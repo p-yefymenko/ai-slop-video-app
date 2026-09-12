@@ -1,0 +1,21 @@
+{
+  "name": "reelshort-clone",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "setup": "bash scripts/setup-cloudflare.sh",
+    "dev:mobile": "pnpm --filter mobile start",
+    "dev:server": "pnpm --filter server exec wrangler dev",
+    "db:generate": "pnpm --filter server exec drizzle-kit generate",
+    "db:migrate:local": "pnpm --filter server exec wrangler d1 migrations apply reelshort-db --local",
+    "db:migrate:remote": "pnpm --filter server exec wrangler d1 migrations apply reelshort-db --remote",
+    "db:seed": "pnpm --filter server exec tsx src/db/seed.ts",
+    "content:generate": "python content-pipeline/scripts/generate_batch.py",
+    "content:upload": "python content-pipeline/scripts/upload_to_r2.py",
+    "deploy": "bash scripts/deploy.sh",
+    "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd"]
+  }
+}

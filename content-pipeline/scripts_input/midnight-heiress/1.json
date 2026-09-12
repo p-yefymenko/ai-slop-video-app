@@ -1,0 +1,19 @@
+{
+  "series": "midnight-heiress",
+  "episodeNumber": 1,
+  "title": "The Return",
+  "isFree": true,
+  "coinCost": 0,
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "prompt": "A young woman in a tailored black coat steps out of a limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, cinematic wide shot, dramatic lighting",
+      "durationSeconds": 6
+    },
+    {
+      "sceneNumber": 2,
+      "prompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in",
+      "durationSeconds": 5
+    }
+  ]
+}

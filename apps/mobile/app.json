@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "ReelShort Clone",
+    "slug": "reelshort-clone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "reelshort",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050505"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.reelshort.clone"
+    },
+    "android": {
+      "package": "com.reelshort.clone",
+      "adaptiveIcon": {
+        "backgroundColor": "#050505",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-video",
+      "expo-secure-store",
+      "react-native-iap"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

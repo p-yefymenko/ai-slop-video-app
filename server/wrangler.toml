@@ -1,0 +1,18 @@
+name = "reelshort-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+ANDROID_PACKAGE_NAME = "com.reelshort.clone"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reelshort-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "drizzle"
+
+[[r2_buckets]]
+binding = "VIDEO_BUCKET"
+bucket_name = "reelshort-videos"

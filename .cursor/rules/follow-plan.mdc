@@ -1,0 +1,14 @@
+---
+description: Always follow PLAN.md as the source of truth for this project
+alwaysApply: true
+---
+
+# Follow PLAN.md
+
+Before implementing, read and follow `PLAN.md` at the repo root.
+
+- Treat it as the build order, architecture, and command-interface contract.
+- Do not invent a different stack, sequence, or command surface.
+- Human-only checklist items in PLAN.md must not be marked done by the agent.
+- Keep root `package.json` scripts in sync with the Command Interface section; never tell the human to run raw `wrangler` or `python` commands — wrap them as named scripts first.
+- If PLAN.md and existing code disagree, call out the conflict and follow PLAN.md unless the user explicitly overrides it.

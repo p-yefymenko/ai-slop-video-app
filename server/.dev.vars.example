@@ -1,0 +1,4 @@
+ADMIN_SECRET=dev-admin-secret
+MEDIA_SIGNING_SECRET=dev-media-signing-secret
+ENVIRONMENT=development
+ANDROID_PACKAGE_NAME=com.reelshort.clone
