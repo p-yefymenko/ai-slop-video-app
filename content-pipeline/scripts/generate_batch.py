@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -17,6 +18,18 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 COMFYUI_URL = "http://127.0.0.1:8188"
+
+
+def load_dotenv() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def load_json(path: Path) -> dict:
@@ -33,6 +46,9 @@ def queue_prompt(prompt_graph: dict) -> str:
     )
     with urllib.request.urlopen(req) as res:
         body = json.loads(res.read().decode("utf-8"))
+    node_errors = body.get("node_errors") or {}
+    if node_errors:
+        raise RuntimeError(f"ComfyUI rejected the workflow: {json.dumps(node_errors)}")
     return body["prompt_id"]
 
 
@@ -43,15 +59,30 @@ def wait_for_output(prompt_id: str, timeout_s: int = 1800) -> list[dict]:
         with urllib.request.urlopen(req) as res:
             history = json.loads(res.read().decode("utf-8"))
         item = history.get(prompt_id)
-        if item and item.get("outputs"):
+        if item:
+            status = item.get("status") or {}
+            for message in status.get("messages") or []:
+                if isinstance(message, (list, tuple)) and message and message[0] == "execution_error":
+                    payload = message[1] if len(message) > 1 else {}
+                    if isinstance(payload, dict):
+                        raise RuntimeError(
+                            payload.get("exception_message")
+                            or payload.get("exception_type")
+                            or json.dumps(payload)
+                        )
+                    raise RuntimeError(str(payload))
             files: list[dict] = []
-            for node_output in item["outputs"].values():
+            for node_output in (item.get("outputs") or {}).values():
                 for video in node_output.get("gifs", []) + node_output.get("videos", []):
                     files.append(video)
                 for image in node_output.get("images", []):
                     files.append(image)
             if files:
                 return files
+            if status.get("completed"):
+                raise RuntimeError(
+                    f"ComfyUI prompt {prompt_id} finished without a video or image output"
+                )
         time.sleep(2)
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish in time")
 
@@ -68,7 +99,7 @@ def download_output(file_info: dict, dest: Path) -> None:
         shutil.copyfileobj(res, handle)
 
 
-def inject_prompt(workflow: dict, prompt: str) -> dict:
+def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
     raw = workflow["prompt"] if "prompt" in workflow else workflow
     graph = json.loads(json.dumps(raw))
     for node in graph.values():
@@ -76,8 +107,11 @@ def inject_prompt(workflow: dict, prompt: str) -> dict:
             continue
         class_type = node.get("class_type", "")
         title = str((node.get("_meta") or {}).get("title", ""))
-        if class_type in {"CLIPTextEncode", "CLIPTextEncodeLTXV"} or "Gemma" in title:
-            node.setdefault("inputs", {})["text"] = prompt
+        if class_type in {"GemmaAPITextEncode", "CLIPTextEncode", "CLIPTextEncodeLTXV"} or "Gemma" in title:
+            node.setdefault("inputs", {})["prompt" if class_type == "GemmaAPITextEncode" else "text"] = prompt
+            if class_type == "GemmaAPITextEncode" and api_key:
+                node["inputs"]["api_key"] = api_key
+                node["inputs"]["ckpt_name"] = node["inputs"].get("ckpt_name") or "ltx-2.3-22b-distilled-api-id.safetensors"
             return graph
     raise RuntimeError("Could not find a text-conditioning node in the ComfyUI workflow")
 
@@ -109,7 +143,8 @@ def generate_episode(script_path: Path, workflow_template: dict) -> None:
 
     scene_files: list[Path] = []
     for scene in script["scenes"]:
-        graph = inject_prompt(workflow_template, scene["prompt"])
+        graph = inject_prompt(workflow_template, scene["prompt"], os.environ.get("LTXV_API_KEY", ""))
+        print(f"Queued scene {scene['sceneNumber']}...")
         prompt_id = queue_prompt(graph)
         outputs = wait_for_output(prompt_id)
         dest = out_dir / f"scene_{scene['sceneNumber']:02d}.mp4"
@@ -128,6 +163,9 @@ def generate_episode(script_path: Path, workflow_template: dict) -> None:
 
 
 def main() -> None:
+    load_dotenv()
+    if not os.environ.get("LTXV_API_KEY"):
+        raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
     workflow_template = load_json(WORKFLOW_PATH)
     scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
     if not scripts:

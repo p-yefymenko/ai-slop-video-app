@@ -13,6 +13,7 @@ build
 .DS_Store
 Thumbs.db
 content-pipeline/output
+content-pipeline/.comfyui
 content-pipeline/__pycache__
 *.pyc
 credentials

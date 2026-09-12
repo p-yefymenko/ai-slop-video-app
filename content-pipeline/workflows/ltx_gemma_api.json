@@ -2,16 +2,19 @@
   "prompt": {
     "3": {
       "inputs": {
-        "text": "PROMPT_PLACEHOLDER",
-        "clip": ["4", 0]
+        "api_key": "",
+        "prompt": "PROMPT_PLACEHOLDER",
+        "enhance_prompt": true,
+        "ckpt_name": "ltx-2.3-22b-distilled-api-id.safetensors"
       },
-      "class_type": "CLIPTextEncode",
-      "_meta": { "title": "Gemma / CLIP conditioning" }
+      "class_type": "GemmaAPITextEncode",
+      "_meta": { "title": "Gemma API conditioning" }
     },
-    "4": {
-      "inputs": {},
-      "class_type": "CLIPLoader",
-      "_meta": { "title": "Text encoder (Gemma API node in real graph)" }
+    "7": {
+      "inputs": {
+        "unet_name": "ltx-2-19b-distilled_Q4_K_M.gguf"
+      },
+      "class_type": "UnetLoaderGGUF"
     },
     "5": {
       "inputs": {
@@ -37,12 +40,6 @@
       },
       "class_type": "KSampler"
     },
-    "7": {
-      "inputs": {
-        "unet_name": "ltx-video-q4_k_m.gguf"
-      },
-      "class_type": "UnetLoaderGGUF"
-    },
     "8": {
       "inputs": {
         "samples": ["6", 0],
@@ -52,13 +49,21 @@
     },
     "9": {
       "inputs": {
-        "vae_name": "ltx-video-vae.safetensors"
+        "vae_name": "LTX2_video_vae_bf16.safetensors"
       },
       "class_type": "VAELoader"
     },
     "10": {
       "inputs": {
         "filename_prefix": "reelshort",
+        "frame_rate": 24,
+        "loop_count": 0,
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": true,
+        "pingpong": false,
+        "save_output": true,
         "images": ["8", 0]
       },
       "class_type": "VHS_VideoCombine"
