@@ -1,17 +1,19 @@
 # ReelShort Clone — Build Plan for Cursor
 
 ## Goal
+
 Build a vertical short-drama video app (ReelShort clone) as a single monorepo. Android launch first via native Play Store app (React Native/Expo), architected so iOS can be added later with minimal extra work. Content is AI-generated locally (LTX) and uploaded to cloud storage; users unlock episodes via coins/subscription.
 
 ## 🧍 Human-only steps — in order, start to Play Store launch
+
 > The agent should never check these off itself — only the human does, after actually completing the action outside Cursor.
 
-1. [ ] Register a Cloudflare account (free)
-2. [ ] Register the $25 Google Play Developer (personal) account — do this early; identity verification can take several days, and this account is what your 14-day closed-testing clock later runs against
-3. [ ] Run `wrangler login` (one-time browser auth — the only Cloudflare step that can't be scripted)
-4. [ ] Run `pnpm run setup` to create the R2 bucket and D1 database, then paste the printed IDs into `server/wrangler.toml`
+1. [x] Register a Cloudflare account (free)
+2. [x] Register the $25 Google Play Developer (personal) account — do this early; identity verification can take several days, and this account is what your 14-day closed-testing clock later runs against
+3. [x] Run `wrangler login` (one-time browser auth — the only Cloudflare step that can't be scripted)
+4. [x] Run `pnpm run setup` to create the R2 bucket and D1 database, then paste the printed IDs into `server/wrangler.toml`
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
-6. [ ] Obtain a Lightricks Gemma API key if the conditioning node requires one
+6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Write or source the actual episode scripts** — the story itself: scene-by-scene visual descriptions for LTX to render. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game (see the open "content source" question earlier in this plan). Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. This has no code dependency — write it whenever, then drop the files into `content-pipeline/scripts_input/`.
 8. [ ] Run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti) — this uses your local GPU, so it's the one step inherently yours to run rather than the agent's
 9. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
@@ -24,12 +26,15 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 Everything not listed above — repo setup, code, schema, screens, pipeline scripts, deployment config, and even the R2/D1 creation commands themselves — should be built/scripted by the AI agent.
 
 ### Expected costs at low usage
+
 - **Workers + D1: $0/month** on the free tier (100K requests/day, 5M D1 row reads/day, 100K row writes/day — comfortably covers early testing and thousands of daily active users before any payment is needed)
 - **R2: $0/month** while the video library stays under 10GB (roughly the first 500-1000+ short episodes depending on compression), then $0.015/GB-month beyond that — egress is always free regardless of scale
 - **The only guaranteed cost pre-launch is the one-time $25 Google Play Developer fee.**
 - **Post-launch, not part of the sequence above:** once real traffic approaches the free-tier limits, upgrade to Workers Paid ($5/mo) in the Cloudflare dashboard — this also raises D1's limits since it's the same subscription. There's no need to do this preemptively; the app will simply keep working on the free tier until you're actually close to the ceiling.
 
 ---
+
+
 
 ## Command Interface — the ONE place to look for what you can run
 
@@ -49,8 +54,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "db:seed": "pnpm --filter server exec tsx src/db/seed.ts",
     "content:generate": "python content-pipeline/scripts/generate_batch.py",
     "content:upload": "python content-pipeline/scripts/upload_to_r2.py",
-    "deploy": "bash scripts/deploy.sh",
-    "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
+    "deploy": "bash scripts/deploy.sh"
   }
 }
 ```
@@ -62,6 +66,7 @@ Whenever the agent adds a new manual step anywhere in the build process (a migra
 No droplet, no Docker, no SSH — deployment is a single command (`pnpm run deploy`) via Wrangler (Cloudflare's Workers CLI) under the hood. Resource creation (R2 bucket, D1 database) is also CLI-driven, not dashboard clicking — wrapped in `pnpm run setup`:
 
 `scripts/setup-cloudflare.sh` (agent should write this; human runs it once via `pnpm run setup`):
+
 ```bash
 #!/bin/bash
 # One-time setup. Requires `wrangler login` to have been run already.
@@ -92,6 +97,8 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - Migrations: `pnpm run db:generate` to create migration files after schema changes, then `pnpm run db:migrate:local` / `pnpm run db:migrate:remote` to apply them.
 - Custom domain (optional, once the human buys one): add a Worker route in `wrangler.toml` to map `api.yourdomain.com` to this Worker.
 
+
+
 ## Final Tech Stack
 
 - **Mobile app:** React Native + Expo (managed workflow), TypeScript
@@ -104,6 +111,8 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
+
+
 
 ## Repo Structure
 
@@ -141,6 +150,8 @@ reelshort-clone/
 └── package.json
 ```
 
+
+
 ## Database Schema (Drizzle, targeting D1) — core models to implement first
 
 - `User`: id, googlePlayAccountId (or device id for now), coinBalance, createdAt
@@ -152,6 +163,8 @@ reelshort-clone/
 
 > Note: D1 is SQLite-based (single-writer model), not Postgres. This schema has no complex joins or high write-concurrency needs, so it's a good fit — don't add features that assume Postgres-specific behavior.
 
+
+
 ## Backend API Endpoints (Hono routes on Workers) — v1 scope
 
 - `GET /series` — list published series with cover art
@@ -161,6 +174,8 @@ reelshort-clone/
 - `POST /episodes/:id/unlock` — spends coins to unlock an episode, creates `UnlockedEpisode`
 - `GET /users/me/wallet` — coin balance
 
+
+
 ## Mobile App Screens — v1 scope
 
 - **Feed/Discover** — vertical swipeable list of series (TikTok-style)
@@ -169,11 +184,15 @@ reelshort-clone/
 - **Paywall/Coin store** — coin packages, triggers Google Play Billing purchase flow
 - **Profile** — coin balance, unlocked history
 
+
+
 ## Content Pipeline — v1 scope
 
 - `generate_batch.py`: reads episode JSON files from `scripts_input/`, sends each scene prompt to the local ComfyUI server running the LTX Q4_K_M workflow with Gemma API conditioning, saves output MP4s locally
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
+
+
 
 ### `scripts_input/` file format
 
@@ -205,26 +224,33 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
 - When asking a chat AI to draft episodes, give it this exact JSON schema up front and ask it to output only valid JSON (no prose, no markdown fences) so it can be saved directly as the `.json` file — this is the human step described in the launch sequence above.
 
+
+
 ## Deployment
 
 See the **Command Interface** section above — `pnpm run setup` provisions R2/D1, `pnpm run dev:server` runs the Worker locally, `pnpm run deploy` ships it. No droplet, no Docker, no SSH.
 
 ## 🤖 AI Agent Build Order (check off as completed, in sequence)
+
 > The agent should check these off itself as each is genuinely finished and working, not just started.
 
-- [x] 1. Scaffold the pnpm monorepo, `shared` package with core types, and empty `mobile`/`server` apps (`server` as a Cloudflare Worker using Hono) that build and run locally via `wrangler dev`.
-- [x] 2. Set up the Drizzle schema and generate D1 migrations; apply them to a local D1 instance via `wrangler d1 migrations apply --local`.
-- [x] 3. Build `series`/`episodes` read routes in the Worker, seed the local D1 DB with a few dummy series/episodes pointing at placeholder video URLs.
-- [x] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
-- [x] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
-- [x] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema defined in the Content Pipeline section, and the R2 binding/upload logic in the Worker.
-- [x] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
-- [x] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
-- [x] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).
-- [x] 11. Prepare a production build (`eas build` for Expo) for Google Play upload — hand off to the human here for account setup and closed testing.
+- [ ] 1. Scaffold the pnpm monorepo, `shared` package with core types, and empty `mobile`/`server` apps (`server` as a Cloudflare Worker using Hono) that build and run locally via `wrangler dev`.
+- [ ] 2. Set up the Drizzle schema and generate D1 migrations; apply them to a local D1 instance via `wrangler d1 migrations apply --local`.
+- [ ] 3. Build `series`/`episodes` read routes in the Worker, seed the local D1 DB with a few dummy series/episodes pointing at placeholder video URLs.
+- [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
+- [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
+- [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
+- [ ] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema defined in the Content Pipeline section, and the R2 binding/upload logic in the Worker.
+- [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
+- [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
+- [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).
+- [ ] 11. Prepare a production build (`eas build` for Expo) for Google Play upload — hand off to the human here for account setup and closed testing.
+
+
 
 ## Explicitly out of scope for v1 (revisit later)
+
 - iOS build (architecture should not block this, but do not implement Apple-specific code yet)
 - Subscription tier (start coins-only, add subscription model later if desired)
 - Recommendation algorithm (v1 feed can be simple reverse-chronological or manually curated order)
+

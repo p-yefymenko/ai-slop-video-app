@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-time setup. Requires `wrangler login` to have been run already.
+# One-time setup. Requires `pnpm run login:cloudflare` to have been run already.
 set -euo pipefail
 
 echo "Creating R2 bucket reelshort-videos..."
@@ -13,6 +13,6 @@ echo "Copy the printed database_id into server/wrangler.toml under [[d1_database
 echo "Set bucket_name to reelshort-videos under [[r2_buckets]] if it is not already."
 echo "Then run: pnpm run db:migrate:remote"
 echo "Optional secrets:"
-echo "  pnpm --filter server exec wrangler secret put ADMIN_SECRET"
-echo "  pnpm --filter server exec wrangler secret put MEDIA_SIGNING_SECRET"
-echo "  pnpm --filter server exec wrangler secret put GOOGLE_PLAY_SERVICE_ACCOUNT"
+echo "  pnpm run secret:admin"
+echo "  pnpm run secret:media"
+echo "  pnpm run secret:play"

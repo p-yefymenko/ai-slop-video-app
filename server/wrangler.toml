@@ -10,7 +10,7 @@ ANDROID_PACKAGE_NAME = "com.reelshort.clone"
 [[d1_databases]]
 binding = "DB"
 database_name = "reelshort-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "a42dce95-e265-41d2-b81f-15ad411c9d7e"
 migrations_dir = "drizzle"
 
 [[r2_buckets]]

@@ -1,11 +1,11 @@
 # First Worker deploy
 
-The human-only Cloudflare steps are: create a Cloudflare account, run `wrangler login` once, then run the scripts below.
+The human-only Cloudflare steps are: create a Cloudflare account, run `pnpm run login:cloudflare` once, then run the scripts below.
 
 1. `pnpm run setup` — creates the R2 bucket `reelshort-videos` and D1 database `reelshort-db`. Paste the printed `database_id` into `server/wrangler.toml` (`[[d1_databases]].database_id`). Keep `bucket_name = "reelshort-videos"`.
-2. `pnpm --filter server exec wrangler secret put ADMIN_SECRET`
-3. `pnpm --filter server exec wrangler secret put MEDIA_SIGNING_SECRET`
-4. `pnpm --filter server exec wrangler secret put GOOGLE_PLAY_SERVICE_ACCOUNT` (paste the Play service-account JSON as the secret value)
+2. `pnpm run secret:admin`
+3. `pnpm run secret:media`
+4. `pnpm run secret:play` (paste the Play service-account JSON as the secret value)
 5. `pnpm run db:migrate:remote`
 6. `pnpm run deploy`
 
