@@ -15,7 +15,7 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + LTX locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF, matching video VAE, and a tiny official-checkpoint metadata stub for the Gemma API node). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Write or source the actual episode scripts** — the story itself: scene-by-scene visual descriptions for LTX to render. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game (see the open "content source" question earlier in this plan). Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. This has no code dependency — write it whenever, then drop the files into `content-pipeline/scripts_input/`.
+8. [ ] **Create character reference images and prompt blocks first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency** in the Content Pipeline section below) — do this before writing scenes, since scenes reference these by `characterId`. Then write the story itself: scene-by-scene visual descriptions for LTX to render. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game (see the open "content source" question earlier in this plan). Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. None of this has a code dependency — do it whenever, then drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
 9. [ ] Run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti) — this uses your local GPU, so it's the one step inherently yours to run rather than the agent's. ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
@@ -153,7 +153,8 @@ reelshort-clone/
 │   ├── scripts/
 │   │   ├── generate_batch.py     # calls ComfyUI API to render a batch of episodes from a script/prompt list
 │   │   └── upload_to_r2.py       # pushes finished MP4s + thumbnails to R2, registers them via the backend API
-│   └── scripts_input/            # episode scripts/prompts live here (plain text/JSON)
+│   ├── characters/                # one JSON + reference image per named character, for identity consistency across scenes
+│   └── scripts_input/            # episode scripts live here (JSON, see schema below)
 ├── packages/
 │   └── shared/                   # shared TypeScript types (Episode, Series, User, Purchase) used by both mobile and server
 ├── pnpm-workspace.yaml
@@ -198,9 +199,30 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads episode JSON files from `scripts_input/`, sends each scene prompt to the local ComfyUI server running the LTX Q4_K_M workflow with Gemma API conditioning, saves output MP4s locally
+- `generate_batch.py`: reads episode JSON files from `scripts_input/`, resolves each scene's `characterIds` against `content-pipeline/characters/*.json`, sends each scene prompt (with character prompt blocks prepended, `durationSeconds` mapped to LTX frame count, and reference images passed as identity guides rather than a locked first frame) to the local ComfyUI server running the LTX Q4_K_M workflow with Gemma API conditioning, saves output MP4s locally
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
+
+### Character consistency
+
+Diffusion video models have no memory between separate generations — every scene is an independent roll of the dice, so the same text description ("red-haired woman in a black coat") produces a *different* woman each time unless you deliberately anchor identity. Solve this with two layers, both required for every named character:
+
+1. **A fixed character prompt block** — one detailed description (hair, face, age, wardrobe) reused word-for-word in every scene that character appears in.
+2. **A reference image**, generated once per character, passed as an LTX **identity guide** for every scene featuring them. This is not image-to-video: the still is appended as extra conditioning tokens the model can attend to, then cropped off after sampling so it does **not** become the first frame of the clip. The scene prompt still controls composition (wide shot, close-up, etc.).
+
+For recurring lead characters appearing across many episodes, consider training a small character LoRA later for tighter identity lock — out of scope for v1, but the `characters/` registry below is structured so a `lora` field can be added later without reshaping anything else.
+
+`content-pipeline/characters/<character-slug>.json`:
+```json
+{
+  "id": "elena-heiress",
+  "referenceImage": "elena-heiress-ref.png",
+  "promptBlock": "Elena, a woman in her late 20s with fiery red hair in a low bun, pale skin, sharp green eyes, wearing a tailored black wool coat. Cinematic lighting, photorealistic."
+}
+```
+
+- `referenceImage` lives alongside the JSON file in the same `characters/` folder — generate it once (a single still image, any text-to-image tool) before writing scenes that use this character.
+- `generate_batch.py` should look up each scene's `characterIds`, prepend the matching `promptBlock`(s) to the scene prompt, and pass the `referenceImage` into `LTXVAddGuide` / `LTXVCropGuides` (identity guidance, not a locked first frame).
 
 ### Local ComfyUI (required before `content:generate`)
 
@@ -220,7 +242,7 @@ reelshort-clone/
 
 ### `scripts_input/` file format
 
-One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
+One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below (plus the relevant character IDs from your `characters/` registry) into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
 
 ```json
 {
@@ -232,11 +254,13 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
   "scenes": [
     {
       "sceneNumber": 1,
-      "prompt": "A young woman in a tailored black coat steps out of a limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, cinematic wide shot, dramatic lighting",
+      "characterIds": ["elena-heiress"],
+      "prompt": "Elena steps out of a limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, cinematic wide shot, dramatic lighting",
       "durationSeconds": 6
     },
     {
       "sceneNumber": 2,
+      "characterIds": ["elena-heiress"],
       "prompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in",
       "durationSeconds": 5
     }
@@ -245,6 +269,7 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
 ```
 
 - `scenes` is an ordered list — each entry becomes one LTX generation call (or one shot within a multishot generation, if the LTX version in use supports it). Keep `prompt` text visual and concrete (subject, action, camera framing, lighting, mood) rather than dialogue-heavy, since LTX generates video from visual description, not spoken lines.
+- `durationSeconds` is the target clip length. `content:generate` converts it to an LTX frame count at the workflow frame rate (24 fps) using the required `8n+1` lengths (so 5s → 121 frames, 6s → 145 frames). Longer clips use more VRAM.
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
 - When asking a chat AI to draft episodes, give it this exact JSON schema up front and ask it to output only valid JSON (no prose, no markdown fences) so it can be saved directly as the `.json` file — this is the human step described in the launch sequence above.
 
@@ -264,7 +289,7 @@ See the **Command Interface** section above — `pnpm run setup` provisions R2/D
 - [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
 - [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
 - [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [ ] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema defined in the Content Pipeline section, and the R2 binding/upload logic in the Worker.
+- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema and the `characters/` registry defined in the Content Pipeline section (character prompt block + reference image resolution per scene), and the R2 binding/upload logic in the Worker.
 - [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
 - [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
 - [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).
