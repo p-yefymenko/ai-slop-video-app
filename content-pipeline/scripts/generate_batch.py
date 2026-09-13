@@ -709,7 +709,7 @@ def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
             node.setdefault("inputs", {})["prompt" if class_type == "GemmaAPITextEncode" else "text"] = prompt
             if class_type == "GemmaAPITextEncode" and api_key:
                 node["inputs"]["api_key"] = api_key
-                node["inputs"]["ckpt_name"] = node["inputs"].get("ckpt_name") or "ltx-2.3-22b-distilled-api-id.safetensors"
+                node["inputs"]["ckpt_name"] = "ltx-2.3-22b-distilled-api-id.safetensors"
             return graph
     raise RuntimeError("Could not find a text-conditioning node in the ComfyUI workflow")
 

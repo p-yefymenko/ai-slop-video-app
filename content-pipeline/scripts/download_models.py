@@ -140,13 +140,14 @@ def main() -> None:
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
     checkpoints = models / "checkpoints"
-    for old_name in OLD_STUB_NAMES:
-        old_stub = checkpoints / old_name
-        if old_stub.exists():
-            old_stub.unlink()
-            print(f"Removed stale Gemma API stub: {old_stub}")
     stub = checkpoints / STUB_NAME
     write_metadata_stub(stub, fetch_official_metadata())
+    # Old ComfyUI graphs still point at this filename. Same 2.3 model_id bytes so
+    # the Gemma API node keeps working if the UI widget was never updated.
+    for old_name in OLD_STUB_NAMES:
+        old_stub = checkpoints / old_name
+        shutil.copy2(stub, old_stub)
+        print(f"Copied Gemma API stub for leftover UI graphs: {old_stub}")
 
 
 if __name__ == "__main__":
