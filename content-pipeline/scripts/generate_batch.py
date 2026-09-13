@@ -15,6 +15,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from ffmpeg_tools import concat_videos
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 CHARACTERS_DIR = ROOT / "characters"
@@ -430,6 +432,13 @@ def wait_for_output(
                 images.extend(node_output.get("images", []))
             files = (images or videos) if prefer == "image" else (videos or images)
             if files:
+                if prefer == "video":
+                    with_audio = [
+                        info
+                        for info in files
+                        if "-audio." in str(info.get("filename") or "")
+                    ]
+                    files = with_audio or files
                 return files, item
             if status.get("completed"):
                 raise RuntimeError(
@@ -552,10 +561,27 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
         "class_type": "LTXVImgToVideo",
         "_meta": {"title": "Animate from start frame"},
     }
-    for node_id, key in (("6", "latent_image"), ("15", "latent"), ("18", "latent")):
+    concat = graph.get("24")
+    if isinstance(concat, dict) and concat.get("class_type") == "LTXVConcatAVLatent":
+        concat.setdefault("inputs", {})["video_latent"] = ["20", 2]
+    else:
+        graph["24"] = {
+            "inputs": {
+                "video_latent": ["20", 2],
+                "audio_latent": ["23", 0],
+            },
+            "class_type": "LTXVConcatAVLatent",
+            "_meta": {"title": "Joint AV latent"},
+        }
+    # Scheduler/shift math needs the 5D video latent. The sampler must get the
+    # concatenated AV latent or VHS writes a silent MP4.
+    for node_id, key in (("15", "latent"), ("18", "latent")):
         node = graph.get(node_id)
         if isinstance(node, dict):
             node.setdefault("inputs", {})[key] = ["20", 2]
+    sampler = graph.get("6")
+    if isinstance(sampler, dict):
+        sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
 
 
 def compose_edit_instruction(scene: dict, characters: list[dict]) -> str:
@@ -660,8 +686,14 @@ def inject_scene_length(graph: dict, duration_seconds: float | None = None, leng
     if length is None:
         length = ltx_length_for_duration(float(duration_seconds or 1), workflow_frame_rate(graph))
     for node in graph.values():
-        if isinstance(node, dict) and node.get("class_type") == "EmptyLTXVLatentVideo":
-            node.setdefault("inputs", {})["length"] = length
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        inputs = node.setdefault("inputs", {})
+        if class_type == "EmptyLTXVLatentVideo":
+            inputs["length"] = length
+        elif class_type == "LTXVEmptyLatentAudio":
+            inputs["frames_number"] = length
     return length
 
 
@@ -680,23 +712,6 @@ def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
                 node["inputs"]["ckpt_name"] = node["inputs"].get("ckpt_name") or "ltx-2.3-22b-distilled-api-id.safetensors"
             return graph
     raise RuntimeError("Could not find a text-conditioning node in the ComfyUI workflow")
-
-
-def concat_with_ffmpeg(scene_files: list[Path], dest: Path) -> bool:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg or not scene_files:
-        return False
-    list_file = dest.with_suffix(".txt")
-    list_file.write_text("".join(f"file '{path.as_posix()}'\n" for path in scene_files), encoding="utf-8")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", str(dest)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    list_file.unlink(missing_ok=True)
-    return result.returncode == 0
 
 
 def generate_episode(script_path: Path, workflow_template: dict, registry: dict[str, dict], stage: str) -> None:
@@ -801,18 +816,28 @@ def generate_episode(script_path: Path, workflow_template: dict, registry: dict[
         )
     else:
         episode_mp4 = out_dir / "episode.mp4"
-        if concat_with_ffmpeg(scene_files, episode_mp4):
-            print(f"Concatenated {episode_mp4}")
-        elif len(scene_files) == 1:
-            shutil.copyfile(scene_files[0], episode_mp4)
-            print(f"Copied single scene to {episode_mp4}")
-        else:
-            print("ffmpeg not found; left individual scene files. Install ffmpeg to concat.")
+        concat_videos(scene_files, episode_mp4)
+        print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     print(
         f"Episode {series}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
         f" ({generated} generated, {skipped} skipped)",
         flush=True,
     )
+
+
+def stage_needs_comfy(scripts: list[Path], stage: str) -> bool:
+    for script_path in scripts:
+        script = load_json(script_path)
+        out_dir = OUTPUT_DIR / script["series"] / str(script["episodeNumber"])
+        for scene in script["scenes"]:
+            dest = (
+                start_still_path(out_dir, scene["sceneNumber"])
+                if stage == "frames"
+                else out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
+            )
+            if not present(dest):
+                return True
+    return False
 
 
 def main() -> None:
@@ -822,8 +847,6 @@ def main() -> None:
     parser.add_argument("--stage", choices=("frames", "video"), default="video")
     args = parser.parse_args()
     load_dotenv()
-    if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
-        raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
     workflow_path = QWEN_WORKFLOW_PATH if args.stage == "frames" else LTX_WORKFLOW_PATH
     if not workflow_path.is_file():
         raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
@@ -832,19 +855,28 @@ def main() -> None:
     scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
     if not scripts:
         raise SystemExit(f"No JSON scripts found in {SCRIPTS_DIR}")
-    try:
-        urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3)
-    except urllib.error.URLError as exc:
-        raise SystemExit(
-            f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`."
-        ) from exc
-    free_comfy_models()
-    idle = GpuMonitor()
-    idle.sample()
-    print(
-        f"ComfyUI ready at {COMFYUI_URL} | stage={args.stage} | idle {snapshot_line(idle.samples[0])}",
-        flush=True,
-    )
+    needs_comfy = stage_needs_comfy(scripts, args.stage)
+    if needs_comfy:
+        if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
+            raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
+        try:
+            urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3)
+        except urllib.error.URLError as exc:
+            raise SystemExit(
+                f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`."
+            ) from exc
+        free_comfy_models()
+        idle = GpuMonitor()
+        idle.sample()
+        print(
+            f"ComfyUI ready at {COMFYUI_URL} | stage={args.stage} | idle {snapshot_line(idle.samples[0])}",
+            flush=True,
+        )
+    else:
+        print(
+            f"All scene files already present | stage={args.stage} | skipping ComfyUI",
+            flush=True,
+        )
     for script_path in scripts:
         print(f"{'Start stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
         generate_episode(script_path, workflow_template, registry, args.stage)

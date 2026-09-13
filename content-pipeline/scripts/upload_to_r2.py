@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
 import urllib.request
 from pathlib import Path
+
+from ffmpeg_tools import extract_thumbnail
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "output"
@@ -75,20 +75,6 @@ def upload_via_worker(local_path: Path, key: str) -> None:
     )
     with urllib.request.urlopen(req) as res:
         json.loads(res.read().decode("utf-8"))
-
-
-def extract_thumbnail(mp4: Path, dest: Path) -> bool:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        return False
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [ffmpeg, "-y", "-i", str(mp4), "-ss", "00:00:01", "-vframes", "1", str(dest)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0 and dest.exists()
 
 
 def pretty_title(slug: str) -> str:

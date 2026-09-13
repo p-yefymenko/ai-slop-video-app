@@ -52,7 +52,7 @@ if (ensuredComfyDir !== comfyDir) {
 console.log("Installing ComfyUI Python deps (this can take several minutes)...");
 runPython(pipPython, ["-m", "pip", "install", "--upgrade", "pip"], comfyDir);
 runPython(pipPython, ["-m", "pip", "install", "-r", "requirements.txt"], comfyDir);
-runPython(pipPython, ["-m", "pip", "install", "huggingface_hub"], comfyDir);
+runPython(pipPython, ["-m", "pip", "install", "huggingface_hub", "imageio-ffmpeg"], comfyDir);
 console.log("Installing CUDA 12.8 PyTorch (required for RTX 50-series)...");
 runPython(pipPython, ["-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"], comfyDir);
 runPython(

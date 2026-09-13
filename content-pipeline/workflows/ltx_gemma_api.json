@@ -40,6 +40,31 @@
       },
       "class_type": "EmptyLTXVLatentVideo"
     },
+    "22": {
+      "inputs": {
+        "ckpt_name": "ltx-2.3-22b-distilled_audio_vae.safetensors"
+      },
+      "class_type": "LTXVAudioVAELoader",
+      "_meta": { "title": "LTX audio VAE" }
+    },
+    "23": {
+      "inputs": {
+        "frames_number": 25,
+        "frame_rate": 24,
+        "batch_size": 1,
+        "audio_vae": ["22", 0]
+      },
+      "class_type": "LTXVEmptyLatentAudio",
+      "_meta": { "title": "Empty audio latent" }
+    },
+    "24": {
+      "inputs": {
+        "video_latent": ["5", 0],
+        "audio_latent": ["23", 0]
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "_meta": { "title": "Joint AV latent" }
+    },
     "18": {
       "inputs": {
         "max_shift": 2.05,
@@ -85,13 +110,20 @@
         "guider": ["17", 0],
         "sampler": ["14", 0],
         "sigmas": ["15", 0],
-        "latent_image": ["5", 0]
+        "latent_image": ["24", 0]
       },
       "class_type": "SamplerCustomAdvanced"
     },
+    "25": {
+      "inputs": {
+        "av_latent": ["6", 0]
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "_meta": { "title": "Split video and audio latents" }
+    },
     "8": {
       "inputs": {
-        "samples": ["6", 0],
+        "samples": ["25", 0],
         "vae": ["9", 0]
       },
       "class_type": "VAEDecode"
@@ -101,6 +133,14 @@
         "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors"
       },
       "class_type": "VAELoader"
+    },
+    "26": {
+      "inputs": {
+        "samples": ["25", 1],
+        "audio_vae": ["22", 0]
+      },
+      "class_type": "LTXVAudioVAEDecode",
+      "_meta": { "title": "Decode LTX audio" }
     },
     "10": {
       "inputs": {
@@ -113,7 +153,8 @@
         "save_metadata": true,
         "pingpong": false,
         "save_output": true,
-        "images": ["8", 0]
+        "images": ["8", 0],
+        "audio": ["26", 0]
       },
       "class_type": "VHS_VideoCombine"
     }

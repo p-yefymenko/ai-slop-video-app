@@ -9,14 +9,14 @@
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
       "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands beside an open black limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, wide shot, dramatic lighting, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena steps out of the limousine and walks forward, her hair moving in the wind, camera slowly pushes in, cinematic motion.",
+      "videoPrompt": "Elena steps out of the limousine and walks forward, her hair moving in the wind, camera slowly pushes in. She says, \"I'm home.\" Distant traffic and a car door thud. No music.",
       "durationSeconds": 2
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
       "imagePrompt": "Cinematic still photograph, vertical 9:16 close-up of Elena's face, determined expression, hair slightly lifted, dusk city lights blurred behind her, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in.",
+      "videoPrompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in. She says, \"Lock the door.\" Night wind and distant traffic. No music.",
       "durationSeconds": 2
     }
   ]

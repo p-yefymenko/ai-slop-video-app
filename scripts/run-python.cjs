@@ -10,7 +10,12 @@ if (!script) {
 
 const extraArgs = process.argv.slice(3);
 const repoRoot = path.resolve(__dirname, "..");
-const python = findPython();
+const comfyDir = path.join(repoRoot, "content-pipeline", ".comfyui");
+const python = findPython([
+  path.join(comfyDir, ".venv", "Scripts"),
+  path.join(comfyDir, ".venv", "bin"),
+  path.join(comfyDir, ".venv"),
+]) || findPython();
 if (!python) {
   console.error(
     "Python 3 was not found. Install it from https://www.python.org/downloads/ and rerun this command.",
