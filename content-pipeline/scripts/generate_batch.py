@@ -8,13 +8,11 @@ import json
 import os
 import random
 import shutil
-import struct
 import subprocess
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import zlib
 from pathlib import Path
 
 from ffmpeg_tools import concat_videos
@@ -30,11 +28,6 @@ COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 COMFYUI_URL = "http://127.0.0.1:8188"
 I2V_STRENGTH = 0.7  # official LTX image-to-video default
 MAX_QWEN_REFS = 3
-STILL_WIDTH = 768
-STILL_HEIGHT = 1152
-LOCATION_CANVAS_NAME = "location-canvas.png"
-QWEN_ANGLES_LORA = "qwen-image-edit-2511-multiple-angles-lora.safetensors"
-QWEN_ANGLES_STRENGTH = 0.9
 NVIDIA_QUERY_FIELDS = [
     "name",
     "memory.used",
@@ -519,40 +512,6 @@ def resolve_scene_characters(scene: dict, registry: dict[str, dict]) -> list[dic
     return resolved
 
 
-def location_view_entries(location: dict) -> dict[str, dict]:
-    views = location.get("views")
-    if not isinstance(views, dict) or not views:
-        raise SystemExit(
-            f"Location {location.get('id')} is missing views. "
-            "Add named cameras (establishing, portrait-medium, …) with image, camera, and reframe on non-establishing views."
-        )
-    cleaned: dict[str, dict] = {}
-    for view_id, view in views.items():
-        if not isinstance(view, dict):
-            raise SystemExit(f"Location {location.get('id')} view {view_id!r} must be an object")
-        image_name = view.get("image")
-        camera = (view.get("camera") or "").strip()
-        reframe = (view.get("reframe") or "").strip()
-        if not image_name:
-            raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing image")
-        if not camera:
-            raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing camera")
-        establishing = location.get("referenceImage")
-        if image_name != establishing and not reframe.startswith("<sks>"):
-            raise SystemExit(
-                f"Location {location.get('id')} view {view_id!r} needs reframe in "
-                "Qwen-Image-Edit-2511 angles form, e.g. "
-                "'<sks> front view eye-level shot medium shot'."
-            )
-        cleaned[str(view_id)] = {
-            **view,
-            "image": image_name,
-            "camera": camera,
-            "reframe": reframe,
-        }
-    return cleaned
-
-
 def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
     location_id = scene.get("locationId")
     if not location_id:
@@ -565,28 +524,42 @@ def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
         raise SystemExit(
             f"Unknown locationId {location_id!r}. Add {LOCATIONS_DIR / f'{location_id}.json'}"
         )
-    view_id = scene.get("locationView")
-    if not view_id:
+    if not (location.get("promptBlock") or "").strip():
+        raise SystemExit(f"Location {location_id} is missing promptBlock")
+    if scene.get("locationView"):
         raise SystemExit(
-            f"Scene {scene.get('sceneNumber')} is missing locationView. "
-            f"Pick a view from {location_id}."
+            f"Scene {scene.get('sceneNumber')} has locationView, which is no longer used. "
+            "locationId is the start-still id: first scene generates it, later scenes reuse it."
         )
-    views = location_view_entries(location)
-    view = views.get(str(view_id))
-    if view is None:
-        known = ", ".join(sorted(views))
-        raise SystemExit(
-            f"Unknown locationView {view_id!r} for {location_id}. Known views: {known}"
-        )
-    wide_path = reference_image_path(location, "Location", location_id, must_exist=False)
-    view_path = location["_dir"] / view["image"]
-    return {
-        **location,
-        "image_path": wide_path,
-        "view_id": str(view_id),
-        "view": view,
-        "view_path": view_path,
-    }
+    return location
+
+
+def image_prompt_text(scene: dict) -> str:
+    return (scene.get("imagePrompt") or "").strip()
+
+
+def validate_location_still_usage(script: dict, registry: dict[str, dict]) -> dict[str, int]:
+    """Map locationId -> first sceneNumber that generates the start still."""
+    origins: dict[str, int] = {}
+    for scene in script.get("scenes") or []:
+        location = resolve_scene_location(scene, registry)
+        location_id = location["id"]
+        scene_number = scene.get("sceneNumber")
+        prompt = image_prompt_text(scene)
+        if location_id not in origins:
+            origins[location_id] = int(scene_number)
+            if not prompt:
+                raise SystemExit(
+                    f"Scene {scene_number} is the first use of locationId {location_id!r} "
+                    "and needs imagePrompt (this generates the start still)."
+                )
+        elif prompt:
+            raise SystemExit(
+                f"Scene {scene_number} reuses locationId {location_id!r} "
+                f"(still from scene {origins[location_id]:02d}). Omit imagePrompt; "
+                "only videoPrompt changes."
+            )
+    return origins
 
 
 def compose_scene_prompt(
@@ -606,10 +579,8 @@ def compose_scene_prompt(
         blocks.append(location["promptBlock"].strip())
     if field == "videoPrompt" and location:
         preserve = (location.get("preserve") or "the same location as the start frame").strip()
-        camera = ((location.get("view") or {}).get("camera") or "").strip()
-        keep_camera = f" Keep this camera: {camera}." if camera else ""
         text = (
-            f"Preserve: {preserve}.{keep_camera} "
+            f"Preserve: {preserve}. "
             "Do not change background geometry or lights.\n"
             f"{text}"
         )
@@ -627,27 +598,6 @@ def present(path: Path) -> bool:
 def clone_workflow(workflow_template: dict) -> dict:
     raw = workflow_template["prompt"] if "prompt" in workflow_template else workflow_template
     return json.loads(json.dumps(raw))
-
-
-def write_solid_png(path: Path, width: int, height: int, color: tuple[int, int, int] = (18, 18, 20)) -> None:
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-
-    raw = b"".join(b"\x00" + bytes(color) * width for _ in range(height))
-    path.write_bytes(
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(raw, 9))
-        + chunk(b"IEND", b"")
-    )
-
-
-def location_canvas_path() -> Path:
-    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / LOCATION_CANVAS_NAME
-    if not present(dest):
-        write_solid_png(dest, STILL_WIDTH, STILL_HEIGHT)
-    return dest
 
 
 def inject_seed(graph: dict, seed: int) -> None:
@@ -722,44 +672,17 @@ def compose_edit_instruction(scene: dict, characters: list[dict], location: dict
     lock = (
         "Picture 1 is the identity reference. Keep that exact person: "
         "same face, identity, hair, skin tone, and body. Do not replace them. "
-        "Picture 2 is an empty location view already framed for this shot. Keep that exact camera, "
-        "architecture, furniture, practical lights, and background geometry. "
-        "Do not pull the camera back to a wide establishing shot. Do not invent a different room. "
-        "Place the person from Picture 1 into Picture 2 at a scale that fits this framing. "
+        "Put them in the location described below. "
         "Hands must actually reach any prop or surface they touch. "
         "Follow the blocking below exactly: eyeline, which hand, where the prop sits on the body. "
         "Do not look at the camera unless the blocking says so."
     )
     if len(characters) > 1:
         lock += (
-            " Extra character reference images after Picture 2 are additional identities "
+            " Extra character reference images after Picture 1 are additional identities "
             "to keep; do not replace those people either."
         )
     return f"{lock}\n\n{scene_text}"
-
-
-def compose_location_plate_prompt(location: dict) -> str:
-    return (
-        "Create a new vertical 9:16 cinematic still photograph of this empty location. "
-        "Establishing wide plate. No people, no faces, no silhouettes, no hands, no figures. "
-        "Architecture, furniture, practical lights, floors, and surfaces only. "
-        "Photorealistic, sharp, no motion blur.\n\n"
-        f"{location['promptBlock'].strip()}"
-    )
-
-
-def compose_location_view_prompt(location: dict, view: dict) -> str:
-    reframe = (view.get("reframe") or "").strip()
-    return (
-        f"{reframe}\n\n"
-        "Picture 1 is the empty establishing plate of this location. "
-        "Keep the same architecture, furniture, practical lights, and materials. "
-        "Empty still: no people, no faces, no figures. "
-        "Change the camera to the new shot. Do not copy the original wide framing. "
-        "Do not invent a different building or room.\n\n"
-        f"{location['promptBlock'].strip()}\n\n"
-        f"Fill the frame: {view['camera']}"
-    )
 
 
 def inject_qwen_prompt(graph: dict, prompt: str) -> None:
@@ -772,31 +695,6 @@ def inject_qwen_prompt(graph: dict, prompt: str) -> None:
         node.setdefault("inputs", {})["prompt"] = prompt
         return
     raise RuntimeError("Could not find the Qwen positive-instruction node in qwen_image_edit.json")
-
-
-def inject_qwen_angles_lora(graph: dict) -> None:
-    lora_path = ROOT / ".comfyui" / "models" / "loras" / QWEN_ANGLES_LORA
-    if not lora_path.is_file():
-        raise SystemExit(
-            f"Missing {lora_path}. Run `pnpm run content:models` to download the "
-            "Qwen-Image-Edit-2511 multiple-angles LoRA, then rerun `pnpm run content:frames`."
-        )
-    lightning = graph.get("4")
-    if not isinstance(lightning, dict) or lightning.get("class_type") != "LoraLoaderModelOnly":
-        raise RuntimeError("Could not find Lightning LoRA node 4 in qwen_image_edit.json")
-    graph["21"] = {
-        "inputs": {
-            "model": ["4", 0],
-            "lora_name": QWEN_ANGLES_LORA,
-            "strength_model": QWEN_ANGLES_STRENGTH,
-        },
-        "class_type": "LoraLoaderModelOnly",
-        "_meta": {"title": "Qwen-Image-Edit-2511 multiple angles"},
-    }
-    sampling = graph.get("5")
-    if not isinstance(sampling, dict):
-        raise RuntimeError("Could not find ModelSamplingAuraFlow node 5 in qwen_image_edit.json")
-    sampling.setdefault("inputs", {})["model"] = ["21", 0]
 
 
 def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
@@ -834,18 +732,11 @@ def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
         encoder_inputs[image_key] = [extra_id, 0]
 
 
-def inject_qwen_references(graph: dict, characters: list[dict], location: dict) -> None:
+def inject_qwen_references(graph: dict, characters: list[dict]) -> None:
     if not characters:
         raise RuntimeError("Qwen-Image-Edit needs at least one character reference image")
-    view_path = location["view_path"]
-    if not present(view_path):
-        raise RuntimeError(
-            f"Missing location view {view_path}. "
-            "content:frames generates empty views before scene stills."
-        )
     refs: list[tuple[str, str]] = [
         (stage_start_still(characters[0]["image_path"]), "Character reference 1"),
-        (stage_start_still(view_path), f"Location view {location.get('view_id') or ''}"),
     ]
     for index, character in enumerate(characters[1:], start=2):
         if len(refs) >= MAX_QWEN_REFS:
@@ -950,75 +841,6 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
-def unique_script_locations(script: dict, locations_registry: dict[str, dict]) -> list[dict]:
-    seen: set[str] = set()
-    locations: list[dict] = []
-    for scene in script["scenes"]:
-        location = resolve_scene_location(scene, locations_registry)
-        if location["id"] in seen:
-            continue
-        seen.add(location["id"])
-        locations.append(location)
-    return locations
-
-
-def generate_qwen_still(
-    workflow_template: dict,
-    prompt: str,
-    refs: list[tuple[str, str]],
-    dest: Path,
-    mode: str,
-    *,
-    angles: bool = False,
-) -> None:
-    graph = clone_workflow(workflow_template)
-    inject_qwen_prompt(graph, prompt)
-    inject_seed(graph, random.randint(0, 2**32 - 1))
-    inject_qwen_image_slots(graph, refs)
-    if angles:
-        inject_qwen_angles_lora(graph)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode)
-
-
-def ensure_location_plates(
-    script: dict,
-    locations_registry: dict[str, dict],
-    workflow_template: dict,
-) -> None:
-    for location in unique_script_locations(script, locations_registry):
-        wide_path = location["image_path"]
-        print(f"Queued location plate {location['id']}...", flush=True)
-        if present(wide_path):
-            print(f"  Skipped (already present): {wide_path} ({format_bytes(wide_path.stat().st_size)})", flush=True)
-        else:
-            generate_qwen_still(
-                workflow_template,
-                compose_location_plate_prompt(location),
-                [(stage_start_still(location_canvas_path()), "Empty canvas")],
-                wide_path,
-                f"location plate ({location['id']})",
-            )
-        for view_id, view in location_view_entries(location).items():
-            dest = location["_dir"] / view["image"]
-            print(f"Queued location view {location['id']}/{view_id}...", flush=True)
-            if dest.resolve() == wide_path.resolve():
-                print(f"  Skipped (same file as establishing plate): {dest}", flush=True)
-                continue
-            if present(dest):
-                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
-                continue
-            if not present(wide_path):
-                raise RuntimeError(f"Cannot generate view {view_id}: missing establishing plate {wide_path}")
-            generate_qwen_still(
-                workflow_template,
-                compose_location_view_prompt(location, view),
-                [(stage_start_still(wide_path), "Establishing plate")],
-                dest,
-                f"location view ({location['id']}/{view_id})",
-                angles=True,
-            )
-
-
 def generate_episode(
     script_path: Path,
     workflow_template: dict,
@@ -1029,23 +851,45 @@ def generate_episode(
     script = load_json(script_path)
     series = script["series"]
     episode_number = script["episodeNumber"]
+    still_origins = validate_location_still_usage(script, locations_registry)
     out_dir = OUTPUT_DIR / series / str(episode_number)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "manifest.json").write_text(json.dumps(script, indent=2), encoding="utf-8")
 
     episode_started = time.time()
-    if stage == "frames":
-        ensure_location_plates(script, locations_registry, workflow_template)
+    origin_still_paths = {
+        location_id: start_still_path(out_dir, scene_number)
+        for location_id, scene_number in still_origins.items()
+    }
 
     scene_files: list[Path] = []
     generated = 0
     skipped = 0
+    copied = 0
     for scene in script["scenes"]:
         scene_number = scene["sceneNumber"]
         still_path = start_still_path(out_dir, scene_number)
         video_path = out_dir / f"scene_{scene_number:02d}.mp4"
         dest = still_path if stage == "frames" else video_path
+        location = resolve_scene_location(scene, locations_registry)
+        origin_still = origin_still_paths[location["id"]]
+        reuses_still = still_path.resolve() != origin_still.resolve()
         print(f"Queued scene {scene_number} ({stage})...", flush=True)
+        if stage == "frames" and reuses_still:
+            if not present(origin_still):
+                raise SystemExit(
+                    f"Scene {scene_number} reuses locationId {location['id']!r} but "
+                    f"{origin_still} is missing. Generate the first scene at that location."
+                )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(origin_still, dest)
+            print(
+                f"  Reused still from scene {still_origins[location['id']]:02d}: "
+                f"{dest} ({format_bytes(dest.stat().st_size)})",
+                flush=True,
+            )
+            copied += 1
+            continue
         if present(dest):
             print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
             if stage == "video":
@@ -1058,7 +902,6 @@ def generate_episode(
                 "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
             )
         characters = resolve_scene_characters(scene, characters_registry)
-        location = resolve_scene_location(scene, locations_registry)
         seed = random.randint(0, 2**32 - 1)
         if stage == "frames":
             if not characters:
@@ -1066,21 +909,20 @@ def generate_episode(
                     f"Scene {scene_number} has no characterIds. content:frames needs a character "
                     "reference PNG so Qwen-Image-Edit can lock identity."
                 )
-            extra_chars = max(0, len(characters) - (MAX_QWEN_REFS - 1))
+            extra_chars = max(0, len(characters) - MAX_QWEN_REFS)
             if extra_chars:
                 print(
-                    f"  Location plate uses one Qwen ref slot; "
-                    f"dropping {extra_chars} extra character ref(s) (max {MAX_QWEN_REFS} images).",
+                    f"  Dropping {extra_chars} extra character ref(s) (max {MAX_QWEN_REFS} images).",
                     flush=True,
                 )
             graph = clone_workflow(workflow_template)
             inject_qwen_prompt(graph, compose_edit_instruction(scene, characters, location))
             inject_seed(graph, seed)
-            inject_qwen_references(graph, characters, location)
+            inject_qwen_references(graph, characters)
             prefer = "image"
             mode = (
                 f"Qwen-Image-Edit ({', '.join(scene.get('characterIds') or []) or 'none'} "
-                f"@ {scene.get('locationId') or 'none'}/{scene.get('locationView') or 'none'})"
+                f"@ {scene.get('locationId') or 'none'})"
             )
         else:
             prompt = compose_scene_prompt(scene, characters, "videoPrompt", location)
@@ -1092,7 +934,7 @@ def generate_episode(
             prefer = "video"
             mode = (
                 f"I2V ({', '.join(scene.get('characterIds') or []) or 'none'} "
-                f"@ {scene.get('locationId') or 'none'}/{scene.get('locationView') or 'none'})"
+                f"@ {scene.get('locationId') or 'none'})"
             )
         print(f"  Graph seed {seed}", flush=True)
         execute_queued_graph(graph, dest, prefer=prefer, mode=mode)
@@ -1103,8 +945,8 @@ def generate_episode(
     if stage == "frames":
         print(
             f"Start stills for {series}/{episode_number} are in {out_dir}. "
-            "Review location plates and views in content-pipeline/locations/ and the scene_*_start.png files. "
-            "Replace one by hand, or delete it and rerun `pnpm run content:frames`. "
+            "Review the scene_*_start.png files (reused locationIds are copies of the first still). "
+            "Replace an origin still by hand, or delete it and rerun `pnpm run content:frames`. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,
         )
@@ -1114,32 +956,25 @@ def generate_episode(
         print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     print(
         f"Episode {series}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
-        f" ({generated} generated, {skipped} skipped)",
+        f" ({generated} generated, {copied} reused, {skipped} skipped)",
         flush=True,
     )
 
 
-def stage_needs_comfy(
-    scripts: list[Path],
-    stage: str,
-    locations_registry: dict[str, dict] | None = None,
-) -> bool:
+def stage_needs_comfy(scripts: list[Path], stage: str) -> bool:
     for script_path in scripts:
         script = load_json(script_path)
-        if stage == "frames" and locations_registry is not None:
-            for location in unique_script_locations(script, locations_registry):
-                if not present(location["image_path"]):
-                    return True
-                for view in location_view_entries(location).values():
-                    if not present(location["_dir"] / view["image"]):
-                        return True
         out_dir = OUTPUT_DIR / script["series"] / str(script["episodeNumber"])
+        seen_locations: set[str] = set()
         for scene in script["scenes"]:
-            dest = (
-                start_still_path(out_dir, scene["sceneNumber"])
-                if stage == "frames"
-                else out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
-            )
+            if stage == "frames":
+                location_id = scene.get("locationId")
+                if location_id in seen_locations:
+                    continue
+                seen_locations.add(location_id)
+                dest = start_still_path(out_dir, scene["sceneNumber"])
+            else:
+                dest = out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
             if not present(dest):
                 return True
     return False
@@ -1161,7 +996,7 @@ def main() -> None:
     scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
     if not scripts:
         raise SystemExit(f"No JSON scripts found in {SCRIPTS_DIR}")
-    needs_comfy = stage_needs_comfy(scripts, args.stage, locations_registry)
+    needs_comfy = stage_needs_comfy(scripts, args.stage)
     if needs_comfy:
         if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
             raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")

@@ -9,7 +9,6 @@
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
       "locationId": "mansion-gates",
-      "locationView": "establishing",
       "imagePrompt": "Elena stands between the open gates, body facing the house, chin lifted, eyes on the upper facade, hands at her sides, lips slightly parted, not looking at camera.",
       "videoPrompt": "Elena looks up slowly toward the mansion filling the upper frame. She says, \"Ten years.\" She pauses, then continues, \"Time to finish this.\" Camera static. Outdoor wind, a distant gate creak, no music.",
       "durationSeconds": 6
@@ -18,64 +17,17 @@
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
       "locationId": "mansion-foyer",
-      "locationView": "portrait-medium",
-      "imagePrompt": "Elena stands in front of the mantel, three-quarter to camera, chin lifted, eyes on the painted faces in the portrait, hands at her sides, lips slightly parted, not looking at camera.",
-      "videoPrompt": "Elena tilts her head slightly toward the portrait. She says, \"You should have told me.\" Camera slow push-in. Room echo, a distant clock, no music.",
-      "durationSeconds": 5
+      "imagePrompt": "Medium shot. Elena stands in front of the mantel, three-quarter to camera, chin lifted, eyes on the painted faces in the portrait, hands at her sides, lips slightly parted, not looking at camera. The gold-framed portrait hangs above her.",
+      "videoPrompt": "Elena tilts her head slightly toward the portrait. She says, \"You should have told me.\" Cut. She pulls a sealed cream envelope from behind the lower-right of the gold frame and glances at it. She murmurs, \"What is this.\" Cut. She unfolds the letter and reads. She says, \"He sold the house.\" She pauses, then continues, \"They all knew.\" Camera slow push-in. Room echo, paper sliding, no music.",
+      "durationSeconds": 9
     },
     {
       "sceneNumber": 3,
       "characterIds": ["elena-heiress"],
-      "locationId": "mansion-foyer",
-      "locationView": "portrait-medium",
-      "imagePrompt": "Elena stands close to the mantel, three-quarter, eyes on the lower-right corner of the gold frame, not looking at camera. Her right hand pulls that corner a few inches off the wall at chest-to-shoulder height. A sealed cream envelope sits in that gap at screen-right, top edge visible. Her left hand rests on the screen-right side of the frame. Lips slightly parted. She is not holding the painting over her head. The envelope is not on her chest.",
-      "videoPrompt": "Elena draws the cream envelope from the gap at the lower-right of the gold frame with her right hand. She glances at the envelope. She murmurs, \"What is this.\" Camera follows her hands. Quiet room echo, frame scraping the wall, paper sliding, no music.",
-      "durationSeconds": 5
-    },
-    {
-      "sceneNumber": 4,
-      "characterIds": ["elena-heiress"],
-      "locationId": "mansion-foyer",
-      "locationView": "portrait-medium",
-      "imagePrompt": "Elena holds an unfolded letter in both hands at chest height, eyes down on the page, not looking at camera, lips slightly parted. The portrait stays on the wall behind her, out of reach of her hands.",
-      "videoPrompt": "Elena reads the letter. She says, \"He sold the house.\" She pauses, then continues, \"They all knew.\" Camera slow push-in. Paper rustle, a sharp breath, faint room tone, no music.",
-      "durationSeconds": 7
-    },
-    {
-      "sceneNumber": 5,
-      "characterIds": ["elena-heiress"],
       "locationId": "mansion-study",
-      "locationView": "desk-medium",
-      "imagePrompt": "Elena sits at the desk, torso facing the ledger, eyes on the open page, not looking at camera. An open leather ledger is already in both hands on the desktop. Lips slightly parted.",
-      "videoPrompt": "Elena's finger traces one line in the ledger. She says, \"His sale.\" She pauses, then continues, \"My proof.\" Camera static. A page settling, quiet room tone, no music.",
-      "durationSeconds": 6
-    },
-    {
-      "sceneNumber": 6,
-      "characterIds": ["elena-heiress"],
-      "locationId": "mansion-study",
-      "locationView": "desk-medium",
-      "imagePrompt": "Elena still seated at the desk, ledger in both hands, head turned toward a closed wooden door at screen-left, eyes on that door, not looking at camera, lips slightly parted, body frozen.",
-      "videoPrompt": "Elena freezes, eyes on the door at screen-left. She whispers, \"Someone's here.\" Camera static. Distant footstep, a floorboard creak, no music.",
-      "durationSeconds": 5
-    },
-    {
-      "sceneNumber": 7,
-      "characterIds": ["elena-heiress"],
-      "locationId": "mansion-study",
-      "locationView": "desk-medium",
-      "imagePrompt": "Elena seated at the desk, the leather ledger already halfway into the inside of her open navy coat at screen-left, eyes glancing toward the door at screen-left, not looking at camera, lips slightly parted.",
-      "videoPrompt": "Elena slips the ledger the rest of the way into her coat and presses it flat. She whispers, \"Not yet.\" Camera static. Fabric rustle, her breath, no music.",
-      "durationSeconds": 5
-    },
-    {
-      "sceneNumber": 8,
-      "characterIds": ["elena-heiress"],
-      "locationId": "mansion-study",
-      "locationView": "desk-mcu",
-      "imagePrompt": "Elena looks into the camera, faint smile, lips slightly parted, shoulders toward camera, green lamp over her screen-right shoulder.",
-      "videoPrompt": "Elena exhales slowly. She looks at the camera and says, \"I can keep secrets too.\" Camera static. Quiet room tone, no music.",
-      "durationSeconds": 5
+      "imagePrompt": "Medium shot. Elena sits at the desk, torso facing an open leather ledger already in both hands on the desktop, eyes on the page, not looking at camera, lips slightly parted. Green banker's lamp at screen-right, bookshelves behind her.",
+      "videoPrompt": "Elena's finger traces one line in the ledger. She says, \"His sale.\" She pauses, then continues, \"My proof.\" Cut. She freezes, eyes on a closed wooden door at screen-left, then slips the ledger into her coat and looks at the camera. She whispers, \"I can keep secrets too.\" Camera static. A page settling, a distant footstep, fabric rustle, quiet room tone, no music.",
+      "durationSeconds": 8
     }
   ]
 }

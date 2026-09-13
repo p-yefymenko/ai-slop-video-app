@@ -10,30 +10,31 @@ Follow **Episode script authoring** and the JSON schema in `PLAN.md`. Do not inv
 
 Prompting follows LTX-2.3 docs (cinematographer shot list, not poetry): [prompt adherence](https://ltx.io/blog/how-to-improve-ltx-2-3-prompt-adherence), [dialogue/acting](https://ltx.io/blog/directing-dialogue-and-acting), [character consistency](https://ltx.io/blog/how-to-maintain-character-consistency-in-ai-video), [I2V](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow), [2.3 template](https://ltx23.github.io/ltx-2-3-prompt-template/). `enhance_prompt` is off; write the real prompt.
 
-- Read `characters/*.json` and `locations/*.json` first. Use only those `id`s and `views` keys.
-- Location views that are not the establishing plate need `reframe` in Qwen-Image-Edit-2511 angles form (`<sks> front view eye-level shot medium shot` or `close-up` / `wide shot`) plus `camera` (what fills the new frame). Prose like “medium shot” alone copies the wide plate.
-- Every scene has `characterIds`, `locationId`, and `locationView`. Same room = same `locationId`. Same camera on that wall = same `locationView`.
-- **Anchoring:** do not restate hair/wardrobe/set. The pipeline prepends the character `promptBlock` and location `preserve`. Scene text is blocking + motion only.
+- Read `characters/*.json` and `locations/*.json` first. Use only those `id`s. No `locationView`, no location photos.
+- Every scene has `characterIds` and `locationId`. `locationId` is the start-still id: first scene generates it (`imagePrompt` required); later scenes reuse it (`imagePrompt` omitted).
+- Prefer one scene per visit with `Cut.` (2–4 shots). Splitting or returning is the same still; pose resets to frame 0.
+- **Anchoring:** do not restate hair/wardrobe/set. The pipeline prepends the character `promptBlock` and location `preserve`. Scene text is framing + blocking + motion only.
 - **Screen-space:** `left` / `right` are the audience’s frame, not the character’s left/right. Write `screen-left`, `screen-right`, `lower-right of the gold frame`. Use `her right hand` only for which hand.
-- **Beats:** one main action per 2–3 seconds of `durationSeconds` (LTX). Distilled clips: one physical action + at most two spoken phrases. Do not stack five actions in one prompt.
+- **Beats:** one main action per 2–3 seconds of `durationSeconds` (LTX). Distilled clips: one physical action + at most two spoken phrases, unless joined by `Cut.` At most four connected shots per scene.
 - **Chronology:** subject + main action first, then gesture, then speech beats, then camera, then audio last.
 
-## `imagePrompt` (Qwen start still = LTX frame 0)
+## `imagePrompt` (origin still only = LTX frame 0)
 
-Blocking the camera will see. No motion, no speech, no camera size (that is `locationView`).
+First scene at this `locationId` only. Framing of the actor plus blocking. No motion, no speech. Omit this field on reuse.
 
 - Eyeline: what she looks at. If she is not addressing the lens, write **not looking at camera**.
 - Body angle, which hand, where the prop sits, lips slightly parted if she speaks this clip.
-- Hands must reach what they touch. Place props in screen-space (`sealed envelope in the gap at the lower-right of the frame`, not “on her chest”).
-- Do not contradict the chosen view (no “hands on the portrait” against an establishing wide).
+- Hands must reach what they touch **in this still**. Later beats belong in `videoPrompt` after `Cut.`
+- Place props in screen-space (`sealed envelope in the gap at the lower-right of the frame`, not “on her chest”).
 
 ## `videoPrompt` (LTX I2V)
 
 Describe **what happens next**, not the still (I2V already has the picture). Literal, chronological, under ~200 words.
 
+- Same room, several beats: `Cut.` between 2–4 shots, or extra scenes with the same `locationId` and no `imagePrompt`.
 - Interleave speech: short phrase, one acting cue, next phrase. Cues: eyeline, pause, voice quality, or a physical beat — **one cue per beat**. Do not dump a full quoted sentence with no pause.
 - Always name camera: `Camera static` or `Camera slow push-in`. Slow moves that underline a beat; no wide pans during dialogue.
 - Audio last: acoustic space + matching foley, **no music**. Off-screen voices steal the line.
-- Do not fight the start frame (no new wardrobe, room, or prop). Gaze between phrases is fine; do not replace the spoken line with “looks past the camera.”
+- Do not fight the start frame (no new wardrobe or room). A new prop after `Cut.` is allowed if the action produces it.
 
 One speaker. English only. No crowds, fights, morphs, 360s, on-screen text, mid-clip identity/set changes. Size `durationSeconds` to the beats. Valid episode JSON only unless the human asked for a plan first.
