@@ -8,16 +8,23 @@
     {
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands beside an open black limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, wide shot, dramatic lighting, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena steps out of the limousine and walks forward, her hair moving in the wind, camera slowly pushes in. She says, \"I'm home.\" Distant traffic and a car door thud. No music.",
-      "durationSeconds": 2
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands at the wrought-iron gates of a large stone mansion at dusk, looking up at the building, wide shot, dramatic golden-hour lighting, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Elena looks up slowly at the mansion, camera holds steady on her, wind moves her hair. She says, \"I never thought I'd come back here.\" She pauses, then steps forward. Foley: distant wind, gravel crunch underfoot. No music.",
+      "durationSeconds": 5
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16 close-up of Elena's face, determined expression, hair slightly lifted, dusk city lights blurred behind her, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in. She says, \"Lock the door.\" Night wind and distant traffic. No music.",
-      "durationSeconds": 2
+      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena seated at a wooden desk in a dim study, holding an open envelope and letter, warm lamp light, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Elena's eyes move down the letter, her expression shifts to shock. Camera slowly pushes in on her face. She says, \"This can't be right.\" She pauses, rereads it, then, \"He knew.\" Foley: paper rustling, a clock ticking in the room. No music.",
+      "durationSeconds": 6
+    },
+    {
+      "sceneNumber": 3,
+      "characterIds": ["elena-heiress"],
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 close-up of Elena's face, jaw set, determined expression, lamp light casting sharp shadows, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Elena crumples the letter slowly in her fist, camera holds close on her face. She says, \"Let's see who's laughing now.\" She looks directly past the camera. Foley: paper crumpling, a single drawer sliding shut. No music.",
+      "durationSeconds": 5
     }
   ]
 }
