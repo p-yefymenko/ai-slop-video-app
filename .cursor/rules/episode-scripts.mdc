@@ -1,0 +1,16 @@
+---
+description: Author episode JSON for Qwen-still + LTX distilled I2V (scripts, plot, imagePrompt, videoPrompt, speech)
+globs: content-pipeline/scripts_input/**/*.json,content-pipeline/characters/**/*.json
+alwaysApply: false
+---
+
+# Episode scripts
+
+When writing plot or `scripts_input/` JSON, follow **Episode script authoring** and the JSON schema in `PLAN.md`. Do not invent a different schema.
+
+- Read `content-pipeline/characters/*.json` first. Use only those `id`s. Appearance must match each `promptBlock` and reference PNG.
+- `imagePrompt`: 9:16 still (who, wardrobe, place, framing, light). No motion or speech.
+- `videoPrompt`: animate **that** still (one action, slow camera). Characters speak in short quoted phrases with beats — not monologues. Foley/ambience that matches the picture; **no music**.
+- Do not write what distilled LTX does unreliably: multi-speaker, non-English, crowds, on-screen text, fights/morphs/360s, mid-clip identity or location changes.
+- Prefer one person on camera. Size `durationSeconds` to the line + action, not an arbitrary cap.
+- Reply with valid episode JSON only (no markdown fences) unless the human asked for a plan first.

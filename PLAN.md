@@ -15,7 +15,7 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json` and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Create character reference images and prompt blocks first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency** in the Content Pipeline section below) — do this before writing scenes, since scenes reference these by `characterId`. Then write the story itself as `imagePrompt` (the locked opening still) plus `videoPrompt` (the motion from that still). Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. None of this has a code dependency — do it whenever, then drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
+8. [ ] **Create character reference images and prompt blocks first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency** in the Content Pipeline section below) — do this before writing scenes, since scenes reference these by `characterId`. Then write the story as `imagePrompt` + `videoPrompt` following **Episode script authoring** (distilled LTX / Qwen-Edit limits). Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Paste that authoring block plus the JSON schema into a chat and save the output with no reformatting. None of this has a code dependency — do it whenever, then drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
 9. [ ] Run `pnpm run content:frames`, look at the `scene_*_start.png` files in `content-pipeline/output/`, and keep, replace, or delete any you do not like (delete + rerun `content:frames` regenerates only the missing stills). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
@@ -276,9 +276,37 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
 ```
 
 - `scenes` is an ordered list. `content:frames` turns each `imagePrompt` plus the scene’s character reference PNG(s) into `scene_XX_start.png` with Qwen-Image-Edit; `content:generate` then animates that PNG with `videoPrompt`. Keep `imagePrompt` as a locked composition (subject, wardrobe, camera, lighting, still photograph). Keep `videoPrompt` as motion from that still (action, camera move). Both get the character `promptBlock` prepended automatically. A legacy `prompt` field is still accepted as a fallback for either.
-- `durationSeconds` is the target **video** clip length. `content:generate` converts it to an LTX frame count at 24 fps using `8n+1` lengths (2s → 49 frames, 5s → 121, 6s → 145). Start stills are 768×1152 Qwen edits (vertical 9:16, ~1MP); LTX I2V resizes them to the video latent (512×768 smoke size). Longer videos use more VRAM and take much longer.
+- `durationSeconds` is the target **video** clip length. `content:generate` converts it to an LTX frame count at 24 fps using `8n+1` lengths (2s → 49 frames, 5s → 121, 6s → 145). Start stills are 768×1152 Qwen edits (vertical 9:16, ~1MP); LTX I2V resizes them to the video latent (512×768 smoke size).
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
-- When asking a chat AI to draft episodes, give it this exact JSON schema up front and ask it to output only valid JSON (no prose, no markdown fences) so it can be saved directly as the `.json` file — this is the human step described in the launch sequence above.
+- When asking a chat AI to draft episodes, paste **Episode script authoring** below plus this JSON schema (and the relevant character IDs / `promptBlock`s from `characters/`) and ask for only valid JSON (no prose, no markdown fences) so it can be saved as the `.json` file.
+
+### Episode script authoring (distilled LTX + Qwen-Image-Edit)
+
+Write shots these models can actually land. Pipeline: Qwen-Image-Edit builds a 9:16 start still from the character PNG + `imagePrompt`; LTX-2.3 **distilled** I2V animates that still from `videoPrompt` (picture and sound together). Distilled is weaker at prompt-following than the full LTX-2.3 dev checkpoint — do not write beats that need precision the distilled model does not have.
+
+**Output**
+- One file: `content-pipeline/scripts_input/<series-slug>/<episode-number>.json`. JSON object only (no markdown fences).
+- Use only existing `characterIds` from `content-pipeline/characters/`. Appearance must match that `promptBlock` and reference PNG.
+- Qwen-Edit takes at most **3** character refs; prefer **one speaker on camera** per shot.
+
+**Do not write (unreliable on distilled)**
+- Monologues or long unbroken quoted speeches (it rushes, skips, or slurs).
+- Two people talking in one shot, off-screen voices, or language other than English.
+- Music / score.
+- Plot that depends on readable on-screen text, logos, or signage.
+- Crowds, fast fight choreography, morphs, 360 orbits, or a new location/wardrobe/face mid-clip.
+
+**`imagePrompt`**
+- Vertical 9:16 still photograph: who, wardrobe, place, camera distance, light. No motion, no speech, no camera move.
+- Same person as the reference PNG. Change the *shot* (wide vs close-up), not their identity.
+
+**`videoPrompt`**
+- Animate **that** still: one action + one slow camera move. Do not contradict the still’s framing.
+- Characters **speak**: short quoted phrases with a beat between them (`She says, "I'm home." She pauses, looks past the camera, then, "Lock the door."`). Size `durationSeconds` to that line + action — not a paragraph of speech in one clip.
+- After the action, name matching foley and space (door thud, wet pavement, distant traffic). **No music.**
+
+**Plot**
+- Hook / turn / button is fine. Each beat is one I2V clip from a still, with a short spoken line, not a theatre scene.
 
 
 
