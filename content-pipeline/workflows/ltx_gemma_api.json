@@ -10,35 +10,84 @@
       "class_type": "GemmaAPITextEncode",
       "_meta": { "title": "Gemma API conditioning" }
     },
+    "16": {
+      "inputs": {
+        "positive": ["3", 0],
+        "negative": ["3", 0],
+        "frame_rate": 24
+      },
+      "class_type": "LTXVConditioning"
+    },
     "7": {
       "inputs": {
-        "unet_name": "ltx-2-19b-distilled_Q4_K_M.gguf"
+        "unet_name": "ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf"
       },
       "class_type": "UnetLoaderGGUF"
     },
+    "11": {
+      "inputs": {
+        "model": ["7", 0]
+      },
+      "class_type": "LTXAVUseProcessedAPIEmbeds",
+      "_meta": { "title": "Use processed Gemma API embeds" }
+    },
     "5": {
       "inputs": {
-        "width": 704,
-        "height": 1280,
-        "length": 97,
+        "width": 512,
+        "height": 768,
+        "length": 25,
         "batch_size": 1
       },
       "class_type": "EmptyLTXVLatentVideo"
     },
+    "18": {
+      "inputs": {
+        "max_shift": 2.05,
+        "base_shift": 0.95,
+        "model": ["11", 0],
+        "latent": ["5", 0]
+      },
+      "class_type": "ModelSamplingLTXV"
+    },
+    "17": {
+      "inputs": {
+        "model": ["18", 0],
+        "conditioning": ["16", 0]
+      },
+      "class_type": "BasicGuider"
+    },
+    "13": {
+      "inputs": {
+        "noise_seed": 42
+      },
+      "class_type": "RandomNoise"
+    },
+    "14": {
+      "inputs": {
+        "sampler_name": "euler"
+      },
+      "class_type": "KSamplerSelect"
+    },
+    "15": {
+      "inputs": {
+        "steps": 8,
+        "max_shift": 2.05,
+        "base_shift": 0.95,
+        "stretch": true,
+        "terminal": 0.1,
+        "latent": ["5", 0]
+      },
+      "class_type": "LTXVScheduler"
+    },
     "6": {
       "inputs": {
-        "seed": 42,
-        "steps": 8,
-        "cfg": 1,
-        "sampler_name": "euler",
-        "scheduler": "simple",
-        "denoise": 1,
-        "model": ["7", 0],
-        "positive": ["3", 0],
-        "negative": ["3", 0],
+        "noise": ["13", 0],
+        "guider": ["17", 0],
+        "sampler": ["14", 0],
+        "sigmas": ["15", 0],
         "latent_image": ["5", 0]
       },
-      "class_type": "KSampler"
+      "class_type": "SamplerCustomAdvanced"
     },
     "8": {
       "inputs": {
@@ -49,7 +98,7 @@
     },
     "9": {
       "inputs": {
-        "vae_name": "LTX2_video_vae_bf16.safetensors"
+        "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors"
       },
       "class_type": "VAELoader"
     },

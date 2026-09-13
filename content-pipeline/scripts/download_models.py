@@ -13,13 +13,13 @@ from pathlib import Path
 import requests
 from huggingface_hub import hf_hub_download, hf_hub_url
 
-GGUF_REPO = "Kijai/LTXV2_comfy"
-GGUF_FILE = "diffusion_models/ltx-2-19b-distilled_Q4_K_M.gguf"
-GGUF_NAME = "ltx-2-19b-distilled_Q4_K_M.gguf"
+GGUF_REPO = "unsloth/LTX-2.3-GGUF"
+GGUF_FILE = "distilled-1.1/ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf"
+GGUF_NAME = "ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf"
 
-VAE_REPO = "Kijai/LTXV2_comfy"
-VAE_FILE = "VAE/LTX2_video_vae_bf16.safetensors"
-VAE_NAME = "LTX2_video_vae_bf16.safetensors"
+VAE_REPO = "unsloth/LTX-2.3-GGUF"
+VAE_FILE = "vae/ltx-2.3-22b-distilled_video_vae.safetensors"
+VAE_NAME = "ltx-2.3-22b-distilled_video_vae.safetensors"
 
 META_REPO = "Lightricks/LTX-2.3"
 META_FILE = "ltx-2.3-22b-distilled-1.1.safetensors"

@@ -18,10 +18,11 @@ if (!python) {
   process.exit(1);
 }
 
+const env = { ...process.env, PYTHONUNBUFFERED: "1" };
 const result = spawnSync(python, [script, ...extraArgs], {
   stdio: "inherit",
   cwd: repoRoot,
-  env: process.env,
+  env,
 });
 
 if (result.error) {

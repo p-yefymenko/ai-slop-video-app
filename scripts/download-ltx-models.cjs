@@ -26,6 +26,10 @@ const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
 fs.mkdirSync(workflowDestDir, { recursive: true });
 fs.copyFileSync(workflowSrc, path.join(workflowDestDir, "ltx_gemma_api.json"));
 
+const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
+const nodeDest = path.join(comfyDir, "custom_nodes", "reelshort_ltx");
+fs.cpSync(nodeSrc, nodeDest, { recursive: true });
+
 const result = spawnSync(python, [script, comfyDir], {
   stdio: "inherit",
   cwd: repoRoot,

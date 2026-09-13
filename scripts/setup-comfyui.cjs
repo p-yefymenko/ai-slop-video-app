@@ -75,6 +75,10 @@ const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
 fs.mkdirSync(workflowDestDir, { recursive: true });
 fs.copyFileSync(workflowSrc, path.join(workflowDestDir, "ltx_gemma_api.json"));
 
+const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
+const nodeDest = path.join(customNodes, "reelshort_ltx");
+fs.cpSync(nodeSrc, nodeDest, { recursive: true });
+
 const modelDir = path.join(comfyDir, "models", "diffusion_models");
 fs.mkdirSync(modelDir, { recursive: true });
 fs.mkdirSync(path.join(comfyDir, "models", "checkpoints"), { recursive: true });

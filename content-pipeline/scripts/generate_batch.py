@@ -52,7 +52,7 @@ def queue_prompt(prompt_graph: dict) -> str:
     return body["prompt_id"]
 
 
-def wait_for_output(prompt_id: str, timeout_s: int = 1800) -> list[dict]:
+def wait_for_output(prompt_id: str, timeout_s: int = 7200) -> list[dict]:
     started = time.time()
     while time.time() - started < timeout_s:
         req = urllib.request.Request(f"{COMFYUI_URL}/history/{prompt_id}")
@@ -143,14 +143,18 @@ def generate_episode(script_path: Path, workflow_template: dict) -> None:
 
     scene_files: list[Path] = []
     for scene in script["scenes"]:
+        print(f"Queued scene {scene['sceneNumber']}...", flush=True)
+        dest = out_dir / f"scene_{scene['sceneNumber']:02d}.mp4"
+        if dest.exists() and dest.stat().st_size > 1024:
+            print(f"Already present: {dest}", flush=True)
+            scene_files.append(dest)
+            continue
         graph = inject_prompt(workflow_template, scene["prompt"], os.environ.get("LTXV_API_KEY", ""))
-        print(f"Queued scene {scene['sceneNumber']}...")
         prompt_id = queue_prompt(graph)
         outputs = wait_for_output(prompt_id)
-        dest = out_dir / f"scene_{scene['sceneNumber']:02d}.mp4"
         download_output(outputs[0], dest)
         scene_files.append(dest)
-        print(f"Wrote {dest}")
+        print(f"Wrote {dest}", flush=True)
 
     episode_mp4 = out_dir / "episode.mp4"
     if concat_with_ffmpeg(scene_files, episode_mp4):
@@ -177,7 +181,7 @@ def main() -> None:
             f"ComfyUI is not reachable at {COMFYUI_URL}. Start it locally with the LTX Q4_K_M workflow loaded."
         ) from exc
     for script_path in scripts:
-        print(f"Generating {script_path}")
+        print(f"Generating {script_path}", flush=True)
         generate_episode(script_path, workflow_template)
 
 
