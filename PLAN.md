@@ -15,8 +15,8 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + audio VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json` and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Create character refs and location JSON first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency**). For each recurring set, write a `locations/*.json` with `id`, `promptBlock`, `preserve`, and a `referenceImage` filename — do not put people in the location description. Empty location plates are generated later by `pnpm run content:frames`. Then write the story as shot-only `imagePrompt` + cinematographer `videoPrompt` following **Episode script authoring** (distilled LTX / Qwen-Edit limits). Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Paste that authoring block plus the JSON schema into a chat and save the output with no reformatting. Drop files into `content-pipeline/characters/`, `content-pipeline/locations/`, and `content-pipeline/scripts_input/`.
-9. [ ] Run `pnpm run content:frames`. Review empty location plates in `content-pipeline/locations/` and the `scene_*_start.png` files in `content-pipeline/output/`. Keep, replace, or delete any you do not like (delete + rerun `content:frames` regenerates only the missing plates/stills). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
+8. [ ] **Create character refs and location JSON first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency**). For each recurring set, write a `locations/*.json` with `id`, `promptBlock`, `preserve`, `referenceImage` (wide empty plate filename), and named `views` (camera + image filename) — do not put people in the location description. Empty plates and extra views are generated later by `pnpm run content:frames`. Then write the story with `locationView` plus blocking-only `imagePrompt` and cinematographer `videoPrompt` following **Episode script authoring**. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Paste that authoring block plus the JSON schema into a chat and save the output with no reformatting. Drop files into `content-pipeline/characters/`, `content-pipeline/locations/`, and `content-pipeline/scripts_input/`.
+9. [ ] Run `pnpm run content:frames`. Review empty plates and named views in `content-pipeline/locations/` and the `scene_*_start.png` files in `content-pipeline/output/`. Keep, replace, or delete any you do not like (delete + rerun `content:frames` regenerates only the missing files). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
 12. [ ] Upload the build to a Closed Testing track in Play Console
@@ -119,7 +119,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA) using each character’s reference PNG as Picture 1 (identity) and the scene’s location plate as Picture 2 (set). Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA) using each character’s reference PNG as Picture 1 (identity) and the scene’s chosen location **view** as Picture 2 (camera-matched empty set). Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -202,7 +202,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads episode JSON from `scripts_input/`, resolves each scene's `characterIds` and required `locationId` against `content-pipeline/characters/*.json` and `content-pipeline/locations/*.json`, and prepends those `promptBlock`s. `pnpm run content:frames` first generates any missing **empty** location plates (no people) from the location `promptBlock`, then runs **Qwen-Image-Edit-2511** on the character PNG (Picture 1) plus that plate (Picture 2) plus a shot-only `imagePrompt`, writing `scene_XX_start.png`. After a human review of plates and PNGs, `pnpm run content:generate` animates each approved still with `videoPrompt` via LTX image-to-video (picture and native soundtrack in the same MP4). Finished MP4s stay local until `upload_to_r2.py` runs. Existing location plates / `scene_*_start.png` / `scene_*.mp4` files are skipped; delete one to regenerate it.
+- `generate_batch.py`: reads episode JSON from `scripts_input/`, resolves each scene's `characterIds`, required `locationId`, and required `locationView` against `content-pipeline/characters/*.json` and `content-pipeline/locations/*.json`, and prepends those `promptBlock`s. `pnpm run content:frames` first generates any missing **empty** establishing plate, then any missing named **views** (reframes of that plate, still no people), then runs **Qwen-Image-Edit-2511** on the character PNG (Picture 1) plus the chosen view (Picture 2) plus blocking-only `imagePrompt`, writing `scene_XX_start.png`. After a human review of plates, views, and PNGs, `pnpm run content:generate` animates each approved still with `videoPrompt` via LTX image-to-video (picture and native soundtrack in the same MP4). Finished MP4s stay local until `upload_to_r2.py` runs. Existing plates / views / `scene_*_start.png` / `scene_*.mp4` files are skipped; delete one to regenerate it.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -211,7 +211,7 @@ reelshort-clone/
 Diffusion video models have no memory between separate generations — every scene is an independent roll of the dice, so the same text description produces a *different* person each time unless you deliberately lock identity. v1 does that in two places:
 
 1. **A fixed character prompt block** — one detailed description (hair, face, age, wardrobe) reused word-for-word in every scene that character appears in.
-2. **A reference still**, generated once per character and kept next to the JSON. `content:frames` feeds this PNG into **Qwen-Image-Edit-2511** as Picture 1 so the scene still keeps that face while following the shot in `imagePrompt`. Picture 2 is the location plate, not a second character. An optional third PNG is another identity if the shot needs two people. Do **not** feed the headshot into LTX as frame 0 — that would open every clip on the portrait. LTX only sees the reviewed `scene_XX_start.png`.
+2. **A reference still**, generated once per character and kept next to the JSON. `content:frames` feeds this PNG into **Qwen-Image-Edit-2511** as Picture 1 so the scene still keeps that face while following the blocking in `imagePrompt`. Picture 2 is the scene’s location **view** (empty, already framed), not a second character. An optional third PNG is another identity if the shot needs two people. Do **not** feed the headshot into LTX as frame 0 — that would open every clip on the portrait. LTX only sees the reviewed `scene_XX_start.png`.
 
 Qwen-Image-Edit-2511 is the still model because it is instruction-based editing from a photo (identity lock), Apache 2.0 (fine for a Play Store app), and the community default on 16GB cards as Unsloth’s Q4_K_M GGUF (~13GB) plus the 4-step Lightning LoRA. FLUX.1 Kontext is what some hosted LTX tools use for reference stills, but FLUX.1 [dev] is non-commercial. Z-Image Turbo is fast text-to-image and does not lock a real reference photo. Full BF16/FP8 Qwen-Edit checkpoints do not fit 16GB VRAM without heavy offload.
 
@@ -231,10 +231,11 @@ For recurring lead characters appearing across many episodes, consider training 
 
 ### Location consistency
 
-The same problem applies to sets: if `imagePrompt` invents “a grand foyer” in prose, Qwen draws a new mansion every still. v1 locks the room the same way it locks the face, except the plate is an **empty set** (no actors):
+The same problem applies to sets: if `imagePrompt` invents “a grand foyer” in prose, Qwen draws a new mansion every still. Feeding one wide empty plate as Picture 2 for every shot is also wrong — Qwen pastes the actor into that wide composition, so a “hands on the picture frame” beat becomes arms over her head. v1 locks the room in three layers:
 
-1. **A fixed location prompt block** — architecture, furniture, practical lights, floor, palette — reused word-for-word for every scene in that room. Do not describe a person in it.
-2. **A location plate PNG**, generated by `content:frames` when missing and kept next to the JSON. `content:frames` feeds this as Qwen Picture 2 so scene stills place the character *into* that room. Character refs stay human-made; location plates are pipeline-made.
+1. **A fixed location prompt block** — architecture, furniture, practical lights, floor, palette. Do not describe a person in it.
+2. **An establishing plate** — empty 9:16 wide of the set, generated by `content:frames` when `referenceImage` is missing.
+3. **Named views** — extra empty stills of the same set at the cameras the story actually uses (medium of the portrait wall, medium of the desk). Generated from the establishing plate + that view’s `camera` line. Several scenes share one view so the fireplace does not drift.
 
 `content-pipeline/locations/<location-slug>.json`:
 ```json
@@ -242,13 +243,23 @@ The same problem applies to sets: if `imagePrompt` invents “a grand foyer” i
   "id": "mansion-foyer",
   "referenceImage": "mansion-foyer-ref.png",
   "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
-  "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+  "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces",
+  "views": {
+    "establishing": {
+      "image": "mansion-foyer-ref.png",
+      "camera": "Vertical 9:16 wide, eye level, full fireplace wall with the gold-framed portrait high above the mantel, empty, no people."
+    },
+    "portrait-medium": {
+      "image": "mansion-foyer-portrait-medium.png",
+      "camera": "Vertical 9:16 medium, eye level. Push in so the gold-framed family portrait and the white marble mantel fill most of the frame. The lower-right corner of the gold frame is within arm's reach of a standing adult. Empty, no people."
+    }
+  }
 }
 ```
 
-- Write the JSON before scenes that use this `locationId`. The `referenceImage` filename is required; the PNG is created by `content:frames` if it is missing (empty 9:16 establishing plate from `promptBlock`). Delete the PNG and rerun `content:frames` to retry a plate.
-- Every scene **must** have a `locationId`. `generate_batch.py` prepends `promptBlock` to `imagePrompt`, prepends `Preserve: {preserve}. Do not change background geometry or lights.` to `videoPrompt`, and generates the plate before any scene still that needs it.
-- Same room across consecutive shots = same `locationId`. Do not re-describe the set in `imagePrompt`.
+- Write the JSON before scenes that use this `locationId`. `referenceImage` is the wide empty plate. Each `views` entry has an `image` filename and a `camera` line. If `image` is the same file as `referenceImage`, it is the establishing view and is not generated twice.
+- Every scene **must** have `locationId` and `locationView`. `generate_batch.py` generates missing plates/views, composites the character into the chosen view (not the wide, unless that is the view), prepends `promptBlock` to `imagePrompt`, and prepends `Preserve: {preserve}` plus the view camera to `videoPrompt`.
+- Same room = same `locationId`. Same camera on that wall = same `locationView`. Do not re-describe the set or the camera in `imagePrompt`.
 
 ### Local ComfyUI (required before `content:frames` / `content:generate`)
 
@@ -262,7 +273,7 @@ The same problem applies to sets: if `imagePrompt` invents “a grand foyer” i
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
 5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
-7. Then `pnpm run content:frames`. Review `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
+7. Then `pnpm run content:frames`. Review plates and views in `content-pipeline/locations/` and `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
 
 `content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once. On Windows, `content:comfy`, `content:frames`, `content:generate`, and `content:render` tell the OS to skip idle sleep while they run (GPU load alone does not). Closing the lid can still sleep the machine.
 
@@ -270,7 +281,7 @@ The same problem applies to sets: if `imagePrompt` invents “a grand foyer” i
 
 ### `scripts_input/` file format
 
-One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below (plus the relevant character IDs from `characters/` and location IDs from `locations/`) into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
+One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below (plus the relevant character IDs from `characters/` and location IDs / view keys from `locations/`) into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
 
 ```json
 {
@@ -284,56 +295,65 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
       "locationId": "mansion-gates",
-      "imagePrompt": "Vertical 9:16 wide shot, eye level. Elena stands between the open gates, looking up at the house, lips slightly parted.",
-      "videoPrompt": "Wide shot. Elena looks up slowly. Camera static. She says, \"Ten years.\" She pauses, then, \"Time to finish this.\" Wind, a distant gate creak. No music.",
+      "locationView": "establishing",
+      "imagePrompt": "Elena stands between the open gates, body facing the house, chin lifted, eyes on the upper facade, hands at her sides, lips slightly parted, not looking at camera.",
+      "videoPrompt": "Elena looks up slowly toward the mansion filling the upper frame. She says, \"Ten years.\" She pauses, then continues, \"Time to finish this.\" Camera static. Outdoor wind, a distant gate creak, no music.",
       "durationSeconds": 6
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
       "locationId": "mansion-foyer",
-      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena looks up at the family portrait, lips slightly parted, hands at her sides.",
-      "videoPrompt": "Medium shot. Elena tilts her head slightly toward the portrait. Camera slow push-in. She says, \"You should have told me.\" Room echo, a distant clock. No music.",
+      "locationView": "portrait-medium",
+      "imagePrompt": "Elena stands in front of the mantel, three-quarter to camera, chin lifted, eyes on the painted faces in the portrait, hands at her sides, lips slightly parted, not looking at camera.",
+      "videoPrompt": "Elena tilts her head slightly toward the portrait. She says, \"You should have told me.\" Camera slow push-in. Room echo, a distant clock, no music.",
       "durationSeconds": 5
     }
   ]
 }
 ```
 
-- `scenes` is an ordered list. Every scene has `characterIds` and a required `locationId`. `content:frames` turns the character PNG (Picture 1), location plate (Picture 2), and shot-only `imagePrompt` into `scene_XX_start.png` with Qwen-Image-Edit; `content:generate` then animates that PNG with `videoPrompt` (pixels and sound together). Keep `imagePrompt` as framing/pose/lips/props already in frame — not a new set description. Keep `videoPrompt` as a cinematographer shot list (one action, static or slow push, short quoted speech, matching foley). Character `promptBlock`s are prepended to both; location `promptBlock` is prepended to `imagePrompt`; location `preserve` is prepended to `videoPrompt`. A legacy `prompt` field is still accepted as a fallback for either.
+- `scenes` is an ordered list. Every scene has `characterIds`, a required `locationId`, and a required `locationView`. `content:frames` generates missing empty plates/views, then turns the character PNG (Picture 1), the chosen view (Picture 2), and blocking-only `imagePrompt` into `scene_XX_start.png`; `content:generate` then animates that PNG with `videoPrompt`. Keep `imagePrompt` as eyeline / hands / props / lips — not camera size or set-dressing. Keep `videoPrompt` as a cinematographer shot list (one action, static or slow push, short quoted speech, matching foley). Character `promptBlock`s are prepended to both; location `promptBlock` is prepended to `imagePrompt`; location `preserve` and the view camera are prepended to `videoPrompt`. A legacy `prompt` field is still accepted as a fallback for either.
 - `durationSeconds` is the target **video** clip length. `content:generate` converts it to an LTX frame count at 24 fps using `8n+1` lengths (2s → 49 frames, 5s → 121, 6s → 145). Start stills are 768×1152 Qwen edits (vertical 9:16, ~1MP); LTX I2V resizes them to the video latent (512×768 smoke size). `content:generate` forces Gemma `enhance_prompt` off so the shot list is not rewritten.
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
 - When asking a chat AI to draft episodes, paste **Episode script authoring** below plus this JSON schema (and the relevant IDs / `promptBlock`s from `characters/` and `locations/`) and ask for only valid JSON (no prose, no markdown fences) so it can be saved as the `.json` file.
 
 ### Episode script authoring (distilled LTX + Qwen-Image-Edit)
 
-Write shots these models can actually land. Pipeline: `content:frames` generates an empty 9:16 location plate (no people) when that PNG is missing, then Qwen-Image-Edit builds a start still from the character PNG (Picture 1) + that plate (Picture 2) + shot-only `imagePrompt`; LTX-2.3 **distilled** I2V animates that still from `videoPrompt` (picture and sound together). Distilled is weaker at prompt-following than the full LTX-2.3 dev checkpoint — do not write beats that need precision the distilled model does not have.
+Write shots these models can actually land. Pipeline: `content:frames` generates an empty establishing plate if missing, then named empty **views** from that plate + each view’s `camera` line, then Qwen-Image-Edit builds a start still from the character PNG (Picture 1) + the scene’s `locationView` plate (Picture 2) + blocking-only `imagePrompt`; LTX-2.3 **distilled** I2V animates that still from `videoPrompt` (picture and sound together). Distilled is weaker at prompt-following than the full LTX-2.3 dev checkpoint — do not write beats that need precision the distilled model does not have.
+
+Prompting follows LTX’s own guides, not freeform style notes: [How to improve LTX-2.3 prompt adherence](https://ltx.io/blog/how-to-improve-ltx-2-3-prompt-adherence) (cinematographer shot list; main action first; chronological; one main action per 2–3 seconds; keep under 200 words; `enhance_prompt` off for control), [Directing dialogue and acting](https://ltx.io/blog/directing-dialogue-and-acting) (phrase + one cue + next phrase; eyeline / pause / voice / physical beat; audio last), [Character consistency](https://ltx.io/blog/how-to-maintain-character-consistency-in-ai-video) (fixed prompt block at the start of every prompt — the pipeline prepends `promptBlock`), [I2V workflow](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow) (in image-to-video, prompt what happens, not what the picture already shows), [LTX 2.3 prompt template](https://ltx23.github.io/ltx-2-3-prompt-template/) (subject → action → camera → look). Left/right are **screen-space** (audience left/right of the frame), not the character’s own left/right.
 
 **Output**
 - One file: `content-pipeline/scripts_input/<series-slug>/<episode-number>.json`. JSON object only (no markdown fences).
-- Use only existing `characterIds` from `content-pipeline/characters/` and `locationId`s from `content-pipeline/locations/`. Appearance must match that character `promptBlock` and reference PNG. The set comes from the location plate, not from new prose.
-- Qwen-Edit takes at most **3** reference images: identity, location plate, optional extra identity. Prefer **one speaker on camera** per shot.
+- Use only existing `characterIds` from `content-pipeline/characters/` and `locationId` / `locationView` keys from `content-pipeline/locations/`. Appearance must match that character `promptBlock` and reference PNG. The set and camera come from the location view, not from new prose.
+- Qwen-Edit takes at most **3** reference images on the character pass: identity, location view, optional extra identity. Prefer **one speaker on camera** per shot.
 
 **Do not write (unreliable on distilled)**
-- Monologues or long unbroken quoted speeches (it rushes, skips, or slurs).
+- Monologues or long unbroken quoted speeches (LTX-2.3 rushes or slurs them; segment instead).
 - Two people talking in one shot, off-screen voices, or language other than English.
 - Music / score.
 - Plot that depends on readable on-screen text, logos, or signage.
 - Crowds, fast fight choreography, morphs, 360 orbits, or a new location/wardrobe/face mid-clip.
+- Five actions in one clip. One main action per 2–3 seconds of `durationSeconds`.
 
 **`imagePrompt`**
-- Shot only: size, camera height, pose, lips, props already in frame. No motion, no speech, no camera move, no set-dressing (that lives on the location JSON).
-- Same person as the reference PNG. Change the *shot* (wide vs close-up), not their identity or the room.
-- If they speak this clip: **lips slightly parted**, medium or medium close-up, and any prop they handle already in frame. Do not write jaw set / clenched / sealed lips / closed eyes, or a face-only CU that hides the letter or hands. Wardrobe used later in the episode (a coat, a bag) belongs in the character `promptBlock`, not restated every scene.
+- This still is LTX frame 0. Blocking only: body angle, **eyeline**, which hand, where the prop sits in **screen-space**, lips, whether she looks at camera. No motion, no speech, no camera size (that is `locationView`).
+- `left` / `right` mean the audience’s frame (`screen-left`, `lower-right of the gold frame`). Use `her right hand` only for which hand, then place it in the frame.
+- Hands must reach what they touch. If the practical is high in the establishing wide, pick a tighter `locationView`. Do not write “hands on the frame” against a wide plate — that is how she ends up holding the painting over her head.
+- If they speak this clip: **lips slightly parted**, prop already in frame. Do not write jaw set / clenched / sealed lips / closed eyes, or a face-only CU that hides the letter or hands. If she is not addressing the lens, write **not looking at camera**.
+- Do not restate hair, wardrobe, or architecture. That lives on `promptBlock` / the location view.
 
 **`videoPrompt`**
-- Cinematographer shot list for **that** still: shot size, one present-tense action, camera (static or slow push), timed speech, matching foley. Do not re-describe wardrobe or architecture.
-- Every clip has speech: short quoted phrases with a beat between them (`She says, "I'm home." She pauses, then, "Lock the door."`). Size `durationSeconds` to that line + action — not a paragraph of speech in one clip. Prefer plain words over long idioms and stacked contractions.
-- After the action, name matching foley and space (door thud, wet pavement, distant traffic). **No music.** Off-screen voices or extra foley often replace the line. Do not write “looks past the camera” on a talking close-up.
+- I2V already has the still. Write what happens next, literally and in time order: main action, then gesture, then speech beats, then camera, then audio. Do not re-describe the picture.
+- Speech is LTX-2.3 segmented acting: short quoted phrase, **one** cue (eyeline, pause, voice quality, or physical beat), next phrase. Example: `She says, "Ten years." She pauses, then continues, "Time to finish this."` Not one unbroken paragraph of dialogue. One cue per beat — more than that reads twitchy.
+- Always name the camera (`Camera static` or `Camera slow push-in`). Slow moves that underline a beat. No wide horizontal pans during dialogue.
+- Audio last: acoustic space + matching foley, **no music**. Off-screen voices often replace the line.
+- Do not contradict frame 0 (no new wardrobe, room, or prop). A gaze cue between phrases is valid; do not replace the spoken line with “looks past the camera.”
 
 **Plot**
 - Hook / turn / button is fine. Each beat is one I2V clip from a still, with a short spoken line, not a theatre scene. Do not pad with silent walks, rummages, or “a memory surfaces.”
-- Recurring rooms reuse `locationId`. Do not invent a new mansion in prose for the next close-up.
+- Recurring rooms reuse `locationId`. Recurring cameras on that room reuse `locationView`. Do not invent a new mansion in prose for the next close-up.
 
 
 
@@ -351,7 +371,7 @@ See the **Command Interface** section above — `pnpm run setup` provisions R2/D
 - [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
 - [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
 - [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema and the `characters/` + `locations/` registries defined in the Content Pipeline section (character + location prompt blocks and reference images per scene), and the R2 binding/upload logic in the Worker.
+- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema and the `characters/` + `locations/` registries defined in the Content Pipeline section (character refs, location plates, named views, and per-scene `locationView`), and the R2 binding/upload logic in the Worker.
 - [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
 - [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
 - [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).

@@ -517,6 +517,27 @@ def resolve_scene_characters(scene: dict, registry: dict[str, dict]) -> list[dic
     return resolved
 
 
+def location_view_entries(location: dict) -> dict[str, dict]:
+    views = location.get("views")
+    if not isinstance(views, dict) or not views:
+        raise SystemExit(
+            f"Location {location.get('id')} is missing views. "
+            "Add named cameras (establishing, portrait-medium, …) with image + camera."
+        )
+    cleaned: dict[str, dict] = {}
+    for view_id, view in views.items():
+        if not isinstance(view, dict):
+            raise SystemExit(f"Location {location.get('id')} view {view_id!r} must be an object")
+        image_name = view.get("image")
+        camera = (view.get("camera") or "").strip()
+        if not image_name:
+            raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing image")
+        if not camera:
+            raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing camera")
+        cleaned[str(view_id)] = {**view, "image": image_name, "camera": camera}
+    return cleaned
+
+
 def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
     location_id = scene.get("locationId")
     if not location_id:
@@ -529,8 +550,28 @@ def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
         raise SystemExit(
             f"Unknown locationId {location_id!r}. Add {LOCATIONS_DIR / f'{location_id}.json'}"
         )
-    image_path = reference_image_path(location, "Location", location_id, must_exist=False)
-    return {**location, "image_path": image_path}
+    view_id = scene.get("locationView")
+    if not view_id:
+        raise SystemExit(
+            f"Scene {scene.get('sceneNumber')} is missing locationView. "
+            f"Pick a view from {location_id}."
+        )
+    views = location_view_entries(location)
+    view = views.get(str(view_id))
+    if view is None:
+        known = ", ".join(sorted(views))
+        raise SystemExit(
+            f"Unknown locationView {view_id!r} for {location_id}. Known views: {known}"
+        )
+    wide_path = reference_image_path(location, "Location", location_id, must_exist=False)
+    view_path = location["_dir"] / view["image"]
+    return {
+        **location,
+        "image_path": wide_path,
+        "view_id": str(view_id),
+        "view": view,
+        "view_path": view_path,
+    }
 
 
 def compose_scene_prompt(
@@ -550,7 +591,13 @@ def compose_scene_prompt(
         blocks.append(location["promptBlock"].strip())
     if field == "videoPrompt" and location:
         preserve = (location.get("preserve") or "the same location as the start frame").strip()
-        text = f"Preserve: {preserve}. Do not change background geometry or lights.\n{text}"
+        camera = ((location.get("view") or {}).get("camera") or "").strip()
+        keep_camera = f" Keep this camera: {camera}." if camera else ""
+        text = (
+            f"Preserve: {preserve}.{keep_camera} "
+            "Do not change background geometry or lights.\n"
+            f"{text}"
+        )
     return "\n".join([*blocks, text])
 
 
@@ -660,11 +707,13 @@ def compose_edit_instruction(scene: dict, characters: list[dict], location: dict
     lock = (
         "Picture 1 is the identity reference. Keep that exact person: "
         "same face, identity, hair, skin tone, and body. Do not replace them. "
-        "Picture 2 is an empty location plate with no people. Keep that exact set: "
-        "architecture, furniture, practical lights, colors, and background geometry. "
-        "Place the person from Picture 1 into the Picture 2 location. "
-        "New vertical 9:16 still. New framing as described below. "
-        "Do not invent a different building or room."
+        "Picture 2 is an empty location view already framed for this shot. Keep that exact camera, "
+        "architecture, furniture, practical lights, and background geometry. "
+        "Do not pull the camera back to a wide establishing shot. Do not invent a different room. "
+        "Place the person from Picture 1 into Picture 2 at a scale that fits this framing. "
+        "Hands must actually reach any prop or surface they touch. "
+        "Follow the blocking below exactly: eyeline, which hand, where the prop sits on the body. "
+        "Do not look at the camera unless the blocking says so."
     )
     if len(characters) > 1:
         lock += (
@@ -681,6 +730,18 @@ def compose_location_plate_prompt(location: dict) -> str:
         "Architecture, furniture, practical lights, floors, and surfaces only. "
         "Photorealistic, sharp, no motion blur.\n\n"
         f"{location['promptBlock'].strip()}"
+    )
+
+
+def compose_location_view_prompt(location: dict, view: dict) -> str:
+    return (
+        "Picture 1 is the empty establishing plate of this location. Keep that exact set: "
+        "architecture, furniture, practical lights, materials, and colors. "
+        "No people, no faces, no silhouettes, no hands, no figures. "
+        "Reframe the camera as described below. New vertical 9:16 empty still. "
+        "Do not invent a different building or room.\n\n"
+        f"{location['promptBlock'].strip()}\n\n"
+        f"Camera: {view['camera']}"
     )
 
 
@@ -734,14 +795,15 @@ def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
 def inject_qwen_references(graph: dict, characters: list[dict], location: dict) -> None:
     if not characters:
         raise RuntimeError("Qwen-Image-Edit needs at least one character reference image")
-    if not present(location["image_path"]):
+    view_path = location["view_path"]
+    if not present(view_path):
         raise RuntimeError(
-            f"Missing location plate {location['image_path']}. "
-            "content:frames generates empty plates before scene stills."
+            f"Missing location view {view_path}. "
+            "content:frames generates empty views before scene stills."
         )
     refs: list[tuple[str, str]] = [
         (stage_start_still(characters[0]["image_path"]), "Character reference 1"),
-        (stage_start_still(location["image_path"]), "Location plate"),
+        (stage_start_still(view_path), f"Location view {location.get('view_id') or ''}"),
     ]
     for index, character in enumerate(characters[1:], start=2):
         if len(refs) >= MAX_QWEN_REFS:
@@ -846,28 +908,62 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
+def unique_script_locations(script: dict, locations_registry: dict[str, dict]) -> list[dict]:
+    seen: set[str] = set()
+    locations: list[dict] = []
+    for scene in script["scenes"]:
+        location = resolve_scene_location(scene, locations_registry)
+        if location["id"] in seen:
+            continue
+        seen.add(location["id"])
+        locations.append(location)
+    return locations
+
+
+def generate_qwen_still(workflow_template: dict, prompt: str, refs: list[tuple[str, str]], dest: Path, mode: str) -> None:
+    graph = clone_workflow(workflow_template)
+    inject_qwen_prompt(graph, prompt)
+    inject_seed(graph, random.randint(0, 2**32 - 1))
+    inject_qwen_image_slots(graph, refs)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+
+
 def ensure_location_plates(
     script: dict,
     locations_registry: dict[str, dict],
     workflow_template: dict,
 ) -> None:
-    seen: set[str] = set()
-    for scene in script["scenes"]:
-        location = resolve_scene_location(scene, locations_registry)
-        location_id = location["id"]
-        if location_id in seen:
-            continue
-        seen.add(location_id)
-        dest = location["image_path"]
-        print(f"Queued location plate {location_id}...", flush=True)
-        if present(dest):
-            print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
-            continue
-        graph = clone_workflow(workflow_template)
-        inject_qwen_prompt(graph, compose_location_plate_prompt(location))
-        inject_seed(graph, random.randint(0, 2**32 - 1))
-        inject_qwen_image_slots(graph, [(stage_start_still(location_canvas_path()), "Empty canvas")])
-        execute_queued_graph(graph, dest, prefer="image", mode=f"location plate ({location_id})")
+    for location in unique_script_locations(script, locations_registry):
+        wide_path = location["image_path"]
+        print(f"Queued location plate {location['id']}...", flush=True)
+        if present(wide_path):
+            print(f"  Skipped (already present): {wide_path} ({format_bytes(wide_path.stat().st_size)})", flush=True)
+        else:
+            generate_qwen_still(
+                workflow_template,
+                compose_location_plate_prompt(location),
+                [(stage_start_still(location_canvas_path()), "Empty canvas")],
+                wide_path,
+                f"location plate ({location['id']})",
+            )
+        for view_id, view in location_view_entries(location).items():
+            dest = location["_dir"] / view["image"]
+            print(f"Queued location view {location['id']}/{view_id}...", flush=True)
+            if dest.resolve() == wide_path.resolve():
+                print(f"  Skipped (same file as establishing plate): {dest}", flush=True)
+                continue
+            if present(dest):
+                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
+                continue
+            if not present(wide_path):
+                raise RuntimeError(f"Cannot generate view {view_id}: missing establishing plate {wide_path}")
+            generate_qwen_still(
+                workflow_template,
+                compose_location_view_prompt(location, view),
+                [(stage_start_still(wide_path), "Establishing plate")],
+                dest,
+                f"location view ({location['id']}/{view_id})",
+            )
 
 
 def generate_episode(
@@ -929,7 +1025,10 @@ def generate_episode(
             inject_seed(graph, seed)
             inject_qwen_references(graph, characters, location)
             prefer = "image"
-            mode = f"Qwen-Image-Edit ({', '.join(scene.get('characterIds') or []) or 'none'} @ {scene.get('locationId') or 'none'})"
+            mode = (
+                f"Qwen-Image-Edit ({', '.join(scene.get('characterIds') or []) or 'none'} "
+                f"@ {scene.get('locationId') or 'none'}/{scene.get('locationView') or 'none'})"
+            )
         else:
             prompt = compose_scene_prompt(scene, characters, "videoPrompt", location)
             graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
@@ -938,7 +1037,10 @@ def generate_episode(
             inject_scene_length(graph, duration_seconds=duration_seconds)
             inject_start_frame(graph, stage_start_still(still_path))
             prefer = "video"
-            mode = f"I2V ({', '.join(scene.get('characterIds') or []) or 'none'} @ {scene.get('locationId') or 'none'})"
+            mode = (
+                f"I2V ({', '.join(scene.get('characterIds') or []) or 'none'} "
+                f"@ {scene.get('locationId') or 'none'}/{scene.get('locationView') or 'none'})"
+            )
         print(f"  Graph seed {seed}", flush=True)
         execute_queued_graph(graph, dest, prefer=prefer, mode=mode)
         if stage == "video":
@@ -948,7 +1050,7 @@ def generate_episode(
     if stage == "frames":
         print(
             f"Start stills for {series}/{episode_number} are in {out_dir}. "
-            "Review location plates in content-pipeline/locations/ and the scene_*_start.png files. "
+            "Review location plates and views in content-pipeline/locations/ and the scene_*_start.png files. "
             "Replace one by hand, or delete it and rerun `pnpm run content:frames`. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,
@@ -972,14 +1074,12 @@ def stage_needs_comfy(
     for script_path in scripts:
         script = load_json(script_path)
         if stage == "frames" and locations_registry is not None:
-            seen: set[str] = set()
-            for scene in script["scenes"]:
-                location = resolve_scene_location(scene, locations_registry)
-                if location["id"] in seen:
-                    continue
-                seen.add(location["id"])
+            for location in unique_script_locations(script, locations_registry):
                 if not present(location["image_path"]):
                     return True
+                for view in location_view_entries(location).values():
+                    if not present(location["_dir"] / view["image"]):
+                        return True
         out_dir = OUTPUT_DIR / script["series"] / str(script["episodeNumber"])
         for scene in script["scenes"]:
             dest = (

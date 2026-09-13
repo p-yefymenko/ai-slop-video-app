@@ -2,5 +2,11 @@
   "id": "mansion-gates",
   "referenceImage": "mansion-gates-ref.png",
   "promptBlock": "Grey stone mansion with a steep slate roof and chimneys, seen through a pair of tall black wrought-iron gates that stand open on stone gateposts. Dusk sky, orange-gold sun on the facade, gravel drive, clipped hedges. Camera outside the gates looking in.",
-  "preserve": "the same grey stone mansion, open black iron gates, dusk orange light, gravel drive"
+  "preserve": "the same grey stone mansion, open black iron gates, dusk orange light, gravel drive",
+  "views": {
+    "establishing": {
+      "image": "mansion-gates-ref.png",
+      "camera": "Vertical 9:16 wide, eye level, outside the open black iron gates looking in at the full grey stone mansion, dusk, empty, no people."
+    }
+  }
 }

@@ -2,5 +2,19 @@
   "id": "mansion-study",
   "referenceImage": "mansion-study-ref.png",
   "promptBlock": "Wood-paneled study: floor-to-ceiling dark mahogany bookshelves packed with leather-bound books, green glass banker's lamp on a polished mahogany desk, warm tungsten lamp light, no windows in frame.",
-  "preserve": "the same mahogany bookshelves, green banker's lamp, polished desk, warm tungsten light"
+  "preserve": "the same mahogany bookshelves, green banker's lamp, polished desk, warm tungsten light",
+  "views": {
+    "establishing": {
+      "image": "mansion-study-ref.png",
+      "camera": "Vertical 9:16 wide, eye level, bookshelves and the polished desk with the green banker's lamp, empty, no people."
+    },
+    "desk-medium": {
+      "image": "mansion-study-desk-medium.png",
+      "camera": "Vertical 9:16 medium, eye level, seated distance from the polished mahogany desk. Green banker's lamp and desktop in frame, bookshelves behind. Empty, no people."
+    },
+    "desk-mcu": {
+      "image": "mansion-study-desk-mcu.png",
+      "camera": "Vertical 9:16 medium close-up, eye level. Bookshelves fill the background, green banker's lamp slightly behind and to the side. Empty, no people."
+    }
+  }
 }
