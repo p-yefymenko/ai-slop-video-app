@@ -63,6 +63,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:comfy": "node scripts/start-comfyui.cjs",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
+    "content:render": "pnpm run content:frames && pnpm run content:generate",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
@@ -239,7 +240,7 @@ For recurring lead characters appearing across many episodes, consider training 
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
 5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
-7. Then `pnpm run content:frames`. Review `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`.
+7. Then `pnpm run content:frames`. Review `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
 
 `content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 
@@ -299,14 +300,15 @@ Write shots these models can actually land. Pipeline: Qwen-Image-Edit builds a 9
 **`imagePrompt`**
 - Vertical 9:16 still photograph: who, wardrobe, place, camera distance, light. No motion, no speech, no camera move.
 - Same person as the reference PNG. Change the *shot* (wide vs close-up), not their identity.
+- If they speak this clip: **lips slightly parted**, medium or medium close-up, and any prop they handle already in frame. Do not write jaw set / clenched / sealed lips / closed eyes, or a face-only CU that hides the letter or hands. Wardrobe used later in the episode (a coat, a bag) belongs in every still.
 
 **`videoPrompt`**
-- Animate **that** still: one action + one slow camera move. Do not contradict the still’s framing.
-- Characters **speak**: short quoted phrases with a beat between them (`She says, "I'm home." She pauses, looks past the camera, then, "Lock the door."`). Size `durationSeconds` to that line + action — not a paragraph of speech in one clip.
-- After the action, name matching foley and space (door thud, wet pavement, distant traffic). **No music.**
+- Animate **that** still: one action + one slow camera move. Do not contradict the still’s framing or invent objects that are out of frame.
+- Every clip has speech: short quoted phrases with a beat between them (`She says, "I'm home." She pauses, then, "Lock the door."`). Size `durationSeconds` to that line + action — not a paragraph of speech in one clip. Prefer plain words over long idioms and stacked contractions.
+- After the action, name matching foley and space (door thud, wet pavement, distant traffic). **No music.** Off-screen voices or extra foley often replace the line. Do not write “looks past the camera” on a talking close-up.
 
 **Plot**
-- Hook / turn / button is fine. Each beat is one I2V clip from a still, with a short spoken line, not a theatre scene.
+- Hook / turn / button is fine. Each beat is one I2V clip from a still, with a short spoken line, not a theatre scene. Do not pad with silent walks, rummages, or “a memory surfaces.”
 
 
 

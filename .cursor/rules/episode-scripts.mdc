@@ -14,3 +14,16 @@ When writing plot or `scripts_input/` JSON, follow **Episode script authoring** 
 - Do not write what distilled LTX does unreliably: multi-speaker, non-English, crowds, on-screen text, fights/morphs/360s, mid-clip identity or location changes.
 - Prefer one person on camera. Size `durationSeconds` to the line + action, not an arbitrary cap.
 - Reply with valid episode JSON only (no markdown fences) unless the human asked for a plan first.
+
+## Speech (I2V will stay silent otherwise)
+
+LTX samples picture and sound together from the start still. A sealed mouth in that PNG usually yields foley, not the quoted line.
+
+- Every clip has a short spoken line. Do not write silent reaction / walk / rummage beats.
+- Talking `imagePrompt`: **lips slightly parted**; medium or medium close-up. Put the letter, ledger, or hands **in the still** if she uses them.
+- Never write jaw set, clenched, sealed lips, closed eyes, or “memory surfaces” on a talking shot. Do not use a face-only CU that hides the prop.
+- `videoPrompt` may only animate what is already in the still. Do not invent a crumple, drawer, or object that is out of frame.
+- Lines: a few plain words in quotes (`"He knew."`). Two beats max. Avoid long idioms and stacked contractions (`"Let's see who's laughing now."`).
+- Foley must match the picture. Off-screen drawers, voices, or extra noise often replace the line.
+- Do not end a talking CU with “looks past the camera.” Look at the camera or at the prop.
+- Wardrobe needed later (a coat she hides something in) belongs in **every** still of that episode.
