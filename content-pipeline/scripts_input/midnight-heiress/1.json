@@ -8,57 +8,65 @@
     {
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands at the wrought-iron gates of a large stone mansion at dusk, wearing a dark coat over a metallic bronze wrap top, lips slightly parted, looking up at the building, wide shot, dramatic golden-hour lighting, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena looks up slowly at the mansion, wind moving her hair, camera holds steady. She says, \"Ten years.\" She pauses, then, \"Time to finish this.\" Foley: wind, a distant gate creak. No music.",
+      "locationId": "mansion-gates",
+      "imagePrompt": "Vertical 9:16 wide shot, eye level. Elena stands between the open gates, looking up at the house, lips slightly parted.",
+      "videoPrompt": "Wide shot. Elena looks up slowly. Camera static. She says, \"Ten years.\" She pauses, then, \"Time to finish this.\" Wind, a distant gate creak. No music.",
       "durationSeconds": 6
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena in a grand marble foyer, still wearing the dark coat over the metallic bronze wrap top, lips slightly parted, looking up at a large family portrait on the wall, warm interior light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena tilts her head slightly, studying the portrait, camera slowly pushes in. She says, \"You should have told me.\" Foley: faint room echo, a distant clock. No music.",
+      "locationId": "mansion-foyer",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena looks up at the family portrait, lips slightly parted, hands at her sides.",
+      "videoPrompt": "Medium shot. Elena tilts her head slightly toward the portrait. Camera slow push-in. She says, \"You should have told me.\" Room echo, a distant clock. No music.",
       "durationSeconds": 5
     },
     {
       "sceneNumber": 3,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena at the portrait, dark coat over the metallic bronze wrap top, both hands on the slightly pulled frame, a sealed envelope already visible in the gap behind it, lips slightly parted, warm interior light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena draws the envelope out slowly, camera follows her hands. She murmurs, \"What is this.\" Foley: frame scraping the wall, paper sliding. No music.",
+      "locationId": "mansion-foyer",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena at the portrait, both hands on the slightly pulled gold frame, a sealed envelope already visible in the gap, lips slightly parted.",
+      "videoPrompt": "Medium shot. Elena draws the envelope out slowly. Camera follows her hands. She murmurs, \"What is this.\" Frame scraping the wall, paper sliding. No music.",
       "durationSeconds": 5
     },
     {
       "sceneNumber": 4,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena in the foyer, dark coat over the metallic bronze wrap top, holding an open letter in both hands, lips slightly parted, eyes on the page, warm interior light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena reads the letter, camera slowly pushes in. She says, \"He sold the house.\" She pauses, then, \"They all knew.\" Foley: paper rustling, a sharp breath. No music.",
+      "locationId": "mansion-foyer",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena holds an open letter in both hands, lips slightly parted, eyes on the page. Portrait still on the wall behind her.",
+      "videoPrompt": "Medium shot. Elena reads the letter. Camera slow push-in. She says, \"He sold the house.\" She pauses, then, \"They all knew.\" Paper rustle, a sharp breath. No music.",
       "durationSeconds": 7
     },
     {
       "sceneNumber": 5,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena in a dim wood-paneled study, dark coat over the metallic bronze wrap top, seated at a desk with an open leather ledger already in her hands, lips slightly parted, lamp light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena's finger traces a line in the ledger, camera holds steady. She says, \"His sale. My proof.\" Foley: a page settling. No music.",
+      "locationId": "mansion-study",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena seated at the desk, an open leather ledger already in her hands, lips slightly parted.",
+      "videoPrompt": "Medium shot. Elena's finger traces one line in the ledger. Camera static. She says, \"His sale. My proof.\" A page settling. No music.",
       "durationSeconds": 6
     },
     {
       "sceneNumber": 6,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena at the study desk, dark coat over the metallic bronze wrap top, ledger still in her hands, lips slightly parted, head already turned toward the closed door, alert, lamp light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena freezes, eyes on the door, camera holds. She whispers, \"Someone's here.\" Foley: a distant footstep in the hallway, a floorboard creak. No music.",
+      "locationId": "mansion-study",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena at the desk, ledger in her hands, lips slightly parted, head already turned toward the closed wooden door.",
+      "videoPrompt": "Medium shot. Elena freezes, eyes on the door. Camera static. She whispers, \"Someone's here.\" A distant footstep, a floorboard creak. No music.",
       "durationSeconds": 5
     },
     {
       "sceneNumber": 7,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium shot of Elena in the study, dark coat over the metallic bronze wrap top open enough to show the inside, the leather ledger already halfway into the coat, lips slightly parted, glancing at the door, lamp light, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena slips the ledger the rest of the way into her coat and presses it flat, camera holds. She whispers, \"Not yet.\" Foley: fabric rustling, her own controlled breath. No music.",
+      "locationId": "mansion-study",
+      "imagePrompt": "Vertical 9:16 medium shot, eye level. Elena at the desk, the leather ledger already halfway into her open coat, lips slightly parted, glancing at the door.",
+      "videoPrompt": "Medium shot. Elena slips the ledger the rest of the way into her coat and presses it flat. Camera static. She whispers, \"Not yet.\" Fabric rustle, her breath. No music.",
       "durationSeconds": 5
     },
     {
       "sceneNumber": 8,
       "characterIds": ["elena-heiress"],
-      "imagePrompt": "Cinematic still photograph, vertical 9:16, medium close-up of Elena in the study, dark coat over the metallic bronze wrap top, lips slightly parted, a faint knowing smile, looking toward the camera, lamp light behind her, photorealistic, sharp, no motion blur.",
-      "videoPrompt": "Elena exhales slowly, camera holds. She looks at the camera and says, \"I can keep secrets too.\" Foley: quiet room tone. No music.",
+      "locationId": "mansion-study",
+      "imagePrompt": "Vertical 9:16 medium close-up, eye level. Elena looks toward the camera, lips slightly parted, a faint smile. Bookshelves and the green lamp behind her.",
+      "videoPrompt": "Medium close-up. Elena exhales slowly. Camera static. She looks at the camera and says, \"I can keep secrets too.\" Quiet room tone. No music.",
       "durationSeconds": 5
     }
   ]

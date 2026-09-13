@@ -1,0 +1,6 @@
+{
+  "id": "mansion-foyer",
+  "referenceImage": "mansion-foyer-ref.png",
+  "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
+  "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+}
