@@ -33,6 +33,8 @@ MAX_QWEN_REFS = 3
 STILL_WIDTH = 768
 STILL_HEIGHT = 1152
 LOCATION_CANVAS_NAME = "location-canvas.png"
+QWEN_ANGLES_LORA = "qwen-image-edit-2511-multiple-angles-lora.safetensors"
+QWEN_ANGLES_STRENGTH = 0.9
 NVIDIA_QUERY_FIELDS = [
     "name",
     "memory.used",
@@ -522,7 +524,7 @@ def location_view_entries(location: dict) -> dict[str, dict]:
     if not isinstance(views, dict) or not views:
         raise SystemExit(
             f"Location {location.get('id')} is missing views. "
-            "Add named cameras (establishing, portrait-medium, …) with image + camera."
+            "Add named cameras (establishing, portrait-medium, …) with image, camera, and reframe on non-establishing views."
         )
     cleaned: dict[str, dict] = {}
     for view_id, view in views.items():
@@ -530,11 +532,24 @@ def location_view_entries(location: dict) -> dict[str, dict]:
             raise SystemExit(f"Location {location.get('id')} view {view_id!r} must be an object")
         image_name = view.get("image")
         camera = (view.get("camera") or "").strip()
+        reframe = (view.get("reframe") or "").strip()
         if not image_name:
             raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing image")
         if not camera:
             raise SystemExit(f"Location {location.get('id')} view {view_id!r} is missing camera")
-        cleaned[str(view_id)] = {**view, "image": image_name, "camera": camera}
+        establishing = location.get("referenceImage")
+        if image_name != establishing and not reframe.startswith("<sks>"):
+            raise SystemExit(
+                f"Location {location.get('id')} view {view_id!r} needs reframe in "
+                "Qwen-Image-Edit-2511 angles form, e.g. "
+                "'<sks> front view eye-level shot medium shot'."
+            )
+        cleaned[str(view_id)] = {
+            **view,
+            "image": image_name,
+            "camera": camera,
+            "reframe": reframe,
+        }
     return cleaned
 
 
@@ -734,14 +749,16 @@ def compose_location_plate_prompt(location: dict) -> str:
 
 
 def compose_location_view_prompt(location: dict, view: dict) -> str:
+    reframe = (view.get("reframe") or "").strip()
     return (
-        "Picture 1 is the empty establishing plate of this location. Keep that exact set: "
-        "architecture, furniture, practical lights, materials, and colors. "
-        "No people, no faces, no silhouettes, no hands, no figures. "
-        "Reframe the camera as described below. New vertical 9:16 empty still. "
+        f"{reframe}\n\n"
+        "Picture 1 is the empty establishing plate of this location. "
+        "Keep the same architecture, furniture, practical lights, and materials. "
+        "Empty still: no people, no faces, no figures. "
+        "Change the camera to the new shot. Do not copy the original wide framing. "
         "Do not invent a different building or room.\n\n"
         f"{location['promptBlock'].strip()}\n\n"
-        f"Camera: {view['camera']}"
+        f"Fill the frame: {view['camera']}"
     )
 
 
@@ -755,6 +772,31 @@ def inject_qwen_prompt(graph: dict, prompt: str) -> None:
         node.setdefault("inputs", {})["prompt"] = prompt
         return
     raise RuntimeError("Could not find the Qwen positive-instruction node in qwen_image_edit.json")
+
+
+def inject_qwen_angles_lora(graph: dict) -> None:
+    lora_path = ROOT / ".comfyui" / "models" / "loras" / QWEN_ANGLES_LORA
+    if not lora_path.is_file():
+        raise SystemExit(
+            f"Missing {lora_path}. Run `pnpm run content:models` to download the "
+            "Qwen-Image-Edit-2511 multiple-angles LoRA, then rerun `pnpm run content:frames`."
+        )
+    lightning = graph.get("4")
+    if not isinstance(lightning, dict) or lightning.get("class_type") != "LoraLoaderModelOnly":
+        raise RuntimeError("Could not find Lightning LoRA node 4 in qwen_image_edit.json")
+    graph["21"] = {
+        "inputs": {
+            "model": ["4", 0],
+            "lora_name": QWEN_ANGLES_LORA,
+            "strength_model": QWEN_ANGLES_STRENGTH,
+        },
+        "class_type": "LoraLoaderModelOnly",
+        "_meta": {"title": "Qwen-Image-Edit-2511 multiple angles"},
+    }
+    sampling = graph.get("5")
+    if not isinstance(sampling, dict):
+        raise RuntimeError("Could not find ModelSamplingAuraFlow node 5 in qwen_image_edit.json")
+    sampling.setdefault("inputs", {})["model"] = ["21", 0]
 
 
 def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
@@ -920,11 +962,21 @@ def unique_script_locations(script: dict, locations_registry: dict[str, dict]) -
     return locations
 
 
-def generate_qwen_still(workflow_template: dict, prompt: str, refs: list[tuple[str, str]], dest: Path, mode: str) -> None:
+def generate_qwen_still(
+    workflow_template: dict,
+    prompt: str,
+    refs: list[tuple[str, str]],
+    dest: Path,
+    mode: str,
+    *,
+    angles: bool = False,
+) -> None:
     graph = clone_workflow(workflow_template)
     inject_qwen_prompt(graph, prompt)
     inject_seed(graph, random.randint(0, 2**32 - 1))
     inject_qwen_image_slots(graph, refs)
+    if angles:
+        inject_qwen_angles_lora(graph)
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
@@ -963,6 +1015,7 @@ def ensure_location_plates(
                 [(stage_start_still(wide_path), "Establishing plate")],
                 dest,
                 f"location view ({location['id']}/{view_id})",
+                angles=True,
             )
 
 

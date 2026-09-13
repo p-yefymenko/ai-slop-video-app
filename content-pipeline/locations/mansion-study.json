@@ -10,11 +10,13 @@
     },
     "desk-medium": {
       "image": "mansion-study-desk-medium.png",
-      "camera": "Vertical 9:16 medium, eye level, seated distance from the polished mahogany desk. Green banker's lamp and desktop in frame, bookshelves behind. Empty, no people."
+      "reframe": "<sks> front view eye-level shot medium shot",
+      "camera": "Seated distance from the polished mahogany desk. Green banker's lamp and desktop fill the lower frame, bookshelves behind. Empty, no people."
     },
     "desk-mcu": {
       "image": "mansion-study-desk-mcu.png",
-      "camera": "Vertical 9:16 medium close-up, eye level. Bookshelves fill the background, green banker's lamp slightly behind and to the side. Empty, no people."
+      "reframe": "<sks> front view eye-level shot close-up",
+      "camera": "Medium close-up on the desktop and green banker's lamp. Bookshelves fill the background. Empty, no people."
     }
   }
 }

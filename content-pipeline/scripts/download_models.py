@@ -38,6 +38,8 @@ QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
 QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+QWEN_ANGLES_LORA_REPO = "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA"
+QWEN_ANGLES_LORA_FILE = "qwen-image-edit-2511-multiple-angles-lora.safetensors"
 
 
 def cache_dir() -> Path:
@@ -139,6 +141,12 @@ def main() -> None:
     download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
+    download(
+        QWEN_ANGLES_LORA_REPO,
+        QWEN_ANGLES_LORA_FILE,
+        models / "loras" / QWEN_ANGLES_LORA_FILE,
+        50_000_000,
+    )
     checkpoints = models / "checkpoints"
     stub = checkpoints / STUB_NAME
     write_metadata_stub(stub, fetch_official_metadata())

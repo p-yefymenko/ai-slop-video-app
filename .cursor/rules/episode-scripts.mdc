@@ -11,6 +11,7 @@ Follow **Episode script authoring** and the JSON schema in `PLAN.md`. Do not inv
 Prompting follows LTX-2.3 docs (cinematographer shot list, not poetry): [prompt adherence](https://ltx.io/blog/how-to-improve-ltx-2-3-prompt-adherence), [dialogue/acting](https://ltx.io/blog/directing-dialogue-and-acting), [character consistency](https://ltx.io/blog/how-to-maintain-character-consistency-in-ai-video), [I2V](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow), [2.3 template](https://ltx23.github.io/ltx-2-3-prompt-template/). `enhance_prompt` is off; write the real prompt.
 
 - Read `characters/*.json` and `locations/*.json` first. Use only those `id`s and `views` keys.
+- Location views that are not the establishing plate need `reframe` in Qwen-Image-Edit-2511 angles form (`<sks> front view eye-level shot medium shot` or `close-up` / `wide shot`) plus `camera` (what fills the new frame). Prose like “medium shot” alone copies the wide plate.
 - Every scene has `characterIds`, `locationId`, and `locationView`. Same room = same `locationId`. Same camera on that wall = same `locationView`.
 - **Anchoring:** do not restate hair/wardrobe/set. The pipeline prepends the character `promptBlock` and location `preserve`. Scene text is blocking + motion only.
 - **Screen-space:** `left` / `right` are the audience’s frame, not the character’s left/right. Write `screen-left`, `screen-right`, `lower-right of the gold frame`. Use `her right hand` only for which hand.

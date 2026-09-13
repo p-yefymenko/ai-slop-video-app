@@ -10,7 +10,8 @@
     },
     "portrait-medium": {
       "image": "mansion-foyer-portrait-medium.png",
-      "camera": "Vertical 9:16 medium, eye level. Push in so the gold-framed family portrait and the white marble mantel fill most of the frame. The lower-right corner of the gold frame is within arm's reach of a standing adult. Empty, no people."
+      "reframe": "<sks> front view eye-level shot medium shot",
+      "camera": "The gold-framed family portrait and the white marble mantel fill most of the frame. The lower-right corner of the gold frame is within arm's reach of a standing adult. Empty, no people."
     }
   }
 }
