@@ -1,6 +1,5 @@
 const { spawn } = require("node:child_process");
 const { comfyPaths, findComfyPython } = require("./comfy-env.cjs");
-const { startStayAwake } = require("./stay-awake.cjs");
 
 const { comfyDir } = comfyPaths();
 const python = findComfyPython();
@@ -11,7 +10,6 @@ if (!python) {
 }
 
 console.log(`Starting ComfyUI with ${python}`);
-const stopStayAwake = startStayAwake();
 const child = spawn(python, ["main.py", "--listen", "127.0.0.1", "--port", "8188"], {
   cwd: comfyDir,
   stdio: "inherit",
@@ -19,6 +17,5 @@ const child = spawn(python, ["main.py", "--listen", "127.0.0.1", "--port", "8188
 });
 
 child.on("exit", (code) => {
-  stopStayAwake();
   process.exit(code ?? 1);
 });

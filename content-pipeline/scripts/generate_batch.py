@@ -20,7 +20,6 @@ from ffmpeg_tools import concat_videos
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 CHARACTERS_DIR = ROOT / "characters"
-LOCATIONS_DIR = ROOT / "locations"
 OUTPUT_DIR = ROOT / "output"
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
@@ -480,8 +479,27 @@ def load_character_registry() -> dict[str, dict]:
     return load_named_registry(CHARACTERS_DIR, "Character")
 
 
-def load_location_registry() -> dict[str, dict]:
-    return load_named_registry(LOCATIONS_DIR, "Location")
+def load_script_locations(script: dict) -> dict[str, dict]:
+    raw = script.get("locations")
+    if not isinstance(raw, dict) or not raw:
+        raise SystemExit(
+            "Episode JSON is missing locations. Add a locations object keyed by locationId "
+            "with promptBlock (and optional preserve) on each entry."
+        )
+    cleaned: dict[str, dict] = {}
+    for loc_id, loc in raw.items():
+        if not isinstance(loc, dict):
+            raise SystemExit(f"locations[{loc_id!r}] must be an object with promptBlock")
+        prompt = (loc.get("promptBlock") or "").strip()
+        if not prompt:
+            raise SystemExit(f"locations[{loc_id!r}] is missing promptBlock")
+        cleaned[str(loc_id)] = {
+            **loc,
+            "id": str(loc_id),
+            "promptBlock": prompt,
+            "preserve": (loc.get("preserve") or "").strip(),
+        }
+    return cleaned
 
 
 def reference_image_path(item: dict, kind: str, item_id: str, *, must_exist: bool) -> Path:
@@ -517,15 +535,14 @@ def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
     if not location_id:
         raise SystemExit(
             f"Scene {scene.get('sceneNumber')} is missing locationId. "
-            f"Add one from {LOCATIONS_DIR}."
+            "Use a key from this episode's locations object."
         )
     location = registry.get(location_id)
     if location is None:
+        known = ", ".join(sorted(registry)) or "(none)"
         raise SystemExit(
-            f"Unknown locationId {location_id!r}. Add {LOCATIONS_DIR / f'{location_id}.json'}"
+            f"Unknown locationId {location_id!r}. Known locations in this episode: {known}"
         )
-    if not (location.get("promptBlock") or "").strip():
-        raise SystemExit(f"Location {location_id} is missing promptBlock")
     if scene.get("locationView"):
         raise SystemExit(
             f"Scene {scene.get('sceneNumber')} has locationView, which is no longer used. "
@@ -845,13 +862,13 @@ def generate_episode(
     script_path: Path,
     workflow_template: dict,
     characters_registry: dict[str, dict],
-    locations_registry: dict[str, dict],
     stage: str,
 ) -> None:
     script = load_json(script_path)
     series = script["series"]
     episode_number = script["episodeNumber"]
-    still_origins = validate_location_still_usage(script, locations_registry)
+    locations = load_script_locations(script)
+    still_origins = validate_location_still_usage(script, locations)
     out_dir = OUTPUT_DIR / series / str(episode_number)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "manifest.json").write_text(json.dumps(script, indent=2), encoding="utf-8")
@@ -871,7 +888,7 @@ def generate_episode(
         still_path = start_still_path(out_dir, scene_number)
         video_path = out_dir / f"scene_{scene_number:02d}.mp4"
         dest = still_path if stage == "frames" else video_path
-        location = resolve_scene_location(scene, locations_registry)
+        location = resolve_scene_location(scene, locations)
         origin_still = origin_still_paths[location["id"]]
         reuses_still = still_path.resolve() != origin_still.resolve()
         print(f"Queued scene {scene_number} ({stage})...", flush=True)
@@ -992,7 +1009,6 @@ def main() -> None:
         raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
     workflow_template = load_json(workflow_path)
     characters_registry = load_character_registry()
-    locations_registry = load_location_registry()
     scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
     if not scripts:
         raise SystemExit(f"No JSON scripts found in {SCRIPTS_DIR}")
@@ -1021,7 +1037,7 @@ def main() -> None:
     for script_path in scripts:
         print(f"{'Start stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
         generate_episode(
-            script_path, workflow_template, characters_registry, locations_registry, args.stage
+            script_path, workflow_template, characters_registry, args.stage
         )
 
 

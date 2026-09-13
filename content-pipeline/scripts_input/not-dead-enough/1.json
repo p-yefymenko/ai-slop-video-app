@@ -1,0 +1,59 @@
+{
+    "series": "not-dead-enough",
+    "episodeNumber": 1,
+    "title": "The Toast",
+    "isFree": true,
+    "coinCost": 0,
+    "locations": {
+      "limousine-backseat": {
+        "promptBlock": "Black leather limousine interior at night, dim amber cabin light, rain streaking down the side window, blurred city lights and neon signs passing outside, privacy partition raised in the background.",
+        "preserve": "the same black leather limousine interior, amber cabin light, rain-streaked window, blurred city lights outside"
+      },
+      "grand-ballroom": {
+        "promptBlock": "Opulent hotel ballroom: three crystal chandeliers overhead, polished white marble floor reflecting warm gold light, round tables draped in white cloth with tall floral centerpieces, a champagne tower on a side table, floor-to-ceiling windows showing a night skyline, guests in formalwear blurred in the background.",
+        "preserve": "the same crystal-chandelier ballroom, white marble floor, champagne tower, floor-to-ceiling night-skyline windows"
+      },
+      "penthouse-balcony": {
+        "promptBlock": "High-rise balcony at night, glass railing, string lights overhead swaying in the wind, city skyline glittering below and beyond, cold blue-white moonlight mixed with warm string-light glow, ballroom noise muffled behind sliding glass doors.",
+        "preserve": "the same high-rise balcony, glass railing, string lights, glittering night skyline below"
+      },
+      "hotel-parking-garage": {
+        "promptBlock": "Underground parking garage, rows of concrete pillars, flickering fluorescent tube lights, dark sedans parked in shadow, damp concrete floor with faint tire-mark stains, distant echo of dripping water.",
+        "preserve": "the same concrete parking garage, flickering fluorescent lights, rows of pillars, dark parked sedans"
+      }
+    },
+    "scenes": [
+      {
+        "sceneNumber": 1,
+        "characterIds": ["elena-heiress"],
+        "locationId": "limousine-backseat",
+        "imagePrompt": "Close shot. Mia sits rigid against the leather seat, black lace gloves folded in her lap, eyes fixed on the blurred lights sliding across the window, not looking at camera, jaw tight, lips slightly parted.",
+        "videoPrompt": "Mia turns a plain gold band slowly between two fingers. She says, \"Five years.\" She pauses, then continues, \"They buried an empty coffin.\" Cut. She looks up at her own faint reflection in the rain-streaked glass. She whispers, \"Let's see their faces.\" Camera slow push-in on her reflection. Rain on glass, distant traffic hum, low engine rumble, no music.",
+        "durationSeconds": 7
+      },
+      {
+        "sceneNumber": 2,
+        "characterIds": ["elena-heiress"],
+        "locationId": "grand-ballroom",
+        "imagePrompt": "Wide shot. Mia stands just inside the ballroom entrance in a black gown, veil pushed back, chin lifted, eyes fixed across the room, not looking at camera, one hand loose at her side.",
+        "videoPrompt": "The ballroom chatter fades as heads slowly turn toward Mia. She walks forward, heels striking marble. She stops, eyes narrowing on someone unseen near the champagne tower. She says, \"Five years, and not one grey hair.\" She pauses, then continues, \"Must be nice.\" Camera static, then slow circle around her. Glass clinking in the distance, gasps rippling through the crowd, hard silence, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 3,
+        "characterIds": ["elena-heiress"],
+        "locationId": "penthouse-balcony",
+        "imagePrompt": "Medium shot. Mia stands at the glass railing, back to the skyline, arms crossed, eyes on the sliding door behind her, not looking at camera, wind lifting the edge of her veil.",
+        "videoPrompt": "Mia pulls a folded document from inside her glove and holds it up to the moonlight. She says, \"The insurance payout.\" She pauses, then continues, \"Filed the day before I 'drowned.'\" Cut. She refolds it slowly and tucks it back against her chest. She whispers, \"Enjoy the party, Daniel.\" Camera slow push-in on the document. Wind gusting, distant party music through glass, fabric snapping, no score.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 4,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-parking-garage",
+        "imagePrompt": "Wide shot. Mia walks alone between concrete pillars toward a dark sedan, veil removed and gripped in one hand, eyes forward, not looking at camera, gown hem sweeping the damp floor.",
+        "videoPrompt": "A fluorescent tube flickers overhead as Mia's phone buzzes. She stops and answers without looking at the screen. She says, \"It's done.\" Cut. She listens, eyes narrowing at something unseen. She says, \"There's another name?\" Cut. She lowers the phone slowly, staring into the dark garage ahead of her. She whispers, \"Whose?\" Camera static, then a slow zoom on her face. Fluorescent buzz, dripping water echo, her own breathing, no music.",
+        "durationSeconds": 8
+      }
+    ]
+  }

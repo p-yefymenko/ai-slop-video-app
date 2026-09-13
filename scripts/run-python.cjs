@@ -1,7 +1,6 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const { findPython } = require("./find-python.cjs");
-const { startStayAwake } = require("./stay-awake.cjs");
 
 const script = process.argv[2];
 if (!script) {
@@ -25,13 +24,11 @@ if (!python) {
 }
 
 const env = { ...process.env, PYTHONUNBUFFERED: "1" };
-const stopStayAwake = startStayAwake();
 const result = spawnSync(python, [script, ...extraArgs], {
   stdio: "inherit",
   cwd: repoRoot,
   env,
 });
-stopStayAwake();
 
 if (result.error) {
   console.error(result.error.message);

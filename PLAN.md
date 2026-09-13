@@ -15,7 +15,7 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + audio VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json` and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Create character refs and location JSON first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency**). For each recurring set, write a `locations/*.json` with `id`, `promptBlock`, and `preserve` — text only, no location photos. Then write the story: `locationId` is the start-still id. The first scene with that id has `imagePrompt` (Qwen generates the still from the character PNG + that text). Later scenes with the same `locationId` omit `imagePrompt` and reuse that still. Prefer one scene per visit (`Cut.` for 2–4 shots in the same room). Follow **Episode script authoring**. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Paste that authoring block plus the JSON schema into a chat and save the output with no reformatting. Drop files into `content-pipeline/characters/`, `content-pipeline/locations/`, and `content-pipeline/scripts_input/`.
+8. [ ] **Create character refs, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency**). Put rooms in the episode JSON `locations` object (`promptBlock` + `preserve`, keyed by `locationId`) — text only, no location photos. `locationId` is the start-still id: the first scene with that id has `imagePrompt` (Qwen generates the still from the character PNG + that text); later scenes with the same id omit `imagePrompt` and reuse that still. Prefer one scene per visit (`Cut.` for 2–4 shots in the same room). Follow **Episode script authoring**. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Paste that authoring block plus the JSON schema into a chat and save the output with no reformatting. Drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
 9. [ ] Run `pnpm run content:frames`. Review the `scene_*_start.png` files in `content-pipeline/output/`. Keep, replace, or delete any origin still you do not like (delete the first still for that `locationId` + rerun `content:frames`; reuse copies are refreshed from it). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
@@ -156,8 +156,7 @@ reelshort-clone/
 │   │   ├── generate_batch.py     # calls ComfyUI API to render a batch of episodes from a script/prompt list
 │   │   └── upload_to_r2.py       # pushes finished MP4s + thumbnails to R2, registers them via the backend API
 │   ├── characters/                # one JSON + reference image per named character, for identity consistency across scenes
-│   ├── locations/                 # one JSON per recurring set (id + promptBlock + preserve); locationId is the start-still id
-│   └── scripts_input/            # episode scripts live here (JSON, see schema below)
+│   └── scripts_input/            # episode scripts live here (JSON: locations + scenes, see schema below)
 ├── packages/
 │   └── shared/                   # shared TypeScript types (Episode, Series, User, Purchase) used by both mobile and server
 ├── pnpm-workspace.yaml
@@ -202,7 +201,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads episode JSON from `scripts_input/`, resolves each scene's `characterIds` and required `locationId` against `content-pipeline/characters/*.json` and `content-pipeline/locations/*.json`, and prepends those `promptBlock`s. `locationId` is the start-still id for that episode: the first scene with that id runs **Qwen-Image-Edit-2511** on the character PNG + `imagePrompt` and writes `scene_XX_start.png`; later scenes with the same id omit `imagePrompt` and copy that PNG. After a human review of origin stills, `pnpm run content:generate` animates each scene's start PNG with `videoPrompt` via LTX image-to-video (picture and native soundtrack in the same MP4). Finished MP4s stay local until `upload_to_r2.py` runs. Existing origin `scene_*_start.png` / `scene_*.mp4` files are skipped; delete an origin still to regenerate it (reuse copies are refreshed from it).
+- `generate_batch.py`: reads episode JSON from `scripts_input/`, resolves each scene's `characterIds` against `content-pipeline/characters/*.json` and `locationId` against that episode’s `locations` object, and prepends those `promptBlock`s. `locationId` is the start-still id for that episode: the first scene with that id runs **Qwen-Image-Edit-2511** on the character PNG + `imagePrompt` and writes `scene_XX_start.png`; later scenes with the same id omit `imagePrompt` and copy that PNG. After a human review of origin stills, `pnpm run content:generate` animates each scene's start PNG with `videoPrompt` via LTX image-to-video (picture and native soundtrack in the same MP4). Finished MP4s stay local until `upload_to_r2.py` runs. Existing origin `scene_*_start.png` / `scene_*.mp4` files are skipped; delete an origin still to regenerate it (reuse copies are refreshed from it).
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -235,24 +234,26 @@ Qwen-Edit is bad at compositing a person onto a second location photo, so v1 doe
 
 LTX I2V never leaves that picture’s set ([I2V workflow](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow)): the start image is the location; the prompt describes what happens next. A single generation can hold character, setting, and voice across 2–4 shots joined by `Cut.` Prefer that for a continuous visit. If the story leaves and later returns, reuse the same `locationId` — do not generate a second still.
 
+Rooms live on the episode JSON as `locations`, keyed by `locationId` (`promptBlock` + `preserve`). No separate location files or photos.
+
 `locationId` is the still’s id:
 
 1. **First scene** with that id has `imagePrompt`. Qwen-Image-Edit gets the character PNG + that text (location `promptBlock` prepended) and writes `scene_XX_start.png`.
 2. **Later scenes** with that id **omit `imagePrompt`**. `content:frames` copies the first still. Only `videoPrompt` / `durationSeconds` change. Pose resets to frame 0 of the origin still.
 
-`content-pipeline/locations/<location-slug>.json` is text only (no photo):
 ```json
-{
-  "id": "mansion-foyer",
-  "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
-  "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+"locations": {
+  "mansion-foyer": {
+    "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
+    "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+  }
 }
 ```
 
-- Write the JSON before scenes that use this `locationId`. Do not add `referenceImage`, `views`, or `locationView`.
-- Every scene **must** have `locationId`. The first use **must** have `imagePrompt`. Reuse **must not**.
+- Define every room the episode uses in `locations`. Do not add `referenceImage`, `views`, or `locationView`.
+- Every scene **must** have `locationId` matching a key in that object. The first use **must** have `imagePrompt`. Reuse **must not**.
 - `generate_batch.py` prepends `promptBlock` to `imagePrompt` on the origin still, and `Preserve: {preserve}` to every `videoPrompt`.
-- Reuse is per episode (`output/<series>/<episode>/`). A later episode generates a new still the first time it uses that id.
+- Reuse is per episode (`output/<series>/<episode>/`). A later episode defines its own `locations` and generates a new still the first time it uses an id.
 
 ### Local ComfyUI (required before `content:frames` / `content:generate`)
 
@@ -268,13 +269,13 @@ LTX I2V never leaves that picture’s set ([I2V workflow](https://ltx.io/blog/lt
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
 7. Then `pnpm run content:frames`. Review `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
 
-`content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once. On Windows, `content:comfy`, `content:frames`, `content:generate`, and `content:render` tell the OS to skip idle sleep while they run (GPU load alone does not). Closing the lid can still sleep the machine.
+`content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 
 
 
 ### `scripts_input/` file format
 
-One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below (plus the relevant character IDs from `characters/` and location IDs from `locations/`) into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
+One JSON file per episode, named `<series-slug>/<episode-number>.json`. This schema is designed to be generated directly by an AI chat — paste the schema below (plus the relevant character IDs / `promptBlock`s from `characters/`) into a chat and ask for episodes in this exact shape, then save the output as-is with no reformatting:
 
 ```json
 {
@@ -283,6 +284,16 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
   "title": "The Return",
   "isFree": true,
   "coinCost": 0,
+  "locations": {
+    "mansion-gates": {
+      "promptBlock": "Grey stone mansion with a steep slate roof and chimneys, seen through a pair of tall black wrought-iron gates that stand open on stone gateposts. Dusk sky, orange-gold sun on the facade, gravel drive, clipped hedges. Camera outside the gates looking in.",
+      "preserve": "the same grey stone mansion, open black iron gates, dusk orange light, gravel drive"
+    },
+    "mansion-foyer": {
+      "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
+      "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+    }
+  },
   "scenes": [
     {
       "sceneNumber": 1,
@@ -314,7 +325,7 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
 - `scenes` is an ordered list. Every scene has `characterIds` and a required `locationId`. The first scene with a given `locationId` has `imagePrompt`; later scenes with that id omit it and reuse the still. `content:frames` generates origin stills with Qwen (character PNG + `imagePrompt`) and copies them onto reuse scenes; `content:generate` then animates each start PNG with `videoPrompt`. Keep origin `imagePrompt` as framing + eyeline / hands / props / lips. Keep `videoPrompt` as a cinematographer shot list (what happens next; `Cut.` for 2–4 connected shots; static or slow push; short quoted speech; matching foley). Character `promptBlock`s are prepended to both; location `promptBlock` is prepended to origin `imagePrompt`; location `preserve` is prepended to `videoPrompt`. A legacy `prompt` field is still accepted as a fallback for `videoPrompt`.
 - `durationSeconds` is the target **video** clip length. `content:generate` converts it to an LTX frame count at 24 fps using `8n+1` lengths (2s → 49 frames, 5s → 121, 6s → 145, 9s → 217). Start stills are 768×1152 Qwen edits (vertical 9:16, ~1MP); LTX I2V resizes them to the video latent (512×768 smoke size). `content:generate` forces Gemma `enhance_prompt` off so the shot list is not rewritten.
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
-- When asking a chat AI to draft episodes, paste **Episode script authoring** below plus this JSON schema (and the relevant IDs / `promptBlock`s from `characters/` and `locations/`) and ask for only valid JSON (no prose, no markdown fences) so it can be saved as the `.json` file.
+- When asking a chat AI to draft episodes, paste **Episode script authoring** below plus this JSON schema (and the relevant IDs / `promptBlock`s from `characters/`) and ask for only valid JSON (no prose, no markdown fences) so it can be saved as the `.json` file. The draft must include a `locations` object for every `locationId` the scenes use.
 
 ### Episode script authoring (distilled LTX + Qwen-Image-Edit)
 
@@ -324,7 +335,7 @@ Prompting follows LTX’s own guides, not freeform style notes: [How to improve 
 
 **Output**
 - One file: `content-pipeline/scripts_input/<series-slug>/<episode-number>.json`. JSON object only (no markdown fences).
-- Use only existing `characterIds` from `content-pipeline/characters/` and `locationId`s from `content-pipeline/locations/`. Appearance must match that character `promptBlock` and reference PNG. The set is whatever the origin still shows; do not invent a new room in a reuse `videoPrompt`.
+- Use only existing `characterIds` from `content-pipeline/characters/`. Define every room in this episode’s top-level `locations` object (`promptBlock` + `preserve`); scenes use those keys as `locationId`. Appearance must match that character `promptBlock` and reference PNG. The set is whatever the origin still shows; do not invent a new room in a reuse `videoPrompt`.
 - Qwen-Edit takes at most **3** character reference images on an origin still. Prefer **one speaker on camera** per scene.
 - First use of a `locationId` requires `imagePrompt`. Reuse omits it (same pixels, new `videoPrompt`). Prefer one scene per visit with `Cut.` (2–4 shots). Splitting or returning is fine; every clip starts from that same pose.
 
@@ -372,7 +383,7 @@ See the **Command Interface** section above — `pnpm run setup` provisions R2/D
 - [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
 - [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
 - [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema and the `characters/` + `locations/` registries defined in the Content Pipeline section (character refs, locationId as start-still id, reuse copies, no location plates), and the R2 binding/upload logic in the Worker.
+- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume the `scripts_input/` JSON schema (episode `locations` object + scenes) and the `characters/` registry defined in the Content Pipeline section (character refs, locationId as start-still id, reuse copies, no location plates), and the R2 binding/upload logic in the Worker.
 - [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
 - [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
 - [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).
