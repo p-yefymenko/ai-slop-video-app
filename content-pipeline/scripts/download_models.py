@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download LTX GGUF + video VAE, and a tiny safetensors stub with official model-id metadata."""
+"""Download LTX video weights plus the Qwen-Image-Edit still-generation stack."""
 
 from __future__ import annotations
 
@@ -25,6 +25,17 @@ META_REPO = "Lightricks/LTX-2.3"
 META_FILE = "ltx-2.3-22b-distilled-1.1.safetensors"
 STUB_NAME = "ltx-2.3-22b-distilled-api-id.safetensors"
 OLD_STUB_NAMES = ("ltx-2-19b-distilled-api-id.safetensors",)
+
+QWEN_GGUF_REPO = "unsloth/Qwen-Image-Edit-2511-GGUF"
+QWEN_GGUF_FILE = "qwen-image-edit-2511-Q4_K_M.gguf"
+QWEN_ENCODER_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
+QWEN_ENCODER_FILE = "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+QWEN_ENCODER_NAME = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+QWEN_VAE_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
+QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
+QWEN_VAE_NAME = "qwen_image_vae.safetensors"
+QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
+QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
 
 
 def cache_dir() -> Path:
@@ -112,6 +123,10 @@ def main() -> None:
     models = comfy_root / "models"
     download(GGUF_REPO, GGUF_FILE, models / "diffusion_models" / GGUF_NAME, 1_000_000_000)
     download(VAE_REPO, VAE_FILE, models / "vae" / VAE_NAME, 100_000_000)
+    download(QWEN_GGUF_REPO, QWEN_GGUF_FILE, models / "diffusion_models" / QWEN_GGUF_FILE, 1_000_000_000)
+    download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
+    download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
+    download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
     checkpoints = models / "checkpoints"
     for old_name in OLD_STUB_NAMES:
         old_stub = checkpoints / old_name

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Render episode scripts via a local ComfyUI + LTX workflow."""
+"""Render episode scripts via ComfyUI: Qwen-Image-Edit stills, then LTX video."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import random
 import shutil
 import subprocess
 import time
@@ -17,9 +19,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 CHARACTERS_DIR = ROOT / "characters"
 OUTPUT_DIR = ROOT / "output"
-WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
+LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
+QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 COMFYUI_URL = "http://127.0.0.1:8188"
+I2V_STRENGTH = 0.7  # official LTX image-to-video default
+MAX_QWEN_REFS = 3
 NVIDIA_QUERY_FIELDS = [
     "name",
     "memory.used",
@@ -317,7 +322,7 @@ def graph_meta(graph: dict) -> dict:
             continue
         class_type = node.get("class_type")
         inputs = node.get("inputs") or {}
-        if class_type == "LTXVScheduler":
+        if class_type in {"LTXVScheduler", "KSampler"}:
             steps = inputs.get("steps")
         if class_type in {"LTXVConditioning", "VHS_VideoCombine"}:
             frame_rate = inputs.get("frame_rate") or frame_rate
@@ -327,10 +332,8 @@ def graph_meta(graph: dict) -> dict:
         "length": length,
         "steps": steps,
         "frame_rate": frame_rate,
-        "i2v": False,
-        "identity_guide": any(
-            isinstance(node, dict)
-            and node.get("class_type") in {"LTXVAddGuide", "LTXVAddGuideAdvanced"}
+        "i2v": any(
+            isinstance(node, dict) and node.get("class_type") == "LTXVImgToVideo"
             for node in graph.values()
         ),
     }
@@ -359,6 +362,21 @@ def execution_seconds_from_history(item: dict | None) -> float | None:
     return max(0.0, delta)
 
 
+def free_comfy_models() -> None:
+    payload = json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{COMFYUI_URL}/free",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=30)
+        print("Unloaded idle ComfyUI models so the next stage can fit in VRAM.", flush=True)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        print(f"Could not unload ComfyUI models ({exc}); continuing.", flush=True)
+
+
 def queue_prompt(prompt_graph: dict) -> str:
     payload = json.dumps({"prompt": prompt_graph}).encode("utf-8")
     req = urllib.request.Request(
@@ -379,6 +397,7 @@ def wait_for_output(
     prompt_id: str,
     timeout_s: int = 7200,
     monitor: GpuMonitor | None = None,
+    prefer: str = "video",
 ) -> tuple[list[dict], dict | None]:
     started = time.time()
     last_heartbeat = started
@@ -404,12 +423,12 @@ def wait_for_output(
                             or json.dumps(payload)
                         )
                     raise RuntimeError(str(payload))
-            files: list[dict] = []
+            videos: list[dict] = []
+            images: list[dict] = []
             for node_output in (item.get("outputs") or {}).values():
-                for video in node_output.get("gifs", []) + node_output.get("videos", []):
-                    files.append(video)
-                for image in node_output.get("images", []):
-                    files.append(image)
+                videos.extend(node_output.get("gifs", []) + node_output.get("videos", []))
+                images.extend(node_output.get("images", []))
+            files = (images or videos) if prefer == "image" else (videos or images)
             if files:
                 return files, item
             if status.get("completed"):
@@ -462,7 +481,7 @@ def resolve_scene_characters(scene: dict, registry: dict[str, dict]) -> list[dic
         if not image_path.is_file():
             raise SystemExit(
                 f"Missing reference image for {character_id}: {image_path}. "
-                "Generate a still and save it next to the character JSON before content:generate."
+                "Generate a still and save it next to the character JSON before content:frames."
             )
         if not character.get("promptBlock", "").strip():
             raise SystemExit(f"Character {character_id} is missing promptBlock")
@@ -470,12 +489,40 @@ def resolve_scene_characters(scene: dict, registry: dict[str, dict]) -> list[dic
     return resolved
 
 
-def compose_scene_prompt(scene: dict, characters: list[dict]) -> str:
+def compose_scene_prompt(scene: dict, characters: list[dict], field: str) -> str:
+    text = (scene.get(field) or scene.get("prompt") or "").strip()
+    if not text:
+        raise SystemExit(
+            f"Scene {scene.get('sceneNumber')} is missing {field} "
+            "(or a prompt fallback). Add imagePrompt and videoPrompt to the episode JSON."
+        )
     blocks = [character["promptBlock"].strip() for character in characters]
-    return "\n".join([*blocks, scene["prompt"].strip()])
+    return "\n".join([*blocks, text])
 
 
-def stage_reference_image(image_path: Path) -> str:
+def start_still_path(out_dir: Path, scene_number: int) -> Path:
+    return out_dir / f"scene_{int(scene_number):02d}_start.png"
+
+
+def present(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 1024
+
+
+def inject_seed(graph: dict, seed: int) -> None:
+    for node in graph.values():
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        inputs = node.setdefault("inputs", {})
+        if class_type == "RandomNoise":
+            inputs["noise_seed"] = seed
+            return
+        if class_type == "KSampler":
+            inputs["seed"] = seed
+            return
+
+
+def stage_start_still(image_path: Path) -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / image_path.name
     if dest.resolve() != image_path.resolve():
@@ -483,12 +530,112 @@ def stage_reference_image(image_path: Path) -> str:
     return dest.name
 
 
+def inject_start_frame(graph: dict, image_name: str) -> None:
+    width, height, length = latent_size(graph)
+    graph["19"] = {
+        "inputs": {"image": image_name},
+        "class_type": "LoadImage",
+        "_meta": {"title": "Scene start frame"},
+    }
+    graph["20"] = {
+        "inputs": {
+            "positive": ["16", 0],
+            "negative": ["16", 1],
+            "vae": ["9", 0],
+            "image": ["19", 0],
+            "width": width,
+            "height": height,
+            "length": length,
+            "batch_size": 1,
+            "strength": I2V_STRENGTH,
+        },
+        "class_type": "LTXVImgToVideo",
+        "_meta": {"title": "Animate from start frame"},
+    }
+    for node_id, key in (("6", "latent_image"), ("15", "latent"), ("18", "latent")):
+        node = graph.get(node_id)
+        if isinstance(node, dict):
+            node.setdefault("inputs", {})[key] = ["20", 2]
+
+
+def compose_edit_instruction(scene: dict, characters: list[dict]) -> str:
+    scene_text = compose_scene_prompt(scene, characters, "imagePrompt")
+    if len(characters) == 1:
+        lock = (
+            "Using Picture 1 as the identity reference, keep this exact person: "
+            "same face, identity, hair, skin tone, and body. Do not replace them with someone else. "
+            "Generate a new vertical 9:16 cinematic still of them in the scene below."
+        )
+    else:
+        pictures = ", ".join(f"Picture {index}" for index in range(1, len(characters) + 1))
+        lock = (
+            f"Using {pictures} as identity references, keep those exact people "
+            "(same faces, identities, hair, skin, bodies). Do not replace them. "
+            "Generate a new vertical 9:16 cinematic still of them in the scene below."
+        )
+    return f"{lock}\n\n{scene_text}"
+
+
+def inject_qwen_prompt(graph: dict, prompt: str) -> None:
+    for node in graph.values():
+        if not isinstance(node, dict) or node.get("class_type") != "TextEncodeQwenImageEditPlus":
+            continue
+        title = str((node.get("_meta") or {}).get("title", ""))
+        if title == "Negative instruction":
+            continue
+        node.setdefault("inputs", {})["prompt"] = prompt
+        return
+    raise RuntimeError("Could not find the Qwen positive-instruction node in qwen_image_edit.json")
+
+
+def inject_character_images(graph: dict, characters: list[dict]) -> None:
+    if not characters:
+        raise RuntimeError("Qwen-Image-Edit needs at least one character reference image")
+    names = [stage_start_still(character["image_path"]) for character in characters[:MAX_QWEN_REFS]]
+    extra_ids = ("13", "14")
+    image_keys = ("image2", "image3")
+    encoder = None
+    for node in graph.values():
+        if (
+            isinstance(node, dict)
+            and node.get("class_type") == "TextEncodeQwenImageEditPlus"
+            and str((node.get("_meta") or {}).get("title", "")) != "Negative instruction"
+        ):
+            encoder = node
+            break
+    if encoder is None:
+        raise RuntimeError("Could not find TextEncodeQwenImageEditPlus in qwen_image_edit.json")
+    load_node = graph.get("6")
+    if not isinstance(load_node, dict):
+        raise RuntimeError("Could not find character LoadImage node 6 in qwen_image_edit.json")
+    load_node.setdefault("inputs", {})["image"] = names[0]
+    encoder_inputs = encoder.setdefault("inputs", {})
+    encoder_inputs["image1"] = ["6", 0]
+    for extra_id, image_key in zip(extra_ids, image_keys):
+        encoder_inputs.pop(image_key, None)
+        graph.pop(extra_id, None)
+    for index, (extra_id, image_key) in enumerate(zip(extra_ids, image_keys), start=1):
+        if index >= len(names):
+            break
+        graph[extra_id] = {
+            "inputs": {"image": names[index]},
+            "class_type": "LoadImage",
+            "_meta": {"title": f"Character reference {index + 1}"},
+        }
+        encoder_inputs[image_key] = [extra_id, 0]
+
+
 def latent_size(graph: dict) -> tuple[int, int, int]:
     for node in graph.values():
-        if isinstance(node, dict) and node.get("class_type") == "EmptyLTXVLatentVideo":
-            inputs = node.setdefault("inputs", {})
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        inputs = node.setdefault("inputs", {})
+        if class_type == "EmptyLTXVLatentVideo":
             return int(inputs["width"]), int(inputs["height"]), int(inputs["length"])
-    raise RuntimeError("Could not find EmptyLTXVLatentVideo in the ComfyUI workflow")
+        if class_type == "EmptySD3LatentImage":
+            return int(inputs["width"]), int(inputs["height"]), 1
+    raise RuntimeError("Could not find EmptyLTXVLatentVideo or EmptySD3LatentImage in the ComfyUI workflow")
 
 
 def workflow_frame_rate(graph: dict) -> float:
@@ -509,62 +656,13 @@ def ltx_length_for_duration(duration_seconds: float, frame_rate: float) -> int:
     return 8 * n + 1
 
 
-def inject_scene_length(graph: dict, duration_seconds: float) -> int:
-    length = ltx_length_for_duration(duration_seconds, workflow_frame_rate(graph))
+def inject_scene_length(graph: dict, duration_seconds: float | None = None, length: int | None = None) -> int:
+    if length is None:
+        length = ltx_length_for_duration(float(duration_seconds or 1), workflow_frame_rate(graph))
     for node in graph.values():
         if isinstance(node, dict) and node.get("class_type") == "EmptyLTXVLatentVideo":
             node.setdefault("inputs", {})["length"] = length
     return length
-
-
-def inject_image_conditioning(graph: dict, image_name: str) -> None:
-    """Attach the still as an identity guide, not as the first decoded frame.
-
-    LTXVImgToVideo writes the photo into latent frame 0, so the clip opens on the
-    portrait. LTXVAddGuide appends it as extra tokens the model can attend to;
-    LTXVCropGuides strips those tokens after sampling so they never appear in the MP4.
-    """
-    graph["19"] = {
-        "inputs": {"image": image_name},
-        "class_type": "LoadImage",
-        "_meta": {"title": "Character reference"},
-    }
-    graph["20"] = {
-        "inputs": {
-            "positive": ["16", 0],
-            "negative": ["16", 1],
-            "vae": ["9", 0],
-            "latent": ["5", 0],
-            "image": ["19", 0],
-            "frame_idx": 0,
-            "strength": 0.7,
-            "crf": 32,
-            "blur_radius": 0,
-            "interpolation": "lanczos",
-            "crop": "center",
-        },
-        "class_type": "LTXVAddGuideAdvanced",
-        "_meta": {"title": "Character identity guide"},
-    }
-    graph["21"] = {
-        "inputs": {
-            "positive": ["20", 0],
-            "negative": ["20", 1],
-            "latent": ["6", 0],
-        },
-        "class_type": "LTXVCropGuides",
-        "_meta": {"title": "Strip identity guide frames"},
-    }
-    for node_id, key in (("6", "latent_image"), ("15", "latent"), ("18", "latent")):
-        node = graph.get(node_id)
-        if isinstance(node, dict):
-            node.setdefault("inputs", {})[key] = ["20", 2]
-    guider = graph.get("17")
-    if isinstance(guider, dict):
-        guider.setdefault("inputs", {})["conditioning"] = ["20", 0]
-    decoder = graph.get("8")
-    if isinstance(decoder, dict):
-        decoder.setdefault("inputs", {})["samples"] = ["21", 2]
 
 
 def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
@@ -601,7 +699,7 @@ def concat_with_ffmpeg(scene_files: list[Path], dest: Path) -> bool:
     return result.returncode == 0
 
 
-def generate_episode(script_path: Path, workflow_template: dict, registry: dict[str, dict]) -> None:
+def generate_episode(script_path: Path, workflow_template: dict, registry: dict[str, dict], stage: str) -> None:
     script = load_json(script_path)
     series = script["series"]
     episode_number = script["episodeNumber"]
@@ -614,32 +712,62 @@ def generate_episode(script_path: Path, workflow_template: dict, registry: dict[
     generated = 0
     skipped = 0
     for scene in script["scenes"]:
-        dest = out_dir / f"scene_{scene['sceneNumber']:02d}.mp4"
-        print(f"Queued scene {scene['sceneNumber']}...", flush=True)
-        if dest.exists() and dest.stat().st_size > 1024:
-            print(
-                f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})",
-                flush=True,
-            )
-            scene_files.append(dest)
+        scene_number = scene["sceneNumber"]
+        still_path = start_still_path(out_dir, scene_number)
+        video_path = out_dir / f"scene_{scene_number:02d}.mp4"
+        dest = still_path if stage == "frames" else video_path
+        print(f"Queued scene {scene_number} ({stage})...", flush=True)
+        if present(dest):
+            print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
+            if stage == "video":
+                scene_files.append(dest)
             skipped += 1
             continue
+        if stage == "video" and not present(still_path):
+            raise SystemExit(
+                f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
+                "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
+            )
         characters = resolve_scene_characters(scene, registry)
-        prompt = compose_scene_prompt(scene, characters)
-        graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
-        duration_seconds = float(scene.get("durationSeconds") or 1)
-        inject_scene_length(graph, duration_seconds)
-        if characters:
-            # Identity guide uses the first listed character; every promptBlock is still prepended.
-            image_name = stage_reference_image(characters[0]["image_path"])
-            inject_image_conditioning(graph, image_name)
+        seed = random.randint(0, 2**32 - 1)
+        if stage == "frames":
+            if not characters:
+                raise SystemExit(
+                    f"Scene {scene_number} has no characterIds. content:frames needs a character "
+                    "reference PNG so Qwen-Image-Edit can lock identity."
+                )
+            if len(characters) > MAX_QWEN_REFS:
+                print(
+                    f"  Using the first {MAX_QWEN_REFS} of {len(characters)} character refs "
+                    "(Qwen-Image-Edit accepts up to 3).",
+                    flush=True,
+                )
+            raw = workflow_template["prompt"] if "prompt" in workflow_template else workflow_template
+            graph = json.loads(json.dumps(raw))
+            inject_qwen_prompt(graph, compose_edit_instruction(scene, characters))
+            inject_seed(graph, seed)
+            inject_character_images(graph, characters)
+            prefer = "image"
+            mode = "Qwen-Image-Edit"
+        else:
+            prompt = compose_scene_prompt(scene, characters, "videoPrompt")
+            graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
+            inject_seed(graph, seed)
+            duration_seconds = float(scene.get("durationSeconds") or 1)
+            inject_scene_length(graph, duration_seconds=duration_seconds)
+            inject_start_frame(graph, stage_start_still(still_path))
+            prefer = "video"
+            mode = "I2V"
         meta = graph_meta(graph)
         character_ids = ", ".join(scene.get("characterIds") or []) or "none"
-        mode = "identity-guide" if meta["identity_guide"] else "T2V"
-        clip_seconds = meta["length"] / float(meta["frame_rate"] or 24)
+        clip_seconds = None
+        if meta["frame_rate"]:
+            clip_seconds = meta["length"] / float(meta["frame_rate"])
+        size_bit = f"{meta['width']}x{meta['height']}"
+        if stage == "video":
+            size_bit += f", {meta['length']} frames (~{clip_seconds:.2f}s)"
         print(
-            f"  Graph: {meta['width']}x{meta['height']}, {meta['length']} frames"
-            f" (~{clip_seconds:.2f}s from durationSeconds={duration_seconds:g})"
+            f"  Graph: {size_bit}, seed {seed}"
             f"{f', {meta['steps']} steps' if meta['steps'] else ''}"
             f"{f' @ {meta['frame_rate']} fps' if meta['frame_rate'] else ''}"
             f", {mode} ({character_ids})",
@@ -649,7 +777,7 @@ def generate_episode(script_path: Path, workflow_template: dict, registry: dict[
         monitor.sample()
         scene_started = time.time()
         prompt_id = queue_prompt(graph)
-        outputs, history_item = wait_for_output(prompt_id, monitor=monitor)
+        outputs, history_item = wait_for_output(prompt_id, monitor=monitor, prefer=prefer)
         download_output(outputs[0], dest)
         monitor.sample()
         elapsed = time.time() - scene_started
@@ -657,32 +785,49 @@ def generate_episode(script_path: Path, workflow_template: dict, registry: dict[
         timing = f"in {format_duration(elapsed)}"
         if comfy_elapsed is not None:
             timing += f" (ComfyUI execution {format_duration(comfy_elapsed)})"
-        print(f"  Scene {scene['sceneNumber']} generated {timing}", flush=True)
+        print(f"  Scene {scene_number} {stage} finished {timing}", flush=True)
         print(f"  Wrote {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
         log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
-        scene_files.append(dest)
+        if stage == "video":
+            scene_files.append(dest)
         generated += 1
 
-    episode_mp4 = out_dir / "episode.mp4"
-    if concat_with_ffmpeg(scene_files, episode_mp4):
-        print(f"Concatenated {episode_mp4}")
-    elif len(scene_files) == 1:
-        shutil.copyfile(scene_files[0], episode_mp4)
-        print(f"Copied single scene to {episode_mp4}")
+    if stage == "frames":
+        print(
+            f"Start stills for {series}/{episode_number} are in {out_dir}. "
+            "Review the scene_*_start.png files. Replace one by hand, or delete it and rerun "
+            "`pnpm run content:frames`. When they look right, run `pnpm run content:generate`.",
+            flush=True,
+        )
     else:
-        print("ffmpeg not found; left individual scene files. Install ffmpeg to concat.")
+        episode_mp4 = out_dir / "episode.mp4"
+        if concat_with_ffmpeg(scene_files, episode_mp4):
+            print(f"Concatenated {episode_mp4}")
+        elif len(scene_files) == 1:
+            shutil.copyfile(scene_files[0], episode_mp4)
+            print(f"Copied single scene to {episode_mp4}")
+        else:
+            print("ffmpeg not found; left individual scene files. Install ffmpeg to concat.")
     print(
-        f"Episode {series}/{episode_number} finished in {format_duration(time.time() - episode_started)}"
+        f"Episode {series}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
         f" ({generated} generated, {skipped} skipped)",
         flush=True,
     )
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Render episode start stills (Qwen-Image-Edit) or videos (LTX) via ComfyUI."
+    )
+    parser.add_argument("--stage", choices=("frames", "video"), default="video")
+    args = parser.parse_args()
     load_dotenv()
-    if not os.environ.get("LTXV_API_KEY"):
+    if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
         raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
-    workflow_template = load_json(WORKFLOW_PATH)
+    workflow_path = QWEN_WORKFLOW_PATH if args.stage == "frames" else LTX_WORKFLOW_PATH
+    if not workflow_path.is_file():
+        raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
+    workflow_template = load_json(workflow_path)
     registry = load_character_registry()
     scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
     if not scripts:
@@ -691,14 +836,18 @@ def main() -> None:
         urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3)
     except urllib.error.URLError as exc:
         raise SystemExit(
-            f"ComfyUI is not reachable at {COMFYUI_URL}. Start it locally with the LTX Q4_K_M workflow loaded."
+            f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`."
         ) from exc
+    free_comfy_models()
     idle = GpuMonitor()
     idle.sample()
-    print(f"ComfyUI ready at {COMFYUI_URL} | idle {snapshot_line(idle.samples[0])}", flush=True)
+    print(
+        f"ComfyUI ready at {COMFYUI_URL} | stage={args.stage} | idle {snapshot_line(idle.samples[0])}",
+        flush=True,
+    )
     for script_path in scripts:
-        print(f"Generating {script_path}", flush=True)
-        generate_episode(script_path, workflow_template, registry)
+        print(f"{'Start stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
+        generate_episode(script_path, workflow_template, registry, args.stage)
 
 
 if __name__ == "__main__":

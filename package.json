@@ -18,7 +18,8 @@
     "content:comfy-torch": "node scripts/install-comfy-torch.cjs",
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
-    "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py",
+    "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
+    "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"

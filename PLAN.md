@@ -14,9 +14,9 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 4. [x] Run `pnpm run setup` to create the R2 bucket and D1 database, then paste the printed IDs into `server/wrangler.toml`
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
-7. [ ] **Install ComfyUI + LTX locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF, matching video VAE, and a tiny official-checkpoint metadata stub for the Gemma API node). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Create character reference images and prompt blocks first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency** in the Content Pipeline section below) — do this before writing scenes, since scenes reference these by `characterId`. Then write the story itself: scene-by-scene visual descriptions for LTX to render. Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game (see the open "content source" question earlier in this plan). Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. None of this has a code dependency — do it whenever, then drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
-9. [ ] Run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti) — this uses your local GPU, so it's the one step inherently yours to run rather than the agent's. ComfyUI must already be running from the previous step.
+7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json` and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
+8. [ ] **Create character reference images and prompt blocks first, then write or source episode scripts.** For each named character, generate one reference image and write a fixed description block (see **Character consistency** in the Content Pipeline section below) — do this before writing scenes, since scenes reference these by `characterId`. Then write the story itself as `imagePrompt` (the locked opening still) plus `videoPrompt` (the motion from that still). Original writing, translated/licensed material reworked into scene prompts, or AI-assisted drafting are all fair game. Use the exact JSON schema in the **Content Pipeline** section below — it's designed to be generated directly by an AI chat and saved with no reformatting. None of this has a code dependency — do it whenever, then drop files into `content-pipeline/characters/` and `content-pipeline/scripts_input/`.
+9. [ ] Run `pnpm run content:frames`, look at the `scene_*_start.png` files in `content-pipeline/output/`, and keep, replace, or delete any you do not like (delete + rerun `content:frames` regenerates only the missing stills). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
 12. [ ] Upload the build to a Closed Testing track in Play Console
@@ -61,7 +61,8 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:comfy-torch": "node scripts/install-comfy-torch.cjs",
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
-    "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py",
+    "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
+    "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
@@ -117,7 +118,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI + LTX-2.3 distilled-1.1 (Q4_K_M GGUF) running locally on the dev machine, with Gemma API used for text-encoder conditioning to stay within 16GB VRAM. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA) using each character’s reference PNG as identity. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -149,7 +150,7 @@ reelshort-clone/
 │   ├── wrangler.toml                # Cloudflare Worker config (bindings for D1 + R2)
 │   └── drizzle/                      # generated migrations
 ├── content-pipeline/
-│   ├── workflows/                # ComfyUI .json graphs (LTX + Gemma API conditioning node)
+│   ├── workflows/                # ComfyUI graphs: qwen_image_edit.json (stills) + ltx_gemma_api.json (video)
 │   ├── scripts/
 │   │   ├── generate_batch.py     # calls ComfyUI API to render a batch of episodes from a script/prompt list
 │   │   └── upload_to_r2.py       # pushes finished MP4s + thumbnails to R2, registers them via the backend API
@@ -199,16 +200,18 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads episode JSON files from `scripts_input/`, resolves each scene's `characterIds` against `content-pipeline/characters/*.json`, sends each scene prompt (with character prompt blocks prepended, `durationSeconds` mapped to LTX frame count, and reference images passed as identity guides rather than a locked first frame) to the local ComfyUI server running the LTX Q4_K_M workflow with Gemma API conditioning, saves output MP4s locally
+- `generate_batch.py`: reads episode JSON from `scripts_input/`, resolves each scene's `characterIds` against `content-pipeline/characters/*.json`, and prepends character `promptBlock`s. `pnpm run content:frames` runs **Qwen-Image-Edit-2511** on the character reference PNG(s) plus `imagePrompt`, writing `scene_XX_start.png`. After a human review of those PNGs, `pnpm run content:generate` animates each approved still with `videoPrompt` via LTX image-to-video. Finished MP4s stay local until `upload_to_r2.py` runs.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
 ### Character consistency
 
-Diffusion video models have no memory between separate generations — every scene is an independent roll of the dice, so the same text description ("red-haired woman in a black coat") produces a *different* woman each time unless you deliberately anchor identity. Solve this with two layers, both required for every named character:
+Diffusion video models have no memory between separate generations — every scene is an independent roll of the dice, so the same text description produces a *different* person each time unless you deliberately lock identity. v1 does that in two places:
 
 1. **A fixed character prompt block** — one detailed description (hair, face, age, wardrobe) reused word-for-word in every scene that character appears in.
-2. **A reference image**, generated once per character, passed as an LTX **identity guide** for every scene featuring them. This is not image-to-video: the still is appended as extra conditioning tokens the model can attend to, then cropped off after sampling so it does **not** become the first frame of the clip. The scene prompt still controls composition (wide shot, close-up, etc.).
+2. **A reference still**, generated once per character and kept next to the JSON. `content:frames` feeds this PNG into **Qwen-Image-Edit-2511** as Picture 1 (up to three refs) so the scene still keeps that face while following `imagePrompt` (wide shot, close-up, new wardrobe/location). Do **not** feed the headshot into LTX as frame 0 — that would open every clip on the portrait. LTX only sees the reviewed `scene_XX_start.png`.
+
+Qwen-Image-Edit-2511 is the still model because it is instruction-based editing from a photo (identity lock), Apache 2.0 (fine for a Play Store app), and the community default on 16GB cards as Unsloth’s Q4_K_M GGUF (~13GB) plus the 4-step Lightning LoRA. FLUX.1 Kontext is what some hosted LTX tools use for reference stills, but FLUX.1 [dev] is non-commercial. Z-Image Turbo is fast text-to-image and does not lock a real reference photo. Full BF16/FP8 Qwen-Edit checkpoints do not fit 16GB VRAM without heavy offload.
 
 For recurring lead characters appearing across many episodes, consider training a small character LoRA later for tighter identity lock — out of scope for v1, but the `characters/` registry below is structured so a `lora` field can be added later without reshaping anything else.
 
@@ -217,26 +220,28 @@ For recurring lead characters appearing across many episodes, consider training 
 {
   "id": "elena-heiress",
   "referenceImage": "elena-heiress-ref.png",
-  "promptBlock": "Elena, a woman in her late 20s with fiery red hair in a low bun, pale skin, sharp green eyes, wearing a tailored black wool coat. Cinematic lighting, photorealistic."
+  "promptBlock": "Elena, a woman in her late 20s with long loosely waved dark brown hair falling over her shoulders, warm tanned skin, blue-grey eyes, full lips, wearing a metallic bronze wrap top. Cinematic lighting, photorealistic."
 }
 ```
 
 - `referenceImage` lives alongside the JSON file in the same `characters/` folder — generate it once (a single still image, any text-to-image tool) before writing scenes that use this character.
-- `generate_batch.py` should look up each scene's `characterIds`, prepend the matching `promptBlock`(s) to the scene prompt, and pass the `referenceImage` into `LTXVAddGuide` / `LTXVCropGuides` (identity guidance, not a locked first frame).
+- `generate_batch.py` looks up each scene's `characterIds`, prepends the matching `promptBlock`(s) to both `imagePrompt` and `videoPrompt`, and confirms the `referenceImage` file exists. `content:frames` sends that PNG into Qwen-Image-Edit; `content:generate` never uses it as the LTX first frame.
 
-### Local ComfyUI (required before `content:generate`)
+### Local ComfyUI (required before `content:frames` / `content:generate`)
 
-`pnpm run content:generate` only talks to a ComfyUI HTTP API at `http://127.0.0.1:8188`. It does not install ComfyUI, download weights, or start the server. Do this on the GPU machine, in order:
+`pnpm run content:frames` and `pnpm run content:generate` only talk to a ComfyUI HTTP API at `http://127.0.0.1:8188`. They do not install ComfyUI, download weights, or start the server. Do this on the GPU machine, in order:
 
-1. `pnpm run content:setup-comfy` — clones [ComfyUI](https://github.com/comfyanonymous/ComfyUI), [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) (includes `GemmaAPITextEncode`), [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF), and [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) into `content-pipeline/.comfyui`. Copies `content-pipeline/workflows/ltx_gemma_api.json` into ComfyUI’s user workflow folder and installs the small `reelshort_ltx` helper node so Gemma API embeddings (already projected to 6144) match the local Q4_K_M GGUF. Installs CUDA 12.8 PyTorch into the ComfyUI venv (required for RTX 50-series / Blackwell).
+1. `pnpm run content:setup-comfy` — clones [ComfyUI](https://github.com/comfyanonymous/ComfyUI), [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) (includes `GemmaAPITextEncode`), [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF), and [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) into `content-pipeline/.comfyui`. Copies `content-pipeline/workflows/*.json` into ComfyUI’s user workflow folder and installs the small `reelshort_ltx` helper node so Gemma API embeddings (already projected to 6144) match the local Q4_K_M GGUF. Installs CUDA 12.8 PyTorch into the ComfyUI venv (required for RTX 50-series / Blackwell).
 2. `pnpm run content:comfy-torch` — only if setup ran before CUDA torch was wired, or if `content:comfy` still says “Torch not compiled with CUDA enabled”.
-3. `pnpm run content:models` — downloads `ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf` (~14GB) into `content-pipeline/.comfyui/models/diffusion_models/`, the matching LTX-2.3 video VAE into `models/vae/`, and a tiny official LTX-2.3 distilled-1.1 safetensors stub into `models/checkpoints/` so `GemmaAPITextEncode` can read a `model_id` the LTX prompt-embedding API actually serves. The GGUF family must match that API model (LTX-2 19B is rejected by the current endpoint). This quantization still fits 16GB VRAM (RTX 5070 Ti) when text encoding is offloaded to the LTX API.
+3. `pnpm run content:models` — downloads:
+   - `ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf` (~14GB) into `content-pipeline/.comfyui/models/diffusion_models/`, the matching LTX-2.3 video VAE into `models/vae/`, and a tiny official LTX-2.3 distilled-1.1 safetensors stub into `models/checkpoints/` so `GemmaAPITextEncode` can read a `model_id` the LTX prompt-embedding API actually serves. The GGUF family must match that API model (LTX-2 19B is rejected by the current endpoint).
+   - Qwen-Image-Edit-2511 Q4_K_M GGUF (`qwen-image-edit-2511-Q4_K_M.gguf`, ~13GB) into `models/diffusion_models/`, `qwen_2.5_vl_7b_fp8_scaled.safetensors` into `models/text_encoders/`, `qwen_image_vae.safetensors` into `models/vae/`, and the 4-step Lightning LoRA into `models/loras/`. This is the 16GB-card still stack (Apache 2.0). Skip files that are already present.
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
-5. Open `http://127.0.0.1:8188` → **Load** → `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded GGUF (and any extra VAE/connector files the node pack asks for).
-6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON.
-7. Then `pnpm run content:generate`.
+5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
+6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
+7. Then `pnpm run content:frames`. Review `content-pipeline/output/<series>/<episode>/scene_*_start.png`. Then `pnpm run content:generate`.
 
-`content:generate` posts the workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run.
+`content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 
 
 
@@ -255,21 +260,23 @@ One JSON file per episode, named `<series-slug>/<episode-number>.json`. This sch
     {
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
-      "prompt": "Elena steps out of a limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, cinematic wide shot, dramatic lighting",
-      "durationSeconds": 6
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands beside an open black limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, wide shot, dramatic lighting, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Elena steps out of the limousine and walks forward, her hair moving in the wind, camera slowly pushes in, cinematic motion.",
+      "durationSeconds": 2
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
-      "prompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in",
-      "durationSeconds": 5
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 close-up of Elena's face, determined expression, hair slightly lifted, dusk city lights blurred behind her, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in.",
+      "durationSeconds": 2
     }
   ]
 }
 ```
 
-- `scenes` is an ordered list — each entry becomes one LTX generation call (or one shot within a multishot generation, if the LTX version in use supports it). Keep `prompt` text visual and concrete (subject, action, camera framing, lighting, mood) rather than dialogue-heavy, since LTX generates video from visual description, not spoken lines.
-- `durationSeconds` is the target clip length. `content:generate` converts it to an LTX frame count at the workflow frame rate (24 fps) using the required `8n+1` lengths (so 5s → 121 frames, 6s → 145 frames). Longer clips use more VRAM.
+- `scenes` is an ordered list. `content:frames` turns each `imagePrompt` plus the scene’s character reference PNG(s) into `scene_XX_start.png` with Qwen-Image-Edit; `content:generate` then animates that PNG with `videoPrompt`. Keep `imagePrompt` as a locked composition (subject, wardrobe, camera, lighting, still photograph). Keep `videoPrompt` as motion from that still (action, camera move). Both get the character `promptBlock` prepended automatically. A legacy `prompt` field is still accepted as a fallback for either.
+- `durationSeconds` is the target **video** clip length. `content:generate` converts it to an LTX frame count at 24 fps using `8n+1` lengths (2s → 49 frames, 5s → 121, 6s → 145). Start stills are 768×1152 Qwen edits (vertical 9:16, ~1MP); LTX I2V resizes them to the video latent (512×768 smoke size). Longer videos use more VRAM and take much longer.
 - `isFree`/`coinCost` map directly onto the `Episode` schema, so decide monetization per-episode right in the script file rather than as a separate step.
 - When asking a chat AI to draft episodes, give it this exact JSON schema up front and ask it to output only valid JSON (no prose, no markdown fences) so it can be saved directly as the `.json` file — this is the human step described in the launch sequence above.
 

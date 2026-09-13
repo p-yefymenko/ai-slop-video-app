@@ -8,14 +8,16 @@
     {
       "sceneNumber": 1,
       "characterIds": ["elena-heiress"],
-      "prompt": "Elena steps out of a limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, cinematic wide shot, dramatic lighting",
-      "durationSeconds": 6
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 frame. Elena stands beside an open black limousine in front of a glass skyscraper at dusk, neon city lights reflecting on wet pavement, wide shot, dramatic lighting, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Elena steps out of the limousine and walks forward, her hair moving in the wind, camera slowly pushes in, cinematic motion.",
+      "durationSeconds": 2
     },
     {
       "sceneNumber": 2,
       "characterIds": ["elena-heiress"],
-      "prompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in",
-      "durationSeconds": 5
+      "imagePrompt": "Cinematic still photograph, vertical 9:16 close-up of Elena's face, determined expression, hair slightly lifted, dusk city lights blurred behind her, photorealistic, sharp, no motion blur.",
+      "videoPrompt": "Close-up on her face, determined expression, wind blowing her hair, camera slowly pushes in.",
+      "durationSeconds": 2
     }
   ]
 }

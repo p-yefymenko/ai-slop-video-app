@@ -17,14 +17,18 @@ if (!python) {
   process.exit(1);
 }
 
-fs.mkdirSync(path.join(comfyDir, "models", "diffusion_models"), { recursive: true });
-fs.mkdirSync(path.join(comfyDir, "models", "vae"), { recursive: true });
-fs.mkdirSync(path.join(comfyDir, "models", "checkpoints"), { recursive: true });
+for (const folder of ["diffusion_models", "vae", "checkpoints", "text_encoders", "loras"]) {
+  fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
+}
 
-const workflowSrc = path.join(repoRoot, "content-pipeline", "workflows", "ltx_gemma_api.json");
+const workflowSrcDir = path.join(repoRoot, "content-pipeline", "workflows");
 const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
 fs.mkdirSync(workflowDestDir, { recursive: true });
-fs.copyFileSync(workflowSrc, path.join(workflowDestDir, "ltx_gemma_api.json"));
+for (const name of fs.readdirSync(workflowSrcDir)) {
+  if (name.endsWith(".json")) {
+    fs.copyFileSync(path.join(workflowSrcDir, name), path.join(workflowDestDir, name));
+  }
+}
 
 const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
 const nodeDest = path.join(comfyDir, "custom_nodes", "reelshort_ltx");

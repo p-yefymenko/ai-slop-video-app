@@ -7,7 +7,7 @@ const { comfyPaths, ensureComfyVenv, run: runPython } = require("./comfy-env.cjs
 const repoRoot = path.resolve(__dirname, "..");
 const comfyDir = path.join(repoRoot, "content-pipeline", ".comfyui");
 const customNodes = path.join(comfyDir, "custom_nodes");
-const workflowSrc = path.join(repoRoot, "content-pipeline", "workflows", "ltx_gemma_api.json");
+const workflowSrcDir = path.join(repoRoot, "content-pipeline", "workflows");
 
 const REPOS = [
   { url: "https://github.com/comfyanonymous/ComfyUI.git", dir: comfyDir },
@@ -73,25 +73,28 @@ runPython(
 
 const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
 fs.mkdirSync(workflowDestDir, { recursive: true });
-fs.copyFileSync(workflowSrc, path.join(workflowDestDir, "ltx_gemma_api.json"));
+for (const name of fs.readdirSync(workflowSrcDir)) {
+  if (name.endsWith(".json")) {
+    fs.copyFileSync(path.join(workflowSrcDir, name), path.join(workflowDestDir, name));
+  }
+}
 
 const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
 const nodeDest = path.join(customNodes, "reelshort_ltx");
 fs.cpSync(nodeSrc, nodeDest, { recursive: true });
 
-const modelDir = path.join(comfyDir, "models", "diffusion_models");
-fs.mkdirSync(modelDir, { recursive: true });
-fs.mkdirSync(path.join(comfyDir, "models", "checkpoints"), { recursive: true });
-fs.mkdirSync(path.join(comfyDir, "models", "vae"), { recursive: true });
+for (const folder of ["diffusion_models", "checkpoints", "vae", "text_encoders", "loras"]) {
+  fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
+}
 
 console.log(`
 ComfyUI is cloned at content-pipeline/.comfyui
-Workflow copied to ComfyUI user/default/workflows/ltx_gemma_api.json
+Workflows copied to ComfyUI user/default/workflows/ (ltx_gemma_api.json, qwen_image_edit.json)
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)
-  2. pnpm run content:models       # downloads the LTX Q4_K_M GGUF, video VAE, and Gemma API model-id stub
+  2. pnpm run content:models       # downloads LTX video weights and the Qwen-Image-Edit still stack
   3. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
-  4. In the ComfyUI UI: Load → ltx_gemma_api.json and confirm no missing-node errors
-  5. pnpm run content:generate
+  4. In the ComfyUI UI: Load → qwen_image_edit.json, then ltx_gemma_api.json, and confirm no missing-node errors
+  5. pnpm run content:frames, then pnpm run content:generate
 `);
