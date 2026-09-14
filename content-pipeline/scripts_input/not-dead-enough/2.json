@@ -1,0 +1,82 @@
+{
+    "series": "not-dead-enough",
+    "episodeNumber": 2,
+    "title": "The Other Name",
+    "isFree": false,
+    "coinCost": 35,
+    "locations": {
+      "hotel-parking-garage": {
+        "promptBlock": "Underground parking garage, rows of concrete pillars, flickering fluorescent tube lights, dark sedans parked in shadow, damp concrete floor with faint tire-mark stains, distant echo of dripping water.",
+        "preserve": "the same concrete parking garage, flickering fluorescent lights, rows of pillars, dark parked sedans"
+      },
+      "tycoon-office": {
+        "promptBlock": "High-rise corporate office at night, floor-to-ceiling windows overlooking a glittering downtown skyline, dark walnut desk with neat stacks of paper, a crystal decanter of amber liquor on a side cabinet, single brass banker's lamp casting warm light against the cool blue window glow, framed company awards lining the far wall.",
+        "preserve": "the same high-rise office, floor-to-ceiling skyline windows, walnut desk, brass lamp glow"
+      },
+      "hotel-suite": {
+        "promptBlock": "Private hotel suite at night, low warm lamp light, a made bed with a garment bag draped across it, heavy curtains half-drawn over a sliver of city skyline, a writing desk in the corner with a locked metal box, thick carpet muffling sound, a single armchair near the window.",
+        "preserve": "the same hotel suite, low lamp light, locked metal box on the desk, half-drawn curtains over the skyline"
+      }
+    },
+    "scenes": [
+      {
+        "sceneNumber": 1,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-parking-garage",
+        "imagePrompt": "Close shot. Mia stands frozen between two concrete pillars, phone still raised to her ear with her right hand, veil bunched in her left fist at her side, eyes wide and fixed past the camera into the dark, not looking at camera, lips pressed into a thin line, listening.",
+        "videoPrompt": "Mia's grip on the phone tightens as the voice keeps talking. She lowers it an inch from her ear. She says, \"Say the name again.\" She pauses, jaw setting hard. Cut. She turns sharply and walks toward a waiting dark sedan, veil dragging against the concrete. She says, \"Take me to the Ashworth.\" Camera static, then slow tracking shot following her from behind. Fluorescent buzz, heels striking concrete, dripping water echo, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 2,
+        "characterIds": ["damian-tycoon"],
+        "locationId": "tycoon-office",
+        "imagePrompt": "Medium shot. Daniel stands behind his desk in an unbuttoned black tuxedo jacket, one hand braced flat on the walnut desktop, phone pressed to his ear with the other, eyes fixed out the window at the skyline, not looking at camera, tie hanging loose.",
+        "videoPrompt": "Daniel listens, his knuckles whitening against the desk. He says, \"That's not possible.\" He pauses, exhaling slow through his nose. Cut. He rounds the desk toward the window, phone still at his ear. He says, \"Pull the ballroom cameras. Now.\" Camera static, then slow push-in on his reflection in the glass. Muffled city hum far below, fabric shifting, his controlled breathing, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 3,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-suite",
+        "imagePrompt": "Wide shot. Mia kneels on the carpet beside the writing desk at screen-left, gown pooling around her knees, both hands working a small key into the lock of a metal box sitting on the desk's lower edge, eyes down on her own hands, not looking at camera, veil discarded on the armchair at screen-right.",
+        "videoPrompt": "The lock clicks and Mia lifts the lid of the box. She lifts out a folded newspaper clipping with her right hand. She says, \"Five years of this.\" She pauses, scanning the page. Cut. She sets it aside and pulls a second, older clipping from beneath it, her expression going still. She whispers, \"Wait.\" Camera static, then slow push-in on the clipping in her hands. Muffled traffic below, paper crinkling, her breath catching, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 4,
+        "characterIds": ["damian-tycoon"],
+        "locationId": "tycoon-office",
+        "videoPrompt": "Daniel stands at the window as a laptop chimes on the desk behind him. He turns and leans over the screen, scrolling footage with two fingers. He says, \"There.\" He pauses, staring at a frozen frame. Cut. He straightens slowly, one hand dragging down over his jaw. He says, \"It's really her.\" Camera slow push-in on his face over the glowing screen. Laptop fan hum, ice shifting in the decanter, his breathing gone ragged, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 5,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-suite",
+        "videoPrompt": "Mia holds the second clipping closer to the lamp, thumb brushing across a photograph printed on it. She says, \"Same ring.\" She pauses, eyes tracing the caption beneath the photo. Cut. She sets it down beside the first and lines the two photographs edge to edge, her hand trembling slightly. She whispers, \"He's done this before.\" Camera static, then slow push-in on the two clippings side by side. Lamp buzzing faintly, paper rustling, her unsteady breath, no music.",
+        "durationSeconds": 7
+      },
+      {
+        "sceneNumber": 6,
+        "characterIds": ["damian-tycoon"],
+        "locationId": "tycoon-office",
+        "videoPrompt": "Daniel picks up his phone again, thumb hovering over a contact. He says, \"Find her before she talks to anyone.\" He pauses, listening to the reply. Cut. He walks back to the window, phone lowering to his side, eyes hard on the skyline. He says, \"I don't care what it costs.\" Camera static, then slow push-in on his reflection ghosted over the city lights. Distant traffic hum, phone screen dimming click, his low even voice, no music.",
+        "durationSeconds": 8
+      },
+      {
+        "sceneNumber": 7,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-suite",
+        "videoPrompt": "Mia gathers both clippings and slides them into her clutch on the desk. She freezes as her phone buzzes once on the desktop beside her. She glances down at the lit screen without touching it. She whispers, \"How does he already know?\" Camera static, then slow zoom on the buzzing phone. Lamp hum, fabric shifting, her held breath, no music.",
+        "durationSeconds": 7
+      },
+      {
+        "sceneNumber": 8,
+        "characterIds": ["elena-heiress"],
+        "locationId": "hotel-suite",
+        "videoPrompt": "Mia's head snaps toward the door as three slow knocks land against the wood. She backs a step toward the window, clutch held tight against her chest. She whispers, \"Room service didn't call.\" Cut. She reaches out and kills the lamp beside her, the suite dropping into near-dark. She stares at the door, unmoving. Camera static, then slow push-in through the dim toward the door. Knocking fading to silence, her own held breath, distant elevator ding beyond the wall, no music.",
+        "durationSeconds": 8
+      }
+    ]
+  }
