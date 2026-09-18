@@ -546,37 +546,48 @@ def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
     if scene.get("locationView"):
         raise SystemExit(
             f"Scene {scene.get('sceneNumber')} has locationView, which is no longer used. "
-            "locationId is the start-still id: first scene generates it, later scenes reuse it."
+            "locationId picks the location+character plate; imagePrompt edits that plate into the scene still."
         )
     return location
+
+
+DEFAULT_PLATE_BLOCKING = (
+    "Medium-wide shot. The character stands in this location at correct adult scale, "
+    "both feet on the floor, body three-quarter to camera, hands at their sides, "
+    "lips slightly parted, not looking at camera. "
+    "Furniture sits in front of or beside them, never through the body. "
+    "No extra handheld props. Do not add objects that are not part of the location."
+)
 
 
 def image_prompt_text(scene: dict) -> str:
     return (scene.get("imagePrompt") or "").strip()
 
 
-def validate_location_still_usage(script: dict, registry: dict[str, dict]) -> dict[str, int]:
-    """Map locationId -> first sceneNumber that generates the start still."""
-    origins: dict[str, int] = {}
+def plate_character_key(scene: dict) -> str:
+    ids = [str(character_id) for character_id in (scene.get("characterIds") or []) if character_id]
+    if not ids:
+        raise SystemExit(
+            f"Scene {scene.get('sceneNumber')} is missing characterIds. "
+            "Each still needs a location+character plate."
+        )
+    return "__".join(sorted(ids))
+
+
+def plate_path(out_dir: Path, location_id: str, character_key: str) -> Path:
+    return out_dir / f"plate_{location_id}_{character_key}.png"
+
+
+def validate_scene_stills(script: dict, registry: dict[str, dict]) -> None:
     for scene in script.get("scenes") or []:
-        location = resolve_scene_location(scene, registry)
-        location_id = location["id"]
+        resolve_scene_location(scene, registry)
         scene_number = scene.get("sceneNumber")
-        prompt = image_prompt_text(scene)
-        if location_id not in origins:
-            origins[location_id] = int(scene_number)
-            if not prompt:
-                raise SystemExit(
-                    f"Scene {scene_number} is the first use of locationId {location_id!r} "
-                    "and needs imagePrompt (this generates the start still)."
-                )
-        elif prompt:
+        if not image_prompt_text(scene):
             raise SystemExit(
-                f"Scene {scene_number} reuses locationId {location_id!r} "
-                f"(still from scene {origins[location_id]:02d}). Omit imagePrompt; "
-                "only videoPrompt changes."
+                f"Scene {scene_number} is missing imagePrompt. Every scene edits the "
+                "location+character plate into that scene's start still."
             )
-    return origins
+        plate_character_key(scene)
 
 
 def compose_scene_prompt(
@@ -593,7 +604,12 @@ def compose_scene_prompt(
         )
     blocks = [character["promptBlock"].strip() for character in characters]
     if field == "imagePrompt" and location:
-        blocks.append(location["promptBlock"].strip())
+        preserve = (location.get("preserve") or "the same location as Picture 1").strip()
+        text = (
+            f"Keep {preserve}. Change only the blocking below. "
+            "Do not rebuild the room.\n"
+            f"{text}"
+        )
     if field == "videoPrompt" and location:
         preserve = (location.get("preserve") or "the same location as the start frame").strip()
         text = (
@@ -684,21 +700,41 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
         sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
 
 
-def compose_edit_instruction(scene: dict, characters: list[dict], location: dict) -> str:
-    scene_text = compose_scene_prompt(scene, characters, "imagePrompt", location)
+def compose_plate_instruction(characters: list[dict], location: dict) -> str:
+    blocking = (location.get("platePrompt") or DEFAULT_PLATE_BLOCKING).strip()
     lock = (
-        "Picture 1 is the identity reference. Keep that exact person: "
-        "same face, identity, hair, skin tone, and body. Do not replace them. "
-        "Put them in the location described below. "
-        "Hands must actually reach any prop or surface they touch. "
-        "Follow the blocking below exactly: eyeline, which hand, where the prop sits on the body. "
-        "Do not look at the camera unless the blocking says so."
+        "Picture 1 is a face identity reference only. Keep that exact face, hair, and skin tone. "
+        "Do not copy wardrobe or bare skin from Picture 1. "
+        "Dress the body from the wardrobe in the character description: fully clothed, torso covered. "
+        "Place them in the location at the position described below. "
+        "Correct adult scale relative to furniture: feet on the floor, no body intersecting desks, "
+        "chairs, or walls. This is a set plate, not a story beat: do not invent scene-specific props."
     )
     if len(characters) > 1:
         lock += (
-            " Extra character reference images after Picture 1 are additional identities "
-            "to keep; do not replace those people either."
+            " Extra character reference images after Picture 1 are additional faces to keep; "
+            "do not replace those people either."
         )
+    blocks = [character["promptBlock"].strip() for character in characters]
+    blocks.append(location["promptBlock"].strip())
+    return "\n".join([lock, *blocks, blocking])
+
+
+def compose_edit_instruction(scene: dict, characters: list[dict], location: dict) -> str:
+    scene_text = compose_scene_prompt(scene, characters, "imagePrompt", location)
+    lock = (
+        "Picture 1 is the location-and-character plate. Keep that exact room, camera, lighting, "
+        "that exact person, their wardrobe, and their scale in the set. Do not undress them. "
+        "Do not replace the set or the face. Do not move them inside furniture. "
+        "Apply only the blocking below: pose, eyeline, hands, and named props. "
+        "Add any named prop so it is already in the picture. Do not invent extra props. "
+        "Hands must actually reach any prop or surface they touch. "
+        "Do not look at the camera unless the blocking says so."
+    )
+    if len(characters) >= 1:
+        lock += " Picture 2 is a face identity reference only; match that face, not that photo's clothing."
+    if len(characters) > 1:
+        lock += " Further images after Picture 2 are additional faces to keep."
     return f"{lock}\n\n{scene_text}"
 
 
@@ -756,6 +792,17 @@ def inject_qwen_references(graph: dict, characters: list[dict]) -> None:
         (stage_start_still(characters[0]["image_path"]), "Character reference 1"),
     ]
     for index, character in enumerate(characters[1:], start=2):
+        if len(refs) >= MAX_QWEN_REFS:
+            break
+        refs.append((stage_start_still(character["image_path"]), f"Character reference {index}"))
+    inject_qwen_image_slots(graph, refs)
+
+
+def inject_qwen_plate_edit(graph: dict, plate_file: Path, characters: list[dict]) -> None:
+    refs: list[tuple[str, str]] = [
+        (stage_start_still(plate_file), "Location-character plate"),
+    ]
+    for index, character in enumerate(characters, start=1):
         if len(refs) >= MAX_QWEN_REFS:
             break
         refs.append((stage_start_still(character["image_path"]), f"Character reference {index}"))
@@ -868,45 +915,61 @@ def generate_episode(
     series = script["series"]
     episode_number = script["episodeNumber"]
     locations = load_script_locations(script)
-    still_origins = validate_location_still_usage(script, locations)
+    validate_scene_stills(script, locations)
     out_dir = OUTPUT_DIR / series / str(episode_number)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "manifest.json").write_text(json.dumps(script, indent=2), encoding="utf-8")
 
     episode_started = time.time()
-    origin_still_paths = {
-        location_id: start_still_path(out_dir, scene_number)
-        for location_id, scene_number in still_origins.items()
-    }
-
     scene_files: list[Path] = []
     generated = 0
     skipped = 0
-    copied = 0
+
+    if stage == "frames":
+        plates: dict[tuple[str, str], tuple[dict, list[dict]]] = {}
+        for scene in script["scenes"]:
+            location = resolve_scene_location(scene, locations)
+            characters = resolve_scene_characters(scene, characters_registry)
+            if not characters:
+                raise SystemExit(
+                    f"Scene {scene['sceneNumber']} has no characterIds. content:frames needs a character "
+                    "reference PNG so Qwen-Image-Edit can lock identity."
+                )
+            extra_chars = max(0, len(characters) - MAX_QWEN_REFS)
+            if extra_chars:
+                print(
+                    f"  Dropping {extra_chars} extra character ref(s) (max {MAX_QWEN_REFS} images).",
+                    flush=True,
+                )
+            plates[(location["id"], plate_character_key(scene))] = (location, characters)
+        for (location_id, character_key), (location, characters) in plates.items():
+            dest = plate_path(out_dir, location_id, character_key)
+            print(f"Queued plate {location_id} + {character_key.replace('__', ', ')}...", flush=True)
+            if present(dest):
+                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
+                skipped += 1
+                continue
+            seed = random.randint(0, 2**32 - 1)
+            graph = clone_workflow(workflow_template)
+            inject_qwen_prompt(graph, compose_plate_instruction(characters, location))
+            inject_seed(graph, seed)
+            inject_qwen_references(graph, characters)
+            print(f"  Graph seed {seed}", flush=True)
+            execute_queued_graph(
+                graph,
+                dest,
+                prefer="image",
+                mode=f"Qwen plate ({character_key.replace('__', ', ')} @ {location_id})",
+            )
+            generated += 1
+
     for scene in script["scenes"]:
         scene_number = scene["sceneNumber"]
         still_path = start_still_path(out_dir, scene_number)
         video_path = out_dir / f"scene_{scene_number:02d}.mp4"
         dest = still_path if stage == "frames" else video_path
         location = resolve_scene_location(scene, locations)
-        origin_still = origin_still_paths[location["id"]]
-        reuses_still = still_path.resolve() != origin_still.resolve()
         print(f"Queued scene {scene_number} ({stage})...", flush=True)
-        if stage == "frames" and reuses_still:
-            if not present(origin_still):
-                raise SystemExit(
-                    f"Scene {scene_number} reuses locationId {location['id']!r} but "
-                    f"{origin_still} is missing. Generate the first scene at that location."
-                )
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(origin_still, dest)
-            print(
-                f"  Reused still from scene {still_origins[location['id']]:02d}: "
-                f"{dest} ({format_bytes(dest.stat().st_size)})",
-                flush=True,
-            )
-            copied += 1
-            continue
         if present(dest):
             print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
             if stage == "video":
@@ -921,24 +984,19 @@ def generate_episode(
         characters = resolve_scene_characters(scene, characters_registry)
         seed = random.randint(0, 2**32 - 1)
         if stage == "frames":
-            if not characters:
+            plate_file = plate_path(out_dir, location["id"], plate_character_key(scene))
+            if not present(plate_file):
                 raise SystemExit(
-                    f"Scene {scene_number} has no characterIds. content:frames needs a character "
-                    "reference PNG so Qwen-Image-Edit can lock identity."
-                )
-            extra_chars = max(0, len(characters) - MAX_QWEN_REFS)
-            if extra_chars:
-                print(
-                    f"  Dropping {extra_chars} extra character ref(s) (max {MAX_QWEN_REFS} images).",
-                    flush=True,
+                    f"Missing location+character plate {plate_file}. "
+                    "Delete nothing else and rerun `pnpm run content:frames`."
                 )
             graph = clone_workflow(workflow_template)
             inject_qwen_prompt(graph, compose_edit_instruction(scene, characters, location))
             inject_seed(graph, seed)
-            inject_qwen_references(graph, characters)
+            inject_qwen_plate_edit(graph, plate_file, characters)
             prefer = "image"
             mode = (
-                f"Qwen-Image-Edit ({', '.join(scene.get('characterIds') or []) or 'none'} "
+                f"Qwen scene edit ({', '.join(scene.get('characterIds') or []) or 'none'} "
                 f"@ {scene.get('locationId') or 'none'})"
             )
         else:
@@ -962,8 +1020,9 @@ def generate_episode(
     if stage == "frames":
         print(
             f"Start stills for {series}/{episode_number} are in {out_dir}. "
-            "Review the scene_*_start.png files (reused locationIds are copies of the first still). "
-            "Replace an origin still by hand, or delete it and rerun `pnpm run content:frames`. "
+            "Review plate_*.png (location+character) then scene_*_start.png (scene edits of those plates). "
+            "Replace a file by hand, or delete it and rerun `pnpm run content:frames`. "
+            "Deleting a plate does not refresh scene stills — delete those too if the plate changed. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,
         )
@@ -973,7 +1032,7 @@ def generate_episode(
         print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     print(
         f"Episode {series}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
-        f" ({generated} generated, {copied} reused, {skipped} skipped)",
+        f" ({generated} generated, {skipped} skipped)",
         flush=True,
     )
 
@@ -982,18 +1041,17 @@ def stage_needs_comfy(scripts: list[Path], stage: str) -> bool:
     for script_path in scripts:
         script = load_json(script_path)
         out_dir = OUTPUT_DIR / script["series"] / str(script["episodeNumber"])
-        seen_locations: set[str] = set()
         for scene in script["scenes"]:
             if stage == "frames":
-                location_id = scene.get("locationId")
-                if location_id in seen_locations:
-                    continue
-                seen_locations.add(location_id)
-                dest = start_still_path(out_dir, scene["sceneNumber"])
+                location_id = scene.get("locationId") or "unknown"
+                plate = plate_path(out_dir, location_id, plate_character_key(scene))
+                still = start_still_path(out_dir, scene["sceneNumber"])
+                if not present(plate) or not present(still):
+                    return True
             else:
                 dest = out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
-            if not present(dest):
-                return True
+                if not present(dest):
+                    return True
     return False
 
 

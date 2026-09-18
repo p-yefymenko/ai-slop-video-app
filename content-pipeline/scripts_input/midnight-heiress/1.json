@@ -6,16 +6,16 @@
   "coinCost": 0,
   "locations": {
     "mansion-gates": {
-      "promptBlock": "Grey stone mansion with a steep slate roof and chimneys, seen through a pair of tall black wrought-iron gates that stand open on stone gateposts. Dusk sky, orange-gold sun on the facade, gravel drive, clipped hedges. Camera outside the gates looking in.",
-      "preserve": "the same grey stone mansion, open black iron gates, dusk orange light, gravel drive"
+      "promptBlock": "Grey stone mansion with a steep slate roof and chimneys, seen through a pair of tall black wrought-iron gates that stand open on stone gateposts. Dusk sky, orange-gold sun on the facade, gravel drive, clipped hedges. The woman stands between the open gates, both feet on the gravel, full body at correct adult scale, gateposts beside her not through her. Camera outside the gates looking in toward her and the house.",
+      "preserve": "the same grey stone mansion, open black iron gates, dusk orange light, gravel drive, the woman standing between the gates at correct scale, fully clothed"
     },
     "mansion-foyer": {
-      "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame.",
-      "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces"
+      "promptBlock": "Grand foyer: cream paneled walls, white marble fireplace, large gold-framed oil portrait of four people hanging above the mantel, black-and-white diamond marble floor, warm wall sconces. Interior, no windows in frame. The woman stands in front of the mantel, both feet on the marble, full body at correct adult scale, the fireplace behind her not through her. Camera medium toward the mantel.",
+      "preserve": "the same cream paneled foyer, white fireplace, gold-framed family portrait, black-and-white marble floor, warm sconces, the woman at the mantel at correct scale, fully clothed"
     },
     "mansion-study": {
-      "promptBlock": "Wood-paneled study: floor-to-ceiling dark mahogany bookshelves packed with leather-bound books, green glass banker's lamp on a polished mahogany desk, warm tungsten lamp light, no windows in frame.",
-      "preserve": "the same mahogany bookshelves, green banker's lamp, polished desk, warm tungsten light"
+      "promptBlock": "Wood-paneled study: floor-to-ceiling dark mahogany bookshelves packed with leather-bound books, green glass banker's lamp on a polished mahogany desk, warm tungsten lamp light, no windows in frame. The woman sits in the chair at the desk, both feet toward the floor, torso at correct adult scale so the desktop sits in front of her, not through her body. Camera medium across the desk.",
+      "preserve": "the same mahogany bookshelves, green banker's lamp, polished desk, warm tungsten light, the woman at the desk at correct scale, fully clothed"
     }
   },
   "scenes": [

@@ -10,28 +10,29 @@ Follow **Episode script authoring** and the JSON schema in `PLAN.md`. Do not inv
 
 Prompting follows LTX-2.3 docs (cinematographer shot list, not poetry): [prompt adherence](https://ltx.io/blog/how-to-improve-ltx-2-3-prompt-adherence), [dialogue/acting](https://ltx.io/blog/directing-dialogue-and-acting), [character consistency](https://ltx.io/blog/how-to-maintain-character-consistency-in-ai-video), [I2V](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow), [2.3 template](https://ltx23.github.io/ltx-2-3-prompt-template/). `enhance_prompt` is off; write the real prompt.
 
-- Read `characters/*.json` first. Define rooms in this episode’s `locations` object (`promptBlock` + `preserve`). Scenes use those keys as `locationId`. No `locationView`, no location photos.
-- Every scene has `characterIds` and `locationId`. `locationId` is the start-still id: first scene generates it (`imagePrompt` required); later scenes reuse it (`imagePrompt` omitted).
-- Prefer one scene per visit with `Cut.` (2–4 shots). Splitting or returning is the same still; pose resets to frame 0.
+- Read `characters/*.json` first. `promptBlock` must include wardrobe (a face-only ref will otherwise print shirtless). Define rooms in this episode’s `locations` object (`promptBlock` + `preserve`). **`promptBlock` includes the set and default character placement/scale** (feet on the floor, furniture not through the body, camera). Scenes use those keys as `locationId`. No `locationView`, no location photos.
+- Every scene has `characterIds`, `locationId`, and `imagePrompt`. The pipeline builds one location+character plate, then edits it into this scene’s start still. Do not omit `imagePrompt` to “reuse” a still. Do not re-place the body unless this clip needs a new stance (kneeling, at the door).
+- Prefer one scene per visit with `Cut.` (2–4 shots). Splitting or returning uses the same plate with a new `imagePrompt`.
 - **Anchoring:** do not restate hair/wardrobe/set. The pipeline prepends the character `promptBlock` and location `preserve`. Scene text is framing + blocking + motion only.
 - **Screen-space:** `left` / `right` are the audience’s frame, not the character’s left/right. Write `screen-left`, `screen-right`, `lower-right of the gold frame`. Use `her right hand` only for which hand.
 - **Beats:** one main action per 2–3 seconds of `durationSeconds` (LTX). Distilled clips: one physical action + at most two spoken phrases, unless joined by `Cut.` At most four connected shots per scene.
 - **Chronology:** subject + main action first, then gesture, then speech beats, then camera, then audio last.
 
-## `imagePrompt` (origin still only = LTX frame 0)
+## `imagePrompt` (every scene = LTX frame 0)
 
-First scene at this `locationId` only. Framing of the actor plus blocking. No motion, no speech. Omit this field on reuse.
+Framing of the actor plus blocking. No motion, no speech. Required on every scene.
 
-- Eyeline: what she looks at. If she is not addressing the lens, write **not looking at camera**.
-- Body angle, which hand, where the prop sits, lips slightly parted if she speaks this clip.
+- Eyeline: what they look at. If they are not addressing the lens, write **not looking at camera**.
+- Body angle, which hand, where the prop sits, lips slightly parted if they speak this clip.
 - Hands must reach what they touch **in this still**. Later beats belong in `videoPrompt` after `Cut.`
+- If this clip **starts** with an object (open laptop, clipping in hand, phone on the desk), that object must be in this still. Do not copy another scene’s pixels.
 - Place props in screen-space (`sealed envelope in the gap at the lower-right of the frame`, not “on her chest”).
 
 ## `videoPrompt` (LTX I2V)
 
 Describe **what happens next**, not the still (I2V already has the picture). Literal, chronological, under ~200 words.
 
-- Same room, several beats: `Cut.` between 2–4 shots, or extra scenes with the same `locationId` and no `imagePrompt`.
+- Same room, several beats: `Cut.` between 2–4 shots, or extra scenes with the same `locationId` and a new `imagePrompt`.
 - Interleave speech: short phrase, one acting cue, next phrase. Cues: eyeline, pause, voice quality, or a physical beat — **one cue per beat**. Do not dump a full quoted sentence with no pause.
 - Always name camera: `Camera static` or `Camera slow push-in`. Slow moves that underline a beat; no wide pans during dialogue.
 - Audio last: acoustic space + matching foley, **no music**. Off-screen voices steal the line.

@@ -6,20 +6,20 @@
     "coinCost": 0,
     "locations": {
       "limousine-backseat": {
-        "promptBlock": "Black leather limousine interior at night, dim amber cabin light, rain streaking down the side window, blurred city lights and neon signs passing outside, privacy partition raised in the background.",
-        "preserve": "the same black leather limousine interior, amber cabin light, rain-streaked window, blurred city lights outside"
+        "promptBlock": "Black leather limousine interior at night, dim amber cabin light, rain streaking down the side window, blurred city lights and neon signs passing outside, privacy partition raised in the background. The woman sits on the back seat, both feet in the footwell, torso at correct adult scale against the leather, the window at her side not through her. Camera close-medium from the facing seat.",
+        "preserve": "the same black leather limousine interior, amber cabin light, rain-streaked window, blurred city lights outside, the woman seated at correct scale, fully clothed"
       },
       "grand-ballroom": {
-        "promptBlock": "Opulent hotel ballroom: three crystal chandeliers overhead, polished white marble floor reflecting warm gold light, round tables draped in white cloth with tall floral centerpieces, a champagne tower on a side table, floor-to-ceiling windows showing a night skyline, guests in formalwear blurred in the background.",
-        "preserve": "the same crystal-chandelier ballroom, white marble floor, champagne tower, floor-to-ceiling night-skyline windows"
+        "promptBlock": "Opulent hotel ballroom: three crystal chandeliers overhead, polished white marble floor reflecting warm gold light, round tables draped in white cloth with tall floral centerpieces, a champagne tower on a side table, floor-to-ceiling windows showing a night skyline, guests in formalwear blurred in the background. The woman stands just inside the entrance on the marble, both feet on the floor, full body at correct adult scale, tables and the champagne tower around her not through her. Camera wide from inside the room toward the entrance.",
+        "preserve": "the same crystal-chandelier ballroom, white marble floor, champagne tower, floor-to-ceiling night-skyline windows, the woman standing in the entrance at correct scale, fully clothed"
       },
       "penthouse-balcony": {
-        "promptBlock": "High-rise balcony at night, glass railing, string lights overhead swaying in the wind, city skyline glittering below and beyond, cold blue-white moonlight mixed with warm string-light glow, ballroom noise muffled behind sliding glass doors.",
-        "preserve": "the same high-rise balcony, glass railing, string lights, glittering night skyline below"
+        "promptBlock": "High-rise balcony at night, glass railing, string lights overhead swaying in the wind, city skyline glittering below and beyond, cold blue-white moonlight mixed with warm string-light glow. The woman stands at the glass railing, both feet on the balcony floor, full body at correct adult scale, the railing in front of her hips not through her body. Camera medium from the sliding door toward her and the skyline.",
+        "preserve": "the same high-rise balcony, glass railing, string lights, glittering night skyline below, the woman at the railing at correct scale, fully clothed"
       },
       "hotel-parking-garage": {
-        "promptBlock": "Underground parking garage, rows of concrete pillars, flickering fluorescent tube lights, dark sedans parked in shadow, damp concrete floor with faint tire-mark stains, distant echo of dripping water.",
-        "preserve": "the same concrete parking garage, flickering fluorescent lights, rows of pillars, dark parked sedans"
+        "promptBlock": "Underground parking garage, rows of concrete pillars, flickering fluorescent tube lights, dark sedans parked in shadow, damp concrete floor with faint tire-mark stains. The woman stands in the driving aisle between two pillars, both feet on the concrete, full body at correct adult scale, cars and pillars around her not through her. Camera medium-wide in the aisle looking toward her.",
+        "preserve": "the same concrete parking garage, flickering fluorescent lights, rows of pillars, dark parked sedans, the woman standing in the aisle at correct scale, fully clothed"
       }
     },
     "scenes": [
