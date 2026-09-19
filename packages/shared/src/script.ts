@@ -12,10 +12,15 @@ export type LocationCharacter = {
   platePrompt: string;
 };
 
+/** Templates sent to Qwen/LTX. Include the `{placeholders}` or the rest of this JSON is ignored. */
 export type ShowPrompts = {
+  /** `{characterPromptBlock}` `{imagePrompt}` */
   characterImage: string;
+  /** `{characterPromptBlocks}` `{locationPromptBlock}` `{platePrompt}` */
   locationCharacter: string;
+  /** `{characterPromptBlocks}` `{preserve}` `{imagePrompt}` */
   sceneStill: string;
+  /** `{characterPromptBlocks}` `{preserve}` `{videoPrompt}` */
   sceneVideo: string;
 };
 

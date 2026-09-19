@@ -473,14 +473,23 @@ def require_text(obj: dict, key: str, where: str) -> str:
 
 
 def render_prompt(template: str, values: dict[str, str]) -> str:
+    unused = set(values)
+
     def repl(match: re.Match[str]) -> str:
         key = match.group(1)
         if key not in values:
             known = ", ".join(sorted(values)) or "(none)"
             raise SystemExit(f"Unknown prompt placeholder {{{key}}}. Known: {known}")
+        unused.discard(key)
         return values[key]
 
     rendered = PLACEHOLDER.sub(repl, template).strip()
+    if unused:
+        missing = ", ".join(f"{{{key}}}" for key in sorted(unused))
+        raise SystemExit(
+            f"prompts template never uses {missing}. Those fields are dropped, so Qwen/LTX "
+            "never see the actual scene. Add the placeholders to the template."
+        )
     if not rendered:
         raise SystemExit("Rendered prompt is empty")
     return rendered
