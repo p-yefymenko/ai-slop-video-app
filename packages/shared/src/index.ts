@@ -64,17 +64,11 @@ export const COIN_PACKAGES: CoinPackage[] = [
   { productId: "coins_1200", coins: 1200, label: "1,200 coins" },
 ];
 
-export type EpisodeScript = {
-  series: string;
-  episodeNumber: number;
-  title: string;
-  isFree: boolean;
-  coinCost: number;
-  scenes: EpisodeScene[];
-};
-
-export type EpisodeScene = {
-  sceneNumber: number;
-  prompt: string;
-  durationSeconds: number;
-};
+export type {
+  LocationCharacter,
+  ScriptScene,
+  ShowCharacter,
+  ShowEpisode,
+  ShowPrompts,
+  ShowScript,
+} from "./script";

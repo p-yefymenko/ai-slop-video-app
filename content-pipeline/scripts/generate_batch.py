@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render episode scripts via ComfyUI: Qwen-Image-Edit stills, then LTX video."""
+"""Render show JSON via ComfyUI: Qwen-Image-Edit stills, then LTX video."""
 
 from __future__ import annotations
 
@@ -7,20 +7,24 @@ import argparse
 import json
 import os
 import random
+import re
 import shutil
+import struct
 import subprocess
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from pathlib import Path
 
 from ffmpeg_tools import concat_videos
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
-CHARACTERS_DIR = ROOT / "characters"
 OUTPUT_DIR = ROOT / "output"
+PROMPT_KEYS = ("characterImage", "locationCharacter", "sceneStill", "sceneVideo")
+PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
@@ -460,168 +464,191 @@ def download_output(file_info: dict, dest: Path) -> None:
         shutil.copyfileobj(res, handle)
 
 
-def load_named_registry(directory: Path, kind: str) -> dict[str, dict]:
-    registry: dict[str, dict] = {}
-    if not directory.exists():
-        return registry
-    for path in sorted(directory.glob("*.json")):
-        data = load_json(path)
-        item_id = data.get("id")
-        if not item_id:
-            raise SystemExit(f"{kind} file {path} is missing an id")
-        if item_id in registry:
-            raise SystemExit(f"Duplicate {kind} id {item_id!r} in {path}")
-        registry[item_id] = {**data, "_dir": path.parent}
-    return registry
-
-
-def load_character_registry() -> dict[str, dict]:
-    return load_named_registry(CHARACTERS_DIR, "Character")
-
-
-def load_script_locations(script: dict) -> dict[str, dict]:
-    raw = script.get("locations")
-    if not isinstance(raw, dict) or not raw:
-        raise SystemExit(
-            "Episode JSON is missing locations. Add a locations object keyed by locationId "
-            "with promptBlock (and optional preserve) on each entry."
-        )
-    cleaned: dict[str, dict] = {}
-    for loc_id, loc in raw.items():
-        if not isinstance(loc, dict):
-            raise SystemExit(f"locations[{loc_id!r}] must be an object with promptBlock")
-        prompt = (loc.get("promptBlock") or "").strip()
-        if not prompt:
-            raise SystemExit(f"locations[{loc_id!r}] is missing promptBlock")
-        cleaned[str(loc_id)] = {
-            **loc,
-            "id": str(loc_id),
-            "promptBlock": prompt,
-            "preserve": (loc.get("preserve") or "").strip(),
-        }
-    return cleaned
-
-
-def reference_image_path(item: dict, kind: str, item_id: str, *, must_exist: bool) -> Path:
-    image_name = item.get("referenceImage")
-    if not image_name:
-        raise SystemExit(f"{kind} {item_id} is missing referenceImage")
-    if not item.get("promptBlock", "").strip():
-        raise SystemExit(f"{kind} {item_id} is missing promptBlock")
-    image_path = item["_dir"] / image_name
-    if must_exist and not image_path.is_file():
-        raise SystemExit(
-            f"Missing reference image for {item_id}: {image_path}. "
-            f"Generate a still and save it next to the {kind.lower()} JSON."
-        )
-    return image_path
-
-
-def resolve_scene_characters(scene: dict, registry: dict[str, dict]) -> list[dict]:
-    resolved: list[dict] = []
-    for character_id in scene.get("characterIds") or []:
-        character = registry.get(character_id)
-        if character is None:
-            raise SystemExit(
-                f"Unknown characterId {character_id!r}. Add {CHARACTERS_DIR / f'{character_id}.json'}"
-            )
-        image_path = reference_image_path(character, "Character", character_id, must_exist=True)
-        resolved.append({**character, "image_path": image_path})
-    return resolved
-
-
-def resolve_scene_location(scene: dict, registry: dict[str, dict]) -> dict:
-    location_id = scene.get("locationId")
-    if not location_id:
-        raise SystemExit(
-            f"Scene {scene.get('sceneNumber')} is missing locationId. "
-            "Use a key from this episode's locations object."
-        )
-    location = registry.get(location_id)
-    if location is None:
-        known = ", ".join(sorted(registry)) or "(none)"
-        raise SystemExit(
-            f"Unknown locationId {location_id!r}. Known locations in this episode: {known}"
-        )
-    if scene.get("locationView"):
-        raise SystemExit(
-            f"Scene {scene.get('sceneNumber')} has locationView, which is no longer used. "
-            "locationId picks the location+character plate; imagePrompt edits that plate into the scene still."
-        )
-    return location
-
-
-DEFAULT_PLATE_BLOCKING = (
-    "Medium-wide shot. The character stands in this location at correct adult scale, "
-    "both feet on the floor, body three-quarter to camera, hands at their sides, "
-    "lips slightly parted, not looking at camera. "
-    "Furniture sits in front of or beside them, never through the body. "
-    "No extra handheld props. Do not add objects that are not part of the location."
-)
-
-
-def image_prompt_text(scene: dict) -> str:
-    return (scene.get("imagePrompt") or "").strip()
-
-
-def plate_character_key(scene: dict) -> str:
-    ids = [str(character_id) for character_id in (scene.get("characterIds") or []) if character_id]
-    if not ids:
-        raise SystemExit(
-            f"Scene {scene.get('sceneNumber')} is missing characterIds. "
-            "Each still needs a location+character plate."
-        )
-    return "__".join(sorted(ids))
-
-
-def plate_path(out_dir: Path, location_id: str, character_key: str) -> Path:
-    return out_dir / f"plate_{location_id}_{character_key}.png"
-
-
-def validate_scene_stills(script: dict, registry: dict[str, dict]) -> None:
-    for scene in script.get("scenes") or []:
-        resolve_scene_location(scene, registry)
-        scene_number = scene.get("sceneNumber")
-        if not image_prompt_text(scene):
-            raise SystemExit(
-                f"Scene {scene_number} is missing imagePrompt. Every scene edits the "
-                "location+character plate into that scene's start still."
-            )
-        plate_character_key(scene)
-
-
-def compose_scene_prompt(
-    scene: dict,
-    characters: list[dict],
-    field: str,
-    location: dict | None = None,
-) -> str:
-    text = (scene.get(field) or scene.get("prompt") or "").strip()
+def require_text(obj: dict, key: str, where: str) -> str:
+    value = obj.get(key)
+    text = value.strip() if isinstance(value, str) else ""
     if not text:
-        raise SystemExit(
-            f"Scene {scene.get('sceneNumber')} is missing {field} "
-            "(or a prompt fallback). Add imagePrompt and videoPrompt to the episode JSON."
+        raise SystemExit(f"{where} is missing {key}")
+    return text
+
+
+def render_prompt(template: str, values: dict[str, str]) -> str:
+    def repl(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in values:
+            known = ", ".join(sorted(values)) or "(none)"
+            raise SystemExit(f"Unknown prompt placeholder {{{key}}}. Known: {known}")
+        return values[key]
+
+    rendered = PLACEHOLDER.sub(repl, template).strip()
+    if not rendered:
+        raise SystemExit("Rendered prompt is empty")
+    return rendered
+
+
+def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
+    return render_prompt(show["prompts"][key], values)
+
+
+def character_blocks(characters: list[dict]) -> str:
+    return "\n".join(character["promptBlock"].strip() for character in characters)
+
+
+def write_black_png(path: Path, width: int = 768, height: int = 1152) -> None:
+    raw = b"".join(b"\x00" + (b"\x00\x00\x00" * width) for _ in range(height))
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+    )
+
+
+def ensure_blank_png() -> str:
+    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    dest = COMFY_INPUT_DIR / "blank.png"
+    if not dest.is_file():
+        write_black_png(dest)
+    return dest.name
+
+
+def load_show(path: Path) -> dict:
+    show = load_json(path)
+    show_id = require_text(show, "id", path.name)
+    if path.stem != show_id:
+        raise SystemExit(f"{path.name}: id {show_id!r} must match the filename stem")
+    require_text(show, "title", path.name)
+    characters = show.get("characters")
+    if not isinstance(characters, dict) or not characters:
+        raise SystemExit(f"{path.name} is missing characters")
+    cleaned_chars: dict[str, dict] = {}
+    for cid, character in characters.items():
+        if not isinstance(character, dict):
+            raise SystemExit(f"characters[{cid!r}] must be an object")
+        cleaned_chars[str(cid)] = {
+            "id": str(cid),
+            "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
+            "imagePrompt": require_text(character, "imagePrompt", f"characters[{cid!r}]"),
+        }
+    show["characters"] = cleaned_chars
+    locations = show.get("locationCharacters")
+    if not isinstance(locations, dict) or not locations:
+        raise SystemExit(f"{path.name} is missing locationCharacters")
+    cleaned_locs: dict[str, dict] = {}
+    for loc_id, loc in locations.items():
+        if not isinstance(loc, dict):
+            raise SystemExit(f"locationCharacters[{loc_id!r}] must be an object")
+        character_ids = [str(cid) for cid in (loc.get("characterIds") or []) if cid]
+        if not character_ids:
+            raise SystemExit(f"locationCharacters[{loc_id!r}] is missing characterIds")
+        for cid in character_ids:
+            if cid not in cleaned_chars:
+                raise SystemExit(f"locationCharacters[{loc_id!r}] names unknown character {cid!r}")
+        cleaned_locs[str(loc_id)] = {
+            "id": str(loc_id),
+            "characterIds": character_ids,
+            "promptBlock": require_text(loc, "promptBlock", f"locationCharacters[{loc_id!r}]"),
+            "preserve": require_text(loc, "preserve", f"locationCharacters[{loc_id!r}]"),
+            "platePrompt": require_text(loc, "platePrompt", f"locationCharacters[{loc_id!r}]"),
+        }
+    show["locationCharacters"] = cleaned_locs
+    prompts = show.get("prompts")
+    if not isinstance(prompts, dict):
+        raise SystemExit(f"{path.name} is missing prompts")
+    extra = set(prompts) - set(PROMPT_KEYS)
+    if extra:
+        raise SystemExit(f"{path.name} has unknown prompts keys: {sorted(extra)}")
+    show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
+    episodes = show.get("episodes")
+    if not isinstance(episodes, list) or not episodes:
+        raise SystemExit(f"{path.name} is missing episodes")
+    cleaned_eps: list[dict] = []
+    for index, episode in enumerate(episodes):
+        if not isinstance(episode, dict):
+            raise SystemExit(f"episodes[{index}] must be an object")
+        if "episodeNumber" not in episode:
+            raise SystemExit(f"episodes[{index}] is missing episodeNumber")
+        ep_num = int(episode["episodeNumber"])
+        scenes = episode.get("scenes")
+        if not isinstance(scenes, list) or not scenes:
+            raise SystemExit(f"episode {ep_num} is missing scenes")
+        cleaned_scenes: list[dict] = []
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                raise SystemExit(f"episode {ep_num} has a non-object scene")
+            scene_label = f"episode {ep_num} scene {scene.get('sceneNumber')}"
+            if scene.get("characterIds"):
+                raise SystemExit(f"{scene_label} has characterIds; put those on locationCharacters")
+            if scene.get("locationId"):
+                raise SystemExit(f"{scene_label} uses locationId; rename it to locationCharacterId")
+            loc_id = require_text(scene, "locationCharacterId", scene_label)
+            if loc_id not in cleaned_locs:
+                known = ", ".join(sorted(cleaned_locs))
+                raise SystemExit(f"Unknown locationCharacterId {loc_id!r}. Known: {known}")
+            cleaned_scenes.append(
+                {
+                    "sceneNumber": int(scene["sceneNumber"]),
+                    "locationCharacterId": loc_id,
+                    "imagePrompt": require_text(scene, "imagePrompt", scene_label),
+                    "videoPrompt": require_text(scene, "videoPrompt", scene_label),
+                    "durationSeconds": float(scene.get("durationSeconds") or 1),
+                }
+            )
+        cleaned_eps.append(
+            {
+                "episodeNumber": ep_num,
+                "title": require_text(episode, "title", f"episode {ep_num}"),
+                "isFree": bool(episode.get("isFree")),
+                "coinCost": int(episode.get("coinCost") or 0),
+                "scenes": cleaned_scenes,
+            }
         )
-    blocks = [character["promptBlock"].strip() for character in characters]
-    if field == "imagePrompt" and location:
-        preserve = (location.get("preserve") or "the same location as Picture 1").strip()
-        text = (
-            f"Keep {preserve}. Change only the blocking below. "
-            "Do not rebuild the room.\n"
-            f"{text}"
-        )
-    if field == "videoPrompt" and location:
-        preserve = (location.get("preserve") or "the same location as the start frame").strip()
-        text = (
-            f"Preserve: {preserve}. "
-            "Do not change background geometry or lights.\n"
-            f"{text}"
-        )
-    return "\n".join([*blocks, text])
+    show["episodes"] = cleaned_eps
+    return show
+
+
+def character_image_path(show_id: str, character_id: str) -> Path:
+    return OUTPUT_DIR / show_id / "characters" / f"{character_id}.png"
+
+
+def location_character_path(show_id: str, location_id: str) -> Path:
+    return OUTPUT_DIR / show_id / "location-characters" / f"{location_id}.png"
+
+
+def episode_dir(show_id: str, episode_number: int) -> Path:
+    return OUTPUT_DIR / show_id / str(episode_number)
 
 
 def start_still_path(out_dir: Path, scene_number: int) -> Path:
     return out_dir / f"scene_{int(scene_number):02d}_start.png"
+
+
+def used_location_characters(show: dict) -> dict[str, dict]:
+    used: dict[str, dict] = {}
+    for episode in show["episodes"]:
+        for scene in episode["scenes"]:
+            loc_id = scene["locationCharacterId"]
+            used[loc_id] = show["locationCharacters"][loc_id]
+    return used
+
+
+def resolve_location(show: dict, scene: dict) -> dict:
+    return show["locationCharacters"][scene["locationCharacterId"]]
+
+
+def resolve_characters(show: dict, location: dict) -> list[dict]:
+    resolved: list[dict] = []
+    for character_id in location["characterIds"]:
+        character = show["characters"][character_id]
+        image_path = character_image_path(show["id"], character_id)
+        if not present(image_path):
+            raise SystemExit(
+                f"Missing character image {image_path}. Run `pnpm run content:frames`."
+            )
+        resolved.append({**character, "image_path": image_path})
+    return resolved
 
 
 def present(path: Path) -> bool:
@@ -700,42 +727,8 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
         sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
 
 
-def compose_plate_instruction(characters: list[dict], location: dict) -> str:
-    blocking = (location.get("platePrompt") or DEFAULT_PLATE_BLOCKING).strip()
-    lock = (
-        "Picture 1 is a face identity reference only. Keep that exact face, hair, and skin tone. "
-        "Do not copy wardrobe or bare skin from Picture 1. "
-        "Dress the body from the wardrobe in the character description: fully clothed, torso covered. "
-        "Place them in the location at the position described below. "
-        "Correct adult scale relative to furniture: feet on the floor, no body intersecting desks, "
-        "chairs, or walls. This is a set plate, not a story beat: do not invent scene-specific props."
-    )
-    if len(characters) > 1:
-        lock += (
-            " Extra character reference images after Picture 1 are additional faces to keep; "
-            "do not replace those people either."
-        )
-    blocks = [character["promptBlock"].strip() for character in characters]
-    blocks.append(location["promptBlock"].strip())
-    return "\n".join([lock, *blocks, blocking])
-
-
-def compose_edit_instruction(scene: dict, characters: list[dict], location: dict) -> str:
-    scene_text = compose_scene_prompt(scene, characters, "imagePrompt", location)
-    lock = (
-        "Picture 1 is the location-and-character plate. Keep that exact room, camera, lighting, "
-        "that exact person, their wardrobe, and their scale in the set. Do not undress them. "
-        "Do not replace the set or the face. Do not move them inside furniture. "
-        "Apply only the blocking below: pose, eyeline, hands, and named props. "
-        "Add any named prop so it is already in the picture. Do not invent extra props. "
-        "Hands must actually reach any prop or surface they touch. "
-        "Do not look at the camera unless the blocking says so."
-    )
-    if len(characters) >= 1:
-        lock += " Picture 2 is a face identity reference only; match that face, not that photo's clothing."
-    if len(characters) > 1:
-        lock += " Further images after Picture 2 are additional faces to keep."
-    return f"{lock}\n\n{scene_text}"
+def inject_qwen_character_canvas(graph: dict) -> None:
+    inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
 
 
 def inject_qwen_prompt(graph: dict, prompt: str) -> None:
@@ -905,159 +898,221 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
-def generate_episode(
-    script_path: Path,
-    workflow_template: dict,
-    characters_registry: dict[str, dict],
-    stage: str,
-) -> None:
-    script = load_json(script_path)
-    series = script["series"]
-    episode_number = script["episodeNumber"]
-    locations = load_script_locations(script)
-    validate_scene_stills(script, locations)
-    out_dir = OUTPUT_DIR / series / str(episode_number)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "manifest.json").write_text(json.dumps(script, indent=2), encoding="utf-8")
+def run_qwen_image(workflow_template: dict, dest: Path, prompt: str, mode: str, inject_images) -> None:
+    seed = random.randint(0, 2**32 - 1)
+    graph = clone_workflow(workflow_template)
+    inject_qwen_prompt(graph, prompt)
+    inject_seed(graph, seed)
+    inject_images(graph)
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
-    episode_started = time.time()
-    scene_files: list[Path] = []
+
+def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
+    show_id = show["id"]
+    started = time.time()
     generated = 0
     skipped = 0
 
     if stage == "frames":
-        plates: dict[tuple[str, str], tuple[dict, list[dict]]] = {}
-        for scene in script["scenes"]:
-            location = resolve_scene_location(scene, locations)
-            characters = resolve_scene_characters(scene, characters_registry)
-            if not characters:
-                raise SystemExit(
-                    f"Scene {scene['sceneNumber']} has no characterIds. content:frames needs a character "
-                    "reference PNG so Qwen-Image-Edit can lock identity."
-                )
+        for character_id, character in show["characters"].items():
+            dest = character_image_path(show_id, character_id)
+            print(f"Queued character {character_id}...", flush=True)
+            if present(dest):
+                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
+                skipped += 1
+                continue
+            prompt = show_prompt(
+                show,
+                "characterImage",
+                {
+                    "characterPromptBlock": character["promptBlock"],
+                    "imagePrompt": character["imagePrompt"],
+                },
+            )
+            run_qwen_image(
+                workflow_template,
+                dest,
+                prompt,
+                f"Qwen character ({character_id})",
+                inject_qwen_character_canvas,
+            )
+            generated += 1
+
+        for location_id, location in used_location_characters(show).items():
+            dest = location_character_path(show_id, location_id)
+            characters = resolve_characters(show, location)
+            names = ", ".join(location["characterIds"])
+            print(f"Queued locationCharacter {location_id} ({names})...", flush=True)
             extra_chars = max(0, len(characters) - MAX_QWEN_REFS)
             if extra_chars:
                 print(
                     f"  Dropping {extra_chars} extra character ref(s) (max {MAX_QWEN_REFS} images).",
                     flush=True,
                 )
-            plates[(location["id"], plate_character_key(scene))] = (location, characters)
-        for (location_id, character_key), (location, characters) in plates.items():
-            dest = plate_path(out_dir, location_id, character_key)
-            print(f"Queued plate {location_id} + {character_key.replace('__', ', ')}...", flush=True)
             if present(dest):
                 print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
                 skipped += 1
                 continue
-            seed = random.randint(0, 2**32 - 1)
-            graph = clone_workflow(workflow_template)
-            inject_qwen_prompt(graph, compose_plate_instruction(characters, location))
-            inject_seed(graph, seed)
-            inject_qwen_references(graph, characters)
-            print(f"  Graph seed {seed}", flush=True)
-            execute_queued_graph(
-                graph,
+            prompt = show_prompt(
+                show,
+                "locationCharacter",
+                {
+                    "characterPromptBlocks": character_blocks(characters),
+                    "locationPromptBlock": location["promptBlock"],
+                    "platePrompt": location["platePrompt"],
+                },
+            )
+            run_qwen_image(
+                workflow_template,
                 dest,
-                prefer="image",
-                mode=f"Qwen plate ({character_key.replace('__', ', ')} @ {location_id})",
+                prompt,
+                f"Qwen locationCharacter ({names} @ {location_id})",
+                lambda graph, chars=characters: inject_qwen_references(graph, chars),
             )
             generated += 1
 
-    for scene in script["scenes"]:
-        scene_number = scene["sceneNumber"]
-        still_path = start_still_path(out_dir, scene_number)
-        video_path = out_dir / f"scene_{scene_number:02d}.mp4"
-        dest = still_path if stage == "frames" else video_path
-        location = resolve_scene_location(scene, locations)
-        print(f"Queued scene {scene_number} ({stage})...", flush=True)
-        if present(dest):
-            print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
-            if stage == "video":
-                scene_files.append(dest)
-            skipped += 1
-            continue
-        if stage == "video" and not present(still_path):
-            raise SystemExit(
-                f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
-                "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
-            )
-        characters = resolve_scene_characters(scene, characters_registry)
-        seed = random.randint(0, 2**32 - 1)
-        if stage == "frames":
-            plate_file = plate_path(out_dir, location["id"], plate_character_key(scene))
-            if not present(plate_file):
+    for episode in show["episodes"]:
+        episode_number = episode["episodeNumber"]
+        out_dir = episode_dir(show_id, episode_number)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "series": show_id,
+                    "episodeNumber": episode_number,
+                    "title": episode["title"],
+                    "isFree": episode["isFree"],
+                    "coinCost": episode["coinCost"],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        episode_started = time.time()
+        scene_files: list[Path] = []
+        episode_generated = 0
+        episode_skipped = 0
+        for scene in episode["scenes"]:
+            scene_number = scene["sceneNumber"]
+            still_path = start_still_path(out_dir, scene_number)
+            video_path = out_dir / f"scene_{scene_number:02d}.mp4"
+            dest = still_path if stage == "frames" else video_path
+            location = resolve_location(show, scene)
+            print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
+            if present(dest):
+                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
+                if stage == "video":
+                    scene_files.append(dest)
+                episode_skipped += 1
+                skipped += 1
+                continue
+            if stage == "video" and not present(still_path):
                 raise SystemExit(
-                    f"Missing location+character plate {plate_file}. "
-                    "Delete nothing else and rerun `pnpm run content:frames`."
+                    f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
+                    "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
                 )
-            graph = clone_workflow(workflow_template)
-            inject_qwen_prompt(graph, compose_edit_instruction(scene, characters, location))
-            inject_seed(graph, seed)
-            inject_qwen_plate_edit(graph, plate_file, characters)
-            prefer = "image"
-            mode = (
-                f"Qwen scene edit ({', '.join(scene.get('characterIds') or []) or 'none'} "
-                f"@ {scene.get('locationId') or 'none'})"
-            )
-        else:
-            prompt = compose_scene_prompt(scene, characters, "videoPrompt", location)
-            graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
-            inject_seed(graph, seed)
-            duration_seconds = float(scene.get("durationSeconds") or 1)
-            inject_scene_length(graph, duration_seconds=duration_seconds)
-            inject_start_frame(graph, stage_start_still(still_path))
-            prefer = "video"
-            mode = (
-                f"I2V ({', '.join(scene.get('characterIds') or []) or 'none'} "
-                f"@ {scene.get('locationId') or 'none'})"
-            )
-        print(f"  Graph seed {seed}", flush=True)
-        execute_queued_graph(graph, dest, prefer=prefer, mode=mode)
+            characters = resolve_characters(show, location)
+            names = ", ".join(location["characterIds"])
+            if stage == "frames":
+                plate_file = location_character_path(show_id, location["id"])
+                if not present(plate_file):
+                    raise SystemExit(
+                        f"Missing locationCharacter plate {plate_file}. "
+                        "Rerun `pnpm run content:frames`."
+                    )
+                prompt = show_prompt(
+                    show,
+                    "sceneStill",
+                    {
+                        "characterPromptBlocks": character_blocks(characters),
+                        "preserve": location["preserve"],
+                        "imagePrompt": scene["imagePrompt"],
+                    },
+                )
+                run_qwen_image(
+                    workflow_template,
+                    dest,
+                    prompt,
+                    f"Qwen scene edit ({names} @ {location['id']})",
+                    lambda graph, plate=plate_file, chars=characters: inject_qwen_plate_edit(
+                        graph, plate, chars
+                    ),
+                )
+            else:
+                prompt = show_prompt(
+                    show,
+                    "sceneVideo",
+                    {
+                        "characterPromptBlocks": character_blocks(characters),
+                        "preserve": location["preserve"],
+                        "videoPrompt": scene["videoPrompt"],
+                    },
+                )
+                seed = random.randint(0, 2**32 - 1)
+                graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
+                inject_seed(graph, seed)
+                inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
+                inject_start_frame(graph, stage_start_still(still_path))
+                print(f"  Graph seed {seed}", flush=True)
+                execute_queued_graph(graph, dest, prefer="video", mode=f"I2V ({names} @ {location['id']})")
+                scene_files.append(dest)
+            episode_generated += 1
+            generated += 1
         if stage == "video":
-            scene_files.append(dest)
-        generated += 1
+            episode_mp4 = out_dir / "episode.mp4"
+            concat_videos(scene_files, episode_mp4)
+            print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
+        print(
+            f"Episode {show_id}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
+            f" ({episode_generated} generated, {episode_skipped} skipped)",
+            flush=True,
+        )
 
     if stage == "frames":
         print(
-            f"Start stills for {series}/{episode_number} are in {out_dir}. "
-            "Review plate_*.png (location+character) then scene_*_start.png (scene edits of those plates). "
+            f"Stills for {show_id} are in {OUTPUT_DIR / show_id}. "
+            "Review characters/, location-characters/, then each episode's scene_*_start.png. "
             "Replace a file by hand, or delete it and rerun `pnpm run content:frames`. "
-            "Deleting a plate does not refresh scene stills — delete those too if the plate changed. "
+            "Deleting a locationCharacter plate does not refresh scene stills — delete those too if the plate changed. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,
         )
-    else:
-        episode_mp4 = out_dir / "episode.mp4"
-        concat_videos(scene_files, episode_mp4)
-        print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     print(
-        f"Episode {series}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
+        f"Show {show_id} {stage} finished in {format_duration(time.time() - started)}"
         f" ({generated} generated, {skipped} skipped)",
         flush=True,
     )
 
 
-def stage_needs_comfy(scripts: list[Path], stage: str) -> bool:
-    for script_path in scripts:
-        script = load_json(script_path)
-        out_dir = OUTPUT_DIR / script["series"] / str(script["episodeNumber"])
-        for scene in script["scenes"]:
-            if stage == "frames":
-                location_id = scene.get("locationId") or "unknown"
-                plate = plate_path(out_dir, location_id, plate_character_key(scene))
-                still = start_still_path(out_dir, scene["sceneNumber"])
-                if not present(plate) or not present(still):
+def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
+    for show in shows:
+        show_id = show["id"]
+        if stage == "frames":
+            for character_id in show["characters"]:
+                if not present(character_image_path(show_id, character_id)):
                     return True
-            else:
-                dest = out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
-                if not present(dest):
+            for location_id in used_location_characters(show):
+                if not present(location_character_path(show_id, location_id)):
                     return True
+            for episode in show["episodes"]:
+                out_dir = episode_dir(show_id, episode["episodeNumber"])
+                for scene in episode["scenes"]:
+                    if not present(start_still_path(out_dir, scene["sceneNumber"])):
+                        return True
+        else:
+            for episode in show["episodes"]:
+                out_dir = episode_dir(show_id, episode["episodeNumber"])
+                for scene in episode["scenes"]:
+                    dest = out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
+                    if not present(dest):
+                        return True
     return False
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Render episode start stills (Qwen-Image-Edit) or videos (LTX) via ComfyUI."
+        description="Render show stills (Qwen-Image-Edit) or videos (LTX) via ComfyUI."
     )
     parser.add_argument("--stage", choices=("frames", "video"), default="video")
     args = parser.parse_args()
@@ -1066,11 +1121,11 @@ def main() -> None:
     if not workflow_path.is_file():
         raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
     workflow_template = load_json(workflow_path)
-    characters_registry = load_character_registry()
-    scripts = sorted(SCRIPTS_DIR.glob("*/*.json"))
+    scripts = sorted(SCRIPTS_DIR.glob("*.json"))
     if not scripts:
-        raise SystemExit(f"No JSON scripts found in {SCRIPTS_DIR}")
-    needs_comfy = stage_needs_comfy(scripts, args.stage)
+        raise SystemExit(f"No show JSON files found in {SCRIPTS_DIR} (expected <id>.json)")
+    shows = [load_show(path) for path in scripts]
+    needs_comfy = stage_needs_comfy(shows, args.stage)
     if needs_comfy:
         if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
             raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
@@ -1092,11 +1147,9 @@ def main() -> None:
             f"All scene files already present | stage={args.stage} | skipping ComfyUI",
             flush=True,
         )
-    for script_path in scripts:
-        print(f"{'Start stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
-        generate_episode(
-            script_path, workflow_template, characters_registry, args.stage
-        )
+    for show, script_path in zip(shows, scripts):
+        print(f"{'Stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
+        generate_show(show, workflow_template, args.stage)
 
 
 if __name__ == "__main__":

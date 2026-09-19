@@ -1,41 +1,15 @@
 ---
-description: Author episode JSON for Qwen-still + LTX-2.3 distilled I2V
-globs: content-pipeline/scripts_input/**/*.json,content-pipeline/characters/**/*.json
+description: Author one ShowScript JSON per show
+globs: content-pipeline/scripts_input/*.json
 alwaysApply: false
 ---
 
-# Episode scripts
+# Show scripts
 
-Follow **Episode script authoring** and the JSON schema in `PLAN.md`. Do not invent a different schema.
+One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Do not invent a different schema.
 
-Prompting follows LTX-2.3 docs (cinematographer shot list, not poetry): [prompt adherence](https://ltx.io/blog/how-to-improve-ltx-2-3-prompt-adherence), [dialogue/acting](https://ltx.io/blog/directing-dialogue-and-acting), [character consistency](https://ltx.io/blog/how-to-maintain-character-consistency-in-ai-video), [I2V](https://ltx.io/blog/ltx-2-image-to-video-text-to-video-workflow), [2.3 template](https://ltx23.github.io/ltx-2-3-prompt-template/). `enhance_prompt` is off; write the real prompt.
+That file is the whole show: characters, location-character plates, prompt templates, and episodes. `content:frames` generates character images from it.
 
-- Read `characters/*.json` first. `promptBlock` must include wardrobe (a face-only ref will otherwise print shirtless). Define rooms in this episode’s `locations` object (`promptBlock` + `preserve`). **`promptBlock` includes the set and default character placement/scale** (feet on the floor, furniture not through the body, camera). Scenes use those keys as `locationId`. No `locationView`, no location photos.
-- Every scene has `characterIds`, `locationId`, and `imagePrompt`. The pipeline builds one location+character plate, then edits it into this scene’s start still. Do not omit `imagePrompt` to “reuse” a still. Do not re-place the body unless this clip needs a new stance (kneeling, at the door).
-- Prefer one scene per visit with `Cut.` (2–4 shots). Splitting or returning uses the same plate with a new `imagePrompt`.
-- **Anchoring:** do not restate hair/wardrobe/set. The pipeline prepends the character `promptBlock` and location `preserve`. Scene text is framing + blocking + motion only.
-- **Screen-space:** `left` / `right` are the audience’s frame, not the character’s left/right. Write `screen-left`, `screen-right`, `lower-right of the gold frame`. Use `her right hand` only for which hand.
-- **Beats:** one main action per 2–3 seconds of `durationSeconds` (LTX). Distilled clips: one physical action + at most two spoken phrases, unless joined by `Cut.` At most four connected shots per scene.
-- **Chronology:** subject + main action first, then gesture, then speech beats, then camera, then audio last.
-
-## `imagePrompt` (every scene = LTX frame 0)
-
-Framing of the actor plus blocking. No motion, no speech. Required on every scene.
-
-- Eyeline: what they look at. If they are not addressing the lens, write **not looking at camera**.
-- Body angle, which hand, where the prop sits, lips slightly parted if they speak this clip.
-- Hands must reach what they touch **in this still**. Later beats belong in `videoPrompt` after `Cut.`
-- If this clip **starts** with an object (open laptop, clipping in hand, phone on the desk), that object must be in this still. Do not copy another scene’s pixels.
-- Place props in screen-space (`sealed envelope in the gap at the lower-right of the frame`, not “on her chest”).
-
-## `videoPrompt` (LTX I2V)
-
-Describe **what happens next**, not the still (I2V already has the picture). Literal, chronological, under ~200 words.
-
-- Same room, several beats: `Cut.` between 2–4 shots, or extra scenes with the same `locationId` and a new `imagePrompt`.
-- Interleave speech: short phrase, one acting cue, next phrase. Cues: eyeline, pause, voice quality, or a physical beat — **one cue per beat**. Do not dump a full quoted sentence with no pause.
-- Always name camera: `Camera static` or `Camera slow push-in`. Slow moves that underline a beat; no wide pans during dialogue.
-- Audio last: acoustic space + matching foley, **no music**. Off-screen voices steal the line.
-- Do not fight the start frame (no new wardrobe or room). A new prop after `Cut.` is allowed if the action produces it.
-
-One speaker. English only. No crowds, fights, morphs, 360s, on-screen text, mid-clip identity/set changes. Size `durationSeconds` to the beats. Valid episode JSON only unless the human asked for a plan first.
+- `locationCharacters` is a set plus the people in it (`characterIds` can be more than one). Scenes use `locationCharacterId`.
+- Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `locationCharacter`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
+- Valid show JSON only unless the human asked for a plan first.
