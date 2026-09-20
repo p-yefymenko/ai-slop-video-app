@@ -276,7 +276,8 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 ```
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
-- `locations` is a shared set description, reused verbatim. Scenes point at it with `locationId` and list who is in the shot with `characterIds` (at most two).
+- `locations` is a shared set description, reused verbatim. Scenes point at it with `locationId`.
+- `characterIds` is who fills the still at the same size (at most two), not everyone in the scene. Coverage (tiny in background, over-the-shoulder) is a different scene.
 - `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.
 
 

@@ -1,4 +1,4 @@
-/** Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show. */
+/** Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show. A chatbot can write this file from these comments. */
 
 export type ShowCharacter = {
   promptBlock: string;
@@ -24,9 +24,15 @@ export type ShowPrompts = {
 export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
-  /** At most two people on camera. Extra portrait photos make Qwen collage. */
+  /**
+   * Faces that fill this still at the same size. At most two.
+   * Not everyone in the scene: a speck, a blur, or someone over a shoulder is not a characterId — cut to another scene.
+   */
   characterIds: string[];
-  /** Full shot: camera, wardrobe, blocking. People and room are generated together from text. */
+  /**
+   * One camera, one scale. Wardrobe and blocking for characterIds only.
+   * Illegal: tiny/far background, over-the-shoulder, hand in the foreground, close-up of one person while listing two.
+   */
   imagePrompt: string;
   videoPrompt: string;
   durationSeconds: number;
