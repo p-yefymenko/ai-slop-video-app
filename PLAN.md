@@ -64,6 +64,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:render": "pnpm run content:frames && pnpm run content:generate",
+    "content:archive": "node scripts/archive-content-output.cjs",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
@@ -211,6 +212,8 @@ reelshort-clone/
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
+The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clips. Both are near 9:16; the LTX size is divisible by 32 and uses fewer pixels than the old 512x768 2:3 profile, which is necessary on the 16GB card.
+
 ### Local ComfyUI (required before `content:frames` / `content:generate`)
 
 `pnpm run content:frames` and `pnpm run content:generate` only talk to a ComfyUI HTTP API at `http://127.0.0.1:8188`. They do not install ComfyUI, download weights, or start the server. Do this on the GPU machine, in order:
@@ -248,9 +251,9 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
     }
   },
   "prompts": {
-    "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "The attached pictures are identity stills in order: {characterIds}. Place the person from Picture 1, and Picture 2 if attached, into one new photograph. Preserve facial identity from those pictures.\n{locationPromptBlock}\n{imagePrompt}",
-    "sceneVideo": "From this image.\n{videoPrompt}"
+    "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
+    "sceneStill": "The attached pictures are identity references in this exact order: {characterIds}. Picture 1 is the first named person; Picture 2, if attached, is the second. Create one new photorealistic vertical 9:16 photograph. Preserve each referenced face, hair, apparent age, and skin tone. Show each named person exactly once. Do not copy the reference backdrop, shirt, pose, or gaze. {locationPromptBlock} {imagePrompt}",
+    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
   },
   "episodes": [
     {
@@ -262,10 +265,16 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
         {
           "sceneNumber": 1,
           "locationId": "mansion-gates",
+          "storyBeat": "Elena returns to the estate and chooses to confront her past.",
+          "continuityIn": "Elena has just arrived alone outside the open gates.",
+          "continuityOut": "Elena commits to entering the estate.",
+          "shotType": "single",
           "characterIds": ["elena-heiress"],
-          "imagePrompt": "Elena stands between the open gates in a navy wool coat, eyes on the house, not looking at camera.",
-          "videoPrompt": "Elena looks up toward the mansion. She says, \"Ten years.\" Camera static. Outdoor wind, no music.",
-          "durationSeconds": 6
+          "speakerId": "elena-heiress",
+          "addresseeId": null,
+          "imagePrompt": "Chest-up single of Elena in a navy wool coat, facing the estate off-frame right with guarded resolve, never looking at camera.",
+          "videoPrompt": "Elena raises her gaze toward the estate and whispers, \"Ten years.\" Camera locked. Outdoor wind stirs.",
+          "durationSeconds": 4
         }
       ]
     }
@@ -275,10 +284,13 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
-- `characterIds` is at most two: Qwen Picture 1, then Picture 2.
-- `imagePrompt` is who is where, facing whom, wardrobe. Identity is the PNG.
-- `videoPrompt` is what happens next: action, camera, audio. Spoken lines in quotes with voice quality and one acting beat between phrases. Do not redescribe the start frame.
-- `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.
+- Each episode uses 5-8 causal shots: setup, pressure, choice/reveal, reaction, cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit and are validated before rendering.
+- `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. The IDs remain Qwen Picture 1 / Picture 2 order.
+- `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 12 words maximum.
+- `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
+- `videoPrompt` advances one meaningful action from that frame, with one speaker and one camera behavior. Do not alternate speakers or repeat the still.
+- `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Prefer 4-second cuts for ReelShort pacing.
+- Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 
 
 ## Deployment

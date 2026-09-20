@@ -68,43 +68,85 @@
         {
           "sceneNumber": 1,
           "locationId": "chapel_altar",
-          "characterIds": [
-            "mara",
-            "julian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in a fitted ivory lace wedding gown and chapel-length veil, her chestnut hair in a low chignon; she holds a white peony bouquet motionless at waist level and gazes at Julian with stunned disbelief. Julian stands at frame right in a charcoal tuxedo, white shirt, black bow tie, and white rosebud boutonniere; he gazes back coldly with his chin slightly raised. Neither looks at the camera.",
-          "videoPrompt": "Julian slightly raises his chin while Mara remains still. Camera locked. Julian says in a cold, flat voice, \"I cannot marry you, Mara. I love Celeste.\" A low organ note fades.",
-          "durationSeconds": 6
+          "storyBeat": "Julian rejects Mara at the altar, publicly breaking their wedding.",
+          "continuityIn": "Mara and Julian face each other at their wedding altar; Celeste and Vivienne are nearby.",
+          "continuityOut": "Mara has heard Julian reject her for Celeste.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Julian in a charcoal tuxedo, white shirt, black bow tie, and white rosebud boutonniere. He faces Mara just off-frame left with a cold, resolved expression; his arms are low out of frame, and he does not look at the camera.",
+          "videoPrompt": "Julian slightly lifts his chin and tells Mara, \"I won't marry you. I love Celeste.\" Camera locked. A low organ note fades.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "chapel_altar",
-          "characterIds": [
-            "mara",
-            "celeste"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane. Mara is at frame left in an ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon; she holds a white peony bouquet still below her chest and gazes off-frame left with glassy, wounded eyes. Celeste is at frame right in a fitted champagne satin maid-of-honor dress, her straight copper-red hair down; she gazes at Mara with a restrained smirk. Neither looks at the camera.",
-          "videoPrompt": "Mara blinks back tears while Celeste remains still. One slow push-in. Mara says in a cracking but steady voice, \"Three hundred people, and you chose now.\" The chapel air is silent.",
-          "durationSeconds": 6
+          "storyBeat": "Mara absorbs the rejection, making its humiliation emotionally visible.",
+          "continuityIn": "Julian has just rejected Mara for Celeste at the altar.",
+          "continuityOut": "Mara is wounded and turns her attention toward Celeste.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "julian",
+          "imagePrompt": "Medium close-up of Mara in a fitted ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon. She holds a white peony bouquet at waist level and stares toward Julian off-frame right with stunned, glassy eyes, never at the camera.",
+          "videoPrompt": "Mara's grip tightens once around the bouquet as hurt reaches her face. One slow push-in. The chapel falls silent.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
-          "locationId": "chapel_pew",
-          "characterIds": [
-            "vivienne"
-          ],
-          "imagePrompt": "Static medium close-up of Vivienne seated alone, centered, in a dove-grey silk skirt suit, pearl necklace, and black leather gloves; a closed black clutch rests motionless against her lap below frame. Her silver bob is neat, and she gazes off-frame right toward the altar with a small satisfied smile. Her hands remain out of frame.",
-          "videoPrompt": "Vivienne's satisfied smile slowly deepens. Camera locked. Vivienne murmurs in a quiet, controlled voice, \"Right on schedule.\" A distant organ hum lingers.",
+          "locationId": "chapel_altar",
+          "storyBeat": "Celeste confirms the betrayal, turning Julian's rejection into a deliberate ambush.",
+          "continuityIn": "Mara now looks toward Celeste after hearing Julian chose her.",
+          "continuityOut": "Mara knows Celeste knowingly took Julian.",
+          "shotType": "single",
+          "characterIds": ["celeste"],
+          "speakerId": "celeste",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Celeste in a fitted champagne satin maid-of-honor dress, sleek copper-red hair down. She faces Mara off-frame left with restrained triumph, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Celeste lets a small smile appear and tells Mara, \"He chose me weeks ago.\" Camera locked. Fabric rustles softly.",
           "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
+          "locationId": "chapel_pew",
+          "storyBeat": "Vivienne's satisfaction reveals the humiliation was expected.",
+          "continuityIn": "Julian and Celeste have exposed their planned betrayal at the altar.",
+          "continuityOut": "Vivienne is visibly pleased that the wedding collapsed.",
+          "shotType": "reaction",
+          "characterIds": ["vivienne"],
+          "speakerId": null,
+          "addresseeId": "celeste",
+          "imagePrompt": "Medium close-up of Vivienne seated in a dove-grey silk skirt suit, pearl necklace, and black leather gloves, a closed black clutch on her lap. She watches Celeste off-frame right with cool satisfaction, never looking at the camera.",
+          "videoPrompt": "Vivienne's mouth curves into one controlled, satisfied smile. Camera locked. A pew creaks softly.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
           "locationId": "chapel_aisle",
-          "characterIds": [
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up portrait of Damian standing alone at center frame in a black tailored suit, crisp white shirt, and slim black tie. His shoulders are square, hands out of frame, and he gazes off-frame right toward the altar with calm resolve, mouth closed. No other person is visible.",
-          "videoPrompt": "Damian takes one quiet breath without shifting position. One slow push-in. Damian says in a low, steady voice, \"If the groom is finished, I'll marry her.\" The wooden chapel softly creaks.",
+          "storyBeat": "Damian interrupts the humiliation with a shocking marriage offer.",
+          "continuityIn": "Mara stands rejected at the altar while Vivienne watches with satisfaction.",
+          "continuityOut": "Mara has heard Damian offer to marry her immediately.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in a black tailored suit, crisp white shirt, and slim black tie. He faces Mara at the altar off-frame right with steady resolve, shoulders squared, never looking at the camera.",
+          "videoPrompt": "Damian takes one measured step toward Mara and says, \"Then marry me instead.\" Camera locked. Chapel whispers rise.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "chapel_altar",
+          "storyBeat": "Mara recognizes Damian as a stranger and must choose under pressure.",
+          "continuityIn": "Damian has stepped forward and offered to marry Mara.",
+          "continuityOut": "Mara stares at Damian, shocked by the offer and poised to answer.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in the ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, white peony bouquet held at waist level. She faces Damian off-frame left with startled, searching eyes, never looking at the camera.",
+          "videoPrompt": "Mara turns her face fully toward Damian as shock becomes wary calculation. One slow push-in. The organ cuts out.",
           "durationSeconds": 6
         }
       ]
@@ -117,45 +159,101 @@
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationId": "chapel_aisle",
-          "characterIds": [
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up portrait of Damian standing alone at center frame in a black tailored suit, crisp white shirt, and slim black tie. His shoulders are square, hands out of frame, jaw set, and gaze fixed off-frame right toward the altar. No other person is visible.",
-          "videoPrompt": "Damian's gaze steadies and his jaw subtly tightens. Camera locked. Damian says in a calm low voice, \"My offer is sincere.\" Soft chapel whispers remain indistinct.",
-          "durationSeconds": 6
+          "locationId": "chapel_altar",
+          "storyBeat": "Mara challenges the stranger to explain why she should trust him.",
+          "continuityIn": "Damian has offered to marry Mara after Julian's rejection.",
+          "continuityOut": "Damian must explain what Mara gains from accepting.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in her ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, holding the white peony bouquet at waist level. She faces Damian off-frame left with guarded disbelief, never looking at the camera.",
+          "videoPrompt": "Mara steadies the bouquet and asks Damian, \"Why would I marry a stranger?\" Camera locked. Guests murmur softly.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "chapel_altar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon; she holds a white peony bouquet still at waist level and gazes up at Damian with wet, searching eyes. Damian stands at frame right in a black tailored suit, crisp white shirt, and slim black tie; his hands are out of frame and he gazes calmly at Mara. Neither looks at the camera.",
-          "videoPrompt": "Mara's searching gaze holds on Damian while he remains still. Camera locked. Mara whispers in a shaken voice, \"Who are you?\" The organ breathes softly.",
-          "durationSeconds": 6
+          "storyBeat": "Damian reveals he can save Mara's bakery for one year of marriage.",
+          "continuityIn": "Mara has demanded a reason to accept Damian's offer.",
+          "continuityOut": "Mara knows the offer trades one year of marriage for her bakery.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in his black tailored suit, crisp white shirt, and slim black tie. He faces Mara off-frame right with calm certainty, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian gives Mara one firm nod and says, \"One year, and Vance releases your bakery.\" Camera locked. The chapel hush deepens.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "chapel_altar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon; a plain silver wedding band is already on her left ring finger, and she holds her white peony bouquet still at waist level while gazing at Damian in wary surprise. Damian stands at frame right in a black tailored suit, crisp white shirt, and slim black tie; his hands are out of frame and he gazes firmly at Mara. Neither looks at the camera.",
-          "videoPrompt": "Damian gives one small resolute nod while Mara remains still. Camera locked. Damian says in a firm low voice, \"I do.\" A faint chapel murmur rises.",
-          "durationSeconds": 6
+          "storyBeat": "Mara chooses the bargain before taking any vow.",
+          "continuityIn": "Mara knows Damian can release her bakery from Vance leverage.",
+          "continuityOut": "Mara has explicitly accepted Damian's one-year bargain.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She faces Damian off-frame left with wet eyes and newly firm resolve, never looking at the camera.",
+          "videoPrompt": "Mara raises her chin and tells Damian, \"Then I accept.\" Camera locked. Her veil softly settles.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
-          "locationId": "chapel_pew",
-          "characterIds": [
-            "vivienne"
-          ],
-          "imagePrompt": "Static medium close-up of Vivienne seated alone, centered, in a dove-grey silk skirt suit, pearl necklace, and black leather gloves. A closed black clutch rests motionless below frame. She gazes off-frame right toward the altar with parted lips and sudden alarm, her hands out of frame.",
-          "videoPrompt": "Vivienne's eyes widen slightly without changing her pose. Camera locked. Vivienne whispers in a barely audible voice, \"Cross.\" A pew softly creaks.",
+          "locationId": "chapel_altar",
+          "storyBeat": "Damian vows to protect the legacy Mara chose to save.",
+          "continuityIn": "Mara has accepted the one-year marriage bargain.",
+          "continuityOut": "Damian has promised to protect Mara's father's bakery.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He faces Mara off-frame right with solemn warmth, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian's expression softens and he vows, \"I'll protect what your father built.\" Camera locked. A quiet organ chord begins.",
           "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "chapel_altar",
+          "storyBeat": "Mara seals her deliberate choice with a public vow.",
+          "continuityIn": "Mara accepted the bargain and Damian promised to protect the bakery.",
+          "continuityOut": "Mara has said her marriage vow to Damian.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She faces Damian off-frame left with nervous resolve, never looking at the camera.",
+          "videoPrompt": "Mara holds Damian's gaze and says, \"I do.\" Camera locked. The organ chord swells.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "chapel_altar",
+          "storyBeat": "Damian answers the vow, making the impulsive marriage real.",
+          "continuityIn": "Mara has publicly vowed to marry Damian.",
+          "continuityOut": "Damian and Mara are married by mutual vows.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He faces Mara off-frame right with unwavering commitment, never looking at the camera.",
+          "videoPrompt": "Damian inclines his head to Mara and says, \"I do.\" Camera locked. Guests gasp softly.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "chapel_pew",
+          "storyBeat": "Vivienne recognizes Damian's surname and loses her composure.",
+          "continuityIn": "Mara has just married Damian Cross in front of the Vances.",
+          "continuityOut": "Vivienne recognizes Cross and is alarmed by Damian's involvement.",
+          "shotType": "single",
+          "characterIds": ["vivienne"],
+          "speakerId": "vivienne",
+          "addresseeId": "julian",
+          "imagePrompt": "Medium close-up of Vivienne in her dove-grey silk skirt suit, pearl necklace, and black leather gloves, closed black clutch on her lap. She turns toward Julian off-frame left with sudden alarm, never looking at the camera.",
+          "videoPrompt": "Vivienne's eyes widen as she whispers to Julian off-screen, \"Cross.\" Camera locked. A pew creaks.",
+          "durationSeconds": 6
         }
       ]
     },
@@ -168,44 +266,85 @@
         {
           "sceneNumber": 1,
           "locationId": "car_interior",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane across the rear seat. Mara sits at frame left in a wrinkled ivory lace wedding gown and crumpled veil, chestnut chignon loosening, faint mascara smudged, and a plain silver band on her left ring finger; her hands are out of frame and she gazes tensely at Damian. Damian sits at frame right in a black suit, white shirt, and slim black tie; his hands are out of frame and he gazes calmly at Mara. A closed slim black folder lies motionless on the seat between them.",
-          "videoPrompt": "Damian holds Mara's gaze and takes one measured breath. Camera locked. Damian says in a calm low voice, \"One year as my wife, and I clear the bakery debt.\" Rain taps the windows.",
-          "durationSeconds": 6
+          "storyBeat": "The already-open contract establishes the loveless-marriage clause before Mara challenges it.",
+          "continuityIn": "Mara and Damian are married and ride away from the chapel.",
+          "continuityOut": "Mara has visibly reviewed the marked clause in Damian's open contract.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara seated in a wrinkled ivory lace wedding gown and crumpled veil, chestnut chignon loosening, faint mascara smudged, plain silver band on her left ring finger. An already-open black folder rests across her lap with an unreadable marked page facing only her; she looks down at it, not at the camera.",
+          "videoPrompt": "Mara traces the edge of the marked clause once with one finger. Camera locked. Rain taps the window.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "car_interior",
-          "characterIds": [
-            "mara"
-          ],
-          "imagePrompt": "Static medium close-up of Mara seated alone at center frame in a wrinkled ivory lace wedding gown and crumpled veil, chestnut chignon loosening, faint mascara smudged, and a plain silver band on her left ring finger. A closed black folder rests below frame. She gazes down toward it with drawn brows and a disbelieving half-smile; her hands remain out of frame.",
-          "videoPrompt": "Mara's half-smile fades into wary disbelief. Camera locked. Mara says in a dry, incredulous voice, \"Clause nine. No falling in love?\" Rain patters against glass.",
-          "durationSeconds": 6
+          "storyBeat": "Mara questions why Damian's contract forbids emotional attachment.",
+          "continuityIn": "Mara has reviewed the marked clause in the already-open folder.",
+          "continuityOut": "Damian must justify the contract's no-love boundary.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in the wrinkled ivory gown and crumpled veil, plain silver band visible. The already-open black folder stays across her lap with its unreadable page facing her; she looks toward Damian off-frame right with wary disbelief, never at the camera.",
+          "videoPrompt": "Mara lowers one corner of the open folder and asks Damian, \"Why does clause nine forbid love?\" Camera locked. Rain patters.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
-          "locationId": "bakery_front",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an ivory lace wedding gown with Damian's black suit jacket already draped over her shoulders, chestnut hair loosening, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at the locked bakery door with grief. Damian stands at frame right in a white shirt, loosened black tie, and sleeves rolled to his forearms; his hands are out of frame and he gazes at Mara with quiet resolve. No sign or text is visible.",
-          "videoPrompt": "Mara's lower lip trembles while Damian remains still beside her. One slow push-in. Mara says in a breaking voice, \"My father built this. Vance takes it Monday.\" Rain drips from the awning.",
-          "durationSeconds": 6
+          "locationId": "car_interior",
+          "storyBeat": "Damian explains that emotional distance protects the practical bargain.",
+          "continuityIn": "Mara has asked why their one-year contract forbids love.",
+          "continuityOut": "Mara knows Damian believes feelings would endanger their bargain.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian seated in a black suit, white shirt, and slim black tie. He faces Mara off-frame left with controlled restraint, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian's jaw tightens and he tells Mara, \"Feelings make bargains dangerous.\" Camera locked. Tires hiss on wet pavement.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "bakery_front",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an ivory lace wedding gown with Damian's black suit jacket over her shoulders, chestnut hair loosening, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at the small silver key already held motionless at Damian's chest with stunned suspicion. Damian stands at frame right in a white shirt, loosened black tie, and sleeves rolled to his forearms; he holds the key still in one relaxed hand and gazes at Mara guardedly.",
-          "videoPrompt": "Mara's eyes lift from the key to Damian's face. Camera locked. Mara whispers in a stunned voice, \"Nobody knows that key. How do you?\" Rain begins softly.",
+          "storyBeat": "The locked bakery makes Damian's promised rescue immediate and real.",
+          "continuityIn": "Damian framed the marriage as a practical bargain to save the bakery.",
+          "continuityOut": "Mara sees her bakery locked and threatened by Vance.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara outside the locked bakery in the ivory lace wedding gown with Damian's black suit jacket over her shoulders, chestnut hair loosening, plain silver band visible. She faces the locked door off-frame right with grief and dread, never looking at the camera.",
+          "videoPrompt": "Mara places one palm against the locked door as grief crosses her face. One slow push-in. Rain drips from the awning.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "bakery_front",
+          "storyBeat": "Damian reveals he possesses the bakery's secret key.",
+          "continuityIn": "Mara has confronted the locked bakery Damian promised to save.",
+          "continuityOut": "Mara sees Damian holding a key only her family should know.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in a white shirt with loosened black tie and sleeves rolled to his forearms. He already holds a small silver key at chest height toward Mara off-frame left, his expression guarded; he never looks at the camera.",
+          "videoPrompt": "Damian raises the already-held key slightly into the streetlight. Camera locked. Rain falls softly.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "bakery_front",
+          "storyBeat": "Mara realizes Damian knows a family secret and suspects a deeper connection.",
+          "continuityIn": "Damian has shown Mara the bakery's secret silver key.",
+          "continuityOut": "Mara has demanded how Damian knows the key, leaving him exposed.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up reaction of Mara in the ivory wedding gown under Damian's black jacket, chestnut hair loosening, plain silver band visible. She stares toward Damian and the key off-frame left with sharp suspicion, never looking at the camera.",
+          "videoPrompt": "Mara's grief hardens into suspicion as she asks Damian off-screen, \"How do you know that key?\" Camera locked. Rain strikes metal.",
           "durationSeconds": 6
         }
       ]
@@ -219,44 +358,99 @@
         {
           "sceneNumber": 1,
           "locationId": "penthouse_living",
-          "characterIds": [
-            "mara",
-            "theo"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at Theo with sleepy uncertainty. Theo stands at frame right in a tailored navy suit, white shirt, pale-pink pocket square, and round tortoiseshell glasses; his hands are out of frame and he gazes brightly at Mara.",
-          "videoPrompt": "Theo's welcoming smile broadens while Mara remains still. Camera locked. Theo says in a bright quick voice, \"Good morning, Mrs. Cross. Avoid the espresso machine.\" A coffee machine hums softly.",
-          "durationSeconds": 6
+          "storyBeat": "Theo orients Mara to Damian's home and directs her toward the private study.",
+          "continuityIn": "Mara has arrived at Damian's penthouse after their wedding night.",
+          "continuityOut": "Mara knows Theo is Damian's aide and the study contains family keepsakes.",
+          "shotType": "twoShot",
+          "characterIds": ["mara", "theo"],
+          "speakerId": "theo",
+          "addresseeId": "mara",
+          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible; Theo at frame right in a tailored navy suit, white shirt, pale-pink pocket square, and round tortoiseshell glasses. Theo faces Mara warmly while Mara listens; neither looks at the camera.",
+          "videoPrompt": "Theo gestures once toward the study and tells Mara, \"I'm Theo. Family keepsakes are in the study.\" Camera locked. A coffee machine hums.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara"
-          ],
-          "imagePrompt": "Static medium close-up of Mara standing alone at center frame in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger. She already holds a small silver photo frame motionless against her chest with its image turned away from the camera, and gazes down at it with shocked recognition and gathering tears.",
-          "videoPrompt": "Mara's breath catches and her eyes fill with tears. One slow push-in. Mara whispers in a fragile voice, \"Dad?\" The green-shaded lamp hums.",
-          "durationSeconds": 6
+          "storyBeat": "Mara notices an old framed photograph among Damian's family keepsakes.",
+          "continuityIn": "Theo directed Mara to the study where family keepsakes are stored.",
+          "continuityOut": "Mara has spotted a silver photo frame whose image faces her.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": null,
+          "imagePrompt": "Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. A small silver photo frame rests on the desk with its old photograph facing Mara and turned away from the camera; she looks down at it in dawning recognition.",
+          "videoPrompt": "Mara leans her gaze closer to the photograph as recognition catches. Camera locked. The desk lamp hums.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger; she holds a small silver photo frame motionless against her chest with its image turned away from the camera and gazes at Damian with hurt recognition. Damian stands at frame right in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers; his hands are out of frame and he gazes back with guarded pain.",
-          "videoPrompt": "Damian's jaw tightens while Mara remains still. Camera locked. Damian says in a cold, controlled voice, \"Put that down.\" The lamp hums in the silence.",
-          "durationSeconds": 6
+          "storyBeat": "Mara lifts the discovered photograph and recognizes her father in it.",
+          "continuityIn": "Mara has spotted an old photograph facing her on Damian's desk.",
+          "continuityOut": "Mara holds the frame and knows it depicts her father.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": null,
+          "imagePrompt": "Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She already holds the small silver frame low against her torso with the photograph facing only her; tears gather as she looks at it, never at the camera.",
+          "videoPrompt": "Mara raises the already-held frame to eye level and whispers, \"Dad?\" Camera locked. The lamp softly buzzes.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane across the desk. Mara stands at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at Damian with furious hurt. Damian stands at frame right in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers; his hands are out of frame and he gazes back with restrained pain.",
-          "videoPrompt": "Mara's eyes narrow as she holds Damian's gaze. One slow push-in. Mara says in a trembling voice, \"You knew my father. You knew exactly who I was.\" The lamp softly buzzes.",
+          "storyBeat": "Damian sees Mara holding the photograph and reacts with guarded pain.",
+          "continuityIn": "Mara holds the frame and has recognized her father.",
+          "continuityOut": "Mara sees that the photograph disturbs Damian deeply.",
+          "shotType": "reaction",
+          "characterIds": ["damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara and the frame off-screen left with sudden guarded pain, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian stops at the doorway and his jaw tightens at the photograph. One slow push-in. The room falls quiet.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "penthouse_study",
+          "storyBeat": "Mara accuses Damian of choosing her because he knew her father.",
+          "continuityIn": "Damian's reaction confirms the photograph matters to him.",
+          "continuityOut": "Mara has directly accused Damian of knowing her identity all along.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She holds the silver frame against her torso with its photograph facing her and confronts Damian off-frame right with hurt anger, never looking at the camera.",
+          "videoPrompt": "Mara lowers the frame slightly and tells Damian, \"You knew my father. You chose me.\" Camera locked. The lamp hums.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "penthouse_study",
+          "storyBeat": "Damian's silence delays the answer and confirms Mara struck a hidden truth.",
+          "continuityIn": "Mara has accused Damian of deliberately choosing Thomas Ellison's daughter.",
+          "continuityOut": "Damian visibly struggles before answering.",
+          "shotType": "reaction",
+          "characterIds": ["damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up reaction of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with grief behind his guarded expression, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian drops his gaze for one long beat before meeting Mara's eyes again. One slow push-in. The clock ticks.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "penthouse_study",
+          "storyBeat": "Damian finally admits Mara's father once saved his life.",
+          "continuityIn": "Damian has paused under Mara's accusation and can no longer evade it.",
+          "continuityOut": "Mara knows Damian owed her father a life debt.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with exposed grief and reluctant honesty, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian exhales once and admits to Mara, \"Your father saved my life.\" Camera locked. The clock ticks.",
           "durationSeconds": 6
         }
       ]
@@ -270,45 +464,99 @@
         {
           "sceneNumber": 1,
           "locationId": "ballroom",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an emerald-green satin off-the-shoulder gown, emerald drop earrings, chestnut hair in glossy loose waves, and a plain silver band on her left ring finger; her hands are out of frame and she gazes forward with poised tension. Damian stands at frame right in a black tuxedo, white shirt, and black bow tie; his hands are out of frame and he gazes at Mara reassuringly. No other people are visible.",
-          "videoPrompt": "Mara's tense expression settles into a composed smile. Camera locked. Mara says in a cool confident voice, \"Let them watch.\" Chandelier crystals softly chime.",
-          "durationSeconds": 6
+          "storyBeat": "Mara enters the gala as Damian's wife despite the watching Vances.",
+          "continuityIn": "Mara knows Damian had a hidden connection to her father.",
+          "continuityOut": "Mara has chosen to face the gala publicly at Damian's side.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in an unstained emerald-green satin off-the-shoulder gown, emerald drop earrings, chestnut hair in glossy loose waves, and a plain silver band. She faces Damian off-frame right with poised tension, never looking at the camera.",
+          "videoPrompt": "Mara takes one step farther into the ballroom and tells Damian, \"Let them watch.\" Camera locked. Chandelier crystals chime.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "ballroom",
-          "characterIds": [
-            "mara",
-            "celeste"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an emerald-green satin off-the-shoulder gown already marked by one dark red wine stain across the bodice, emerald drop earrings, and chestnut hair in glossy loose waves; her hands are out of frame and she gazes at Celeste with controlled anger. Celeste stands at frame right in a fitted gold sequin cocktail dress with straight copper-red hair; she holds an empty wine glass motionless at her own waist and gazes at Mara with false concern.",
-          "videoPrompt": "Celeste's false concern curls into a slight smile while Mara remains still. Camera locked. Celeste says in a syrupy voice, \"Oops. Clumsy me.\" The empty glass faintly rings.",
-          "durationSeconds": 6
+          "storyBeat": "Celeste deliberately spills wine on Mara to humiliate her.",
+          "continuityIn": "Mara has entered in an unstained emerald gown and faces the Vances.",
+          "continuityOut": "Mara's gown bears a fresh red wine stain caused by Celeste.",
+          "shotType": "twoShot",
+          "characterIds": ["mara", "celeste"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in the unstained emerald satin gown with emerald earrings, glossy chestnut waves, and silver band; Celeste at frame right in a fitted gold sequin cocktail dress, copper-red hair straight, already holding a tilted wine glass above Mara's bodice. Celeste watches the glass while Mara watches Celeste; neither looks at the camera.",
+          "videoPrompt": "Celeste tips the already-tilted glass once, splashing red wine across Mara's bodice. Camera locked. The glass gives a faint clink.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "ballroom",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an emerald-green satin off-the-shoulder gown with Damian's black tuxedo jacket already draped over her shoulders, chestnut hair in glossy loose waves, emerald drop earrings, and a plain silver band on her left ring finger; her hands are out of frame and she gazes up at Damian with quiet surprise. Damian stands at frame right in a white tuxedo shirt, black bow tie, and black trousers; his hands are out of frame and he gazes warmly at Mara.",
-          "videoPrompt": "Damian gives Mara a small reassuring smile while she remains still. Camera locked. Damian says in a warm firm voice, \"My wife looks perfect in anything.\" Chandelier crystals softly chime.",
-          "durationSeconds": 6
+          "storyBeat": "Mara registers the public humiliation before Damian intervenes.",
+          "continuityIn": "Celeste has just stained Mara's emerald gown with red wine.",
+          "continuityOut": "Mara stands visibly stained and hurt as Damian approaches.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "celeste",
+          "imagePrompt": "Medium close-up of Mara in the emerald satin gown now marked by one dark red wine stain across the bodice, emerald earrings, glossy chestnut waves, and silver band. She looks toward Celeste off-frame right with humiliated anger, never at the camera.",
+          "videoPrompt": "Mara looks down once at the stain, then back toward Celeste with controlled hurt. Camera locked. Ballroom chatter dips.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "ballroom",
-          "characterIds": [
-            "vivienne",
-            "julian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Vivienne stands at frame left in a floor-length black satin gown and pearl choker, her silver bob neat; her hands are out of frame and she gazes off-frame left with cold alarm. Julian stands at frame right in a black tuxedo, white shirt, and black bow tie; his hands are out of frame and he gazes uneasily at Vivienne. Neither looks at the camera.",
-          "videoPrompt": "Vivienne's lips tighten while Julian remains still. One slow push-in. Vivienne says in a low guarded voice, \"Because Thomas left something behind.\" Ballroom music murmurs faintly.",
+          "storyBeat": "Damian covers the stain, turning Celeste's attack into visible support.",
+          "continuityIn": "Mara's wine-stained bodice is exposed after Celeste's spill.",
+          "continuityOut": "Damian's tuxedo jacket now covers Mara's stained gown.",
+          "shotType": "twoShot",
+          "characterIds": ["mara", "damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in the stained emerald gown, emerald earrings, glossy chestnut waves, and silver band; Damian at frame right in a white tuxedo shirt, black bow tie, and black trousers, already holding his black tuxedo jacket open at Mara's shoulders. They look at each other, not at the camera.",
+          "videoPrompt": "Damian lowers the already-open jacket over Mara's shoulders, covering the stain. Camera locked. Satin rustles softly.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "ballroom",
+          "storyBeat": "Mara reacts to Damian protecting her without demanding anything.",
+          "continuityIn": "Damian's black tuxedo jacket covers Mara's stained gown.",
+          "continuityOut": "Mara's humiliation gives way to surprised trust in Damian.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in the emerald satin gown with Damian's black tuxedo jacket now over her shoulders, the low stain mostly covered, emerald earrings, glossy chestnut waves, and silver band. She looks toward Damian off-frame right with surprised gratitude, never at the camera.",
+          "videoPrompt": "Mara gathers the jacket edge once as gratitude softens her anger. One slow push-in. Music resumes faintly.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "ballroom",
+          "storyBeat": "Damian publicly defends Mara and denies Celeste the humiliation.",
+          "continuityIn": "Mara now wears Damian's jacket over the wine stain.",
+          "continuityOut": "Celeste and the room have heard Damian claim and defend Mara.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "celeste",
+          "imagePrompt": "Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He faces Celeste off-frame left with calm warning, shoulders squared, never looking at the camera.",
+          "videoPrompt": "Damian turns his head toward Celeste and says, \"My wife needs no approval from you.\" Camera locked. The room quiets.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "ballroom",
+          "storyBeat": "Vivienne hints that Thomas left evidence, exposing her fear of Mara's father.",
+          "continuityIn": "Damian has publicly defended Mara against Celeste.",
+          "continuityOut": "Julian hears Vivienne fear something Thomas left behind.",
+          "shotType": "single",
+          "characterIds": ["vivienne"],
+          "speakerId": "vivienne",
+          "addresseeId": "julian",
+          "imagePrompt": "Medium close-up of Vivienne in a floor-length black satin gown and pearl choker, silver bob neat. She faces Julian off-frame right with cold alarm, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Vivienne leans slightly toward Julian and warns, \"Thomas left something behind.\" Camera locked. Ballroom music murmurs.",
           "durationSeconds": 6
         }
       ]
@@ -322,45 +570,99 @@
         {
           "sceneNumber": 1,
           "locationId": "terrace",
-          "characterIds": [
-            "mara",
-            "julian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an emerald satin gown with a black tuxedo jacket draped over her shoulders, a dark wine stain low on the gown, chestnut hair in glossy waves, and a plain silver band on her left ring finger; her hands are out of frame and she gazes away over the railing with guarded calm. Julian stands at frame right in a black tuxedo, white shirt, and undone black bow tie; his hands are out of frame and he gazes at Mara with regret.",
-          "videoPrompt": "Julian's regretful gaze stays on Mara while she remains still. Camera locked. Julian says in a quiet voice, \"You look happy, Mara. It suits you.\" Night wind rustles the olive leaves.",
-          "durationSeconds": 6
+          "storyBeat": "Julian follows Mara onto the terrace and approaches with regret.",
+          "continuityIn": "Damian defended Mara at the gala; Mara wears his jacket over her stained gown.",
+          "continuityOut": "Julian has approached Mara privately and she knows he wants to speak.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Julian in a black tuxedo, white shirt, and undone black bow tie, sandy-blond hair neat. He faces Mara off-frame left with regret, one foot slightly behind the other, never looking at the camera.",
+          "videoPrompt": "Julian takes one restrained step toward Mara and stops. Camera locked. Night wind stirs the olive leaves.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "terrace",
-          "characterIds": [
-            "mara",
-            "julian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane and no contact. Mara stands at frame left in an emerald satin gown with a black tuxedo jacket over her shoulders, a dark wine stain low on the gown, chestnut hair in glossy waves, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at Julian with defiant caution. Julian stands at frame right in a black tuxedo, white shirt, and undone black bow tie; his hands are out of frame and he gazes at Mara with desperate entitlement.",
-          "videoPrompt": "Julian leans his head slightly forward without moving closer. One slow push-in. Julian says in a desperate voice, \"Whatever he is paying you, I will double it.\" Night wind hums at the railing.",
-          "durationSeconds": 6
+          "storyBeat": "Julian apologizes for abandoning Mara at the altar.",
+          "continuityIn": "Julian has approached Mara alone on the terrace.",
+          "continuityOut": "Mara has heard Julian apologize but has not forgiven him.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with shame and lowered shoulders, never looking at the camera.",
+          "videoPrompt": "Julian drops his gaze and tells Mara, \"I was a coward. I'm sorry.\" Camera locked. Wind hums softly.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "terrace",
-          "characterIds": [
-            "julian",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane and no contact. Julian stands at frame left in a black tuxedo, white shirt, and undone black bow tie; his hands are out of frame and he gazes at Damian with faltering arrogance. Damian stands at frame right in a white tuxedo shirt, black bow tie, and black trousers; his hands are out of frame and he gazes at Julian with calm menace.",
-          "videoPrompt": "Damian's eyes narrow while Julian remains still. Camera locked. Damian says in a soft dangerous voice, \"Threaten her again, and Vance and Sons will not survive.\" Night wind whistles softly.",
-          "durationSeconds": 6
+          "storyBeat": "Julian undercuts his apology by trying to buy Mara away from Damian.",
+          "continuityIn": "Julian apologized, while Mara still wears Damian's protective jacket.",
+          "continuityOut": "Mara knows Julian views her marriage and loyalty as purchasable.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with desperate entitlement replacing shame, never looking at the camera.",
+          "videoPrompt": "Julian raises his chin and offers Mara, \"Name Damian's price. I'll double it.\" Camera locked. Leaves rustle.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "terrace",
-          "characterIds": [
-            "mara",
-            "julian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an emerald satin gown with a black tuxedo jacket over her shoulders, a dark wine stain low on the gown, chestnut hair in glossy waves, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at Julian with rising uncertainty. Julian stands at frame right in a black tuxedo, white shirt, and undone black bow tie; his hands are out of frame and he gazes at Mara with a bitter, triumphant expression.",
-          "videoPrompt": "Julian's bitter smile hardens while Mara remains still. Camera locked. Julian says in a cutting voice, \"Ask where Damian was the night your father died.\" Night wind rustles the leaves.",
+          "storyBeat": "Mara rejects Julian and asserts that she cannot be bought.",
+          "continuityIn": "Julian has offered money to pull Mara away from Damian.",
+          "continuityOut": "Julian has been decisively rejected by Mara.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "julian",
+          "imagePrompt": "Medium close-up of Mara in the emerald satin gown with Damian's black tuxedo jacket over her shoulders, dark stain low beneath it, emerald earrings, glossy chestnut waves, and silver band. She faces Julian off-frame right with hard clarity, never looking at the camera.",
+          "videoPrompt": "Mara squares her shoulders and tells Julian, \"You never knew my value.\" Camera locked. Wind brushes the railing.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "terrace",
+          "storyBeat": "Damian warns Julian to stop threatening Mara.",
+          "continuityIn": "Mara has rejected Julian's attempt to buy her.",
+          "continuityOut": "Julian knows Damian will defend Mara and challenge Vance power.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "julian",
+          "imagePrompt": "Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He faces Julian off-frame left with calm menace, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian takes one step into Julian's eyeline and warns, \"Threaten her again, and Vance falls.\" Camera locked. Wind whistles.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "terrace",
+          "storyBeat": "Cornered, Julian reveals Damian was present when Mara's father died.",
+          "continuityIn": "Damian has warned Julian that Vance power can fall.",
+          "continuityOut": "Mara has heard that Damian was with her father on the fatal night.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with bitter triumph, never looking at the camera.",
+          "videoPrompt": "Julian turns toward Mara and says, \"Ask where Damian was when your father died.\" Camera locked. Wind rises.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "terrace",
+          "storyBeat": "Mara realizes Damian withheld a central fact about her father's death.",
+          "continuityIn": "Julian has revealed Damian was present on the night Thomas died.",
+          "continuityOut": "Mara looks to Damian with betrayed shock and needs an answer.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up reaction of Mara in the emerald gown under Damian's black jacket, emerald earrings, glossy chestnut waves, and silver band. She turns toward Damian off-frame right with betrayed shock, never looking at the camera.",
+          "videoPrompt": "Mara's certainty collapses as she turns fully toward Damian. One slow push-in. The gala music cuts off.",
           "durationSeconds": 6
         }
       ]
@@ -374,43 +676,99 @@
         {
           "sceneNumber": 1,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger; her hands are out of frame and she gazes at Damian with restrained fury. Damian stands at frame right in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers; his hands are out of frame, his eyes are red-rimmed, and he gazes at Mara with grief.",
-          "videoPrompt": "Damian's eyes glisten while Mara remains still. One slow push-in. Damian says in a hollow voice, \"I was with him. I held his hand.\" The lamp hums softly.",
-          "durationSeconds": 6
+          "storyBeat": "Mara demands Damian account for where he was when her father died.",
+          "continuityIn": "Julian revealed Damian was with Thomas on the fatal night.",
+          "continuityOut": "Damian must answer Mara's direct question.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She faces Damian off-frame right with restrained fury, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Mara steps closer to the desk and asks Damian, \"Where were you when my father died?\" Camera locked. Rain taps glass.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "damian"
-          ],
-          "imagePrompt": "Static medium close-up of Damian standing alone at center frame in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. His hands are out of frame, his eyes are distant and grief-stricken, and he gazes off-frame left toward Mara. No other person is visible.",
-          "videoPrompt": "Damian swallows once as the memory settles over him. One slow push-in. Damian says in a hollow voice, \"He said it was no accident, then made me promise.\" Rain taps the window.",
-          "durationSeconds": 6
+          "storyBeat": "Damian answers that he stayed with Thomas through his death.",
+          "continuityIn": "Mara has directly asked where Damian was during Thomas's death.",
+          "continuityOut": "Mara knows Damian was physically beside her dying father.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara off-frame left with red-rimmed eyes and grief, never looking at the camera.",
+          "videoPrompt": "Damian swallows once and answers Mara, \"Beside him. I held his hand.\" Camera locked. Rain taps steadily.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane and no contact. Mara stands at frame left in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger; her hands are out of frame and she gazes down at a worn sealed cream envelope and small brass key already resting motionless on the desk. Damian stands at frame right in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers; his hands are out of frame and he gazes at Mara with quiet grief.",
-          "videoPrompt": "Damian lowers his gaze toward the envelope while Mara remains still. Camera locked. Damian says quietly, \"Your father left this. The ring was your mother's.\" Rain murmurs against glass.",
-          "durationSeconds": 6
+          "storyBeat": "Mara reacts to learning Damian witnessed her father's final moments.",
+          "continuityIn": "Damian admitted he held Thomas's hand as Thomas died.",
+          "continuityOut": "Mara's anger is pierced by grief, but she still needs the full truth.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up reaction of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. She faces Damian off-frame right with grief overtaking anger, never looking at the camera.",
+          "videoPrompt": "Mara's eyes fill and her raised chin falters once. One slow push-in. Rain fills the silence.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "penthouse_study",
-          "characterIds": [
-            "mara"
-          ],
-          "imagePrompt": "Static medium close-up of Mara standing alone at center frame in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, and a plain silver band on her left ring finger. A sealed cream envelope and small brass key rest motionless below frame with no writing visible. Her hands are out of frame, and she gazes off-frame right with tearful realization.",
-          "videoPrompt": "Mara's tearful gaze sharpens with sudden understanding. Camera locked. Mara whispers in a broken voice, \"The truth is under the heart of the shop.\" The lamp quietly hums.",
+          "storyBeat": "Damian admits he promised Thomas silence but commits to explaining now.",
+          "continuityIn": "Mara knows Damian witnessed Thomas's death and needs the withheld truth.",
+          "continuityOut": "Damian has promised Mara a full explanation and turns to Thomas's letter.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with remorse and resolve, never looking at the camera.",
+          "videoPrompt": "Damian meets Mara's eyes and promises, \"I promised him silence. Now I'll explain everything.\" Camera locked. The clock ticks.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "penthouse_study",
+          "storyBeat": "Thomas's already-open letter and envelope establish the clue Damian withheld.",
+          "continuityIn": "Damian promised an explanation and has produced Thomas's letter.",
+          "continuityOut": "Mara has seen the already-open letter and heard its key phrase.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. An already-open worn cream envelope and unfolded letter lie on the desk with the unreadable page facing Mara; she looks down at them, never at the camera.",
+          "videoPrompt": "Mara touches the open letter's edge as Damian says off-screen, \"He wrote: find the heart of the shop.\" Camera locked. Paper softly shifts.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "penthouse_study",
+          "storyBeat": "Mara connects Thomas's phrase to the bakery's old oven.",
+          "continuityIn": "Mara has heard Thomas's clue about the heart of the shop.",
+          "continuityOut": "Mara identifies the old bakery oven as the clue's destination.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. The already-open worn cream envelope and unfolded letter stay on the desk below frame; she looks toward Damian off-frame right with sudden understanding, never at the camera.",
+          "videoPrompt": "Mara's gaze sharpens and she tells Damian, \"The old oven. Dad called it the heart.\" Camera locked. Rain patters.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "penthouse_study",
+          "storyBeat": "Mara decides they must search the bakery immediately.",
+          "continuityIn": "Mara has identified the old oven as Thomas's hidden clue.",
+          "continuityOut": "Mara and Damian are committed to going to the bakery cellar.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara off-frame left with urgent resolve, never looking at the camera.",
+          "videoPrompt": "Damian turns toward the study door and tells Mara, \"We go now.\" Camera locked. Thunder rolls.",
           "durationSeconds": 6
         }
       ]
@@ -424,45 +782,99 @@
         {
           "sceneNumber": 1,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds a flashlight motionless at her own waist with its beam fixed on the blackened oven door and gazes toward the oven with resolve. Damian stands at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes toward the same oven.",
-          "videoPrompt": "Mara's gaze fixes on the oven while Damian remains still. Camera locked. Mara whispers with recognition, \"Dad always called the oven the heart of the shop.\" The cellar bulb faintly buzzes.",
-          "durationSeconds": 6
+          "storyBeat": "Mara and Damian enter the cellar and face the old oven together.",
+          "continuityIn": "Mara identified the old oven and decided to search immediately.",
+          "continuityOut": "They are inside the cellar with the oven directly before them.",
+          "shotType": "twoShot",
+          "characterIds": ["mara", "damian"],
+          "speakerId": null,
+          "addresseeId": null,
+          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, silver band visible, holding a flashlight at waist level; Damian at frame right in a black wool overcoat over a charcoal sweater and black trousers. Both face the blackened oven off-frame left, not the camera.",
+          "videoPrompt": "Mara and Damian take one cautious step deeper toward the oven. Camera locked. The caged bulb buzzes.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds a flashlight motionless at her own waist, its beam fixed on an already open narrow iron compartment, and gazes into it with tense discovery. Damian stands at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes into the open compartment with guarded relief. The brass key is already stationary in the lock.",
-          "videoPrompt": "Mara's eyes widen at the open compartment while Damian remains still. Camera locked. Mara says in a hushed voice, \"The key opened a safe behind the oven.\" The old lock settles with a soft click.",
-          "durationSeconds": 6
+          "storyBeat": "Mara confirms the old oven is the heart named in Thomas's clue.",
+          "continuityIn": "Mara and Damian stand inside the cellar facing the old oven.",
+          "continuityOut": "Damian knows Mara is certain the oven hides Thomas's evidence.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the flashlight at waist level with its beam aimed toward the oven off-frame right and looks there with certainty, never at the camera.",
+          "videoPrompt": "Mara lifts the flashlight beam slightly and tells Damian, \"This is the heart.\" Camera locked. The bulb buzzes.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds a flashlight motionless at her own waist with its beam fixed below frame and gazes down in stunned recognition. Damian stands at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes down with pained pride. A closed leather ledger and old cassette recorder rest motionless inside the open safe, with no text visible.",
-          "videoPrompt": "Mara's stunned expression hardens with purpose while Damian remains still. Camera locked. Mara says in an awed voice, \"Every payment, every name. He kept everything.\" The cassette mechanism faintly ticks.",
-          "durationSeconds": 6
+          "storyBeat": "Mara uses the already-located keyhole and family key to release the hidden compartment.",
+          "continuityIn": "Mara has identified the oven as the hiding place; Damian's key is available.",
+          "continuityOut": "The hidden oven compartment is unlocked but still closed.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She is beside the oven with the small silver key already inserted in the clearly located compartment lock; her fingers rest on the key and she watches it, not the camera.",
+          "videoPrompt": "Mara turns the already-inserted key once until the hidden lock releases. Camera locked. Metal clicks.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds the closed leather ledger motionless against her own chest and gazes upward with alarm. Damian stands separately at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes upward with protective focus. A flashlight rests stationary on the worktable with its beam fixed on the wall.",
-          "videoPrompt": "Damian's gaze sharpens toward the unseen stairs while Mara remains still. Camera locked. Damian whispers in a protective voice, \"Stay behind me.\" A floorboard creaks overhead.",
+          "storyBeat": "Damian opens the released compartment, exposing what Thomas hid.",
+          "continuityIn": "Mara has unlocked the hidden oven compartment; its door is released.",
+          "continuityOut": "The compartment stands open before Mara and Damian.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in the black wool overcoat over a charcoal sweater and black trousers. He stands beside the released iron compartment with one hand already on its handle, looking toward Mara off-frame left, never at the camera.",
+          "videoPrompt": "Damian pulls the released iron door open in one controlled motion. Camera locked. Hinges groan.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "cellar",
+          "storyBeat": "Mara discovers Thomas's ledger and recorder inside the open compartment.",
+          "continuityIn": "Damian has opened the hidden compartment.",
+          "continuityOut": "Mara has visibly found a closed leather ledger and old recorder.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. The open compartment beside her visibly contains a closed leather ledger and old cassette recorder with no readable text; she looks down at them in stunned recognition, never at the camera.",
+          "videoPrompt": "Mara's eyes widen as recognition turns to resolve. One slow push-in. The recorder mechanism faintly ticks.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "cellar",
+          "storyBeat": "A floorboard overhead reveals that someone has followed them.",
+          "continuityIn": "Mara and Damian have found the ledger and recorder in the open compartment.",
+          "continuityOut": "Mara hears someone overhead and realizes they are not alone.",
+          "shotType": "reaction",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up reaction of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She already holds the closed leather ledger against her chest and looks upward with sudden alarm, never at the camera.",
+          "videoPrompt": "Mara snaps her gaze toward the ceiling at one heavy floorboard creak. Camera locked. Dust sifts down.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "cellar",
+          "storyBeat": "Damian moves between Mara and the stairs as the unseen threat approaches.",
+          "continuityIn": "Mara holds the ledger and has heard someone overhead.",
+          "continuityOut": "Damian shields Mara while footsteps descend toward them.",
+          "shotType": "single",
+          "characterIds": ["damian"],
+          "speakerId": "damian",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Damian in a black wool overcoat over a charcoal sweater and black trousers. He faces the unseen stairs off-frame right with protective focus, positioned just ahead of Mara off-screen, never looking at the camera.",
+          "videoPrompt": "Damian takes one step toward the stairs and tells Mara, \"Stay behind me.\" Camera locked. A stair creaks closer.",
           "durationSeconds": 6
         }
       ]
@@ -476,45 +888,99 @@
         {
           "sceneNumber": 1,
           "locationId": "cellar",
-          "characterIds": [
-            "vivienne",
-            "julian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Vivienne stands at frame left in a camel wool coat, plain silk scarf, and black leather gloves, her silver bob neat; her arms rest at her sides and she gazes off-frame left toward Mara with silky menace. Julian stands at frame right in a black overcoat over an open-collar white shirt, his sandy-blond hair rain-damp; his hands are out of frame and he gazes downward uneasily.",
-          "videoPrompt": "Vivienne's controlled smile tightens while Julian remains still. Camera locked. Vivienne says in a silky calm voice, \"That ledger belongs to my family, Mara.\" The caged bulb sputters.",
-          "durationSeconds": 6
+          "storyBeat": "Julian confronts Vivienne after following her into the cellar.",
+          "continuityIn": "Vivienne and Julian have arrived above Mara and Damian in the cellar.",
+          "continuityOut": "Vivienne must explain why she came for Thomas's evidence.",
+          "shotType": "twoShot",
+          "characterIds": ["vivienne", "julian"],
+          "speakerId": "julian",
+          "addresseeId": "vivienne",
+          "imagePrompt": "Asymmetric chest-up two-shot: Vivienne at frame left in a camel wool coat, plain silk scarf, and black leather gloves, silver bob neat; Julian at frame right in a black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. Julian faces Vivienne with suspicion while she watches Mara off-frame left; neither looks at the camera.",
+          "videoPrompt": "Julian turns fully toward Vivienne and asks, \"Why did you bring me here?\" Camera locked. The caged bulb sputters.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane and no contact. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; a phone already recording rests motionless inside her breast pocket with its blank back facing the camera, her hands are out of frame, and she gazes off-frame left with defiance. Damian stands separately at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes off-frame left with protective focus.",
-          "videoPrompt": "Mara steadies her breathing while Damian remains still. Camera locked. Mara says in a firm voice, \"It belongs to my father.\" The hidden phone microphone catches the cellar hum.",
-          "durationSeconds": 6
+          "storyBeat": "Mara has already activated a hidden recording before provoking Vivienne.",
+          "continuityIn": "Julian has questioned Vivienne; Mara still holds Thomas's ledger.",
+          "continuityOut": "Mara's concealed phone is recording the confrontation without showing a screen.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "vivienne",
+          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest; a phone is already activated and hidden in her coat breast pocket with only its blank back edge visible. She faces Vivienne off-frame left, never the camera.",
+          "videoPrompt": "Mara steadies the ledger against her chest and fixes Vivienne with a challenging gaze. Camera locked. The cellar hum continues.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "cellar",
-          "characterIds": [
-            "vivienne",
-            "julian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane. Vivienne stands at frame left in a camel wool coat, plain silk scarf, and black leather gloves, her silver bob neat; her hands are out of frame and she gazes off-frame left with exposed cold fury. Julian stands at frame right in a black overcoat over an open-collar white shirt, his sandy-blond hair rain-damp; his hands are out of frame and he gazes at Vivienne with dawning horror.",
-          "videoPrompt": "Vivienne's cold composure cracks while Julian remains still. One slow push-in. Vivienne says in an icy voice, \"Your father would not stay quiet, so I silenced him.\" The cellar bulb buzzes harshly.",
-          "durationSeconds": 6
+          "storyBeat": "Vivienne claims Thomas's ledger, confirming she knows what it contains.",
+          "continuityIn": "Mara's hidden recording is active and she visibly holds the ledger.",
+          "continuityOut": "The recording captures Vivienne claiming the ledger as Vance property.",
+          "shotType": "single",
+          "characterIds": ["vivienne"],
+          "speakerId": "vivienne",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She faces Mara and the ledger off-frame right with controlled menace, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Vivienne lifts her chin and tells Mara, \"That ledger belongs to the Vances.\" Camera locked. The bulb crackles.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "cellar",
-          "characterIds": [
-            "vivienne",
-            "julian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane. Julian stands at frame left in a black overcoat over an open-collar white shirt, his sandy-blond hair rain-damp; his hands are out of frame and he gazes at Vivienne with wet-eyed betrayal. Vivienne stands at frame right in a camel wool coat, plain silk scarf, and black leather gloves, her silver bob neat; her hands are out of frame and she gazes away from Julian with rigid contempt.",
-          "videoPrompt": "Julian's face tightens with betrayal while Vivienne remains still. Camera locked. Julian says in a cracking voice, \"You told me it was an accident.\" Water drips somewhere in the cellar.",
+          "storyBeat": "Mara pressures Vivienne by naming Thomas's attempt to expose her.",
+          "continuityIn": "Vivienne has claimed the ledger while Mara's hidden recording runs.",
+          "continuityOut": "Vivienne is provoked into answering what she did to silence Thomas.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "vivienne",
+          "imagePrompt": "Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, hidden phone still in her breast pocket, and faces Vivienne off-frame left with controlled defiance, never at the camera.",
+          "videoPrompt": "Mara raises the ledger slightly and tells Vivienne, \"My father kept this to expose you.\" Camera locked. Water drips.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "cellar",
+          "storyBeat": "Vivienne confesses that she killed Thomas to stop him speaking.",
+          "continuityIn": "Mara has accused Vivienne of silencing Thomas while secretly recording.",
+          "continuityOut": "Vivienne's murder confession is captured by Mara's hidden phone.",
+          "shotType": "single",
+          "characterIds": ["vivienne"],
+          "speakerId": "vivienne",
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up single of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She faces Mara off-frame right with cold fury breaking through her composure, never looking at the camera.",
+          "videoPrompt": "Vivienne's control cracks and she tells Mara, \"He wouldn't stay quiet, so I silenced him.\" Camera locked. The bulb buzzes harshly.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "cellar",
+          "storyBeat": "Julian realizes his mother murdered Thomas and lied to him.",
+          "continuityIn": "Julian has heard Vivienne confess to silencing Thomas.",
+          "continuityOut": "Julian openly rejects Vivienne's accident story.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "vivienne",
+          "imagePrompt": "Medium close-up reaction of Julian in the black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. He faces Vivienne off-frame left with wet-eyed betrayal, never looking at the camera.",
+          "videoPrompt": "Julian recoils half a step and tells Vivienne off-screen, \"You told me it was an accident.\" Camera locked. Water drips.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "cellar",
+          "storyBeat": "Mara reveals Theo received the live recording, ensuring the confession reaches police.",
+          "continuityIn": "Vivienne confessed on Mara's hidden recording and Julian reacted.",
+          "continuityOut": "Vivienne knows Theo has the recording and can bring police.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "vivienne",
+          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, phone still hidden in her breast pocket, and faces Vivienne off-frame left with steady resolve, never at the camera.",
+          "videoPrompt": "Mara lowers the ledger slightly and tells Vivienne, \"Theo already received every word.\" Camera locked. A distant siren begins.",
           "durationSeconds": 6
         }
       ]
@@ -528,44 +994,99 @@
         {
           "sceneNumber": 1,
           "locationId": "cellar",
-          "characterIds": [
-            "vivienne",
-            "julian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Vivienne stands at frame left in a camel wool coat, plain silk scarf, and black leather gloves, her silver bob neat; her hands are out of frame and she gazes at Julian with stricken disbelief. Julian stands separately at frame right in a black overcoat over an open-collar white shirt, his sandy-blond hair rain-damp; his hands are out of frame and he gazes back with final resolve. Red and blue police light falls across both faces.",
-          "videoPrompt": "Julian's expression settles into final resolve while Vivienne remains still. Camera locked. Julian says in a firm voice, \"I am done, Mother.\" Police sirens swell outside.",
-          "durationSeconds": 6
+          "storyBeat": "Police lights and sirens confirm Mara's recording reached help.",
+          "continuityIn": "Mara told Vivienne that Theo received the recorded confession.",
+          "continuityOut": "Everyone knows police have arrived outside the cellar.",
+          "shotType": "reaction",
+          "characterIds": ["vivienne"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up reaction of Vivienne in the camel wool coat, silk scarf, and black leather gloves. Red and blue police light begins crossing her face as she looks toward Mara off-frame right with cornered disbelief, never at the camera.",
+          "videoPrompt": "Vivienne turns her gaze toward the stairwell as police light pulses brighter. Camera locked. Sirens swell outside.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 2,
           "locationId": "cellar",
-          "characterIds": [
-            "vivienne"
-          ],
-          "imagePrompt": "Static medium close-up of Vivienne standing alone at center frame in a camel wool coat, plain silk scarf, and black leather gloves. Her hands are out of frame, and she gazes off-frame right with cornered defiance and a brittle smile as red and blue police light crosses her face.",
-          "videoPrompt": "Vivienne's brittle smile holds as her eyes sharpen. One slow push-in. Vivienne says in a cold voice, \"Read the last page. This began before me.\" Police sirens pulse outside.",
-          "durationSeconds": 6
+          "storyBeat": "Julian rejects his mother after hearing her confession.",
+          "continuityIn": "Police have arrived after Vivienne's confession; Julian knows she lied.",
+          "continuityOut": "Julian has severed his loyalty to Vivienne.",
+          "shotType": "single",
+          "characterIds": ["julian"],
+          "speakerId": "julian",
+          "addresseeId": "vivienne",
+          "imagePrompt": "Chest-up single of Julian in the black overcoat over an open-collar white shirt, rain-damp sandy-blond hair, red and blue light on his face. He faces Vivienne off-frame left with final resolve, never looking at the camera.",
+          "videoPrompt": "Julian straightens and tells Vivienne, \"I'm done protecting you, Mother.\" Camera locked. Sirens pulse.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static waist-up two-shot with both unobscured faces similar-sized on one focal plane. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds the closed leather ledger motionless against her own chest with no writing visible and gazes at Damian with shocked suspicion. Damian stands at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes back, ghost-white and stricken. Red and blue police light falls across both faces.",
-          "videoPrompt": "Mara's shocked gaze locks on Damian while he remains still. Camera locked. Mara says in a hushed voice, \"The final signature is Alistair Cross.\" Police sirens echo through brick.",
-          "durationSeconds": 6
+          "storyBeat": "Cornered, Vivienne points Mara toward the ledger's last page.",
+          "continuityIn": "Julian has rejected Vivienne while Mara still holds the closed ledger.",
+          "continuityOut": "Mara has been directed to open the ledger's last page.",
+          "shotType": "single",
+          "characterIds": ["vivienne"],
+          "speakerId": "vivienne",
+          "addresseeId": "mara",
+          "imagePrompt": "Medium close-up of Vivienne in the camel coat, silk scarf, and black gloves, red and blue light across her face. She faces Mara and the closed ledger off-frame right, one gloved hand already raised near her chest, never looking at the camera.",
+          "videoPrompt": "Vivienne points the already-raised hand toward Mara's ledger and says, \"Read the last page.\" Camera locked. Sirens echo.",
+          "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "cellar",
-          "characterIds": [
-            "mara",
-            "damian"
-          ],
-          "imagePrompt": "Static medium close-up two-shot with both unobscured faces similar-sized on one focal plane and no contact. Mara stands at frame left in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, and a plain silver band on her left ring finger; she holds the closed leather ledger motionless against her own chest and gazes at Damian with wide-eyed hurt and suspicion. Damian stands separately at frame right in a black wool overcoat over a charcoal sweater and black trousers; his hands are out of frame and he gazes back, stricken. Red and blue police light falls across both faces.",
-          "videoPrompt": "Mara's chin trembles as she holds Damian's gaze. One slow push-in. Mara asks in a broken voice, \"Did you know?\" Police sirens peak outside.",
+          "storyBeat": "The already-open last page faces Mara, establishing the source of the final reveal.",
+          "continuityIn": "Vivienne directed Mara to the ledger's last page.",
+          "continuityOut": "Mara has examined the already-open final page and recognized Alistair Cross.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": null,
+          "addresseeId": "damian",
+          "imagePrompt": "Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light on her face. She holds the leather ledger already open with its unreadable final page facing only her; she looks down in dawning horror, never at the camera.",
+          "videoPrompt": "Mara's eyes track the final entry, then stop as recognition hits. One slow push-in. Sirens echo through brick.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "cellar",
+          "storyBeat": "Mara reveals that Alistair Cross is named on the final page.",
+          "continuityIn": "Mara has examined the open final page and recognized Damian's family name.",
+          "continuityOut": "Damian hears that Alistair Cross is implicated by Thomas's ledger.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the ledger open with the unreadable page facing her and looks toward Damian off-frame right in shocked suspicion, never at the camera.",
+          "videoPrompt": "Mara lowers the open ledger slightly and tells Damian, \"The last name is Alistair Cross.\" Camera locked. Sirens pulse.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "cellar",
+          "storyBeat": "Damian reacts to his father's implication before Mara confronts him.",
+          "continuityIn": "Mara has revealed Alistair Cross is named on the ledger's last page.",
+          "continuityOut": "Mara sees Damian devastated by the name and suspects prior knowledge.",
+          "shotType": "reaction",
+          "characterIds": ["damian"],
+          "speakerId": null,
+          "addresseeId": "mara",
+          "imagePrompt": "Chest-up reaction of Damian in the black wool overcoat over a charcoal sweater and black trousers, red and blue light across his face. He faces Mara off-frame left, ghost-pale and stricken, never looking at the camera.",
+          "videoPrompt": "Damian's composure breaks as he absorbs his father's name. One slow push-in. Sirens throb outside.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "cellar",
+          "storyBeat": "Mara asks whether Damian knew his father was involved, ending on fractured trust.",
+          "continuityIn": "Damian reacted with devastation to Alistair Cross's name.",
+          "continuityOut": "Damian must answer whether he concealed his father's involvement.",
+          "shotType": "single",
+          "characterIds": ["mara"],
+          "speakerId": "mara",
+          "addresseeId": "damian",
+          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the open ledger against her torso with its unreadable page facing inward and looks toward Damian off-frame right with wounded suspicion, never at the camera.",
+          "videoPrompt": "Mara's chin trembles as she asks Damian, \"Did you know?\" Camera locked. Sirens peak outside.",
           "durationSeconds": 6
         }
       ]

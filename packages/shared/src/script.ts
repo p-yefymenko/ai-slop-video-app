@@ -1,15 +1,15 @@
 /**
  * Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show.
  *
- * Reliability contract for the script-writing model:
- * - One `ScriptScene` is one independently generated still plus one short I2V clip, not a
- *   screenplay scene. Make every shot atomic. Split a beat into more scenes whenever it
- *   needs a new pose, composition, speaker, prop state, or camera angle.
- * - Prefer one visible character. Use two only when their shared frame is essential.
- * - Never ask either model to invent a crowd, readable text, a reflection, or an unseen
- *   character. Put off-screen voices in audio only.
- * - Continuity is explicit: repeat wardrobe and held props in every `imagePrompt`. Models
- *   do not remember earlier scenes.
+ * Story contract for the script-writing model:
+ * - Write a vertical micro-drama, not disconnected prompt demonstrations. Each episode is
+ *   a causal chain: setup -> pressure -> choice/reveal -> reaction -> cliffhanger.
+ * - One `ScriptScene` is one generated shot. Use 5-8 short shots per episode so actions and
+ *   reactions get separate frames. Never omit the reaction that makes a reveal meaningful.
+ * - Every spoken line has a clear speaker and addressee. A character must not answer a
+ *   question the audience never heard or refer to a prop they never saw established.
+ * - Prefer singles and reaction shots. Use a two-shot only for confrontation or intimacy.
+ * - Continuity is explicit because the models remember nothing between shots.
  */
 
 export type ShowCharacter = {
@@ -86,46 +86,75 @@ export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
   /**
+   * Why this shot exists in the story, written as cause and effect rather than visuals.
+   * Example: "Julian publicly rejects Mara, causing her humiliation." The next shot must
+   * respond to this beat; no isolated exposition.
+   */
+  storyBeat: string;
+  /**
+   * Relevant state already established before this shot: wardrobe, relationships, known
+   * information, location, and important prop state. Must agree with the prior shot's
+   * `continuityOut`.
+   */
+  continuityIn: string;
+  /**
+   * What visibly or narratively changes by the end of this shot. The following shot must
+   * begin from this state.
+   */
+  continuityOut: string;
+  /**
+   * `single`: one visible speaking/acting character. `reaction`: one visible character
+   * reacts while another may speak off-screen. `twoShot`: two visible people share a
+   * confrontation or intimate beat. Alternate shot sizes; do not make every shot a two-shot.
+   */
+  shotType: "single" | "reaction" | "twoShot";
+  /**
    * One ID preferred, two maximum. Order is exact: first ID = Qwen Picture 1, second ID =
    * Picture 2. Every listed character must be clearly visible exactly once in `imagePrompt`;
    * no unlisted visible people.
    */
   characterIds: string[];
   /**
-   * Qwen description of the clip's exact first frame, written as one static photograph with
-   * no before/after sequence. Repeat each character's complete scene wardrobe and held prop.
-   * Specify a simple medium close-up or waist-up composition, left/right placement, gaze,
-   * and one stable emotion/pose. With two people, keep both faces unobscured, similar-sized,
-   * and on the same focal plane.
+   * Character delivering the quoted line, or null for a silent shot. May be absent from
+   * `characterIds` only for an off-screen line over a visible reaction.
+   */
+  speakerId: string | null;
+  /**
+   * Character the line/action is directed toward, or null when genuinely private. Usually
+   * visible or established immediately off-screen. Never use dialogue without an addressee
+   * merely to explain the plot to the audience.
+   */
+  addresseeId: string | null;
+  /**
+   * Qwen description of the clip's exact first frame. Repeat complete wardrobe and visible
+   * props. Specify shot size, left/right placement, gaze target, and emotion. Singles and
+   * reactions should be chest-up or medium close-ups with the subject looking toward the
+   * established off-screen addressee, never into the camera. Two-shots keep both faces
+   * readable but need not be symmetrical or posed.
    *
-   * Use a pose from which `videoPrompt` can begin without changing geometry. Avoid wide/full
-   * body shots, extreme close-ups, crossed/hidden limbs, hand-to-hand contact, fights,
-   * embraces, walking poses, object transfer, pouring, eating, dressing, readable documents,
-   * phones/screens, mirrors, crowds, duplicate people, and important tiny objects. If a beat
-   * depends on one of these, show its stable result or split it into simpler shots.
+   * Establish the beginning of one achievable action. Simple turns, one step, raising or
+   * lowering an already-held prop, and restrained gestures are allowed. Avoid readable
+   * documents/screens, mirrors, crowds, fights, complex hand contact, transfers between
+   * people, and tiny plot-critical details.
    */
   imagePrompt: string;
   /**
-   * LTX chronological motion continuing directly from `imagePrompt`. One clip gets one
-   * primary visible actor, one simple continuous action, and one camera behavior. Prefer
-   * facial micro-action (blink, breath, gaze shift, slight head turn) over hand/body action.
-   * Keep the camera locked; use at most one slow push-in only when it helps the beat.
+   * LTX motion continuing directly from the first frame. Give the shot one meaningful,
+   * achievable action plus natural blinks/breathing. The action should change the dramatic
+   * state in `continuityOut`; do not fill six seconds with a frozen face.
    *
-   * For dialogue, use one visible speaker per clip, one quoted line of at most 12 spoken
-   * words, and name the speaker immediately before it with voice quality. The other person
-   * may only hold a simple reaction. Do not alternate speakers, make both mouths move, or
-   * combine speech with walking, prop manipulation, touch, entrances/exits, large gestures,
-   * camera cuts, angle changes, time jumps, transformations, or newly appearing people or
-   * objects.
+   * At most one quoted line of 12 words, spoken by `speakerId` to `addresseeId`. Name both
+   * roles in the prompt so lip-sync and eyeline are unambiguous. For a reaction shot, keep
+   * the off-screen voice brief and animate only the visible listener. Do not alternate
+   * speakers, cut angles inside a clip, introduce a new person, or repeat the first frame.
    *
-   * End with one short ambience/foley sentence. Do not redescribe the still. If the story
-   * beat needs another action, speaker, prop state, or viewpoint, create another scene.
+   * Use a locked camera for speech or one slow push-in for a major reaction. End with one
+   * short ambience/foley sentence. If the beat needs a reply, create the next shot.
    */
   videoPrompt: string;
   /**
-   * Clip length in seconds. Use 4 for a silent micro-action, 6 for one short spoken line,
-   * or 8 only for one slow action with one short line and reaction. More time is not a
-   * license to add more events.
+   * Clip length in seconds. Prefer 4 seconds for dialogue/reactions and 6 only for a reveal
+   * needing a hold. ReelShort pacing comes from cuts, not long generated shots.
    */
   durationSeconds: number;
 };

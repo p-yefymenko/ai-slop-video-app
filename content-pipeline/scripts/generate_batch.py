@@ -26,6 +26,9 @@ OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
+SHOT_TYPES = {"single", "reaction", "twoShot"}
+MIN_SCENES_PER_EPISODE = 5
+MAX_SCENES_PER_EPISODE = 8
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
@@ -499,7 +502,7 @@ def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
     return render_prompt(show["prompts"][key], values)
 
 
-def write_black_png(path: Path, width: int = 768, height: int = 1152) -> None:
+def write_black_png(path: Path, width: int = 768, height: int = 1360) -> None:
     raw = b"".join(b"\x00" + (b"\x00\x00\x00" * width) for _ in range(height))
 
     def chunk(tag: bytes, data: bytes) -> bytes:
@@ -513,7 +516,7 @@ def write_black_png(path: Path, width: int = 768, height: int = 1152) -> None:
 
 def ensure_blank_png() -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / "blank.png"
+    dest = COMFY_INPUT_DIR / "blank-768x1360.png"
     if not dest.is_file():
         write_black_png(dest)
     return dest.name
@@ -584,11 +587,21 @@ def load_show(path: Path) -> dict:
         scenes = episode.get("scenes")
         if not isinstance(scenes, list) or not scenes:
             raise SystemExit(f"episode {ep_num} is missing scenes")
+        if not MIN_SCENES_PER_EPISODE <= len(scenes) <= MAX_SCENES_PER_EPISODE:
+            raise SystemExit(
+                f"episode {ep_num} has {len(scenes)} scenes; use "
+                f"{MIN_SCENES_PER_EPISODE}-{MAX_SCENES_PER_EPISODE} causal shots."
+            )
         cleaned_scenes: list[dict] = []
-        for scene in scenes:
+        for scene_index, scene in enumerate(scenes, start=1):
             if not isinstance(scene, dict):
                 raise SystemExit(f"episode {ep_num} has a non-object scene")
             scene_label = f"episode {ep_num} scene {scene.get('sceneNumber')}"
+            scene_number = int(scene["sceneNumber"])
+            if scene_number != scene_index:
+                raise SystemExit(
+                    f"{scene_label} is out of sequence; expected sceneNumber {scene_index}"
+                )
             if scene.get("locationCharacterId"):
                 raise SystemExit(f"{scene_label} uses locationCharacterId; rename it to locationId")
             loc_id = require_text(scene, "locationId", scene_label)
@@ -606,14 +619,62 @@ def load_show(path: Path) -> dict:
             for cid in character_ids:
                 if cid not in cleaned_chars:
                     raise SystemExit(f"{scene_label} names unknown character {cid!r}")
+            shot_type = require_text(scene, "shotType", scene_label)
+            if shot_type not in SHOT_TYPES:
+                raise SystemExit(
+                    f"{scene_label} has shotType {shot_type!r}; use one of {sorted(SHOT_TYPES)}"
+                )
+            expected_characters = 2 if shot_type == "twoShot" else 1
+            if len(character_ids) != expected_characters:
+                raise SystemExit(
+                    f"{scene_label} is {shot_type!r} and must have exactly "
+                    f"{expected_characters} visible character(s)."
+                )
+            speaker_id = scene.get("speakerId")
+            if speaker_id is not None:
+                speaker_id = str(speaker_id)
+                if speaker_id not in cleaned_chars:
+                    raise SystemExit(f"{scene_label} names unknown speakerId {speaker_id!r}")
+            addressee_id = scene.get("addresseeId")
+            if addressee_id is not None:
+                addressee_id = str(addressee_id)
+                if addressee_id not in cleaned_chars:
+                    raise SystemExit(f"{scene_label} names unknown addresseeId {addressee_id!r}")
+            if shot_type == "reaction" and speaker_id in character_ids:
+                raise SystemExit(
+                    f"{scene_label} is a reaction shot; speakerId must be off-screen or null."
+                )
+            if shot_type != "reaction" and speaker_id is not None and speaker_id not in character_ids:
+                raise SystemExit(
+                    f"{scene_label} has off-screen speakerId {speaker_id!r}; use shotType 'reaction'."
+                )
+            video_prompt = require_text(scene, "videoPrompt", scene_label)
+            dialogue = re.findall(r'"([^"]+)"', video_prompt)
+            if len(dialogue) > 1:
+                raise SystemExit(f"{scene_label} has more than one quoted spoken line")
+            if bool(dialogue) != bool(speaker_id):
+                raise SystemExit(
+                    f"{scene_label} must have both one quoted line and speakerId, or neither."
+                )
+            if dialogue and len(dialogue[0].split()) > 12:
+                raise SystemExit(f"{scene_label} dialogue exceeds 12 words: {dialogue[0]!r}")
+            duration_seconds = float(scene.get("durationSeconds") or 0)
+            if duration_seconds not in (4.0, 6.0):
+                raise SystemExit(f"{scene_label} durationSeconds must be 4 or 6")
             cleaned_scenes.append(
                 {
-                    "sceneNumber": int(scene["sceneNumber"]),
+                    "sceneNumber": scene_number,
                     "locationId": loc_id,
+                    "storyBeat": require_text(scene, "storyBeat", scene_label),
+                    "continuityIn": require_text(scene, "continuityIn", scene_label),
+                    "continuityOut": require_text(scene, "continuityOut", scene_label),
+                    "shotType": shot_type,
                     "characterIds": character_ids,
+                    "speakerId": speaker_id,
+                    "addresseeId": addressee_id,
                     "imagePrompt": require_text(scene, "imagePrompt", scene_label),
-                    "videoPrompt": require_text(scene, "videoPrompt", scene_label),
-                    "durationSeconds": float(scene.get("durationSeconds") or 1),
+                    "videoPrompt": video_prompt,
+                    "durationSeconds": duration_seconds,
                 }
             )
         cleaned_eps.append(
