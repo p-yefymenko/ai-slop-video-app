@@ -5,7 +5,12 @@ export type ShowCharacter = {
   promptBlock: string;
 };
 
-/** Shared set bible. Text only. Injected once into each scene still. Do not repeat this in imagePrompt. */
+/**
+ * Materials, architecture, and light of ONE place the camera can stand.
+ * Not a viewpoint, not a building tour, not "in the distance", not guests looking at something off-frame.
+ * Altar, aisle, and pews are three locations. A paragraph that names all of them is already a camera
+ * (stock 9:16 wedding = people at the entrance, congregation facing an empty altar).
+ */
 export type ShowLocation = {
   promptBlock: string;
 };
@@ -17,6 +22,7 @@ export type ShowPrompts = {
   /**
    * Picture 1 (and Picture 2) are the identity stills in `characterIds` order.
    * `{characterIds}` `{locationPromptBlock}` `{imagePrompt}` — do not paste character bibles.
+   * Instruction must keep attached faces at portrait scale and forbid collage.
    */
   sceneStill: string;
   /** Motion and spoken lines only. The start PNG is the lock. `{videoPrompt}` */
@@ -27,13 +33,17 @@ export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
   /**
-   * Faces that fill this still at the same size. At most two. Order is Qwen Picture 1, Picture 2.
-   * Not everyone in the scene: a speck, a blur, or someone over a shoulder is not a characterId — cut to another scene.
+   * Faces that fill this still at roughly the same size as the identity portraits. At most two.
+   * Order is Qwen Picture 1, Picture 2.
+   * A person who is far, tiny, over a shoulder, or "too small to identify" is not listed — cut to another scene.
+   * Qwen cannot copy a face that is a speck, and cannot invent a tighter crop than the portrait.
    */
   characterIds: string[];
   /**
    * This camera, wardrobe, blocking. Do not restate the location promptBlock or character bibles.
-   * One camera, one scale.
+   * Named people are waist-up to head-and-shoulders, matching the identity stills.
+   * Forbidden: a wide of the whole room, a shot from the far end, an extreme close-up tighter than the portraits.
+   * "At the altar" means the altar is immediately behind or beside them, filling the background — not seen from the church door.
    */
   imagePrompt: string;
   /** Camera move, action, spoken lines. Do not redescribe faces or the room. */

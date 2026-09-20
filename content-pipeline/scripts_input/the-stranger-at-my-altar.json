@@ -22,8 +22,14 @@
     }
   },
   "locations": {
-    "chapel": {
-      "promptBlock": "SET: a grand old stone chapel at golden hour — tall pointed stained-glass windows throwing amber and rose light, warm dust in the sunbeams, a carved oak altar with ivory drapery, an aisle lined with white peonies and eucalyptus, wedding guests in the pews softly out of focus. Same building throughout: altar, aisle, and front pews."
+    "chapel_altar": {
+      "promptBlock": "SET: the altar of a grand old stone chapel at golden hour. Carved oak altar with ivory drapery immediately in frame, tall pointed stained-glass windows throwing amber and rose light onto the altar, white peonies and eucalyptus at the altar steps, warm dust in the sunbeams. Materials and light only — not the nave, not the entrance, not a view down the aisle."
+    },
+    "chapel_aisle": {
+      "promptBlock": "SET: the center aisle of the same stone chapel at golden hour. Stone floor, white peony and eucalyptus sprays along the aisle, dark wood pews on both sides, stained-glass side light, warm dust. Materials and light only — not a shot from the church door toward a distant altar."
+    },
+    "chapel_pew": {
+      "promptBlock": "SET: a front pew in the same stone chapel at golden hour. Dark wood pew, a spray of white peonies at the pew end, stained-glass side light, other pews beside. Materials and light only — the pew is the set, not a view of the altar as the subject."
     },
     "car_interior": {
       "promptBlock": "SET: the rear seat of a black luxury sedan at night, cream leather seats, a soft amber dome light, rain on the windows with gold and blue streetlights streaking past."
@@ -32,13 +38,13 @@
       "promptBlock": "SET: the street front of a small old-fashioned corner bakery at night: dark green painted wood storefront, gold-leaf script above the window reading Ellison & Daughter, warm dim light inside, a white paper legal notice with a red stamp taped to the glass door (text not legible), wet cobblestone sidewalk reflecting an orange sodium streetlamp, three terracotta herb pots lined up beside the door."
     },
     "penthouse_living": {
-      "promptBlock": "SET: a vast minimalist penthouse living room on a bright morning: floor-to-ceiling windows over a hazy city skyline, pale oak floors, a low charcoal sofa, a white marble kitchen island with a stainless espresso machine, cool soft daylight."
+      "promptBlock": "SET: a penthouse living room on a bright morning: floor-to-ceiling windows over a hazy city skyline, pale oak floors, a low charcoal sofa, a white marble kitchen island with a stainless espresso machine, cool soft daylight. Materials and light only — not a wide of an empty room."
     },
     "penthouse_study": {
       "promptBlock": "SET: a private study in the penthouse at dusk: walls of leather-bound books, a heavy walnut desk with a green banker's lamp, a tall window with glittering city lights, and on a shelf a small silver frame whose photo is too far to read. Warm lamp pools against cool blue window light."
     },
     "ballroom": {
-      "promptBlock": "SET: an opulent hotel ballroom at a black-tie charity gala: gilded columns, three huge crystal chandeliers, a sweeping white marble staircase, guests in evening wear holding champagne flutes (softly out of focus), warm gold light and flashes from press photographers."
+      "promptBlock": "SET: an opulent hotel ballroom at a black-tie charity gala: gilded columns, crystal chandeliers, a white marble staircase, warm gold light. Materials and light only — not a wide of the whole room. Guests if any stay at the frame edges, out of focus."
     },
     "terrace": {
       "promptBlock": "SET: a moonlit stone terrace off the ballroom: wrought-iron railing, strings of warm lights, potted olive trees, the city skyline glittering below, cool blue night light with warm gold spilling from tall glass doors behind."
@@ -49,7 +55,7 @@
   },
   "prompts": {
     "characterImage": "Photorealistic cinematic character reference portrait, vertical 9:16, waist-up, facing the camera, arms at the sides, plain warm-grey studio backdrop, soft light, tack-sharp eyes, natural skin. Plain fitted t-shirt, no scene costume. Exactly one person. No text, no extra fingers.\nIgnore the attached image. Generate a new identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person — keep that face. If Picture 2 is attached, it is the second person — keep that face. Do not collage the photos. Put those people into a new shot in this location, with wardrobe and blocking from the shot below. Adult scale, listed people only, each once, two arms each. No extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person — keep that face. If Picture 2 is attached, it is the second person — keep that face. Do not collage the photos. Keep each attached face large in the frame, similar scale to those portraits (head-and-shoulders to waist). Do not shrink the people into a wide of the room. Do not crop closer than the portraits. The location is the set immediately around them, not a camera at the far end of the room. Adult scale, listed people only, each once, two arms each. No extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
     "sceneVideo": "Animate the start frame. Keep faces, wardrobe, and set as they appear in the image. Motion and spoken lines only. Diegetic sound, no music, no narration, no extra characters.\n{videoPrompt}"
   },
   "episodes": [
@@ -61,44 +67,44 @@
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationId": "chapel",
+          "locationId": "chapel_altar",
           "characterIds": [
             "mara",
             "julian"
           ],
-          "imagePrompt": "MARA in a fitted ivory lace wedding gown with a sweetheart neckline and chapel-length veil, hair in a low chignon, white peony bouquet. JULIAN in a charcoal tuxedo with a white rosebud boutonniere. Medium shot at the altar, eye level. MARA at frame left in her ivory gown and veil, peony bouquet trembling in both hands, face caught in dawning disbelief. JULIAN at frame right, chin lifted, cold and decisive. Golden stained-glass light on the veil, guests blurred behind.",
+          "imagePrompt": "MARA in a fitted ivory lace wedding gown with a sweetheart neckline and chapel-length veil, hair in a low chignon, white peony bouquet. JULIAN in a charcoal tuxedo with a white rosebud boutonniere. Waist-up two-shot beside the carved oak altar, eye level, both faces the same size as the identity stills. The altar fills the background between them. MARA at frame left, bouquet trembling, dawning disbelief. JULIAN at frame right, chin lifted, cold. Stained-glass light on the veil. No nave, no church entrance, no congregation facing away from them.",
           "videoPrompt": "Very slow push-in on Mara. Julian says, flat and cold: 'I can't marry you, Mara. I'm in love with Celeste.' Mara's bouquet trembles; barely audible, she whispers: 'She's my sister.' Soft gasps ripple from the pews as the organ note fades.",
           "durationSeconds": 8
         },
         {
           "sceneNumber": 2,
-          "locationId": "chapel",
+          "locationId": "chapel_altar",
           "characterIds": [
             "mara",
             "celeste"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown and chapel-length veil, low chignon, white peony bouquet. CELESTE in a fitted champagne satin maid-of-honor dress, copper hair straight and polished. Tight close-up on MARA's face, chin lifted, eyes glassy with tears that have not yet fallen, veil catching stained-glass light. CELESTE at frame right, slightly behind, a faint smirk. Shallow depth of field, Mara's eyes razor sharp.",
+          "imagePrompt": "MARA in her ivory lace wedding gown and chapel-length veil, low chignon, white peony bouquet. CELESTE in a fitted champagne satin maid-of-honor dress, copper hair straight and polished. Head-and-shoulders two-shot at the altar, both faces the same size as the identity stills. MARA chin lifted, eyes glassy with tears that have not yet fallen. CELESTE at frame right, same scale, not behind her as a speck, a faint smirk. Stained-glass light. Not tighter than the portraits.",
           "videoPrompt": "Slow push-in on Mara's face as a single tear slips free and she holds her chin high. Celeste smirks. Mara, voice cracking but steady: 'Three hundred people. And you chose now.'",
           "durationSeconds": 6
         },
         {
           "sceneNumber": 3,
-          "locationId": "chapel",
+          "locationId": "chapel_pew",
           "characterIds": [
             "vivienne"
           ],
-          "imagePrompt": "VIVIENNE in a dove-grey silk skirt suit with a strand of pearls, a black leather clutch, silver bob, crimson lipstick. Medium close-up of VIVIENNE in the front pew, side-lit by stained glass, glancing at a slim gold wristwatch with a small satisfied curl at the corner of her crimson lips; the altar softly blurred beyond her.",
+          "imagePrompt": "VIVIENNE in a dove-grey silk skirt suit with a strand of pearls, a black leather clutch, silver bob, crimson lipstick. Head-and-shoulders of VIVIENNE seated in the front pew, same scale as her identity still, side-lit by stained glass, glancing at a slim gold wristwatch with a small satisfied curl at her crimson lips. Pew wood and peonies beside her. No distant empty altar.",
           "videoPrompt": "Locked-off medium close-up. Vivienne glances at her gold watch, then toward the altar, and murmurs with quiet satisfaction: 'Right on schedule.' A slow, cold smile spreads across her crimson lips. Faint crowd murmur beneath.",
           "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
-          "locationId": "chapel",
+          "locationId": "chapel_aisle",
           "characterIds": [
             "damian"
           ],
-          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Low-angle wide shot down the chapel aisle from behind the pews. Damian stands in the center of the aisle, jacket buttoned, expression calm and unreadable, guests' heads turned toward him. An unreadable figure in white at the far altar, too small to identify. Golden light.",
-          "videoPrompt": "Slow push-in from behind Damian as the whole chapel falls silent and heads turn toward him. In a low, steady voice: 'If the groom is finished, I'll marry her.' A wave of gasps. At the far end of the aisle, Mara slowly turns to look at him.",
+          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up of Damian standing in the center aisle between the pews, same scale as his identity still, jacket buttoned, expression calm and unreadable. Guests in the pews only at the frame edges, out of focus. Stained-glass side light. No church entrance, no empty altar at the end of the nave, no tiny figure in white.",
+          "videoPrompt": "Slow push-in on Damian as the chapel falls silent and heads at the pew edges turn toward him. In a low, steady voice: 'If the groom is finished, I'll marry her.' A wave of gasps.",
           "durationSeconds": 8
         }
       ]
@@ -111,43 +117,43 @@
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationId": "chapel",
+          "locationId": "chapel_aisle",
           "characterIds": [
             "damian"
           ],
-          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Side-tracking medium-wide shot of Damian in profile striding up the center aisle, jaw set, gaze fixed on the altar, guests' faces turning as he passes on both sides. An unreadable figure in white at the far altar. Golden light, floating dust.",
-          "videoPrompt": "Slow lateral tracking shot alongside Damian in profile as he walks the length of the aisle, unhurried, guests turning to stare. Whispers ripple: 'Who is he?' 'Is he a guest?' Mara watches, breathless, at the altar ahead. Damian never breaks his gaze from her and stops at the altar steps.",
+          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up profile of Damian walking the aisle between the pews, same scale as his identity still, jaw set. Guests turning beside him at the frame edges. Stained-glass side light, floating dust. No distant altar, no tiny figure in white, no shot from the church entrance.",
+          "videoPrompt": "Slow lateral tracking alongside Damian in profile as he walks the aisle, unhurried, guests at the pew edges turning to stare. Whispers: 'Who is he?' 'Is he a guest?' Damian never breaks stride.",
           "durationSeconds": 8
         },
         {
           "sceneNumber": 2,
-          "locationId": "chapel",
+          "locationId": "chapel_altar",
           "characterIds": [
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Close two-shot at the altar, both faces the same size: Mara's upturned wet eyes searching Damian's, golden backlight in her veil.",
+          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Head-and-shoulders two-shot beside the carved oak altar, both faces the same size as the identity stills. The altar fills the background. Mara's upturned wet eyes searching Damian's, golden light in her veil. No nave, no church entrance.",
           "videoPrompt": "Slow push-in over Damian's shoulder. Mara, whispering, searching his face: 'Who are you?' Damian, low and steady: 'Someone who doesn't leave.' After a long beat she places her trembling hand in his and he closes his fingers around it.",
           "durationSeconds": 6
         },
         {
           "sceneNumber": 3,
-          "locationId": "chapel",
+          "locationId": "chapel_altar",
           "characterIds": [
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Close two-shot at the altar: DAMIAN sliding a plain silver band onto MARA's ring finger; her eyes flick down to it in surprise, then up to his face. Blurred officiant's robes at the frame edge, golden light.",
+          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up two-shot beside the carved oak altar, both faces the same size as the identity stills. DAMIAN sliding a plain silver band onto MARA's ring finger; her eyes flick down to it, then up to his face. The altar immediately behind them. Blurred officiant's robes at the frame edge only. No nave.",
           "videoPrompt": "Close on joined hands as Damian slides a plain silver band onto Mara's ring finger; it fits perfectly. Mara looks from the ring up to his face, puzzled. An off-screen officiant asks: 'Damian Cross, do you take this woman?' Damian, eyes still on Mara: 'I do.' A ripple of shocked whispers at the name Cross.",
           "durationSeconds": 8
         },
         {
           "sceneNumber": 4,
-          "locationId": "chapel",
+          "locationId": "chapel_pew",
           "characterIds": [
             "vivienne"
           ],
-          "imagePrompt": "VIVIENNE in a dove-grey silk skirt suit with a strand of pearls, a black leather clutch, silver bob, crimson lipstick. Tight close-up on VIVIENNE, the smirk gone, color draining from her face, lips parted, knuckles white on the black clutch.",
+          "imagePrompt": "VIVIENNE in a dove-grey silk skirt suit with a strand of pearls, a black leather clutch, silver bob, crimson lipstick. Head-and-shoulders of VIVIENNE in the pew, same scale as her identity still. The smirk gone, color draining from her face, lips parted, knuckles white on the black clutch. Pew wood beside her. Not tighter than the portrait, no distant altar.",
           "videoPrompt": "Locked-off close-up. Vivienne's smile collapses; her hand tightens on the clutch. She whispers, barely voiced: 'Cross...' and her eyes dart toward the altar in alarm.",
           "durationSeconds": 4
         }
@@ -176,7 +182,7 @@
           "characterIds": [
             "mara"
           ],
-          "imagePrompt": "MARA in her wrinkled ivory lace wedding gown, veil crumpled, chignon loosening, a faint mascara smudge, a plain silver band on her ring finger. Close-up of Mara reading the contract under the amber dome light, brows drawn together, a disbelieving half-smile forming on her lips; the printed page soft in front of her with one line highlighted.",
+          "imagePrompt": "MARA in her wrinkled ivory lace wedding gown, veil crumpled, chignon loosening, a faint mascara smudge, a plain silver band on her ring finger. Head-and-shoulders of Mara reading the contract under the amber dome light, same scale as her identity still, brows drawn together, a disbelieving half-smile; the printed page in the lower frame.",
           "videoPrompt": "Handheld-feel close-up. Mara's eyes race down the page and she lets out a short, incredulous laugh: 'Clause nine. No falling in love?' Damian, eyes on the rain-streaked window: 'I wrote it years ago.' Mara's smile fades as she looks at him.",
           "durationSeconds": 6
         },
@@ -187,7 +193,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Wide-medium night shot: MARA at the dark green bakery door in her gown and DAMIAN's black jacket, palm flat against the glass beside the white legal notice, shoulders sagging. DAMIAN one step behind her, watching her rather than the door. Orange streetlamp, wet cobblestones.",
+          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Waist-up two-shot at the bakery door, both faces the same size as the identity stills. MARA palm flat against the glass beside the white legal notice. DAMIAN beside her in the same plane, not behind her as a speck. Orange streetlamp, wet cobblestones.",
           "videoPrompt": "Slow push-in from behind as Mara lays her palm against the glass beside the notice. Voice breaking: 'My father built this with his hands. Vance takes it Monday.' Damian steps up beside her, peels the notice off the door and tears it in two: 'Not anymore.'",
           "durationSeconds": 8
         },
@@ -217,7 +223,7 @@
             "mara",
             "theo"
           ],
-          "imagePrompt": "MARA barefoot in an oversized cream cable-knit sweater and grey leggings, hair down, plain silver band. THEO in a tailored navy suit with a pale-pink pocket square and round tortoiseshell glasses, holding a tablet. Wide-medium shot in the sunlit penthouse: MARA barefoot in her oversized cream sweater in the middle of the enormous living room, overwhelmed; THEO beside her with his tablet, beaming and gesturing toward the skyline. Cool morning haze on the windows.",
+          "imagePrompt": "MARA barefoot in an oversized cream cable-knit sweater and grey leggings, hair down, plain silver band. THEO in a tailored navy suit with a pale-pink pocket square and round tortoiseshell glasses, holding a tablet. Waist-up two-shot of MARA and THEO, both faces the same size as the identity stills. Skyline windows immediately behind them. Not a wide of the empty living room.",
           "videoPrompt": "Gentle handheld push-in. Theo, bright and fast: 'Good morning, Mrs. Cross! Never touch the espresso machine.' Mara, still dazed: 'Mrs. Cross. That'll take a while.' Theo grins and sweeps a hand toward the skyline.",
           "durationSeconds": 8
         },
@@ -228,7 +234,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the dim study. MARA holds a small silver photo frame in both hands at chest height, looking down at it. DAMIAN stands at the window. The photograph is too small to read faces. Green banker's lamp, city lights.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Waist-up two-shot in the dim study, both faces the same size as the identity stills. MARA holds a small silver photo frame at chest height. DAMIAN beside her in the same plane, not a speck at a far window. The photograph is too small to read faces. Green banker's lamp, city lights behind them.",
           "videoPrompt": "Slow push-in on Mara's hands and face as she lifts the silver frame from the shelf. Her breath catches. She whispers: 'Dad?' Her thumb traces the older man's face; tears gather.",
           "durationSeconds": 6
         },
@@ -239,7 +245,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the study. MARA holds the silver photo frame against her chest with both hands, head turned toward DAMIAN in the doorway, backlit by hallway light. Damian's arms hang at his sides. Green lamp glow.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Waist-up two-shot, both faces the same size as the identity stills. MARA holds the silver photo frame against her chest. DAMIAN beside her in the same plane, not a silhouette in a far doorway. Green lamp glow.",
           "videoPrompt": "Damian appears in the doorway, motionless. Cold and controlled: 'Put that down.' Mara turns, clutching the frame to her chest: 'That's my father. And that's you.' He doesn't answer; the silence stretches, the lamp humming.",
           "durationSeconds": 6
         },
@@ -269,7 +275,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in a floor-length emerald-green satin off-the-shoulder gown, glossy loose waves, emerald drop earrings, plain silver band. DAMIAN in a black tuxedo with a white shirt and black bow tie. Medium-wide shot at the foot of the marble staircase as MARA and DAMIAN arrive arm in arm, guests parting and turning, photographers' flashes bursting; MARA's chin lifted, a flicker of nerves beneath her poise; DAMIAN's hand at the small of her back. Chandeliers blazing above.",
+          "imagePrompt": "MARA in a floor-length emerald-green satin off-the-shoulder gown, glossy loose waves, emerald drop earrings, plain silver band. DAMIAN in a black tuxedo with a white shirt and black bow tie. Waist-up two-shot of MARA and DAMIAN arm in arm at the foot of the marble staircase, both faces the same size as the identity stills. Chandeliers above them. Guests only at the frame edges. Not a wide of the ballroom.",
           "videoPrompt": "Slow tracking shot as Mara and Damian step forward together, flashes popping, guests parting and whispering. Damian leans to her ear: 'Smile, Mrs. Cross. Everyone's watching.' Mara, through a perfect smile: 'Let them.' Her shoulders settle as she walks.",
           "durationSeconds": 8
         },
@@ -321,7 +327,7 @@
             "mara",
             "julian"
           ],
-          "imagePrompt": "MARA in her emerald satin gown with a black tuxedo jacket draped over her shoulders, a faint dark wine stain on the lower skirt, plain silver band. JULIAN in a black tuxedo with his bow tie undone. Medium shot: MARA at the moonlit terrace railing, a black tuxedo jacket around her shoulders, city lights glittering below, warm light spilling from the glass doors behind her. JULIAN a few steps behind her, approaching.",
+          "imagePrompt": "MARA in her emerald satin gown with a black tuxedo jacket draped over her shoulders, a faint dark wine stain on the lower skirt, plain silver band. JULIAN in a black tuxedo with his bow tie undone. Waist-up two-shot at the terrace railing, both faces the same size as the identity stills. MARA at the railing, city lights behind. JULIAN beside her in the same plane, not a few steps behind as a speck.",
           "videoPrompt": "Slow push-in on Mara at the railing, exhaling into the cold night. Julian steps into frame. Julian, quiet: 'You look happy, Mara. It suits you.' Mara, not turning: 'Go back inside, Julian.'",
           "durationSeconds": 6
         },
@@ -373,7 +379,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium two-shot in the dim study at night: MARA at the desk, arms crossed tight, glaring, anger and grief in her eyes; DAMIAN at the window, back half-turned, jaw clenched; green lamp glow, city glitter.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Waist-up two-shot in the dim study, both faces the same size as the identity stills. MARA at the desk, arms crossed, glaring. DAMIAN beside her in the same plane, not a speck at a far window, jaw clenched. Green lamp glow, city glitter behind them.",
           "videoPrompt": "Slow push-in. Mara, shaking with restraint: 'Where were you the night my father died?' Damian keeps his back to her for a long moment, then turns, eyes red-rimmed: 'With him. I held his hand.' Mara's face crumples.",
           "durationSeconds": 8
         },
@@ -383,7 +389,7 @@
           "characterIds": [
             "damian"
           ],
-          "imagePrompt": "DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Close-up on Damian's face in the green lamp light, eyes distant with memory, rain-light flickering on the window glass behind him, raw vulnerability cracking his stillness.",
+          "imagePrompt": "DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Head-and-shoulders of Damian, same scale as his identity still, green lamp light, eyes distant with memory, rain-light on the window glass behind him. Not tighter than the portrait.",
           "videoPrompt": "Slow push-in on Damian as he speaks, hollow with memory: 'It was raining. He said it wasn't an accident. Then he made me promise.' His throat works. Out of focus in the foreground, Mara's silhouette lifts a hand to her mouth.",
           "durationSeconds": 8
         },
@@ -404,7 +410,7 @@
           "characterIds": [
             "mara"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. Close-up on Mara reading a handwritten letter under the green lamp, lips trembling, a tear falling onto the paper; the brass key glinting on the desk beside her hand.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. Head-and-shoulders of Mara reading a handwritten letter under the green lamp, same scale as her identity still, lips trembling, a tear on her cheek; the brass key in the lower frame. Not tighter than the portrait.",
           "videoPrompt": "Mara unfolds the letter and reads in a broken whisper: 'The truth is under the heart of the shop.' She looks up at Damian, eyes blazing through tears: 'The oven.' Damian nods once: 'Tonight.'",
           "durationSeconds": 6
         }
@@ -423,7 +429,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in black jeans and a dark green wool coat over a cream sweater, hair in a loose side braid, silver band, flashlight in hand. DAMIAN in a black wool overcoat over a charcoal sweater and black trousers. Wide shot of the brick-vaulted cellar: MARA and DAMIAN at the foot of the stairs in weak amber light, her flashlight beam sweeping across the massive brick oven and hanging copper pans, dust motes floating; DAMIAN alert at her shoulder.",
+          "imagePrompt": "MARA in black jeans and a dark green wool coat over a cream sweater, hair in a loose side braid, silver band, flashlight in hand. DAMIAN in a black wool overcoat over a charcoal sweater and black trousers. Waist-up two-shot of MARA and DAMIAN at the foot of the cellar stairs, both faces the same size as the identity stills. Her flashlight between them, brick oven around them. Not a wide of the whole vault.",
           "videoPrompt": "Handheld-style follow shot as Mara sweeps a flashlight beam across the cellar, dust motes drifting. She whispers: 'Dad always said the oven was the heart of the shop.' Damian, low: 'Then start there.' The beam settles on the blackened iron oven door.",
           "durationSeconds": 8
         },
@@ -475,7 +481,7 @@
             "vivienne",
             "julian"
           ],
-          "imagePrompt": "VIVIENNE in a camel wool coat with a silk scarf, silver bob, crimson lips, black leather gloves. JULIAN in a black overcoat with an open collar, sandy-blond hair rain-damp and disheveled. Low-angle wide-medium shot from the cellar floor: VIVIENNE emerging from shadow at the foot of the stairs in her camel coat, silver bob immaculate, one black-gloved hand extended; JULIAN a step behind her, pale and rain-damp, eyes on the floor; the caged bulb swaying amber.",
+          "imagePrompt": "VIVIENNE in a camel wool coat with a silk scarf, silver bob, crimson lips, black leather gloves. JULIAN in a black overcoat with an open collar, sandy-blond hair rain-damp and disheveled. Waist-up two-shot of VIVIENNE and JULIAN at the foot of the cellar stairs, both faces the same size as the identity stills. Vivienne one black-gloved hand extended; Julian a step beside her in the same plane, pale, eyes down. Caged amber bulb. Not a wide from the cellar floor.",
           "videoPrompt": "The caged bulb sputters back to life. Vivienne steps out of the darkness at the foot of the stairs, Julian trailing behind her. Silky and calm: 'Hello, Mara. I believe you're holding something that belongs to my family.' Julian stares at the floor.",
           "durationSeconds": 8
         },
@@ -537,7 +543,7 @@
           "characterIds": [
             "vivienne"
           ],
-          "imagePrompt": "VIVIENNE in a camel wool coat with a silk scarf, silver bob, crimson lips, black leather gloves. Close-up on Vivienne, cornered and defiant, a brittle smile on her crimson lips, red-blue light flickering across her face, eyes flicking off-frame.",
+          "imagePrompt": "VIVIENNE in a camel wool coat with a silk scarf, silver bob, crimson lips, black leather gloves. Head-and-shoulders of Vivienne, same scale as her identity still, cornered and defiant, a brittle smile, red-blue light on her face. Not tighter than the portrait.",
           "videoPrompt": "Cornered, Vivienne laughs, brittle and cold, and looks past Julian at someone off-screen: 'You think I started this? Read the last page.' The sirens grow louder.",
           "durationSeconds": 6
         },
