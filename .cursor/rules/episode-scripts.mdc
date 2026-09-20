@@ -12,8 +12,8 @@ That file is the whole show: characters, locations (text only), prompt templates
 
 - Character `promptBlock` is identity landmarks for the character still only. Scene stills attach that PNG, not this text.
 - `locations.promptBlock` is materials and light on the people. Not a camera looking at a building or a room.
-- `characterIds` is at most two faces at identity-still scale, Picture 1 then Picture 2. Far, tiny, or over-the-shoulder is a different scene.
-- `imagePrompt` is this camera, wardrobe, blocking. People waist-up to head-and-shoulders. The set is immediately around them. No room-wide, no far-end camera, no crop tighter than the portraits.
-- `videoPrompt` is motion and lines. Do not redescribe faces or the set, and do not invent people who are not in the still.
+- `characterIds` is at most two. Each appears once. Far, tiny, or over-the-shoulder is another scene.
+- `imagePrompt` is this camera, wardrobe, blocking, and where they look. Faces at identity-still scale. One pose per listed person. Set behind them. Nothing between the camera and a listed face.
+- `videoPrompt` is same camera as the start frame, small motion, spoken lines with how the voice sounds. Do not restage, do not redescribe faces or the set, and do not invent people who are not in the still.
 - Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
 - Valid show JSON only unless the human asked for a plan first.

@@ -16,7 +16,7 @@ export type ShowPrompts = {
   characterImage: string;
   /** Identity PNGs in `characterIds` order. `{characterIds}` `{locationPromptBlock}` `{imagePrompt}` */
   sceneStill: string;
-  /** Motion and spoken lines only. The start PNG is the lock. `{videoPrompt}` */
+  /** Same camera as the start PNG. Small motion. Spoken lines with how they sound. `{videoPrompt}` */
   sceneVideo: string;
 };
 
@@ -24,16 +24,18 @@ export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
   /**
-   * At most two. Faces fill the frame at identity-still scale, Picture 1 then Picture 2.
-   * Far, tiny, or over-the-shoulder is a different scene.
+   * At most two. Each appears once. Far, tiny, or over-the-shoulder is another scene.
    */
   characterIds: string[];
   /**
-   * This camera, wardrobe, blocking. People waist-up to head-and-shoulders.
-   * The set is immediately around them. No room-wide, no far-end camera, no crop tighter than the portraits.
+   * This camera, wardrobe, blocking, where they look. Faces at identity-still scale. One pose per listed person.
+   * Set behind them. Nothing between the camera and a listed face.
    */
   imagePrompt: string;
-  /** Camera move, action, spoken lines. Do not redescribe faces or the set. */
+  /**
+   * Same camera as the start frame. Small motion. Spoken lines include how the voice sounds.
+   * Do not restage, do not redescribe faces or the set, do not invent people who are not in the still.
+   */
   videoPrompt: string;
   durationSeconds: number;
 };
