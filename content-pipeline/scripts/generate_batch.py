@@ -25,6 +25,7 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
+MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
@@ -644,6 +645,19 @@ def resolve_location(show: dict, scene: dict) -> dict:
     return show["locations"][scene["locationId"]]
 
 
+def resolve_scene_characters(show: dict, scene: dict) -> list[dict]:
+    resolved: list[dict] = []
+    for character_id in scene["characterIds"]:
+        image_path = character_image_path(show["id"], character_id)
+        if not present(image_path):
+            raise SystemExit(
+                f"Missing character still {image_path}. Run `pnpm run content:frames` "
+                "so identity portraits exist before scene stills."
+            )
+        resolved.append({"id": character_id, "image_path": image_path})
+    return resolved
+
+
 def present(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 1024
 
@@ -722,6 +736,20 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
 
 def inject_qwen_character_canvas(graph: dict) -> None:
     inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
+
+
+def inject_qwen_character_refs(graph: dict, characters: list[dict]) -> None:
+    if not characters:
+        raise RuntimeError("Scene stills need at least one character reference PNG")
+    refs: list[tuple[str, str]] = []
+    for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1):
+        refs.append(
+            (
+                stage_start_still(character["image_path"]),
+                f"Character reference {index} ({character['id']})",
+            )
+        )
+    inject_qwen_image_slots(graph, refs)
 
 
 def inject_qwen_prompt(graph: dict, prompt: str) -> None:
@@ -949,10 +977,12 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                     "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
                 )
             if stage == "frames":
+                characters = resolve_scene_characters(show, scene)
                 prompt = show_prompt(
                     show,
                     "sceneStill",
                     {
+                        "characterIds": ", ".join(scene["characterIds"]),
                         "locationPromptBlock": location["promptBlock"],
                         "imagePrompt": scene["imagePrompt"],
                     },
@@ -962,7 +992,7 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                     dest,
                     prompt,
                     f"Qwen scene still ({names} @ {location['id']})",
-                    inject_qwen_character_canvas,
+                    lambda graph, chars=characters: inject_qwen_character_refs(graph, chars),
                 )
             else:
                 prompt = show_prompt(

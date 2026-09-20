@@ -49,7 +49,7 @@
   },
   "prompts": {
     "characterImage": "Photorealistic cinematic character reference portrait, vertical 9:16, waist-up, facing the camera, arms at the sides, plain warm-grey studio backdrop, soft light, tack-sharp eyes, natural skin. Plain fitted t-shirt, no scene costume. Exactly one person. No text, no extra fingers.\nIgnore the attached image. Generate a new identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. Picture 1 is a blank canvas — ignore it. Adult scale, listed people only, each once, two arms each. No collage, no extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person — keep that face. If Picture 2 is attached, it is the second person — keep that face. Do not collage the photos. Put those people into a new shot in this location, with wardrobe and blocking from the shot below. Adult scale, listed people only, each once, two arms each. No extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
     "sceneVideo": "Animate the start frame. Keep faces, wardrobe, and set as they appear in the image. Motion and spoken lines only. Diegetic sound, no music, no narration, no extra characters.\n{videoPrompt}"
   },
   "episodes": [

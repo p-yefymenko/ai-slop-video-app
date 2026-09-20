@@ -119,7 +119,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still from text (blank canvas + shared location block + shot prompt). Character bibles are not pasted into scene stills. Do not attach portraits or location PNGs — Qwen collages extra images and pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video (motion prompt only; the PNG locks look), with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still with those portraits as Qwen Picture 1 / Picture 2 plus shared location text and the shot prompt. Character bibles are not pasted into scene stills. Do not attach a location PNG or a blank canvas on a scene still — extra unrelated images make Qwen collage, and an empty-room plate pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video (motion prompt only; the PNG locks look), with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -200,14 +200,14 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped; delete a file to regenerate it.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from those portraits plus location text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped; delete a file to regenerate it.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
 `content:frames` writes:
 
-1. Character stills — `output/<show>/characters/<id>.png` (human review; not fed back into Qwen)
-2. Scene stills — `output/<show>/<episode>/scene_XX_start.png` (blank canvas + text; extra images make Qwen collage)
+1. Character stills — `output/<show>/characters/<id>.png` (human review, then Qwen Picture 1 / Picture 2 on scene stills)
+2. Scene stills — `output/<show>/<episode>/scene_XX_start.png` (identity portraits + location text + shot; do not attach a location PNG)
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
@@ -249,7 +249,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   },
   "prompts": {
     "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "Picture 1 is a blank canvas. Ignore it and generate the shot from text.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneStill": "The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person; if Picture 2 is attached, it is the second. Keep those faces. Do not collage the photos. Generate one new shot in this location.\n{locationPromptBlock}\n{imagePrompt}",
     "sceneVideo": "Animate the start frame. Motion and spoken lines only.\n{videoPrompt}"
   },
   "episodes": [
@@ -275,7 +275,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a shared set description, reused verbatim. Scenes point at it with `locationId`.
-- `characterIds` is who fills the still at the same size (at most two), not everyone in the scene. Coverage (tiny in background, over-the-shoulder) is a different scene.
+- `characterIds` is who fills the still at the same size (at most two), in Qwen Picture 1 / Picture 2 order, not everyone in the scene. Coverage (tiny in background, over-the-shoulder) is a different scene.
 - `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.
 
 
