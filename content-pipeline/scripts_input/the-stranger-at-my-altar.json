@@ -23,13 +23,13 @@
   },
   "locations": {
     "chapel_altar": {
-      "promptBlock": "SET: the altar of a grand old stone chapel at golden hour. Carved oak altar with ivory drapery immediately in frame, tall pointed stained-glass windows throwing amber and rose light onto the altar, white peonies and eucalyptus at the altar steps, warm dust in the sunbeams. Materials and light only — not the nave, not the entrance, not a view down the aisle."
+      "promptBlock": "SET: carved oak and ivory drapery immediately behind the people, stained-glass amber-rose light on them, white peonies at their sides, warm dust. Materials that touch the bodies."
     },
     "chapel_aisle": {
-      "promptBlock": "SET: the center aisle of the same stone chapel at golden hour. Stone floor, white peony and eucalyptus sprays along the aisle, dark wood pews on both sides, stained-glass side light, warm dust. Materials and light only — not a shot from the church door toward a distant altar."
+      "promptBlock": "SET: dark wood pew backs immediately left and right of a standing person, stained-glass side light, white peonies on the pew ends, warm dust. Materials that touch the body. No receding floor, no far architecture."
     },
     "chapel_pew": {
-      "promptBlock": "SET: a front pew in the same stone chapel at golden hour. Dark wood pew, a spray of white peonies at the pew end, stained-glass side light, other pews beside. Materials and light only — the pew is the set, not a view of the altar as the subject."
+      "promptBlock": "SET: dark wood pew under and beside a seated person, a spray of white peonies at the pew end, stained-glass side light. Materials that touch the body."
     },
     "car_interior": {
       "promptBlock": "SET: the rear seat of a black luxury sedan at night, cream leather seats, a soft amber dome light, rain on the windows with gold and blue streetlights streaking past."
@@ -72,7 +72,7 @@
             "mara",
             "julian"
           ],
-          "imagePrompt": "MARA in a fitted ivory lace wedding gown with a sweetheart neckline and chapel-length veil, hair in a low chignon, white peony bouquet. JULIAN in a charcoal tuxedo with a white rosebud boutonniere. Waist-up two-shot beside the carved oak altar, eye level, both faces the same size as the identity stills. The altar fills the background between them. MARA at frame left, bouquet trembling, dawning disbelief. JULIAN at frame right, chin lifted, cold. Stained-glass light on the veil. No nave, no church entrance, no congregation facing away from them.",
+          "imagePrompt": "MARA in a fitted ivory lace wedding gown with a sweetheart neckline and chapel-length veil, hair in a low chignon, white peony bouquet. JULIAN in a charcoal tuxedo with a white rosebud boutonniere. Waist-up two-shot, both faces the same size as the identity stills. They stand in front of the altar wood, altar behind them not in the foreground. MARA at frame left, bouquet trembling, dawning disbelief. JULIAN at frame right, chin lifted, cold. Stained-glass light on the veil.",
           "videoPrompt": "Very slow push-in on Mara. Julian says, flat and cold: 'I can't marry you, Mara. I'm in love with Celeste.' Mara's bouquet trembles; barely audible, she whispers: 'She's my sister.' Soft gasps ripple from the pews as the organ note fades.",
           "durationSeconds": 8
         },
@@ -83,7 +83,7 @@
             "mara",
             "celeste"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown and chapel-length veil, low chignon, white peony bouquet. CELESTE in a fitted champagne satin maid-of-honor dress, copper hair straight and polished. Head-and-shoulders two-shot at the altar, both faces the same size as the identity stills. MARA chin lifted, eyes glassy with tears that have not yet fallen. CELESTE at frame right, same scale, not behind her as a speck, a faint smirk. Stained-glass light. Not tighter than the portraits.",
+          "imagePrompt": "MARA in her ivory lace wedding gown and chapel-length veil, low chignon, white peony bouquet. CELESTE in a fitted champagne satin maid-of-honor dress, copper hair straight and polished. Waist-up two-shot, both faces the same size as the identity stills. They stand in front of the altar wood, altar behind them not as a table in the foreground. MARA at frame left, chin lifted, eyes glassy. CELESTE at frame right, same scale, faint smirk. Stained-glass light.",
           "videoPrompt": "Slow push-in on Mara's face as a single tear slips free and she holds her chin high. Celeste smirks. Mara, voice cracking but steady: 'Three hundred people. And you chose now.'",
           "durationSeconds": 6
         },
@@ -103,7 +103,7 @@
           "characterIds": [
             "damian"
           ],
-          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up of Damian standing in the center aisle between the pews, same scale as his identity still, jacket buttoned, expression calm and unreadable. Guests in the pews only at the frame edges, out of focus. Stained-glass side light. No church entrance, no empty altar at the end of the nave, no tiny figure in white.",
+          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up, same crop as his identity still. Pew wood fills the left and right of the frame at his ribs. Feet and floor out of frame. No guests. Stained-glass side light.",
           "videoPrompt": "Slow push-in on Damian as the chapel falls silent and heads at the pew edges turn toward him. In a low, steady voice: 'If the groom is finished, I'll marry her.' A wave of gasps.",
           "durationSeconds": 8
         }
@@ -121,7 +121,7 @@
           "characterIds": [
             "damian"
           ],
-          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up profile of Damian walking the aisle between the pews, same scale as his identity still, jaw set. Guests turning beside him at the frame edges. Stained-glass side light, floating dust. No distant altar, no tiny figure in white, no shot from the church entrance.",
+          "imagePrompt": "DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up three-quarter, walking, same crop as his identity still. Pew wood fills the left and right of the frame at his ribs. Feet and floor out of frame. No guests. Stained-glass side light.",
           "videoPrompt": "Slow lateral tracking alongside Damian in profile as he walks the aisle, unhurried, guests at the pew edges turning to stare. Whispers: 'Who is he?' 'Is he a guest?' Damian never breaks stride.",
           "durationSeconds": 8
         },
@@ -132,7 +132,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Head-and-shoulders two-shot beside the carved oak altar, both faces the same size as the identity stills. The altar fills the background. Mara's upturned wet eyes searching Damian's, golden light in her veil. No nave, no church entrance.",
+          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up two-shot, both faces the same size as the identity stills. They stand in front of the altar wood, altar behind them not in the foreground. Mara's upturned wet eyes searching Damian's.",
           "videoPrompt": "Slow push-in over Damian's shoulder. Mara, whispering, searching his face: 'Who are you?' Damian, low and steady: 'Someone who doesn't leave.' After a long beat she places her trembling hand in his and he closes his fingers around it.",
           "durationSeconds": 6
         },
@@ -143,7 +143,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up two-shot beside the carved oak altar, both faces the same size as the identity stills. DAMIAN sliding a plain silver band onto MARA's ring finger; her eyes flick down to it, then up to his face. The altar immediately behind them. Blurred officiant's robes at the frame edge only. No nave.",
+          "imagePrompt": "MARA in her ivory lace wedding gown, chapel-length veil, low chignon and white peony bouquet. DAMIAN in a black tailored suit, crisp white shirt and slim black tie. Waist-up two-shot, both faces the same size as the identity stills. They stand in front of the altar wood, altar behind them not in the foreground. DAMIAN sliding a plain silver band onto MARA's ring finger; her eyes flick down to it, then up to his face.",
           "videoPrompt": "Close on joined hands as Damian slides a plain silver band onto Mara's ring finger; it fits perfectly. Mara looks from the ring up to his face, puzzled. An off-screen officiant asks: 'Damian Cross, do you take this woman?' Damian, eyes still on Mara: 'I do.' A ripple of shocked whispers at the name Cross.",
           "durationSeconds": 8
         },
