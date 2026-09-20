@@ -3,68 +3,54 @@
   "title": "The Stranger at My Altar",
   "characters": {
     "mara": {
-      "promptBlock": "MARA ELLISON: 26-year-old woman, 5 ft 6 in, slim build, warm light-olive skin, oval face with soft cheekbones, large expressive hazel eyes, full natural eyebrows, a small beauty mark beneath the outer corner of her left eye, long wavy chestnut-brown hair with a soft side part. Warm, quietly stubborn; her eyes carry most of her acting.",
-      "imagePrompt": "Waist-up reference portrait of MARA ELLISON, a 26-year-old woman with warm light-olive skin, large hazel eyes, full natural eyebrows, a small beauty mark beneath the outer corner of her left eye, and long wavy chestnut-brown hair with a soft side part, worn loose past her shoulders. Minimal natural makeup, plain fitted white cotton t-shirt. Calm, slightly guarded neutral expression, looking straight into the lens."
+      "promptBlock": "MARA ELLISON: 26, slim, warm light-olive skin, large hazel eyes, a small beauty mark beneath the outer corner of her left eye, long wavy chestnut-brown hair with a soft side part."
     },
     "damian": {
-      "promptBlock": "DAMIAN CROSS: 34-year-old man, 6 ft 2 in, broad-shouldered lean athletic build, medium-tan skin, sharp jawline with a neat shadow of stubble, deep-set steel-grey eyes, straight dark brows with a thin pale scar cutting through the left eyebrow, short black hair swept back with a slight wave. Still, controlled, few words; his stillness reads as power.",
-      "imagePrompt": "Waist-up reference portrait of DAMIAN CROSS, a 34-year-old man, broad-shouldered and lean, with medium-tan skin, deep-set steel-grey eyes, a thin pale scar cutting through his left eyebrow, short black hair swept back with a slight wave, and a neat shadow of stubble along a sharp jawline. Plain fitted black crew-neck t-shirt. Composed, unreadable neutral expression, looking straight into the lens."
+      "promptBlock": "DAMIAN CROSS: 34, broad-shouldered, medium-tan skin, deep-set steel-grey eyes, a thin pale scar through the left eyebrow, short black hair swept back, neat stubble."
     },
     "julian": {
-      "promptBlock": "JULIAN VANCE: 28-year-old man, 6 ft 0 in, athletic build, fair skin, sandy-blond hair styled back, clear blue eyes, clean-shaven polished boyish face with a practised charming smile that curdles into contempt, a gold signet ring on his right hand. Entitled, cowardly beneath the polish.",
-      "imagePrompt": "Waist-up reference portrait of JULIAN VANCE, a 28-year-old man with fair skin, clear blue eyes, sandy-blond hair styled back, and a clean-shaven, polished, boyish face, a gold signet ring on his right hand. Plain fitted light-grey t-shirt. Easy, faintly smug neutral expression, looking straight into the lens."
+      "promptBlock": "JULIAN VANCE: 28, fair skin, sandy-blond hair styled back, clear blue eyes, clean-shaven boyish face, gold signet ring on his right hand."
     },
     "celeste": {
-      "promptBlock": "CELESTE HALE: 25-year-old woman, 5 ft 8 in, slender, fair skin with a light dusting of freckles across the nose, sleek straight copper-red hair falling past her shoulders, green eyes with fine winged liner, glossy pink lips. Mara's stepsister. Sweet on the surface, calculating underneath.",
-      "imagePrompt": "Waist-up reference portrait of CELESTE HALE, a 25-year-old woman with fair skin and a light dusting of freckles across the nose, sleek straight copper-red hair falling past her shoulders, green eyes with fine winged liner and glossy pink lips. Plain fitted black t-shirt. Sweet, composed neutral expression with a hint of calculation behind the eyes, looking straight into the lens."
+      "promptBlock": "CELESTE HALE: 25, fair skin with freckles across the nose, sleek straight copper-red hair, green eyes, winged liner, glossy pink lips."
     },
     "vivienne": {
-      "promptBlock": "VIVIENNE VANCE: 58-year-old woman, 5 ft 7 in, upright and slender, pale porcelain skin, sleek silver-white chin-length bob, icy pale-blue eyes, high sharp cheekbones, thin lips in deep crimson lipstick, a strand of pearls at her throat. Julian's mother. Elegant, controlled, quietly cruel.",
-      "imagePrompt": "Waist-up reference portrait of VIVIENNE VANCE, a 58-year-old woman with pale porcelain skin, a sleek silver-white chin-length bob, icy pale-blue eyes, high sharp cheekbones, and thin lips in deep crimson lipstick, a strand of pearls at her throat. Plain fitted charcoal silk blouse. Poised, cool, faintly imperious neutral expression, looking straight into the lens."
+      "promptBlock": "VIVIENNE VANCE: 58, pale porcelain skin, silver-white chin-length bob, icy pale-blue eyes, high cheekbones, crimson lipstick, pearls."
     },
     "theo": {
-      "promptBlock": "THEO PARK: 29-year-old man, 5 ft 9 in, slim, warm light-tan skin, short tousled black hair, round tortoiseshell glasses, an easy dimpled grin. Damian's loyal, fast-talking assistant; comic warmth.",
-      "imagePrompt": "Waist-up reference portrait of THEO PARK, a 29-year-old man with warm light-tan skin, short tousled black hair, round tortoiseshell glasses and an easy dimpled smile. Plain fitted navy crew-neck t-shirt. Friendly, alert expression, looking straight into the lens."
+      "promptBlock": "THEO PARK: 29, warm light-tan skin, short tousled black hair, round tortoiseshell glasses, dimpled grin."
     }
   },
   "locations": {
     "chapel": {
-      "promptBlock": "SET: a grand old stone chapel at golden hour — tall pointed stained-glass windows throwing amber and rose light, warm dust in the sunbeams, a carved oak altar with ivory drapery, an aisle lined with white peonies and eucalyptus, wedding guests in the pews softly out of focus. Same building throughout: altar, aisle, and front pews.",
-      "preserve": "chapel architecture, stained-glass windows, peony aisle decor, carved oak altar, golden-hour light and the warm amber-rose palette"
+      "promptBlock": "SET: a grand old stone chapel at golden hour — tall pointed stained-glass windows throwing amber and rose light, warm dust in the sunbeams, a carved oak altar with ivory drapery, an aisle lined with white peonies and eucalyptus, wedding guests in the pews softly out of focus. Same building throughout: altar, aisle, and front pews."
     },
     "car_interior": {
-      "promptBlock": "SET: the rear seat of a black luxury sedan at night, cream leather seats, a soft amber dome light, rain on the windows with gold and blue streetlights streaking past.",
-      "preserve": "the cream leather interior, amber dome light, rain-streaked windows and the gold-and-blue night palette"
+      "promptBlock": "SET: the rear seat of a black luxury sedan at night, cream leather seats, a soft amber dome light, rain on the windows with gold and blue streetlights streaking past."
     },
     "bakery_front": {
-      "promptBlock": "SET: the street front of a small old-fashioned corner bakery at night: dark green painted wood storefront, gold-leaf script above the window reading Ellison & Daughter, warm dim light inside, a white paper legal notice with a red stamp taped to the glass door (text not legible), wet cobblestone sidewalk reflecting an orange sodium streetlamp, three terracotta herb pots lined up beside the door.",
-      "preserve": "the dark green storefront, gold Ellison & Daughter lettering, legal notice on the door, the three terracotta pots, wet cobblestones and orange streetlamp glow"
+      "promptBlock": "SET: the street front of a small old-fashioned corner bakery at night: dark green painted wood storefront, gold-leaf script above the window reading Ellison & Daughter, warm dim light inside, a white paper legal notice with a red stamp taped to the glass door (text not legible), wet cobblestone sidewalk reflecting an orange sodium streetlamp, three terracotta herb pots lined up beside the door."
     },
     "penthouse_living": {
-      "promptBlock": "SET: a vast minimalist penthouse living room on a bright morning: floor-to-ceiling windows over a hazy city skyline, pale oak floors, a low charcoal sofa, a white marble kitchen island with a stainless espresso machine, cool soft daylight.",
-      "preserve": "the room layout, marble island, espresso machine, skyline windows and cool morning daylight"
+      "promptBlock": "SET: a vast minimalist penthouse living room on a bright morning: floor-to-ceiling windows over a hazy city skyline, pale oak floors, a low charcoal sofa, a white marble kitchen island with a stainless espresso machine, cool soft daylight."
     },
     "penthouse_study": {
-      "promptBlock": "SET: a private study in the penthouse at dusk: walls of leather-bound books, a heavy walnut desk with a green banker's lamp, a tall window with glittering city lights, and on a shelf a small silver frame whose photo is too far to read. Warm lamp pools against cool blue window light.",
-      "preserve": "the bookshelves, walnut desk, green banker's lamp, small silver frame on the shelf, window with city lights and the warm-lamp versus cool-blue palette"
+      "promptBlock": "SET: a private study in the penthouse at dusk: walls of leather-bound books, a heavy walnut desk with a green banker's lamp, a tall window with glittering city lights, and on a shelf a small silver frame whose photo is too far to read. Warm lamp pools against cool blue window light."
     },
     "ballroom": {
-      "promptBlock": "SET: an opulent hotel ballroom at a black-tie charity gala: gilded columns, three huge crystal chandeliers, a sweeping white marble staircase, guests in evening wear holding champagne flutes (softly out of focus), warm gold light and flashes from press photographers.",
-      "preserve": "ballroom architecture, chandeliers, marble staircase and the warm gold palette"
+      "promptBlock": "SET: an opulent hotel ballroom at a black-tie charity gala: gilded columns, three huge crystal chandeliers, a sweeping white marble staircase, guests in evening wear holding champagne flutes (softly out of focus), warm gold light and flashes from press photographers."
     },
     "terrace": {
-      "promptBlock": "SET: a moonlit stone terrace off the ballroom: wrought-iron railing, strings of warm lights, potted olive trees, the city skyline glittering below, cool blue night light with warm gold spilling from tall glass doors behind.",
-      "preserve": "the railing, olive trees, string lights, skyline, glass doors and the cool-blue night palette with warm gold spill"
+      "promptBlock": "SET: a moonlit stone terrace off the ballroom: wrought-iron railing, strings of warm lights, potted olive trees, the city skyline glittering below, cool blue night light with warm gold spilling from tall glass doors behind."
     },
     "cellar": {
-      "promptBlock": "SET: the brick-vaulted cellar kitchen beneath the Ellison & Daughter bakery at night: a massive antique brick bread oven with a blackened iron door, wooden proofing racks, flour-dusted steel worktables, copper pans on hooks, a single caged bare bulb giving weak amber light, drifting dust, a narrow street-level window high on the back wall, a steep wooden stairway rising into darkness at the rear.",
-      "preserve": "the brick vault, antique oven with iron door, proofing racks, copper pans, caged bulb, high narrow window, rear stairway and the amber-and-shadow palette"
+      "promptBlock": "SET: the brick-vaulted cellar kitchen beneath the Ellison & Daughter bakery at night: a massive antique brick bread oven with a blackened iron door, wooden proofing racks, flour-dusted steel worktables, copper pans on hooks, a single caged bare bulb giving weak amber light, drifting dust, a narrow street-level window high on the back wall, a steep wooden stairway rising into darkness at the rear."
     }
   },
   "prompts": {
-    "characterImage": "Photorealistic cinematic character reference portrait for a premium vertical micro-drama. Vertical 9:16 frame, subject centered and framed from the waist up, facing the camera with a neutral, relaxed expression and arms natural at the sides. Plain soft warm-grey studio backdrop, soft diffused key light with a gentle rim light, shallow depth of field, tack-sharp eyes. Natural skin texture with visible pores and realistic hair strands, no beauty-filter smoothing, no glamour retouching. Neutral basic wardrobe only (no scene costume). Exactly one person in frame. No text, no logos, no watermark, no extra fingers, no distorted hands.\nIgnore the attached image. Generate a new identity still from the description.\n{characterPromptBlock}\n{imagePrompt}",
-    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, 35mm lens look, one continuous photograph, not a collage. Picture 1 is a blank canvas — ignore it and generate a new shot from the descriptions. Do not attach or collage portraits. Exactly the listed people, all the same adult scale, faces readable, feet on the ground, two arms and two hands each. Each person appears once. Never a contact sheet, stacked portraits, extra limbs, phone frames, or text overlays. Background extras only where the set calls for them, faces unreadable. No logos, no watermark, no distorted hands.\n{characterPromptBlocks}\n{locationPromptBlock}\n{imagePrompt}",
-    "sceneVideo": "Animate the supplied still into a cinematic vertical 9:16 clip. Keep faces, hairstyles, wardrobe, props and set consistent with the still. Motion is grounded and realistic. Characters speak the quoted dialogue on camera with natural lip sync. Diegetic room tone only, no music, no narration. No morphing, no extra characters, no text overlays.\n{characterPromptBlocks}\nPreserve: {preserve}. Do not change background geometry or lights.\n{videoPrompt}"
+    "characterImage": "Photorealistic cinematic character reference portrait, vertical 9:16, waist-up, facing the camera, arms at the sides, plain warm-grey studio backdrop, soft light, tack-sharp eyes, natural skin. Plain fitted t-shirt, no scene costume. Exactly one person. No text, no extra fingers.\nIgnore the attached image. Generate a new identity still from the description.\n{characterPromptBlock}",
+    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. Picture 1 is a blank canvas — ignore it. Adult scale, listed people only, each once, two arms each. No collage, no extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneVideo": "Animate the start frame. Keep faces, wardrobe, and set as they appear in the image. Motion and spoken lines only. Diegetic sound, no music, no narration, no extra characters.\n{videoPrompt}"
   },
   "episodes": [
     {
@@ -212,7 +198,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Medium shot at the bakery door, adult scale, feet on the wet cobblestones. DAMIAN crouched at the third terracotta pot, lifting a small silver key from under it. MARA standing beside him, eyes wide, one hand at her chest. One Mara, one Damian. Two arms and two hands each. Orange streetlamp, wet stone.",
+          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Medium shot at the bakery door, DAMIAN crouched at the third terracotta pot, lifting a small silver key from under it. MARA standing beside him, eyes wide, one hand at her chest. Orange streetlamp, wet stone.",
           "videoPrompt": "Damian bends, lifts the third flowerpot without searching, and holds up a small silver key. Mara stares, stunned, whispering: 'Nobody knows that key is there. How do you?' Damian turns the key over in his fingers and says nothing as rain begins to fall.",
           "durationSeconds": 6
         }
@@ -242,7 +228,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the dim study. MARA holds a small silver photo frame in both hands at chest height, looking down at it. DAMIAN stands at the window. The photograph is too small to read faces. One Mara, one Damian. Two arms and two hands each. Green banker's lamp, city lights.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the dim study. MARA holds a small silver photo frame in both hands at chest height, looking down at it. DAMIAN stands at the window. The photograph is too small to read faces. Green banker's lamp, city lights.",
           "videoPrompt": "Slow push-in on Mara's hands and face as she lifts the silver frame from the shelf. Her breath catches. She whispers: 'Dad?' Her thumb traces the older man's face; tears gather.",
           "durationSeconds": 6
         },
@@ -253,7 +239,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the study. MARA holds the silver photo frame against her chest with both hands, head turned toward DAMIAN in the doorway, backlit by hallway light. Damian's arms hang at his sides. One Mara, one Damian. Two arms and two hands each. Green lamp glow.",
+          "imagePrompt": "MARA in an oversized cream cable-knit sweater and grey leggings, hair down, silver band. DAMIAN in a charcoal crew-neck sweater with sleeves pushed to the elbows and black trousers. Medium shot in the study. MARA holds the silver photo frame against her chest with both hands, head turned toward DAMIAN in the doorway, backlit by hallway light. Damian's arms hang at his sides. Green lamp glow.",
           "videoPrompt": "Damian appears in the doorway, motionless. Cold and controlled: 'Put that down.' Mara turns, clutching the frame to her chest: 'That's my father. And that's you.' He doesn't answer; the silence stretches, the lamp humming.",
           "durationSeconds": 6
         },

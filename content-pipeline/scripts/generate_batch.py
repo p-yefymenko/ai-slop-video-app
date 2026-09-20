@@ -498,10 +498,6 @@ def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
     return render_prompt(show["prompts"][key], values)
 
 
-def character_blocks(characters: list[dict]) -> str:
-    return "\n".join(character["promptBlock"].strip() for character in characters)
-
-
 def write_black_png(path: Path, width: int = 768, height: int = 1152) -> None:
     raw = b"".join(b"\x00" + (b"\x00\x00\x00" * width) for _ in range(height))
 
@@ -538,8 +534,12 @@ def load_show(path: Path) -> dict:
         cleaned_chars[str(cid)] = {
             "id": str(cid),
             "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
-            "imagePrompt": require_text(character, "imagePrompt", f"characters[{cid!r}]"),
         }
+        if character.get("imagePrompt"):
+            raise SystemExit(
+                f"characters[{cid!r}] has imagePrompt; identity is promptBlock only "
+                "(portrait framing lives in prompts.characterImage)."
+            )
     show["characters"] = cleaned_chars
     if "locationCharacters" in show:
         raise SystemExit(
@@ -556,8 +556,12 @@ def load_show(path: Path) -> dict:
         cleaned_locs[str(loc_id)] = {
             "id": str(loc_id),
             "promptBlock": require_text(loc, "promptBlock", f"locations[{loc_id!r}]"),
-            "preserve": require_text(loc, "preserve", f"locations[{loc_id!r}]"),
         }
+        if loc.get("preserve"):
+            raise SystemExit(
+                f"locations[{loc_id!r}] has preserve; the start still locks the set. "
+                "Put motion in videoPrompt only."
+            )
     show["locations"] = cleaned_locs
     prompts = show.get("prompts")
     if not isinstance(prompts, dict):
@@ -638,10 +642,6 @@ def start_still_path(out_dir: Path, scene_number: int) -> Path:
 
 def resolve_location(show: dict, scene: dict) -> dict:
     return show["locations"][scene["locationId"]]
-
-
-def resolve_characters(show: dict, scene: dict) -> list[dict]:
-    return [show["characters"][character_id] for character_id in scene["characterIds"]]
 
 
 def present(path: Path) -> bool:
@@ -896,7 +896,6 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                 "characterImage",
                 {
                     "characterPromptBlock": character["promptBlock"],
-                    "imagePrompt": character["imagePrompt"],
                 },
             )
             run_qwen_image(
@@ -935,7 +934,6 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
             video_path = out_dir / f"scene_{scene_number:02d}.mp4"
             dest = still_path if stage == "frames" else video_path
             location = resolve_location(show, scene)
-            characters = resolve_characters(show, scene)
             names = ", ".join(scene["characterIds"])
             print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
             if present(dest):
@@ -955,7 +953,6 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                     show,
                     "sceneStill",
                     {
-                        "characterPromptBlocks": character_blocks(characters),
                         "locationPromptBlock": location["promptBlock"],
                         "imagePrompt": scene["imagePrompt"],
                     },
@@ -972,8 +969,6 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                     show,
                     "sceneVideo",
                     {
-                        "characterPromptBlocks": character_blocks(characters),
-                        "preserve": location["preserve"],
                         "videoPrompt": scene["videoPrompt"],
                     },
                 )

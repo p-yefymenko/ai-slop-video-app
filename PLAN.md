@@ -119,7 +119,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still from text (blank canvas + character blocks + shared location block + shot prompt). Do not attach portraits or location PNGs — Qwen collages extra images and pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still from text (blank canvas + shared location block + shot prompt). Character bibles are not pasted into scene stills. Do not attach portraits or location PNGs — Qwen collages extra images and pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video (motion prompt only; the PNG locks look), with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -239,20 +239,18 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   "title": "Midnight Heiress",
   "characters": {
     "elena-heiress": {
-      "promptBlock": "Elena, a woman in her late 20s, navy wool coat over a metallic bronze wrap top.",
-      "imagePrompt": "Vertical head-and-shoulders identity still on a solid black background, looking at camera."
+      "promptBlock": "Elena, late 20s, dark hair, navy wool coat over a metallic bronze wrap top."
     }
   },
   "locations": {
     "mansion-gates": {
-      "promptBlock": "Grey stone mansion, open iron gates, dusk, gravel drive.",
-      "preserve": "the same mansion, gates, dusk light, gravel drive"
+      "promptBlock": "Grey stone mansion, open iron gates, dusk, gravel drive."
     }
   },
   "prompts": {
-    "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}\n{imagePrompt}",
-    "sceneStill": "Picture 1 is a blank canvas. Ignore it and generate the shot from text. One continuous photograph, adult scale, listed people only.\n{characterPromptBlocks}\n{locationPromptBlock}\n{imagePrompt}",
-    "sceneVideo": "{characterPromptBlocks}\nPreserve: {preserve}. Do not change background geometry or lights.\n{videoPrompt}"
+    "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}",
+    "sceneStill": "Picture 1 is a blank canvas. Ignore it and generate the shot from text.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneVideo": "Animate the start frame. Motion and spoken lines only.\n{videoPrompt}"
   },
   "episodes": [
     {

@@ -10,9 +10,10 @@ One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScr
 
 That file is the whole show: characters, locations (text only), prompt templates, and episodes. `content:frames` generates character stills from it, then each scene still from text.
 
-- `locations` is a shared set description (`promptBlock` + `preserve`). No location PNGs.
-- `characterIds` is who fills the frame at the same size (at most two), not everyone who exists in the scene. A distant or over-the-shoulder person is a different still.
-- `imagePrompt` is one camera, one scale, wardrobe for those ids only. Do not write coverage (tiny in background, OTS, hand in the foreground, close-up of one face while listing two).
-- Do not attach character portraits or location stills on a scene still. Extra images make Qwen collage.
+- Character `promptBlock` is identity landmarks for the character still only. It is not pasted into scene stills or video.
+- `locations.promptBlock` is the set, injected once. Do not rewrite the room in `imagePrompt`.
+- `characterIds` is who fills the frame at the same size (at most two), not everyone in the scene.
+- `imagePrompt` is camera, wardrobe, blocking. `videoPrompt` is motion and lines. The start PNG locks look for LTX — do not redescribe faces or the set there.
+- Do not attach character portraits or location stills on a scene still.
 - Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
 - Valid show JSON only unless the human asked for a plan first.
