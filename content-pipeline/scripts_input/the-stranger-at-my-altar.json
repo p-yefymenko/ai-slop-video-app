@@ -55,7 +55,7 @@
   },
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
-    "sceneStill": "The attached pictures are identity references in this exact order: {characterIds}. Picture 1 is the first named person; Picture 2, if attached, is the second. Create one new photorealistic vertical 9:16 photograph. Preserve each referenced face, hair, apparent age, and skin tone. Show each named person exactly once. Do not copy the reference backdrop, shirt, pose, or gaze. {locationPromptBlock} {imagePrompt}",
+    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. {locationPromptBlock} {imagePrompt}",
     "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
   },
   "episodes": [

@@ -62,7 +62,9 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
+    "content:frame": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
+    "content:clip": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:render": "pnpm run content:frames && pnpm run content:generate",
     "content:archive": "node scripts/archive-content-output.cjs",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
@@ -252,7 +254,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   },
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
-    "sceneStill": "The attached pictures are identity references in this exact order: {characterIds}. Picture 1 is the first named person; Picture 2, if attached, is the second. Create one new photorealistic vertical 9:16 photograph. Preserve each referenced face, hair, apparent age, and skin tone. Show each named person exactly once. Do not copy the reference backdrop, shirt, pose, or gaze. {locationPromptBlock} {imagePrompt}",
+    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. {locationPromptBlock} {imagePrompt}",
     "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
   },
   "episodes": [
@@ -291,6 +293,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 - `videoPrompt` advances one meaningful action from that frame, with one speaker and one camera behavior. Do not alternate speakers or repeat the still.
 - `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Prefer 4-second cuts for ReelShort pacing.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
+- Iterate on one shot with `pnpm run content:frame -- --show <show-id> --episode <n> --scene <n>`, then test only its video with the same filters through `pnpm run content:clip`. A partial clip render never overwrites `episode.mp4`.
 
 
 ## Deployment

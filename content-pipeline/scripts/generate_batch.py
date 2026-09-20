@@ -966,7 +966,7 @@ def run_qwen_image(workflow_template: dict, dest: Path, prompt: str, mode: str, 
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
-def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
+def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool = False) -> None:
     show_id = show["id"]
     started = time.time()
     generated = 0
@@ -1043,6 +1043,11 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                     show,
                     "sceneStill",
                     {
+                        "referenceMap": "; ".join(
+                            f"Picture {index} = {character_id}"
+                            for index, character_id in enumerate(scene["characterIds"], start=1)
+                        ),
+                        "characterCount": str(len(scene["characterIds"])),
                         "characterIds": ", ".join(scene["characterIds"]),
                         "locationPromptBlock": location["promptBlock"],
                         "imagePrompt": scene["imagePrompt"],
@@ -1073,7 +1078,7 @@ def generate_show(show: dict, workflow_template: dict, stage: str) -> None:
                 scene_files.append(dest)
             episode_generated += 1
             generated += 1
-        if stage == "video":
+        if stage == "video" and not partial:
             episode_mp4 = out_dir / "episode.mp4"
             concat_videos(scene_files, episode_mp4)
             print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
@@ -1125,16 +1130,44 @@ def main() -> None:
         description="Render show stills (Qwen-Image-Edit) or videos (LTX) via ComfyUI."
     )
     parser.add_argument("--stage", choices=("frames", "video"), default="video")
+    parser.add_argument("--show", help="Render only this show id")
+    parser.add_argument("--episode", type=int, help="Render only this episode number")
+    parser.add_argument("--scene", type=int, help="Render only this scene number (requires --episode)")
     args = parser.parse_args()
+    if args.scene is not None and args.episode is None:
+        parser.error("--scene requires --episode")
     load_dotenv()
     workflow_path = QWEN_WORKFLOW_PATH if args.stage == "frames" else LTX_WORKFLOW_PATH
     if not workflow_path.is_file():
         raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
     workflow_template = load_json(workflow_path)
     scripts = sorted(SCRIPTS_DIR.glob("*.json"))
+    if args.show:
+        scripts = [path for path in scripts if path.stem == args.show]
     if not scripts:
-        raise SystemExit(f"No show JSON files found in {SCRIPTS_DIR} (expected <id>.json)")
+        target = f" for show {args.show!r}" if args.show else ""
+        raise SystemExit(f"No show JSON files found{target} in {SCRIPTS_DIR}")
     shows = [load_show(path) for path in scripts]
+    for show in shows:
+        if args.episode is not None:
+            show["episodes"] = [
+                episode
+                for episode in show["episodes"]
+                if episode["episodeNumber"] == args.episode
+            ]
+            if not show["episodes"]:
+                raise SystemExit(f"Show {show['id']!r} has no episode {args.episode}")
+        if args.scene is not None:
+            scenes = [
+                scene
+                for scene in show["episodes"][0]["scenes"]
+                if scene["sceneNumber"] == args.scene
+            ]
+            if not scenes:
+                raise SystemExit(
+                    f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}"
+                )
+            show["episodes"][0]["scenes"] = scenes
     needs_comfy = stage_needs_comfy(shows, args.stage)
     if needs_comfy:
         if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
@@ -1159,7 +1192,12 @@ def main() -> None:
         )
     for show, script_path in zip(shows, scripts):
         print(f"{'Stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
-        generate_show(show, workflow_template, args.stage)
+        generate_show(
+            show,
+            workflow_template,
+            args.stage,
+            partial=args.scene is not None,
+        )
 
 
 if __name__ == "__main__":

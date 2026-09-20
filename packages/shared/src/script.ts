@@ -53,18 +53,22 @@ export type ShowPrompts = {
    */
   characterImage: string;
   /**
-   * Qwen-Image-Edit-2511 template. State that Picture 1 and optional Picture 2 are identity
-   * references, preserve their faces, and create one new photograph. Map references in the
-   * same order as `{characterIds}`; then include the environment and shot description.
+   * Qwen-Image-Edit-2511 template. Give an exact per-shot picture map and output person
+   * count. Never mention a nonexistent Picture 2: the four-step model may duplicate Picture
+   * 1 when given conditional multi-picture wording.
    *
    * Exact template:
-   * `The attached pictures are identity references in this exact order: {characterIds}.
-   * Picture 1 is the first named person; Picture 2, if attached, is the second. Create one
-   * new photorealistic vertical 9:16 photograph. Preserve each referenced face, hair,
-   * apparent age, and skin tone. Show each named person exactly once. Do not copy the
-   * reference backdrop, shirt, pose, or gaze. {locationPromptBlock} {imagePrompt}`
+   * `The attached identity pictures map exactly as follows: {referenceMap} Transform those
+   * people into one new photorealistic vertical 9:16 scene. The finished scene contains
+   * exactly {characterCount} visible people: {characterIds}. Each appears once only. No
+   * duplicates, twins, background people, portraits, paintings, mirrors, or reflections.
+   * Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the
+   * reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal
+   * identity portrait; obey the stated eyeline and placement. {locationPromptBlock}
+   * {imagePrompt}`
    *
-   * `{characterIds}` `{locationPromptBlock}` `{imagePrompt}`
+   * `{referenceMap}` `{characterCount}` `{characterIds}` `{locationPromptBlock}`
+   * `{imagePrompt}`
    */
   sceneStill: string;
   /**
