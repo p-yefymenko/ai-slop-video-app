@@ -11,7 +11,7 @@ One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScr
 That file is the whole show: characters, locations (text only), prompt templates, and episodes. `content:frames` generates character stills from it, then each scene still from those portraits plus location text.
 
 - Character `promptBlock` is identity landmarks for the character still only. Scene stills attach that PNG, not this text.
-- `locations.promptBlock` is materials and light next to the people. Not a viewpoint. Not a space you look down.
+- `locations.promptBlock` is materials and light on the people. Not a camera looking at a building or a room.
 - `characterIds` is at most two faces at identity-still scale, Picture 1 then Picture 2. Far, tiny, or over-the-shoulder is a different scene.
 - `imagePrompt` is this camera, wardrobe, blocking. People waist-up to head-and-shoulders. The set is immediately around them. No room-wide, no far-end camera, no crop tighter than the portraits.
 - `videoPrompt` is motion and lines. Do not redescribe faces or the set, and do not invent people who are not in the still.

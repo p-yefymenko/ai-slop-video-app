@@ -5,7 +5,7 @@ export type ShowCharacter = {
   promptBlock: string;
 };
 
-/** Materials and light next to the people. Not a viewpoint. Not a space you look down. */
+/** Materials and light on the people. Not a camera looking at a building or a room. */
 export type ShowLocation = {
   promptBlock: string;
 };

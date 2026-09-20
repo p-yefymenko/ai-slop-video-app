@@ -274,7 +274,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 ```
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
-- `locations` is materials and light next to the people, reused verbatim. Not a viewpoint. Not a space you look down. Scenes point at it with `locationId`.
+- `locations` is materials and light on the people, reused verbatim. Not a camera looking at a building or a room. Scenes point at it with `locationId`.
 - `characterIds` is who fills the still at roughly the same size as the identity portraits (at most two), in Qwen Picture 1 / Picture 2 order. A far, tiny, or over-the-shoulder figure is a different scene.
 - `imagePrompt` is this camera, wardrobe, blocking. Named people stay waist-up to head-and-shoulders. Do not write a wide of the whole room or a crop tighter than the portraits.
 - `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.

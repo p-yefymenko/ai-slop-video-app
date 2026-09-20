@@ -35,7 +35,7 @@
       "promptBlock": "SET: the rear seat of a black luxury sedan at night, cream leather seats, a soft amber dome light, rain on the windows with gold and blue streetlights streaking past."
     },
     "bakery_front": {
-      "promptBlock": "SET: the street front of a small old-fashioned corner bakery at night: dark green painted wood storefront, gold-leaf script above the window reading Ellison & Daughter, warm dim light inside, a white paper legal notice with a red stamp taped to the glass door (text not legible), wet cobblestone sidewalk reflecting an orange sodium streetlamp, three terracotta herb pots lined up beside the door."
+      "promptBlock": "SET: dark green painted wood and glass immediately behind two standing people, warm interior light on their backs, orange streetlamp on their faces, wet stone underfoot. Materials on the bodies. No readable signage."
     },
     "penthouse_living": {
       "promptBlock": "SET: a penthouse living room on a bright morning: floor-to-ceiling windows over a hazy city skyline, pale oak floors, a low charcoal sofa, a white marble kitchen island with a stainless espresso machine, cool soft daylight. Materials and light only — not a wide of an empty room."
@@ -193,7 +193,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Waist-up two-shot at the bakery door, both faces the same size as the identity stills. MARA palm flat against the glass beside the white legal notice. DAMIAN beside her in the same plane, not behind her as a speck. Orange streetlamp, wet cobblestones.",
+          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Waist-up two-shot, both faces the same size as the identity stills. They stand outside in front of the door. MARA's palm on the glass from outside; a white notice is taped to the glass beside her hand — she is not holding it. DAMIAN beside her in the same plane, also outside. Green wood around them.",
           "videoPrompt": "Slow push-in from behind as Mara lays her palm against the glass beside the notice. Voice breaking: 'My father built this with his hands. Vance takes it Monday.' Damian steps up beside her, peels the notice off the door and tears it in two: 'Not anymore.'",
           "durationSeconds": 8
         },
@@ -204,7 +204,7 @@
             "mara",
             "damian"
           ],
-          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Medium shot at the bakery door, DAMIAN crouched at the third terracotta pot, lifting a small silver key from under it. MARA standing beside him, eyes wide, one hand at her chest. Orange streetlamp, wet stone.",
+          "imagePrompt": "MARA in her ivory lace gown with Damian's black suit jacket over her shoulders, hair loosening, plain silver band. DAMIAN in a white shirt with a loosened black tie and sleeves rolled to the forearms. Waist-up two-shot outside the door, both faces the same size as the identity stills. DAMIAN bent into the lower frame lifting a small silver key from under a terracotta pot, his face still large. MARA beside him in the same plane. Green wood around them, not a wide of the shop.",
           "videoPrompt": "Damian bends, lifts the third flowerpot without searching, and holds up a small silver key. Mara stares, stunned, whispering: 'Nobody knows that key is there. How do you?' Damian turns the key over in his fingers and says nothing as rain begins to fall.",
           "durationSeconds": 6
         }
