@@ -15,8 +15,8 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + audio VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json` and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating.
-8. [ ] **Write a show JSON.** One file per show at `content-pipeline/scripts_input/<id>.json` (`ShowScript` in `packages/shared/src/script.ts`). Put characters, location-character plates, every prompt template, and episodes in that file. `pnpm run content:frames` generates character stills from it — no handmade PNGs in `characters/`.
-9. [ ] Run `pnpm run content:frames`. Review `characters/`, `location-characters/`, then `scene_*_start.png` in `content-pipeline/output/<show>/`. Keep, replace, or delete any file you do not like (delete a plate and its scene stills to regenerate them). Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
+8. [ ] **Write a show JSON.** One file per show at `content-pipeline/scripts_input/<id>.json` (`ShowScript` in `packages/shared/src/script.ts`). Put characters, locations (text only), every prompt template, and episodes in that file. `pnpm run content:frames` generates character stills from it — no handmade PNGs in `characters/`.
+9. [ ] Run `pnpm run content:frames`. Review `characters/` then `scene_*_start.png` in `content-pipeline/output/<show>/`. Keep, replace, or delete any file you do not like. Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
 12. [ ] Upload the build to a Closed Testing track in Play Console
@@ -119,7 +119,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): first a location+character plate from the character PNG, then a per-scene edit of that plate from `imagePrompt` so pose and props are already in frame 0. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still from text (blank canvas + character blocks + shared location block + shot prompt). Do not attach portraits or location PNGs — Qwen collages extra images and pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video, with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -200,15 +200,14 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then location-character plates, then each scene still. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped; delete a file to regenerate it.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped; delete a file to regenerate it.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
 `content:frames` writes:
 
-1. Character stills — `output/<show>/characters/<id>.png`
-2. Location-character plates — `output/<show>/location-characters/<id>.png`
-3. Scene stills — `output/<show>/<episode>/scene_XX_start.png` (edit of that plate)
+1. Character stills — `output/<show>/characters/<id>.png` (human review; not fed back into Qwen)
+2. Scene stills — `output/<show>/<episode>/scene_XX_start.png` (blank canvas + text; extra images make Qwen collage)
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
@@ -224,7 +223,7 @@ reelshort-clone/
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
 5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
-7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/`, `location-characters/`, then each episode’s `scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
+7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/` and each episode’s `scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
 
 `content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 
@@ -244,18 +243,15 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
       "imagePrompt": "Vertical head-and-shoulders identity still on a solid black background, looking at camera."
     }
   },
-  "locationCharacters": {
-    "mansion-gates-elena-heiress": {
-      "characterIds": ["elena-heiress"],
-      "promptBlock": "Grey stone mansion, open iron gates, dusk. The woman stands between the gates.",
-      "preserve": "the same mansion, gates, dusk light, the woman standing between the gates",
-      "platePrompt": "Medium-wide shot. Correct adult scale, feet on the ground, not looking at camera."
+  "locations": {
+    "mansion-gates": {
+      "promptBlock": "Grey stone mansion, open iron gates, dusk, gravel drive.",
+      "preserve": "the same mansion, gates, dusk light, gravel drive"
     }
   },
   "prompts": {
     "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}\n{imagePrompt}",
-    "locationCharacter": "Picture 1 is a face identity reference only.\n{characterPromptBlocks}\n{locationPromptBlock}\n{platePrompt}",
-    "sceneStill": "Picture 1 is the location-character plate. Picture 2 is a face identity reference.\n{characterPromptBlocks}\nKeep {preserve}. Change only the blocking below.\n{imagePrompt}",
+    "sceneStill": "Picture 1 is a blank canvas. Ignore it and generate the shot from text. One continuous photograph, adult scale, listed people only.\n{characterPromptBlocks}\n{locationPromptBlock}\n{imagePrompt}",
     "sceneVideo": "{characterPromptBlocks}\nPreserve: {preserve}. Do not change background geometry or lights.\n{videoPrompt}"
   },
   "episodes": [
@@ -267,8 +263,9 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationCharacterId": "mansion-gates-elena-heiress",
-          "imagePrompt": "Elena stands between the open gates, eyes on the house, not looking at camera.",
+          "locationId": "mansion-gates",
+          "characterIds": ["elena-heiress"],
+          "imagePrompt": "Elena stands between the open gates in a navy wool coat, eyes on the house, not looking at camera.",
           "videoPrompt": "Elena looks up toward the mansion. She says, \"Ten years.\" Camera static. Outdoor wind, no music.",
           "durationSeconds": 6
         }
@@ -279,7 +276,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 ```
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
-- `locationCharacters` is a set plus whoever stands in it (`characterIds` can be more than one). Scenes point at it with `locationCharacterId`.
+- `locations` is a shared set description, reused verbatim. Scenes point at it with `locationId` and list who is in the shot with `characterIds` (at most two).
 - `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.
 
 
@@ -297,7 +294,7 @@ See the **Command Interface** section above — `pnpm run setup` provisions R2/D
 - [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
 - [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
 - [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume one `ShowScript` JSON per show (`scripts_input/<id>.json`: characters, locationCharacters, prompt templates, episodes) and the R2 binding/upload logic in the Worker.
+- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume one `ShowScript` JSON per show (`scripts_input/<id>.json`: characters, locations, prompt templates, episodes) and the R2 binding/upload logic in the Worker.
 - [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
 - [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
 - [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).

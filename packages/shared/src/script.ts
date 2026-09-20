@@ -5,20 +5,17 @@ export type ShowCharacter = {
   imagePrompt: string;
 };
 
-export type LocationCharacter = {
-  characterIds: string[];
+/** Shared set bible. Text only — do not generate or attach a location PNG. */
+export type ShowLocation = {
   promptBlock: string;
   preserve: string;
-  platePrompt: string;
 };
 
 /** Templates sent to Qwen/LTX. Include the `{placeholders}` or the rest of this JSON is ignored. */
 export type ShowPrompts = {
   /** `{characterPromptBlock}` `{imagePrompt}` */
   characterImage: string;
-  /** `{characterPromptBlocks}` `{locationPromptBlock}` `{platePrompt}` */
-  locationCharacter: string;
-  /** `{characterPromptBlocks}` `{preserve}` `{imagePrompt}` */
+  /** Picture 1 is blank; no portraits or location stills. `{characterPromptBlocks}` `{locationPromptBlock}` `{imagePrompt}` */
   sceneStill: string;
   /** `{characterPromptBlocks}` `{preserve}` `{videoPrompt}` */
   sceneVideo: string;
@@ -26,7 +23,10 @@ export type ShowPrompts = {
 
 export type ScriptScene = {
   sceneNumber: number;
-  locationCharacterId: string;
+  locationId: string;
+  /** At most two people on camera. Extra portrait photos make Qwen collage. */
+  characterIds: string[];
+  /** Full shot: camera, wardrobe, blocking. People and room are generated together from text. */
   imagePrompt: string;
   videoPrompt: string;
   durationSeconds: number;
@@ -44,7 +44,7 @@ export type ShowScript = {
   id: string;
   title: string;
   characters: Record<string, ShowCharacter>;
-  locationCharacters: Record<string, LocationCharacter>;
+  locations: Record<string, ShowLocation>;
   prompts: ShowPrompts;
   episodes: ShowEpisode[];
 };

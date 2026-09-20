@@ -8,8 +8,10 @@ alwaysApply: false
 
 One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Do not invent a different schema.
 
-That file is the whole show: characters, location-character plates, prompt templates, and episodes. `content:frames` generates character images from it.
+That file is the whole show: characters, locations (text only), prompt templates, and episodes. `content:frames` generates character stills from it, then each scene still from text.
 
-- `locationCharacters` is a set plus the people in it (`characterIds` can be more than one). Scenes use `locationCharacterId`.
-- Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `locationCharacter`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
+- `locations` is a shared set description (`promptBlock` + `preserve`). No location PNGs. Qwen pastes people into location stills at the wrong scale.
+- Scenes use `locationId` plus `characterIds` (at most two). `imagePrompt` is the full shot: camera, wardrobe, and blocking.
+- Do not attach character portraits or location stills on a scene still. Extra images make Qwen collage.
+- Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
 - Valid show JSON only unless the human asked for a plan first.

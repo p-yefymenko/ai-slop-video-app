@@ -65,10 +65,10 @@ export const COIN_PACKAGES: CoinPackage[] = [
 ];
 
 export type {
-  LocationCharacter,
   ScriptScene,
   ShowCharacter,
   ShowEpisode,
+  ShowLocation,
   ShowPrompts,
   ShowScript,
 } from "./script";
