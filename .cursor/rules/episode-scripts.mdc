@@ -8,12 +8,10 @@ alwaysApply: false
 
 One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Do not invent a different schema.
 
-That file is the whole show: characters, locations (text only), prompt templates, and episodes. `content:frames` generates character stills from it, then each scene still from those portraits plus location text.
-
-- Character `promptBlock` is identity landmarks for the character still only. Scene stills attach that PNG, not this text.
-- `locations.promptBlock` is materials and light on the people. Not a camera looking at a building or a room.
-- `characterIds` is at most two. Each appears once. Far, tiny, or over-the-shoulder is another scene.
-- `imagePrompt` is this camera, wardrobe, blocking, and where they look. Faces at identity-still scale. One pose per listed person. Set behind them. Nothing between the camera and a listed face.
-- `videoPrompt` is same camera as the start frame, small motion, spoken lines with how the voice sounds. Do not restage, do not redescribe faces or the set, and do not invent people who are not in the still.
-- Every instruction the pipeline sends to Qwen or LTX comes from `prompts` (`characterImage`, `sceneStill`, `sceneVideo`) with `{placeholders}` filled from the matching fields. Do not hide prompts in Python.
+- Character `promptBlock` is face and body for the identity still. Scene stills attach that PNG, not this text.
+- `locations.promptBlock` is a short environment clause (where they are). Not a camera.
+- `characterIds` is at most two: Qwen Picture 1, then Picture 2.
+- `imagePrompt` is who is where, facing whom, wardrobe. Identity is the PNG.
+- `videoPrompt` is what happens next: action, camera, audio. Spoken lines in quotes with voice quality and one acting beat between phrases. Audio at the end. Do not redescribe the start frame.
+- Every instruction sent to Qwen or LTX comes from `prompts` with `{placeholders}` filled. Do not hide prompts in Python.
 - Valid show JSON only unless the human asked for a plan first.

@@ -1,11 +1,11 @@
 /** Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show. A chatbot can write this file from these comments. */
 
 export type ShowCharacter = {
-  /** Face and body landmarks for the identity still. Scene stills use that PNG, not this text. */
+  /** Face and body for the identity still. Scene stills attach that PNG, not this text. */
   promptBlock: string;
 };
 
-/** Materials and light on the people. Not a camera looking at a building or a room. */
+/** Short environment clause for the Qwen edit — where they are. Not a camera. */
 export type ShowLocation = {
   promptBlock: string;
 };
@@ -14,27 +14,29 @@ export type ShowLocation = {
 export type ShowPrompts = {
   /** Identity still on a blank canvas. `{characterPromptBlock}` */
   characterImage: string;
-  /** Identity PNGs in `characterIds` order. `{characterIds}` `{locationPromptBlock}` `{imagePrompt}` */
+  /**
+   * Qwen-Edit-2511: name Picture 1 / Picture 2, who is where, facing whom, in this place.
+   * `{characterIds}` `{locationPromptBlock}` `{imagePrompt}`
+   */
   sceneStill: string;
-  /** Same camera as the start PNG. Small motion. Spoken lines with how they sound. `{videoPrompt}` */
+  /**
+   * LTX I2V: from this image, what happens — action, camera, audio. Do not redescribe the frame.
+   * `{videoPrompt}`
+   */
   sceneVideo: string;
 };
 
 export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
-  /**
-   * At most two. Each appears once. Far, tiny, or over-the-shoulder is another scene.
-   */
+  /** At most two. Qwen Picture 1, then Picture 2. */
   characterIds: string[];
-  /**
-   * This camera, wardrobe, blocking, where they look. Faces at identity-still scale. One pose per listed person.
-   * Set behind them. Nothing between the camera and a listed face.
-   */
+  /** Who is where, facing whom, wardrobe. Identity is the PNG. */
   imagePrompt: string;
   /**
-   * Same camera as the start frame. Small motion. Spoken lines include how the voice sounds.
-   * Do not restage, do not redescribe faces or the set, do not invent people who are not in the still.
+   * What happens next: action, camera, audio.
+   * Spoken lines in quotes with voice quality; one acting beat (pause, gaze, breath) between phrases.
+   * Audio at the end. Do not redescribe the start frame.
    */
   videoPrompt: string;
   durationSeconds: number;

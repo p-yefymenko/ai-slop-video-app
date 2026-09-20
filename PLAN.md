@@ -249,8 +249,8 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   },
   "prompts": {
     "characterImage": "Ignore the attached image. Generate a new vertical identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person; if Picture 2 is attached, it is the second. Keep those faces at portrait scale (head-and-shoulders to waist). Do not collage. Do not shrink them into a wide of the room. Do not crop closer than the portraits.\n{locationPromptBlock}\n{imagePrompt}",
-    "sceneVideo": "Animate the start frame. Same camera. Small motion. Spoken lines: the voice performs the emotion written on each line.\n{videoPrompt}"
+    "sceneStill": "The attached pictures are identity stills in order: {characterIds}. Place the person from Picture 1, and Picture 2 if attached, into one new photograph. Preserve facial identity from those pictures.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneVideo": "From this image.\n{videoPrompt}"
   },
   "episodes": [
     {
@@ -274,10 +274,10 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 ```
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
-- `locations` is materials and light on the people, reused verbatim. Not a camera looking at a building or a room. Scenes point at it with `locationId`.
-- `characterIds` is at most two. Each appears once. A far, tiny, or over-the-shoulder figure is a different scene.
-- `imagePrompt` is this camera, wardrobe, blocking, and where they look. Faces at identity-still scale. One pose per listed person. Set behind them. Nothing between the camera and a listed face.
-- `videoPrompt` is the same camera as the start frame, small motion, spoken lines with how the voice sounds. Do not restage.
+- `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
+- `characterIds` is at most two: Qwen Picture 1, then Picture 2.
+- `imagePrompt` is who is where, facing whom, wardrobe. Identity is the PNG.
+- `videoPrompt` is what happens next: action, camera, audio. Spoken lines in quotes with voice quality and one acting beat between phrases. Do not redescribe the start frame.
 - `durationSeconds` is the video clip length (`8n+1` frames at 24 fps). `isFree` / `coinCost` map onto the `Episode` schema.
 
 

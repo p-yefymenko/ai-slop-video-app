@@ -55,8 +55,8 @@
   },
   "prompts": {
     "characterImage": "Photorealistic cinematic character reference portrait, vertical 9:16, waist-up, facing the camera, arms at the sides, plain warm-grey studio backdrop, soft light, tack-sharp eyes, natural skin. Plain fitted t-shirt, no scene costume. Exactly one person. No text, no extra fingers.\nIgnore the attached image. Generate a new identity still from the description.\n{characterPromptBlock}",
-    "sceneStill": "Photorealistic cinematic keyframe, vertical 9:16, one continuous photograph. The attached images are identity stills, in order: {characterIds}. Picture 1 is the first person — keep that face, not the portrait eyeline. If Picture 2 is attached, it is the second person — keep that face, not the portrait eyeline. Each listed person once, one pose. Do not collage. Do not add a second body of the same person. Keep faces large, similar scale to those portraits (head-and-shoulders to waist). Set behind them; nothing between the camera and a listed face. They look where the shot says, not at the camera unless the shot says so. Adult scale, two arms each. No extra faces, no text.\n{locationPromptBlock}\n{imagePrompt}",
-    "sceneVideo": "Animate the start frame. Same camera as the image. Small motion only. Do not restage, do not cut to a new angle. Keep faces, wardrobe, and set as they appear. Spoken lines: the voice performs the emotion written on each line. Diegetic sound, no music, no extra characters.\n{videoPrompt}"
+    "sceneStill": "The attached pictures are identity stills in order: {characterIds}. Place the person from Picture 1, and Picture 2 if attached, into one new photograph. Preserve facial identity from those pictures.\n{locationPromptBlock}\n{imagePrompt}",
+    "sceneVideo": "From this image.\n{videoPrompt}"
   },
   "episodes": [
     {
