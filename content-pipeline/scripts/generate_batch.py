@@ -658,6 +658,27 @@ def load_show(path: Path) -> dict:
                 )
             if dialogue and len(dialogue[0].split()) > 12:
                 raise SystemExit(f"{scene_label} dialogue exceeds 12 words: {dialogue[0]!r}")
+            motion_directions = re.sub(r'"[^"]*"', "", video_prompt)
+            image_prompt = require_text(scene, "imagePrompt", scene_label)
+            for hidden_id, hidden_character in cleaned_chars.items():
+                if hidden_id in character_ids:
+                    continue
+                aliases = {hidden_id, hidden_id.replace("-", " ")}
+                first_word = re.match(r"[A-Za-z][A-Za-z'-]*", hidden_character["promptBlock"])
+                if first_word:
+                    aliases.add(first_word.group(0))
+                for alias in aliases:
+                    if re.search(rf"\b{re.escape(alias)}\b", image_prompt, re.IGNORECASE):
+                        raise SystemExit(
+                            f"{scene_label} imagePrompt names absent character {hidden_id!r} "
+                            f"as {alias!r}. Use empty off-frame space for the eyeline instead."
+                        )
+                    if re.search(rf"\b{re.escape(alias)}\b", motion_directions, re.IGNORECASE):
+                        raise SystemExit(
+                            f"{scene_label} videoPrompt motion directions name absent character "
+                            f"{hidden_id!r} as {alias!r}. Use the frame edge or an anonymous "
+                            "off-screen voice instead."
+                        )
             duration_seconds = float(scene.get("durationSeconds") or 0)
             if duration_seconds not in (4.0, 6.0):
                 raise SystemExit(f"{scene_label} durationSeconds must be 4 or 6")
@@ -672,7 +693,7 @@ def load_show(path: Path) -> dict:
                     "characterIds": character_ids,
                     "speakerId": speaker_id,
                     "addresseeId": addressee_id,
-                    "imagePrompt": require_text(scene, "imagePrompt", scene_label),
+                    "imagePrompt": image_prompt,
                     "videoPrompt": video_prompt,
                     "durationSeconds": duration_seconds,
                 }

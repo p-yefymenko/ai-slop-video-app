@@ -55,7 +55,7 @@
   },
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
-    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. {locationPromptBlock} {imagePrompt}",
+    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
     "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
   },
   "episodes": [
@@ -75,8 +75,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Julian in a charcoal tuxedo, white shirt, black bow tie, and white rosebud boutonniere. He faces Mara just off-frame left with a cold, resolved expression; his arms are low out of frame, and he does not look at the camera.",
-          "videoPrompt": "Julian slightly lifts his chin and tells Mara, \"I won't marry you. I love Celeste.\" Camera locked. A low organ note fades.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Julian in a charcoal tuxedo, white shirt, black bow tie, and white rosebud boutonniere. He holds a three-quarter view toward empty space beyond frame left with a cold, resolved expression; his arms are low out of frame, and he does not look at the camera.",
+          "videoPrompt": "Julian slightly lifts his chin toward the left frame edge and says, \"I won't marry you. I love Celeste.\" Camera locked. A low organ note fades.",
           "durationSeconds": 4
         },
         {
@@ -89,7 +89,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "julian",
-          "imagePrompt": "Medium close-up of Mara in a fitted ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon. She holds a white peony bouquet at waist level and stares toward Julian off-frame right with stunned, glassy eyes, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in a fitted ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon. She holds a white peony bouquet at waist level and stares toward empty space beyond frame right with stunned, glassy eyes, never at the camera.",
           "videoPrompt": "Mara's grip tightens once around the bouquet as hurt reaches her face. One slow push-in. The chapel falls silent.",
           "durationSeconds": 4
         },
@@ -103,8 +103,8 @@
           "characterIds": ["celeste"],
           "speakerId": "celeste",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Celeste in a fitted champagne satin maid-of-honor dress, sleek copper-red hair down. She faces Mara off-frame left with restrained triumph, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Celeste lets a small smile appear and tells Mara, \"He chose me weeks ago.\" Camera locked. Fabric rustles softly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Celeste in a fitted champagne satin maid-of-honor dress, sleek copper-red hair down. She holds a three-quarter view toward empty space beyond frame left with restrained triumph, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Celeste lets a small smile appear toward the left frame edge and says, \"He chose me weeks ago.\" Camera locked. Fabric rustles softly.",
           "durationSeconds": 4
         },
         {
@@ -117,7 +117,7 @@
           "characterIds": ["vivienne"],
           "speakerId": null,
           "addresseeId": "celeste",
-          "imagePrompt": "Medium close-up of Vivienne seated in a dove-grey silk skirt suit, pearl necklace, and black leather gloves, a closed black clutch on her lap. She watches Celeste off-frame right with cool satisfaction, never looking at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Vivienne seated in a dove-grey silk skirt suit, pearl necklace, and black leather gloves, a closed black clutch on her lap. She watches empty space beyond frame right with cool satisfaction, never looking at the camera.",
           "videoPrompt": "Vivienne's mouth curves into one controlled, satisfied smile. Camera locked. A pew creaks softly.",
           "durationSeconds": 4
         },
@@ -131,8 +131,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in a black tailored suit, crisp white shirt, and slim black tie. He faces Mara at the altar off-frame right with steady resolve, shoulders squared, never looking at the camera.",
-          "videoPrompt": "Damian takes one measured step toward Mara and says, \"Then marry me instead.\" Camera locked. Chapel whispers rise.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a black tailored suit, crisp white shirt, and slim black tie. He holds a three-quarter view toward empty space beyond frame right with steady resolve, shoulders squared, never looking at the camera.",
+          "videoPrompt": "Damian takes one measured step toward the right frame edge and says, \"Then marry me instead.\" Camera locked. Chapel whispers rise.",
           "durationSeconds": 4
         },
         {
@@ -145,8 +145,8 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in the ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, white peony bouquet held at waist level. She faces Damian off-frame left with startled, searching eyes, never looking at the camera.",
-          "videoPrompt": "Mara turns her face fully toward Damian as shock becomes wary calculation. One slow push-in. The organ cuts out.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, white peony bouquet held at waist level. She holds a three-quarter view toward empty space beyond frame left with startled, searching eyes, never looking at the camera.",
+          "videoPrompt": "Mara turns her face fully toward the left frame edge as shock becomes wary calculation. One slow push-in. The organ cuts out.",
           "durationSeconds": 6
         }
       ]
@@ -167,8 +167,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in her ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, holding the white peony bouquet at waist level. She faces Damian off-frame left with guarded disbelief, never looking at the camera.",
-          "videoPrompt": "Mara steadies the bouquet and asks Damian, \"Why would I marry a stranger?\" Camera locked. Guests murmur softly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in her ivory lace wedding gown and chapel-length veil, chestnut hair in a low chignon, holding the white peony bouquet at waist level. She holds a three-quarter view toward empty space beyond frame left with guarded disbelief, never looking at the camera.",
+          "videoPrompt": "Mara steadies the bouquet, looks toward the left frame edge, and asks, \"Why would I marry a stranger?\" Camera locked. Guests murmur softly.",
           "durationSeconds": 4
         },
         {
@@ -181,8 +181,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in his black tailored suit, crisp white shirt, and slim black tie. He faces Mara off-frame right with calm certainty, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian gives Mara one firm nod and says, \"One year, and Vance releases your bakery.\" Camera locked. The chapel hush deepens.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in his black tailored suit, crisp white shirt, and slim black tie. He holds a three-quarter view toward empty space beyond frame right with calm certainty, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian gives one firm nod toward the right frame edge and says, \"One year, and Vance releases your bakery.\" Camera locked. The chapel hush deepens.",
           "durationSeconds": 4
         },
         {
@@ -195,8 +195,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She faces Damian off-frame left with wet eyes and newly firm resolve, never looking at the camera.",
-          "videoPrompt": "Mara raises her chin and tells Damian, \"Then I accept.\" Camera locked. Her veil softly settles.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She holds a three-quarter view toward empty space beyond frame left with wet eyes and newly firm resolve, never looking at the camera.",
+          "videoPrompt": "Mara raises her chin toward the left frame edge and says, \"Then I accept.\" Camera locked. Her veil softly settles.",
           "durationSeconds": 4
         },
         {
@@ -209,7 +209,7 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He faces Mara off-frame right with solemn warmth, hands low out of frame, never looking at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He holds a three-quarter view toward empty space beyond frame right with solemn warmth, hands low out of frame, never looking at the camera.",
           "videoPrompt": "Damian's expression softens and he vows, \"I'll protect what your father built.\" Camera locked. A quiet organ chord begins.",
           "durationSeconds": 4
         },
@@ -223,8 +223,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She faces Damian off-frame left with nervous resolve, never looking at the camera.",
-          "videoPrompt": "Mara holds Damian's gaze and says, \"I do.\" Camera locked. The organ chord swells.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in the ivory lace wedding gown and veil, white peony bouquet held at waist level. She holds a three-quarter view toward empty space beyond frame left with nervous resolve, never looking at the camera.",
+          "videoPrompt": "Mara holds her gaze toward the left frame edge and says, \"I do.\" Camera locked. The organ chord swells.",
           "durationSeconds": 4
         },
         {
@@ -237,8 +237,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He faces Mara off-frame right with unwavering commitment, never looking at the camera.",
-          "videoPrompt": "Damian inclines his head to Mara and says, \"I do.\" Camera locked. Guests gasp softly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Damian in the black tailored suit, white shirt, and slim black tie. He holds a three-quarter view toward empty space beyond frame right with unwavering commitment, never looking at the camera.",
+          "videoPrompt": "Damian inclines his head toward the right frame edge and says, \"I do.\" Camera locked. Guests gasp softly.",
           "durationSeconds": 4
         },
         {
@@ -251,8 +251,8 @@
           "characterIds": ["vivienne"],
           "speakerId": "vivienne",
           "addresseeId": "julian",
-          "imagePrompt": "Medium close-up of Vivienne in her dove-grey silk skirt suit, pearl necklace, and black leather gloves, closed black clutch on her lap. She turns toward Julian off-frame left with sudden alarm, never looking at the camera.",
-          "videoPrompt": "Vivienne's eyes widen as she whispers to Julian off-screen, \"Cross.\" Camera locked. A pew creaks.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Vivienne in her dove-grey silk skirt suit, pearl necklace, and black leather gloves, closed black clutch on her lap. She turns into a three-quarter view toward empty space beyond frame left with sudden alarm, never looking at the camera.",
+          "videoPrompt": "Vivienne's eyes widen as she looks toward the left frame edge and whispers, \"Cross.\" Camera locked. A pew creaks.",
           "durationSeconds": 6
         }
       ]
@@ -273,7 +273,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara seated in a wrinkled ivory lace wedding gown and crumpled veil, chestnut chignon loosening, faint mascara smudged, plain silver band on her left ring finger. An already-open black folder rests across her lap with an unreadable marked page facing only her; she looks down at it, not at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara seated in a wrinkled ivory lace wedding gown and crumpled veil, chestnut chignon loosening, faint mascara smudged, plain silver band on her left ring finger. An already-open black folder rests across her lap with an unreadable marked page facing only her; she looks down at it, not at the camera.",
           "videoPrompt": "Mara traces the edge of the marked clause once with one finger. Camera locked. Rain taps the window.",
           "durationSeconds": 4
         },
@@ -287,8 +287,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in the wrinkled ivory gown and crumpled veil, plain silver band visible. The already-open black folder stays across her lap with its unreadable page facing her; she looks toward Damian off-frame right with wary disbelief, never at the camera.",
-          "videoPrompt": "Mara lowers one corner of the open folder and asks Damian, \"Why does clause nine forbid love?\" Camera locked. Rain patters.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the same fitted ivory lace wedding gown with sweetheart neckline and crumpled chapel-length veil, chestnut chignon loosening, faint mascara smudged, plain silver band visible. The already-open black folder stays across her lap with its page angled away from the camera; she looks toward empty space beyond frame right with wary disbelief, never at the camera.",
+          "videoPrompt": "Mara lowers one corner of the open folder, looks toward the right frame edge, and asks, \"Why does clause nine forbid love?\" Camera locked. Rain patters.",
           "durationSeconds": 4
         },
         {
@@ -301,8 +301,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian seated in a black suit, white shirt, and slim black tie. He faces Mara off-frame left with controlled restraint, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian's jaw tightens and he tells Mara, \"Feelings make bargains dangerous.\" Camera locked. Tires hiss on wet pavement.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian seated in a black suit, white shirt, and slim black tie. He holds a three-quarter view toward empty space beyond frame left with controlled restraint, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian's jaw tightens as he looks toward the left frame edge and says, \"Feelings make bargains dangerous.\" Camera locked. Tires hiss on wet pavement.",
           "durationSeconds": 4
         },
         {
@@ -315,7 +315,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara outside the locked bakery in the ivory lace wedding gown with Damian's black suit jacket over her shoulders, chestnut hair loosening, plain silver band visible. She faces the locked door off-frame right with grief and dread, never looking at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara outside the locked bakery in the same fitted ivory lace wedding gown with sweetheart neckline and crumpled chapel-length veil, a black suit jacket over her shoulders, chestnut chignon loosening, faint mascara smudged, plain silver band visible. She faces the locked door off-frame right with grief and dread, never looking at the camera.",
           "videoPrompt": "Mara places one palm against the locked door as grief crosses her face. One slow push-in. Rain drips from the awning.",
           "durationSeconds": 4
         },
@@ -329,7 +329,7 @@
           "characterIds": ["damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in a white shirt with loosened black tie and sleeves rolled to his forearms. He already holds a small silver key at chest height toward Mara off-frame left, his expression guarded; he never looks at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a white shirt with loosened black tie and sleeves rolled to his forearms. He already holds a small silver key at chest height toward empty space beyond frame left, his expression guarded; he never looks at the camera.",
           "videoPrompt": "Damian raises the already-held key slightly into the streetlight. Camera locked. Rain falls softly.",
           "durationSeconds": 4
         },
@@ -343,15 +343,15 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up reaction of Mara in the ivory wedding gown under Damian's black jacket, chestnut hair loosening, plain silver band visible. She stares toward Damian and the key off-frame left with sharp suspicion, never looking at the camera.",
-          "videoPrompt": "Mara's grief hardens into suspicion as she asks Damian off-screen, \"How do you know that key?\" Camera locked. Rain strikes metal.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Mara in the same fitted ivory lace wedding gown with sweetheart neckline and crumpled chapel-length veil under a black suit jacket, chestnut chignon loosening, faint mascara smudged, plain silver band visible. She holds a three-quarter view toward empty space beyond frame left with sharp suspicion, never looking at the camera.",
+          "videoPrompt": "Mara's grief hardens into suspicion as she looks toward the left frame edge and asks, \"How do you know that key?\" Camera locked. Rain strikes metal.",
           "durationSeconds": 6
         }
       ]
     },
     {
       "episodeNumber": 4,
-      "title": "The Photograph",
+      "title": "His Recipe Book",
       "isFree": true,
       "coinCost": 0,
       "scenes": [
@@ -372,57 +372,57 @@
         {
           "sceneNumber": 2,
           "locationId": "penthouse_study",
-          "storyBeat": "Mara notices an old framed photograph among Damian's family keepsakes.",
-          "continuityIn": "Theo directed Mara to the study where family keepsakes are stored.",
-          "continuityOut": "Mara has spotted a silver photo frame whose image faces her.",
+          "storyBeat": "Mara notices her father's distinctive bakery recipe book among Damian's keepsakes.",
+          "continuityIn": "Theo directed Mara to the study where old family keepsakes are stored.",
+          "continuityOut": "Mara has spotted the worn recipe book she remembers from her father's bakery.",
           "shotType": "single",
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. A small silver photo frame rests on the desk with its old photograph facing Mara and turned away from the camera; she looks down at it in dawning recognition.",
-          "videoPrompt": "Mara leans her gaze closer to the photograph as recognition catches. Camera locked. The desk lamp hums.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. A closed, worn brown leather recipe notebook with a pressed white peony under its twine rests prominently on the desk; its cover has no writing. She looks down at it in dawning recognition.",
+          "videoPrompt": "Mara leans closer to the worn recipe notebook as recognition catches. Camera locked. The desk lamp hums.",
           "durationSeconds": 4
         },
         {
           "sceneNumber": 3,
           "locationId": "penthouse_study",
-          "storyBeat": "Mara lifts the discovered photograph and recognizes her father in it.",
-          "continuityIn": "Mara has spotted an old photograph facing her on Damian's desk.",
-          "continuityOut": "Mara holds the frame and knows it depicts her father.",
+          "storyBeat": "Mara lifts the recipe book and confirms it belonged to her father.",
+          "continuityIn": "Mara recognizes the worn recipe book from her father's bakery.",
+          "continuityOut": "Mara holds her father's recipe book and knows Damian kept it.",
           "shotType": "single",
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": null,
-          "imagePrompt": "Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She already holds the small silver frame low against her torso with the photograph facing only her; tears gather as she looks at it, never at the camera.",
-          "videoPrompt": "Mara raises the already-held frame to eye level and whispers, \"Dad?\" Camera locked. The lamp softly buzzes.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She holds the closed, worn brown leather recipe notebook with a pressed white peony under its twine against her torso; the cover has no writing. Tears gather as she looks down at it, never at the camera.",
+          "videoPrompt": "Mara draws the already-held notebook closer and whispers, \"Dad's recipe book.\" Camera locked. The lamp softly buzzes.",
           "durationSeconds": 4
         },
         {
           "sceneNumber": 4,
           "locationId": "penthouse_study",
-          "storyBeat": "Damian sees Mara holding the photograph and reacts with guarded pain.",
-          "continuityIn": "Mara holds the frame and has recognized her father.",
-          "continuityOut": "Mara sees that the photograph disturbs Damian deeply.",
+          "storyBeat": "Damian sees Mara holding the recipe book and reacts with guarded pain.",
+          "continuityIn": "Mara holds the recipe book she remembers from her father's bakery.",
+          "continuityOut": "Mara sees that the recipe book disturbs Damian deeply.",
           "shotType": "reaction",
           "characterIds": ["damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara and the frame off-screen left with sudden guarded pain, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian stops at the doorway and his jaw tightens at the photograph. One slow push-in. The room falls quiet.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He holds a three-quarter view toward empty space beyond frame left with sudden guarded pain, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian's jaw tightens as he notices the object beyond frame left. One slow push-in. The room falls quiet.",
           "durationSeconds": 4
         },
         {
           "sceneNumber": 5,
           "locationId": "penthouse_study",
           "storyBeat": "Mara accuses Damian of choosing her because he knew her father.",
-          "continuityIn": "Damian's reaction confirms the photograph matters to him.",
+          "continuityIn": "Damian's reaction confirms the recipe book matters to him.",
           "continuityOut": "Mara has directly accused Damian of knowing her identity all along.",
           "shotType": "single",
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She holds the silver frame against her torso with its photograph facing her and confronts Damian off-frame right with hurt anger, never looking at the camera.",
-          "videoPrompt": "Mara lowers the frame slightly and tells Damian, \"You knew my father. You chose me.\" Camera locked. The lamp hums.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She holds the closed, worn brown leather recipe notebook with a pressed white peony under its twine against her torso; its cover has no writing. She confronts empty space beyond frame right with hurt anger, never looking at the camera.",
+          "videoPrompt": "Mara lowers the notebook slightly, looks toward the right frame edge, and says, \"You knew my father. You chose me.\" Camera locked. The lamp hums.",
           "durationSeconds": 4
         },
         {
@@ -435,8 +435,8 @@
           "characterIds": ["damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up reaction of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with grief behind his guarded expression, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian drops his gaze for one long beat before meeting Mara's eyes again. One slow push-in. The clock ticks.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Damian in the charcoal sweater and black trousers. He holds a three-quarter view toward empty space beyond frame left with grief behind his guarded expression, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian drops his gaze for one long beat before looking toward the left frame edge again. One slow push-in. The clock ticks.",
           "durationSeconds": 4
         },
         {
@@ -449,8 +449,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with exposed grief and reluctant honesty, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian exhales once and admits to Mara, \"Your father saved my life.\" Camera locked. The clock ticks.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Damian in the charcoal sweater and black trousers. He holds a three-quarter view toward empty space beyond frame left with exposed grief and reluctant honesty, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian exhales once, looks toward the left frame edge, and admits, \"Your father saved my life.\" Camera locked. The clock ticks.",
           "durationSeconds": 6
         }
       ]
@@ -471,8 +471,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in an unstained emerald-green satin off-the-shoulder gown, emerald drop earrings, chestnut hair in glossy loose waves, and a plain silver band. She faces Damian off-frame right with poised tension, never looking at the camera.",
-          "videoPrompt": "Mara takes one step farther into the ballroom and tells Damian, \"Let them watch.\" Camera locked. Chandelier crystals chime.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in an unstained emerald-green satin off-the-shoulder gown, emerald drop earrings, chestnut hair in glossy loose waves, and a plain silver band. She holds a three-quarter view toward empty space beyond frame right with poised tension, never looking at the camera.",
+          "videoPrompt": "Mara takes one step farther into the ballroom, looks toward the right frame edge, and says, \"Let them watch.\" Camera locked. Chandelier crystals chime.",
           "durationSeconds": 4
         },
         {
@@ -499,8 +499,8 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "celeste",
-          "imagePrompt": "Medium close-up of Mara in the emerald satin gown now marked by one dark red wine stain across the bodice, emerald earrings, glossy chestnut waves, and silver band. She looks toward Celeste off-frame right with humiliated anger, never at the camera.",
-          "videoPrompt": "Mara looks down once at the stain, then back toward Celeste with controlled hurt. Camera locked. Ballroom chatter dips.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the emerald satin gown now marked by a broad translucent burgundy wine splash soaking only the green fabric, with diffuse wet edges and downward droplets; her skin is clean and uninjured. She wears emerald earrings, glossy chestnut waves, and a silver band, and looks toward empty space beyond frame right with humiliated anger, never at the camera.",
+          "videoPrompt": "Mara looks down once at the stain, then back toward the right frame edge with controlled hurt. Camera locked. Ballroom chatter dips.",
           "durationSeconds": 4
         },
         {
@@ -513,7 +513,7 @@
           "characterIds": ["mara", "damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in the stained emerald gown, emerald earrings, glossy chestnut waves, and silver band; Damian at frame right in a white tuxedo shirt, black bow tie, and black trousers, already holding his black tuxedo jacket open at Mara's shoulders. They look at each other, not at the camera.",
+          "imagePrompt": "Asymmetric chest-up two-shot: Mara at frame left in the emerald gown with a broad translucent burgundy wine splash limited to the green fabric, skin clean and uninjured, emerald earrings, glossy chestnut waves, and silver band; Damian at frame right in a white tuxedo shirt, black bow tie, and black trousers, already holding his black tuxedo jacket open at Mara's shoulders. They look at each other, not at the camera.",
           "videoPrompt": "Damian lowers the already-open jacket over Mara's shoulders, covering the stain. Camera locked. Satin rustles softly.",
           "durationSeconds": 4
         },
@@ -527,7 +527,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in the emerald satin gown with Damian's black tuxedo jacket now over her shoulders, the low stain mostly covered, emerald earrings, glossy chestnut waves, and silver band. She looks toward Damian off-frame right with surprised gratitude, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the emerald satin gown with a black tuxedo jacket now over her shoulders, the low stain mostly covered, emerald earrings, glossy chestnut waves, and silver band. She looks toward empty space beyond frame right with surprised gratitude, never at the camera.",
           "videoPrompt": "Mara gathers the jacket edge once as gratitude softens her anger. One slow push-in. Music resumes faintly.",
           "durationSeconds": 4
         },
@@ -541,8 +541,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "celeste",
-          "imagePrompt": "Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He faces Celeste off-frame left with calm warning, shoulders squared, never looking at the camera.",
-          "videoPrompt": "Damian turns his head toward Celeste and says, \"My wife needs no approval from you.\" Camera locked. The room quiets.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He holds a three-quarter view toward empty space beyond frame left with calm warning, shoulders squared, never looking at the camera.",
+          "videoPrompt": "Damian turns his head toward the left frame edge and says, \"My wife needs no approval from you.\" Camera locked. The room quiets.",
           "durationSeconds": 4
         },
         {
@@ -555,8 +555,8 @@
           "characterIds": ["vivienne"],
           "speakerId": "vivienne",
           "addresseeId": "julian",
-          "imagePrompt": "Medium close-up of Vivienne in a floor-length black satin gown and pearl choker, silver bob neat. She faces Julian off-frame right with cold alarm, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Vivienne leans slightly toward Julian and warns, \"Thomas left something behind.\" Camera locked. Ballroom music murmurs.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Vivienne in a floor-length black satin gown and pearl choker, silver bob neat. She holds a three-quarter view toward empty space beyond frame right with cold alarm, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Vivienne leans slightly toward the right frame edge and warns, \"Thomas left something behind.\" Camera locked. Ballroom music murmurs.",
           "durationSeconds": 6
         }
       ]
@@ -577,8 +577,8 @@
           "characterIds": ["julian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Julian in a black tuxedo, white shirt, and undone black bow tie, sandy-blond hair neat. He faces Mara off-frame left with regret, one foot slightly behind the other, never looking at the camera.",
-          "videoPrompt": "Julian takes one restrained step toward Mara and stops. Camera locked. Night wind stirs the olive leaves.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Julian in a black tuxedo, white shirt, and undone black bow tie, sandy-blond hair neat. He holds a three-quarter view toward empty space beyond frame left with regret, one foot slightly behind the other, never looking at the camera.",
+          "videoPrompt": "Julian takes one restrained step toward the left frame edge and stops. Camera locked. Night wind stirs the olive leaves.",
           "durationSeconds": 4
         },
         {
@@ -591,8 +591,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with shame and lowered shoulders, never looking at the camera.",
-          "videoPrompt": "Julian drops his gaze and tells Mara, \"I was a coward. I'm sorry.\" Camera locked. Wind hums softly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He holds a three-quarter view toward empty space beyond frame left with shame and lowered shoulders, never looking at the camera.",
+          "videoPrompt": "Julian drops his gaze toward the left frame edge and says, \"I was a coward. I'm sorry.\" Camera locked. Wind hums softly.",
           "durationSeconds": 4
         },
         {
@@ -605,8 +605,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with desperate entitlement replacing shame, never looking at the camera.",
-          "videoPrompt": "Julian raises his chin and offers Mara, \"Name Damian's price. I'll double it.\" Camera locked. Leaves rustle.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Julian in the black tuxedo, white shirt, and undone bow tie. He holds a three-quarter view toward empty space beyond frame left with desperate entitlement replacing shame, never looking at the camera.",
+          "videoPrompt": "Julian raises his chin toward the left frame edge and says, \"Name Damian's price. I'll double it.\" Camera locked. Leaves rustle.",
           "durationSeconds": 4
         },
         {
@@ -619,8 +619,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "julian",
-          "imagePrompt": "Medium close-up of Mara in the emerald satin gown with Damian's black tuxedo jacket over her shoulders, dark stain low beneath it, emerald earrings, glossy chestnut waves, and silver band. She faces Julian off-frame right with hard clarity, never looking at the camera.",
-          "videoPrompt": "Mara squares her shoulders and tells Julian, \"You never knew my value.\" Camera locked. Wind brushes the railing.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the emerald satin gown with a black tuxedo jacket over her shoulders, dark stain low beneath it, emerald earrings, glossy chestnut waves, and silver band. She holds a three-quarter view toward empty space beyond frame right with hard clarity, never looking at the camera.",
+          "videoPrompt": "Mara squares her shoulders toward the right frame edge and says, \"You never knew my value.\" Camera locked. Wind brushes the railing.",
           "durationSeconds": 4
         },
         {
@@ -633,8 +633,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "julian",
-          "imagePrompt": "Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He faces Julian off-frame left with calm menace, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Damian takes one step into Julian's eyeline and warns, \"Threaten her again, and Vance falls.\" Camera locked. Wind whistles.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a white tuxedo shirt, black bow tie, and black trousers. He holds a three-quarter view toward empty space beyond frame left with calm menace, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Damian takes one step toward the left frame edge and warns, \"Threaten her again, and Vance falls.\" Camera locked. Wind whistles.",
           "durationSeconds": 4
         },
         {
@@ -647,8 +647,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He faces Mara off-frame left with bitter triumph, never looking at the camera.",
-          "videoPrompt": "Julian turns toward Mara and says, \"Ask where Damian was when your father died.\" Camera locked. Wind rises.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Julian in the black tuxedo, white shirt, and undone bow tie. He holds a three-quarter view toward empty space beyond frame left with bitter triumph, never looking at the camera.",
+          "videoPrompt": "Julian turns toward the left frame edge and says, \"Ask where Damian was when your father died.\" Camera locked. Wind rises.",
           "durationSeconds": 4
         },
         {
@@ -661,8 +661,8 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up reaction of Mara in the emerald gown under Damian's black jacket, emerald earrings, glossy chestnut waves, and silver band. She turns toward Damian off-frame right with betrayed shock, never looking at the camera.",
-          "videoPrompt": "Mara's certainty collapses as she turns fully toward Damian. One slow push-in. The gala music cuts off.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Mara in the emerald gown under a black tuxedo jacket, emerald earrings, glossy chestnut waves, and silver band. She turns into a three-quarter view toward empty space beyond frame right with betrayed shock, never looking at the camera.",
+          "videoPrompt": "Mara's certainty collapses as she turns fully toward the right frame edge. One slow push-in. The gala music cuts off.",
           "durationSeconds": 6
         }
       ]
@@ -683,8 +683,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She faces Damian off-frame right with restrained fury, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Mara steps closer to the desk and asks Damian, \"Where were you when my father died?\" Camera locked. Rain taps glass.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. She holds a three-quarter view toward empty space beyond frame right with restrained fury, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Mara steps closer to the desk, looks toward the right frame edge, and asks, \"Where were you when my father died?\" Camera locked. Rain taps glass.",
           "durationSeconds": 4
         },
         {
@@ -697,8 +697,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara off-frame left with red-rimmed eyes and grief, never looking at the camera.",
-          "videoPrompt": "Damian swallows once and answers Mara, \"Beside him. I held his hand.\" Camera locked. Rain taps steadily.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He holds a three-quarter view toward empty space beyond frame left with red-rimmed eyes and grief, never looking at the camera.",
+          "videoPrompt": "Damian swallows once, looks toward the left frame edge, and answers, \"Beside him. I held his hand.\" Camera locked. Rain taps steadily.",
           "durationSeconds": 4
         },
         {
@@ -711,7 +711,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up reaction of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. She faces Damian off-frame right with grief overtaking anger, never looking at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. She holds a three-quarter view toward empty space beyond frame right with grief overtaking anger, never looking at the camera.",
           "videoPrompt": "Mara's eyes fill and her raised chin falters once. One slow push-in. Rain fills the silence.",
           "durationSeconds": 4
         },
@@ -725,8 +725,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Damian in the charcoal sweater and black trousers. He faces Mara off-frame left with remorse and resolve, never looking at the camera.",
-          "videoPrompt": "Damian meets Mara's eyes and promises, \"I promised him silence. Now I'll explain everything.\" Camera locked. The clock ticks.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Damian in the charcoal sweater and black trousers. He holds a three-quarter view toward empty space beyond frame left with remorse and resolve, never looking at the camera.",
+          "videoPrompt": "Damian looks toward the left frame edge and promises, \"I promised him silence. Now I'll explain everything.\" Camera locked. The clock ticks.",
           "durationSeconds": 4
         },
         {
@@ -739,8 +739,8 @@
           "characterIds": ["mara"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. An already-open worn cream envelope and unfolded letter lie on the desk with the unreadable page facing Mara; she looks down at them, never at the camera.",
-          "videoPrompt": "Mara touches the open letter's edge as Damian says off-screen, \"He wrote: find the heart of the shop.\" Camera locked. Paper softly shifts.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in the cream cable-knit sweater and grey leggings, chestnut hair down, silver band visible. An already-open worn cream envelope and unfolded letter lie on the desk with the unreadable page facing Mara; she looks down at them, never at the camera.",
+          "videoPrompt": "Mara touches the open letter's edge as an off-screen low male voice says, \"He wrote: find the heart of the shop.\" Camera locked. Paper softly shifts.",
           "durationSeconds": 4
         },
         {
@@ -753,8 +753,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. The already-open worn cream envelope and unfolded letter stay on the desk below frame; she looks toward Damian off-frame right with sudden understanding, never at the camera.",
-          "videoPrompt": "Mara's gaze sharpens and she tells Damian, \"The old oven. Dad called it the heart.\" Camera locked. Rain patters.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in an oversized cream cable-knit sweater and grey leggings, chestnut hair down, plain silver band visible. The already-open worn cream envelope and unfolded letter stay on the desk below frame; she looks toward empty space beyond frame right with sudden understanding, never at the camera.",
+          "videoPrompt": "Mara's gaze sharpens toward the right frame edge and she says, \"The old oven. Dad called it the heart.\" Camera locked. Rain patters.",
           "durationSeconds": 4
         },
         {
@@ -767,8 +767,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He faces Mara off-frame left with urgent resolve, never looking at the camera.",
-          "videoPrompt": "Damian turns toward the study door and tells Mara, \"We go now.\" Camera locked. Thunder rolls.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a charcoal crew-neck sweater with sleeves pushed to his elbows and black trousers. He holds a three-quarter view toward empty space beyond frame left with urgent resolve, never looking at the camera.",
+          "videoPrompt": "Damian turns toward the study door, glances toward the left frame edge, and says, \"We go now.\" Camera locked. Thunder rolls.",
           "durationSeconds": 6
         }
       ]
@@ -803,8 +803,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the flashlight at waist level with its beam aimed toward the oven off-frame right and looks there with certainty, never at the camera.",
-          "videoPrompt": "Mara lifts the flashlight beam slightly and tells Damian, \"This is the heart.\" Camera locked. The bulb buzzes.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the flashlight at waist level with its beam aimed toward the oven off-frame right and looks there with certainty, never at the camera.",
+          "videoPrompt": "Mara lifts the flashlight beam slightly, looks toward the right frame edge, and says, \"This is the heart.\" Camera locked. The bulb buzzes.",
           "durationSeconds": 4
         },
         {
@@ -817,7 +817,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She is beside the oven with the small silver key already inserted in the clearly located compartment lock; her fingers rest on the key and she watches it, not the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She is beside the oven with the small silver key already inserted in the clearly located compartment lock; her fingers rest on the key and she watches it, not the camera.",
           "videoPrompt": "Mara turns the already-inserted key once until the hidden lock releases. Camera locked. Metal clicks.",
           "durationSeconds": 4
         },
@@ -831,7 +831,7 @@
           "characterIds": ["damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in the black wool overcoat over a charcoal sweater and black trousers. He stands beside the released iron compartment with one hand already on its handle, looking toward Mara off-frame left, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in the black wool overcoat over a charcoal sweater and black trousers. He stands beside the released iron compartment with one hand already on its handle, looking toward empty space beyond frame left, never at the camera.",
           "videoPrompt": "Damian pulls the released iron door open in one controlled motion. Camera locked. Hinges groan.",
           "durationSeconds": 4
         },
@@ -845,7 +845,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. The open compartment beside her visibly contains a closed leather ledger and old cassette recorder with no readable text; she looks down at them in stunned recognition, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. The open compartment beside her visibly contains a closed leather ledger and old cassette recorder with no readable text; she looks down at them in stunned recognition, never at the camera.",
           "videoPrompt": "Mara's eyes widen as recognition turns to resolve. One slow push-in. The recorder mechanism faintly ticks.",
           "durationSeconds": 4
         },
@@ -859,7 +859,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up reaction of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She already holds the closed leather ledger against her chest and looks upward with sudden alarm, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Mara in black jeans and a dark green wool coat over a cream sweater, chestnut hair in a loose side braid, plain silver band visible. She already holds the closed leather ledger against her chest and looks upward with sudden alarm, never at the camera.",
           "videoPrompt": "Mara snaps her gaze toward the ceiling at one heavy floorboard creak. Camera locked. Dust sifts down.",
           "durationSeconds": 4
         },
@@ -873,8 +873,8 @@
           "characterIds": ["damian"],
           "speakerId": "damian",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Damian in a black wool overcoat over a charcoal sweater and black trousers. He faces the unseen stairs off-frame right with protective focus, positioned just ahead of Mara off-screen, never looking at the camera.",
-          "videoPrompt": "Damian takes one step toward the stairs and tells Mara, \"Stay behind me.\" Camera locked. A stair creaks closer.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Damian in a black wool overcoat over a charcoal sweater and black trousers. He faces the unseen stairs off-frame right with protective focus, positioned protectively at the front of the frame, never looking at the camera.",
+          "videoPrompt": "Damian takes one step toward the stairs, glances toward the left frame edge, and says, \"Stay behind me.\" Camera locked. A stair creaks closer.",
           "durationSeconds": 6
         }
       ]
@@ -895,7 +895,7 @@
           "characterIds": ["vivienne", "julian"],
           "speakerId": "julian",
           "addresseeId": "vivienne",
-          "imagePrompt": "Asymmetric chest-up two-shot: Vivienne at frame left in a camel wool coat, plain silk scarf, and black leather gloves, silver bob neat; Julian at frame right in a black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. Julian faces Vivienne with suspicion while she watches Mara off-frame left; neither looks at the camera.",
+          "imagePrompt": "Asymmetric chest-up two-shot: Vivienne at frame left in a camel wool coat, plain silk scarf, and black leather gloves, silver bob neat; Julian at frame right in a black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. Julian faces Vivienne with suspicion while she watches empty space beyond frame left; neither looks at the camera.",
           "videoPrompt": "Julian turns fully toward Vivienne and asks, \"Why did you bring me here?\" Camera locked. The caged bulb sputters.",
           "durationSeconds": 4
         },
@@ -909,8 +909,8 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "vivienne",
-          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest; a phone is already activated and hidden in her coat breast pocket with only its blank back edge visible. She faces Vivienne off-frame left, never the camera.",
-          "videoPrompt": "Mara steadies the ledger against her chest and fixes Vivienne with a challenging gaze. Camera locked. The cellar hum continues.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in black jeans and the dark green wool coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest; a phone is already activated and hidden in her coat breast pocket with only its blank back edge visible. She holds a three-quarter view toward empty space beyond frame left, never the camera.",
+          "videoPrompt": "Mara steadies the ledger against her chest and fixes the left frame edge with a challenging gaze. Camera locked. The cellar hum continues.",
           "durationSeconds": 4
         },
         {
@@ -923,8 +923,8 @@
           "characterIds": ["vivienne"],
           "speakerId": "vivienne",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She faces Mara and the ledger off-frame right with controlled menace, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Vivienne lifts her chin and tells Mara, \"That ledger belongs to the Vances.\" Camera locked. The bulb crackles.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She holds a three-quarter view toward empty space beyond frame right with controlled menace, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Vivienne lifts her chin toward the right frame edge and says, \"That ledger belongs to the Vances.\" Camera locked. The bulb crackles.",
           "durationSeconds": 4
         },
         {
@@ -937,8 +937,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "vivienne",
-          "imagePrompt": "Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, hidden phone still in her breast pocket, and faces Vivienne off-frame left with controlled defiance, never at the camera.",
-          "videoPrompt": "Mara raises the ledger slightly and tells Vivienne, \"My father kept this to expose you.\" Camera locked. Water drips.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, hidden phone still in her breast pocket, and holds a three-quarter view toward empty space beyond frame left with controlled defiance, never at the camera.",
+          "videoPrompt": "Mara raises the ledger slightly toward the left frame edge and says, \"My father kept this to expose you.\" Camera locked. Water drips.",
           "durationSeconds": 4
         },
         {
@@ -951,8 +951,8 @@
           "characterIds": ["vivienne"],
           "speakerId": "vivienne",
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up single of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She faces Mara off-frame right with cold fury breaking through her composure, never looking at the camera.",
-          "videoPrompt": "Vivienne's control cracks and she tells Mara, \"He wouldn't stay quiet, so I silenced him.\" Camera locked. The bulb buzzes harshly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Vivienne in the camel wool coat, silk scarf, and black leather gloves. She holds a three-quarter view toward empty space beyond frame right with cold fury breaking through her composure, never looking at the camera.",
+          "videoPrompt": "Vivienne's control cracks as she looks toward the right frame edge and says, \"He wouldn't stay quiet, so I silenced him.\" Camera locked. The bulb buzzes harshly.",
           "durationSeconds": 6
         },
         {
@@ -965,8 +965,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "vivienne",
-          "imagePrompt": "Medium close-up reaction of Julian in the black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. He faces Vivienne off-frame left with wet-eyed betrayal, never looking at the camera.",
-          "videoPrompt": "Julian recoils half a step and tells Vivienne off-screen, \"You told me it was an accident.\" Camera locked. Water drips.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up reaction of Julian in the black overcoat over an open-collar white shirt, sandy-blond hair rain-damp. He holds a three-quarter view toward empty space beyond frame left with wet-eyed betrayal, never looking at the camera.",
+          "videoPrompt": "Julian recoils half a step, looks toward the left frame edge, and says, \"You told me it was an accident.\" Camera locked. Water drips.",
           "durationSeconds": 4
         },
         {
@@ -979,8 +979,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "vivienne",
-          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, phone still hidden in her breast pocket, and faces Vivienne off-frame left with steady resolve, never at the camera.",
-          "videoPrompt": "Mara lowers the ledger slightly and tells Vivienne, \"Theo already received every word.\" Camera locked. A distant siren begins.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible. She holds the closed leather ledger against her chest, phone still hidden in her breast pocket, and holds a three-quarter view toward empty space beyond frame left with steady resolve, never at the camera.",
+          "videoPrompt": "Mara lowers the ledger slightly, looks toward the left frame edge, and says, \"Theo already received every word.\" Camera locked. A distant siren begins.",
           "durationSeconds": 6
         }
       ]
@@ -1001,7 +1001,7 @@
           "characterIds": ["vivienne"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up reaction of Vivienne in the camel wool coat, silk scarf, and black leather gloves. Red and blue police light begins crossing her face as she looks toward Mara off-frame right with cornered disbelief, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up reaction of Vivienne in the camel wool coat, silk scarf, and black leather gloves. Red and blue police light begins crossing her face as she looks toward empty space beyond frame right with cornered disbelief, never at the camera.",
           "videoPrompt": "Vivienne turns her gaze toward the stairwell as police light pulses brighter. Camera locked. Sirens swell outside.",
           "durationSeconds": 4
         },
@@ -1015,8 +1015,8 @@
           "characterIds": ["julian"],
           "speakerId": "julian",
           "addresseeId": "vivienne",
-          "imagePrompt": "Chest-up single of Julian in the black overcoat over an open-collar white shirt, rain-damp sandy-blond hair, red and blue light on his face. He faces Vivienne off-frame left with final resolve, never looking at the camera.",
-          "videoPrompt": "Julian straightens and tells Vivienne, \"I'm done protecting you, Mother.\" Camera locked. Sirens pulse.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Julian in the black overcoat over an open-collar white shirt, rain-damp sandy-blond hair, red and blue light on his face. He holds a three-quarter view toward empty space beyond frame left with final resolve, never looking at the camera.",
+          "videoPrompt": "Julian straightens toward the left frame edge and says, \"I'm done protecting you, Mother.\" Camera locked. Sirens pulse.",
           "durationSeconds": 4
         },
         {
@@ -1029,8 +1029,8 @@
           "characterIds": ["vivienne"],
           "speakerId": "vivienne",
           "addresseeId": "mara",
-          "imagePrompt": "Medium close-up of Vivienne in the camel coat, silk scarf, and black gloves, red and blue light across her face. She faces Mara and the closed ledger off-frame right, one gloved hand already raised near her chest, never looking at the camera.",
-          "videoPrompt": "Vivienne points the already-raised hand toward Mara's ledger and says, \"Read the last page.\" Camera locked. Sirens echo.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Vivienne in the camel coat, silk scarf, and black gloves, red and blue light across her face. She holds a three-quarter view toward empty space beyond frame right, one gloved hand already raised near her chest, never looking at the camera.",
+          "videoPrompt": "Vivienne points the already-raised hand toward the right frame edge and says, \"Read the last page.\" Camera locked. Sirens echo.",
           "durationSeconds": 4
         },
         {
@@ -1043,7 +1043,7 @@
           "characterIds": ["mara"],
           "speakerId": null,
           "addresseeId": "damian",
-          "imagePrompt": "Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light on her face. She holds the leather ledger already open with its unreadable final page facing only her; she looks down in dawning horror, never at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light on her face. She holds the leather ledger already open with its unreadable final page facing only her; she looks down in dawning horror, never at the camera.",
           "videoPrompt": "Mara's eyes track the final entry, then stop as recognition hits. One slow push-in. Sirens echo through brick.",
           "durationSeconds": 4
         },
@@ -1057,8 +1057,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the ledger open with the unreadable page facing her and looks toward Damian off-frame right in shocked suspicion, never at the camera.",
-          "videoPrompt": "Mara lowers the open ledger slightly and tells Damian, \"The last name is Alistair Cross.\" Camera locked. Sirens pulse.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the ledger open with the unreadable page facing her and looks toward empty space beyond frame right in shocked suspicion, never at the camera.",
+          "videoPrompt": "Mara lowers the open ledger slightly, looks toward the right frame edge, and says, \"The last name is Alistair Cross.\" Camera locked. Sirens pulse.",
           "durationSeconds": 4
         },
         {
@@ -1071,7 +1071,7 @@
           "characterIds": ["damian"],
           "speakerId": null,
           "addresseeId": "mara",
-          "imagePrompt": "Chest-up reaction of Damian in the black wool overcoat over a charcoal sweater and black trousers, red and blue light across his face. He faces Mara off-frame left, ghost-pale and stricken, never looking at the camera.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up reaction of Damian in the black wool overcoat over a charcoal sweater and black trousers, red and blue light across his face. He holds a three-quarter view toward empty space beyond frame left, ghost-pale and stricken, never looking at the camera.",
           "videoPrompt": "Damian's composure breaks as he absorbs his father's name. One slow push-in. Sirens throb outside.",
           "durationSeconds": 4
         },
@@ -1085,8 +1085,8 @@
           "characterIds": ["mara"],
           "speakerId": "mara",
           "addresseeId": "damian",
-          "imagePrompt": "Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the open ledger against her torso with its unreadable page facing inward and looks toward Damian off-frame right with wounded suspicion, never at the camera.",
-          "videoPrompt": "Mara's chin trembles as she asks Damian, \"Did you know?\" Camera locked. Sirens peak outside.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Mara in black jeans and the dark green coat over a cream sweater, side braid, silver band visible, red and blue light across her face. She holds the open ledger against her torso with its unreadable page facing inward and looks toward empty space beyond frame right with wounded suspicion, never at the camera.",
+          "videoPrompt": "Mara's chin trembles as she looks toward the right frame edge and asks, \"Did you know?\" Camera locked. Sirens peak outside.",
           "durationSeconds": 6
         }
       ]

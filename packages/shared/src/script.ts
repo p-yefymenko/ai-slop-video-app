@@ -64,8 +64,8 @@ export type ShowPrompts = {
    * duplicates, twins, background people, portraits, paintings, mirrors, or reflections.
    * Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the
    * reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal
-   * identity portrait; obey the stated eyeline and placement. {locationPromptBlock}
-   * {imagePrompt}`
+   * identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame
+   * or absent addressee. {locationPromptBlock} {imagePrompt}`
    *
    * `{referenceMap}` `{characterCount}` `{characterIds}` `{locationPromptBlock}`
    * `{imagePrompt}`
@@ -140,6 +140,11 @@ export type ScriptScene = {
    * lowering an already-held prop, and restrained gestures are allowed. Avoid readable
    * documents/screens, mirrors, crowds, fights, complex hand contact, transfers between
    * people, and tiny plot-critical details.
+   *
+   * Critical: name only characters listed in `characterIds`. Never name an off-frame or
+   * absent addressee—the four-step Qwen model may render that name as an extra, unreferenced
+   * person. Express eyelines as "toward empty space beyond frame left/right." Describe an
+   * absent character's clothing or prop generically, without possessive names.
    */
   imagePrompt: string;
   /**
@@ -147,9 +152,10 @@ export type ScriptScene = {
    * achievable action plus natural blinks/breathing. The action should change the dramatic
    * state in `continuityOut`; do not fill six seconds with a frozen face.
    *
-   * At most one quoted line of 12 words, spoken by `speakerId` to `addresseeId`. Name both
-   * roles in the prompt so lip-sync and eyeline are unambiguous. For a reaction shot, keep
-   * the off-screen voice brief and animate only the visible listener. Do not alternate
+   * At most one quoted line of 12 words, spoken by `speakerId` to `addresseeId`. Outside
+   * quoted dialogue, name only visible `characterIds`; direct eyelines toward the frame edge
+   * instead of naming an absent addressee, or LTX may invent them. For a reaction shot, keep
+   * an off-screen voice brief and animate only the visible listener. Do not alternate
    * speakers, cut angles inside a clip, introduce a new person, or repeat the first frame.
    *
    * Use a locked camera for speech or one slow push-in for a major reaction. End with one
