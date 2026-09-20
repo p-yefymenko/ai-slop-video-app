@@ -1,0 +1,211 @@
+{
+  "id": "the-billionaires-evidence",
+  "title": "The Billionaire's Evidence",
+  "characters": {
+    "aria": {
+      "promptBlock": "Aria Chen, a Chinese American woman in her late twenties with a slim build, warm light skin, an oval face, alert dark-brown almond eyes, a small beauty mark beneath her left eye, and straight black hair reaching her shoulders."
+    },
+    "nolan": {
+      "promptBlock": "Nolan Price, a white man in his early thirties with a lean build, fair skin, a narrow angular face, pale blue eyes, a straight nose, and short ash-brown hair brushed neatly back."
+    },
+    "roman": {
+      "promptBlock": "Roman Vale, a Latino man in his mid-thirties with a tall athletic build, olive skin, a square face, deep-set dark-brown eyes, a faint scar through his right eyebrow, and short wavy black hair."
+    }
+  },
+  "locations": {
+    "hotel_ballroom": {
+      "promptBlock": "A private hotel ballroom side stage with dark navy velvet curtains, walnut wall panels, warm brass sconces, and a matte pale-stone floor at night. No signage, screens, mirrors, or visible guests."
+    }
+  },
+  "prompts": {
+    "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
+    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
+    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
+  },
+  "episodes": [
+    {
+      "episodeNumber": 1,
+      "title": "The Source",
+      "isFree": true,
+      "coinCost": 0,
+      "scenes": [
+        {
+          "sceneNumber": 1,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Nolan fires Aria in public and orders her to retract the investigation.",
+          "continuityIn": "Aria has arrived at her newspaper's private awards dinner expecting recognition for her investigation.",
+          "continuityOut": "Aria knows Nolan intends to destroy both her story and her career.",
+          "shotType": "single",
+          "characterIds": [
+            "nolan"
+          ],
+          "speakerId": "nolan",
+          "addresseeId": "aria",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in a fitted midnight-blue tuxedo jacket over a black dress shirt with no tie. He faces empty space beyond frame left with polished contempt, arms low out of frame, never looking at the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, his clipped voice cold and loud enough to command the ballroom: \"You're fired, Aria. Retract the Vale investigation before security walks you out.\" His mouth settles into a thin line. Camera locked. The room falls silent.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 2,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Aria absorbs the ambush but refuses to appear defeated.",
+          "continuityIn": "Nolan has fired Aria and demanded a public retraction.",
+          "continuityOut": "Aria's shock has hardened into defiance.",
+          "shotType": "reaction",
+          "characterIds": [
+            "aria"
+          ],
+          "speakerId": null,
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Aria in a deep emerald satin evening dress with a slim black belt, straight black hair in a low ponytail, and silver stud earrings. She looks toward empty space beyond frame right with stunned, wounded eyes, hands low out of frame, never at the camera.",
+          "videoPrompt": "Aria takes one tight breath immediately as shock leaves her face and defiance replaces it. One slow push-in. A distant glass clinks once.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 3,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Aria forces Nolan to deny the investigation rather than hide behind her dismissal.",
+          "continuityIn": "Aria has recovered from the surprise firing.",
+          "continuityOut": "Nolan must publicly defend his claim that Aria's evidence is false.",
+          "shotType": "single",
+          "characterIds": [
+            "aria"
+          ],
+          "speakerId": "aria",
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Aria in the deep emerald satin evening dress with slim black belt, low black ponytail, and silver stud earrings. She faces empty space beyond frame right with controlled anger, shoulders squared, never looking at the camera.",
+          "videoPrompt": "Aria speaks immediately with no silent pause, projecting a clear, furious voice across the ballroom: \"Fire me if you want. Tell everyone which piece of evidence was false.\" Her stare remains unwavering. Camera locked. The brass sconces hum faintly.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 4,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Nolan threatens Aria with financial ruin instead of answering her evidence.",
+          "continuityIn": "Aria has challenged Nolan to identify a false claim.",
+          "continuityOut": "Aria knows Nolan plans to use legal costs to silence her.",
+          "shotType": "single",
+          "characterIds": [
+            "nolan"
+          ],
+          "speakerId": "nolan",
+          "addresseeId": "aria",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in the midnight-blue tuxedo jacket and black dress shirt with no tie. He faces empty space beyond frame left with a smooth, threatening calm, arms low out of frame, never looking at the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, lowering his voice without losing its cutting force: \"Refuse, and our lawyers will take your apartment before sunrise.\" A satisfied smile barely touches his lips. Camera locked. The room tone turns still.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Aria reveals that protecting the dead source matters more than protecting herself.",
+          "continuityIn": "Nolan has threatened to bankrupt Aria unless she retracts.",
+          "continuityOut": "Aria has publicly refused to betray her source.",
+          "shotType": "single",
+          "characterIds": [
+            "aria"
+          ],
+          "speakerId": "aria",
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Aria in the deep emerald satin evening dress with slim black belt, low black ponytail, and silver stud earrings. She faces empty space beyond frame right with grief beneath fierce resolve, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Aria speaks immediately with no silent pause, her voice rough with grief but forceful and fully audible: \"My source died protecting that truth. I won't bury her twice.\" Her eyes shine without breaking contact. Camera locked. Air conditioning murmurs softly.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Roman steps from the curtained side entrance and interrupts the confrontation.",
+          "continuityIn": "Aria has refused Nolan's threat in front of the room.",
+          "continuityOut": "An imposing stranger has entered and taken control of the silence.",
+          "shotType": "single",
+          "characterIds": [
+            "roman"
+          ],
+          "speakerId": null,
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in a black wool overcoat over a tailored black suit and open-collar white shirt. He stands beside the dark navy curtain facing empty space beyond frame left with contained authority, hands low out of frame, never looking at the camera.",
+          "videoPrompt": "Roman takes one deliberate step immediately from beside the curtain and stops with calm, squared posture. Camera locked. His shoe lands sharply on the stone floor.",
+          "durationSeconds": 4
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Roman validates Aria's investigation and claims possession of the original evidence.",
+          "continuityIn": "Roman has interrupted the confrontation without identifying himself.",
+          "continuityOut": "Aria and Nolan know an outsider can prove the buried story.",
+          "shotType": "single",
+          "characterIds": [
+            "roman"
+          ],
+          "speakerId": "roman",
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame left with restrained fury, shoulders motionless, never looking at the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his deep voice quiet but resonant enough to carry through the room: \"Her source told the truth. I have the original evidence.\" His eyes harden after the claim. Camera locked. The curtain shifts softly.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 8,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Nolan challenges Roman, assuming the stranger has no power over him.",
+          "continuityIn": "Roman has claimed he can prove Aria's investigation.",
+          "continuityOut": "Nolan has demanded Roman identify himself.",
+          "shotType": "single",
+          "characterIds": [
+            "nolan"
+          ],
+          "speakerId": "nolan",
+          "addresseeId": "roman",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in the midnight-blue tuxedo jacket and black dress shirt with no tie. He faces empty space beyond frame right with anger masking sudden uncertainty, arms low out of frame, never looking at the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, his raised voice brittle as confidence begins to crack: \"Who are you to walk in here and threaten my company?\" His nostrils flare at the final word. Camera locked. A low murmur begins off-screen.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 9,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Roman reveals that he has already bought Nolan's company.",
+          "continuityIn": "Nolan has challenged Roman's authority in the room.",
+          "continuityOut": "Nolan knows Roman now controls the company he used to threaten Aria.",
+          "shotType": "single",
+          "characterIds": [
+            "roman"
+          ],
+          "speakerId": "roman",
+          "addresseeId": "nolan",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame left with cool, absolute control, shoulders relaxed, never looking at the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his measured baritone calm enough to make the revelation more threatening: \"Roman Vale. As of ten minutes ago, it is my company.\" One eyebrow lifts slightly afterward. Camera locked. The off-screen murmur swells.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 10,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Aria realizes the feared Vale heir has chosen to defend her.",
+          "continuityIn": "Roman has revealed that he owns the company and can stop Nolan.",
+          "continuityOut": "Aria's suspicion of Roman now competes with shocked hope.",
+          "shotType": "reaction",
+          "characterIds": [
+            "aria"
+          ],
+          "speakerId": null,
+          "addresseeId": "roman",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Aria in the deep emerald satin evening dress with slim black belt, low black ponytail, and silver stud earrings. She looks toward empty space beyond frame left with wary shock and the first trace of hope, hands low out of frame, never at the camera.",
+          "videoPrompt": "Aria's expression shifts immediately from guarded disbelief to wary hope while her eyes remain fixed toward the left frame edge. One slow push-in. She releases a breath she had been holding.",
+          "durationSeconds": 6
+        },
+        {
+          "sceneNumber": 11,
+          "locationId": "hotel_ballroom",
+          "storyBeat": "Roman reveals his personal link to Aria's dead source and warns that the killer remains close.",
+          "continuityIn": "Aria knows Roman can protect the investigation but not why he cares.",
+          "continuityOut": "Aria knows her source was Roman's sister and the conspiracy remains active inside the company.",
+          "shotType": "single",
+          "characterIds": [
+            "roman"
+          ],
+          "speakerId": "roman",
+          "addresseeId": "aria",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame right with grief breaking through his controlled expression, never looking at the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his low voice fully audible as grief roughens every word: \"Your source was my sister, and her killer is still inside this company.\" Pain flashes across his eyes. One slow push-in. The ballroom doors close with a heavy thud.",
+          "durationSeconds": 6
+        }
+      ]
+    }
+  ]
+}

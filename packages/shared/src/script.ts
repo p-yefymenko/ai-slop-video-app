@@ -1,11 +1,12 @@
 /**
  * Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show.
  *
- * Story contract for the script-writing model:
+ * Story guidance for the script-writing model. These are authoring instructions, not
+ * runtime validation rules; the renderer validates only fields needed to execute safely.
  * - Write a vertical micro-drama, not disconnected prompt demonstrations. Each episode is
  *   a causal chain: setup -> pressure -> choice/reveal -> reaction -> cliffhanger.
- * - One `ScriptScene` is one generated shot. Use 5-8 short shots per episode so actions and
- *   reactions get separate frames. Never omit the reaction that makes a reveal meaningful.
+ * - One `ScriptScene` is one generated shot. Use 10-12 shots totaling at least 60 seconds
+ *   per episode. Actions, dialogue, and reactions get separate shots.
  * - Every spoken line has a clear speaker and addressee. A character must not answer a
  *   question the audience never heard or refer to a prop they never saw established.
  * - Prefer singles and reaction shots. Use a two-shot only for confrontation or intimacy.
@@ -148,23 +149,28 @@ export type ScriptScene = {
    */
   imagePrompt: string;
   /**
-   * LTX motion continuing directly from the first frame. Give the shot one meaningful,
-   * achievable action plus natural blinks/breathing. The action should change the dramatic
-   * state in `continuityOut`; do not fill six seconds with a frozen face.
+   * LTX motion continuing directly from the first frame. A silent shot gets one meaningful,
+   * achievable action that starts immediately. A dialogue shot starts speech immediately
+   * and gets only natural acting during/after the line—never put a step, turn, or prop action
+   * before speech, because LTX often performs it after the words instead.
    *
-   * At most one quoted line of 12 words, spoken by `speakerId` to `addresseeId`. Outside
-   * quoted dialogue, name only visible `characterIds`; direct eyelines toward the frame edge
-   * instead of naming an absent addressee, or LTX may invent them. For a reaction shot, keep
-   * an off-screen voice brief and animate only the visible listener. Do not alternate
-   * speakers, cut angles inside a clip, introduce a new person, or repeat the first frame.
+   * At most one quoted line of 16 words, spoken by `speakerId` to `addresseeId`. Put the
+   * quoted line near the beginning and explicitly say speech begins immediately with no
+   * silent pause. Specify projected volume, emotional intensity, pace, and vocal texture;
+   * vary these by beat instead of defaulting to flat/quiet speech. Outside quoted dialogue,
+   * name only visible `characterIds`; direct eyelines toward the frame edge instead of
+   * naming an absent addressee, or LTX may invent them. For a reaction shot, keep an
+   * off-screen voice brief and animate only the visible listener. Do not alternate speakers,
+   * cut angles inside a clip, introduce a new person, or repeat the first frame.
    *
    * Use a locked camera for speech or one slow push-in for a major reaction. End with one
    * short ambience/foley sentence. If the beat needs a reply, create the next shot.
    */
   videoPrompt: string;
   /**
-   * Clip length in seconds. Prefer 4 seconds for dialogue/reactions and 6 only for a reveal
-   * needing a hold. ReelShort pacing comes from cuts, not long generated shots.
+   * Clip length in seconds. Dialogue shots are 6 seconds so a substantial line can begin
+   * immediately and land emotionally. Silent inserts/reactions are 4 or 6 seconds. Episode
+   * scenes together must total at least 60 seconds.
    */
   durationSeconds: number;
 };

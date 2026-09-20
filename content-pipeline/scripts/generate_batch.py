@@ -26,9 +26,6 @@ OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
-SHOT_TYPES = {"single", "reaction", "twoShot"}
-MIN_SCENES_PER_EPISODE = 5
-MAX_SCENES_PER_EPISODE = 8
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
@@ -539,11 +536,6 @@ def load_show(path: Path) -> dict:
             "id": str(cid),
             "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
         }
-        if character.get("imagePrompt"):
-            raise SystemExit(
-                f"characters[{cid!r}] has imagePrompt; identity is promptBlock only "
-                "(portrait framing lives in prompts.characterImage)."
-            )
     show["characters"] = cleaned_chars
     if "locationCharacters" in show:
         raise SystemExit(
@@ -561,18 +553,10 @@ def load_show(path: Path) -> dict:
             "id": str(loc_id),
             "promptBlock": require_text(loc, "promptBlock", f"locations[{loc_id!r}]"),
         }
-        if loc.get("preserve"):
-            raise SystemExit(
-                f"locations[{loc_id!r}] has preserve; the start still locks the set. "
-                "Put motion in videoPrompt only."
-            )
     show["locations"] = cleaned_locs
     prompts = show.get("prompts")
     if not isinstance(prompts, dict):
         raise SystemExit(f"{path.name} is missing prompts")
-    extra = set(prompts) - set(PROMPT_KEYS)
-    if extra:
-        raise SystemExit(f"{path.name} has unknown prompts keys: {sorted(extra)}")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
@@ -587,11 +571,6 @@ def load_show(path: Path) -> dict:
         scenes = episode.get("scenes")
         if not isinstance(scenes, list) or not scenes:
             raise SystemExit(f"episode {ep_num} is missing scenes")
-        if not MIN_SCENES_PER_EPISODE <= len(scenes) <= MAX_SCENES_PER_EPISODE:
-            raise SystemExit(
-                f"episode {ep_num} has {len(scenes)} scenes; use "
-                f"{MIN_SCENES_PER_EPISODE}-{MAX_SCENES_PER_EPISODE} causal shots."
-            )
         cleaned_scenes: list[dict] = []
         for scene_index, scene in enumerate(scenes, start=1):
             if not isinstance(scene, dict):
@@ -620,68 +599,17 @@ def load_show(path: Path) -> dict:
                 if cid not in cleaned_chars:
                     raise SystemExit(f"{scene_label} names unknown character {cid!r}")
             shot_type = require_text(scene, "shotType", scene_label)
-            if shot_type not in SHOT_TYPES:
-                raise SystemExit(
-                    f"{scene_label} has shotType {shot_type!r}; use one of {sorted(SHOT_TYPES)}"
-                )
-            expected_characters = 2 if shot_type == "twoShot" else 1
-            if len(character_ids) != expected_characters:
-                raise SystemExit(
-                    f"{scene_label} is {shot_type!r} and must have exactly "
-                    f"{expected_characters} visible character(s)."
-                )
             speaker_id = scene.get("speakerId")
             if speaker_id is not None:
                 speaker_id = str(speaker_id)
-                if speaker_id not in cleaned_chars:
-                    raise SystemExit(f"{scene_label} names unknown speakerId {speaker_id!r}")
             addressee_id = scene.get("addresseeId")
             if addressee_id is not None:
                 addressee_id = str(addressee_id)
-                if addressee_id not in cleaned_chars:
-                    raise SystemExit(f"{scene_label} names unknown addresseeId {addressee_id!r}")
-            if shot_type == "reaction" and speaker_id in character_ids:
-                raise SystemExit(
-                    f"{scene_label} is a reaction shot; speakerId must be off-screen or null."
-                )
-            if shot_type != "reaction" and speaker_id is not None and speaker_id not in character_ids:
-                raise SystemExit(
-                    f"{scene_label} has off-screen speakerId {speaker_id!r}; use shotType 'reaction'."
-                )
             video_prompt = require_text(scene, "videoPrompt", scene_label)
-            dialogue = re.findall(r'"([^"]+)"', video_prompt)
-            if len(dialogue) > 1:
-                raise SystemExit(f"{scene_label} has more than one quoted spoken line")
-            if bool(dialogue) != bool(speaker_id):
-                raise SystemExit(
-                    f"{scene_label} must have both one quoted line and speakerId, or neither."
-                )
-            if dialogue and len(dialogue[0].split()) > 12:
-                raise SystemExit(f"{scene_label} dialogue exceeds 12 words: {dialogue[0]!r}")
-            motion_directions = re.sub(r'"[^"]*"', "", video_prompt)
             image_prompt = require_text(scene, "imagePrompt", scene_label)
-            for hidden_id, hidden_character in cleaned_chars.items():
-                if hidden_id in character_ids:
-                    continue
-                aliases = {hidden_id, hidden_id.replace("-", " ")}
-                first_word = re.match(r"[A-Za-z][A-Za-z'-]*", hidden_character["promptBlock"])
-                if first_word:
-                    aliases.add(first_word.group(0))
-                for alias in aliases:
-                    if re.search(rf"\b{re.escape(alias)}\b", image_prompt, re.IGNORECASE):
-                        raise SystemExit(
-                            f"{scene_label} imagePrompt names absent character {hidden_id!r} "
-                            f"as {alias!r}. Use empty off-frame space for the eyeline instead."
-                        )
-                    if re.search(rf"\b{re.escape(alias)}\b", motion_directions, re.IGNORECASE):
-                        raise SystemExit(
-                            f"{scene_label} videoPrompt motion directions name absent character "
-                            f"{hidden_id!r} as {alias!r}. Use the frame edge or an anonymous "
-                            "off-screen voice instead."
-                        )
             duration_seconds = float(scene.get("durationSeconds") or 0)
-            if duration_seconds not in (4.0, 6.0):
-                raise SystemExit(f"{scene_label} durationSeconds must be 4 or 6")
+            if duration_seconds <= 0:
+                raise SystemExit(f"{scene_label} durationSeconds must be positive")
             cleaned_scenes.append(
                 {
                     "sceneNumber": scene_number,

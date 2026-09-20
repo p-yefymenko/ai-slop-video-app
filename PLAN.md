@@ -275,8 +275,8 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
           "speakerId": "elena-heiress",
           "addresseeId": null,
           "imagePrompt": "Chest-up single of Elena in a navy wool coat, facing the estate off-frame right with guarded resolve, never looking at camera.",
-          "videoPrompt": "Elena raises her gaze toward the estate and whispers, \"Ten years.\" Camera locked. Outdoor wind stirs.",
-          "durationSeconds": 4
+          "videoPrompt": "Elena speaks immediately with no silent pause, her low voice fully audible and weighted with dread: \"Ten years, and this place still knows how to frighten me.\" Her resolve hardens afterward. Camera locked. Outdoor wind stirs.",
+          "durationSeconds": 6
         }
       ]
     }
@@ -286,13 +286,14 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
-- Each episode uses 5-8 causal shots: setup, pressure, choice/reveal, reaction, cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit and are validated before rendering.
+- Authoring guidance lives in `packages/shared/src/script.ts`, not in creative runtime checks. Aim for 10-12 causal shots totaling at least 60 seconds: setup, escalating pressure, choice/reveal, reactions, and cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit.
 - `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. The IDs remain Qwen Picture 1 / Picture 2 order.
-- `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 12 words maximum.
+- `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
 - `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.
-- `videoPrompt` advances one meaningful action from that frame, with one speaker and one camera behavior. Do not alternate speakers or repeat the still.
-- `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Prefer 4-second cuts for ReelShort pacing.
+- A dialogue `videoPrompt` starts speech immediately with no lead-in action and specifies concrete volume, emotion, pace, and vocal texture. Any meaningful action before dialogue becomes its own silent shot. Do not alternate speakers or repeat the still.
+- `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Dialogue uses 6 seconds; silent inserts and reactions use 4 or 6.
+- The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Iterate on one shot with `pnpm run content:frame -- --show <show-id> --episode <n> --scene <n>`, then test only its video with the same filters through `pnpm run content:clip`. A partial clip render never overwrites `episode.mp4`.
 
