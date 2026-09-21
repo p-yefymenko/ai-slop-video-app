@@ -255,7 +255,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
     "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. Use one locked continuous take with constant framing, exposure, and color. Keep each person planted at the same distance and preserve the starting body angle and eyeline unless the motion prompt explicitly changes them. The final frame remains a normally lit continuation of the shot, not a fade or transition. {videoPrompt}"
+    "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}"
   },
   "episodes": [
     {
@@ -263,10 +263,18 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
       "title": "The Return",
       "isFree": true,
       "coinCost": 0,
+      "logline": "Elena reaches the estate before her enemy can destroy her inheritance.",
+      "dramaticQuestion": "Will Elena enter before the gates close?",
+      "hook": "Elena stands outside the closing gates.",
+      "reversal": "She recognizes the person ordering the gates shut.",
+      "cliffhanger": "Elena crosses the threshold and the gates lock behind her.",
+      "nextEpisodeOpening": "Elena faces the enemy waiting inside the locked gates.",
       "screenDirection": "At the gates, Elena is screen left and looks frame right toward the estate.",
       "scenes": [
         {
           "sceneNumber": 1,
+          "beatType": "hook",
+          "coverageRole": "closeup",
           "locationId": "mansion-gates",
           "storyBeat": "Elena returns to the estate and chooses to confront her past.",
           "continuityIn": "Elena has just arrived alone outside the open gates.",
@@ -287,14 +295,14 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
-- Authoring guidance lives in `packages/shared/src/script.ts`, not in creative runtime checks. Aim for 10-12 causal shots totaling at least 60 seconds: setup, escalating pressure, choice/reveal, reactions, and cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit.
-- `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. Ground each conversation with a two-shot before close coverage. For three people, use pairwise anchors (A+B, then entrant C+B, then C+A) because Qwen receives at most two identities. Only the speaker moves their mouth in an animated two-shot. The IDs remain Qwen Picture 1 / Picture 2 order.
+- Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
+- `shotType` is `single`, `reaction`, or `twoShot`. Use 2–3 second silent two-shots only as spatial anchors, then cut dialogue to singles; distilled LTX does not reliably preserve a silent listener during two-shot dialogue. For three people, establish pairwise anchors when the active pair changes. The IDs remain Qwen Picture 1 / Picture 2 order.
 - `screenDirection` fixes the 180-degree axis per recurring location before shots are written. Every scene derives left/right eyelines from it; never choose eyelines independently per prompt.
 - `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
 - `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.
-- A dialogue `videoPrompt` starts speech immediately with no lead-in action and specifies concrete volume, emotion, pace, and vocal texture. Any meaningful action before dialogue becomes its own silent shot. Do not alternate speakers or repeat the still.
-- `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Dialogue uses 6 seconds; silent inserts and reactions use 4 or 6.
+- A `videoPrompt` is a short chronological present-tense paragraph describing one speaker or one simple action, camera behavior, and sound. Do not alternate speakers or restate the opening frame.
+- `durationSeconds` is flexible and converted to `8n+1` frames at 24 fps. Episode scenes should total about 60 seconds.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.

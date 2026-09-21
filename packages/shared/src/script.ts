@@ -1,19 +1,8 @@
 /**
  * Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show.
  *
- * Story guidance for the script-writing model. These are authoring instructions, not
- * runtime validation rules; the renderer validates only fields needed to execute safely.
- * - Write a vertical micro-drama, not disconnected prompt demonstrations. Each episode is
- *   a causal chain: setup -> pressure -> choice/reveal -> reaction -> cliffhanger.
- * - One `ScriptScene` is one generated shot. Use 10-12 shots totaling at least 60 seconds
- *   per episode. Actions, dialogue, and reactions get separate shots.
- * - Every spoken line has a clear speaker and addressee. A character must not answer a
- *   question the audience never heard or refer to a prop they never saw established.
- * - Ground every conversation with a two-shot before using singles/reactions. In a
- *   three-person exchange, use pairwise anchors when the participant changes: A+B establish
- *   the first axis, then C+B establishes the entrant, then C+A grounds their connection.
- *   Never fake a three-shot: Qwen receives at most two identity references.
- * - Continuity is explicit because the models remember nothing between shots.
+ * Authoring JSON for one vertical microdrama. Persistent screenwriting guidance lives in
+ * `.cursor/rules/episode-scripts.mdc`; these field comments document renderer semantics.
  */
 
 export type ShowCharacter = {
@@ -81,12 +70,9 @@ export type ShowPrompts = {
    * Do not ask LTX to add a person or repair/change anything visible in the still.
    *
    * Exact template:
-   * `Continue directly from this image as the exact first frame. Keep the same people,
-   * faces, wardrobe, props, composition, lighting, and set. Do not add people or objects.
-   * Use one locked continuous take with constant framing, exposure, and color. Keep each
-   * person planted at the same distance and preserve the starting body angle and eyeline
-   * unless the motion prompt explicitly changes them. The final frame remains a normally
-   * lit continuation of the shot, not a fade or transition. {videoPrompt}`
+   * `Continue directly from this image as the exact first frame. Preserve its people,
+   * wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only
+   * the motion, performance, camera, dialogue, and sound described here: {videoPrompt}`
    *
    * `{videoPrompt}`
    */
@@ -95,11 +81,14 @@ export type ShowPrompts = {
 
 export type ScriptScene = {
   sceneNumber: number;
+  /** Dramatic function in the one-minute episode, independent of camera coverage. */
+  beatType: "hook" | "pressure" | "reversal" | "cliffhanger";
+  /** Editing function: spatial anchor, speaking close-up, silent reaction, or prop detail. */
+  coverageRole: "anchor" | "closeup" | "reaction" | "insert";
   locationId: string;
   /**
    * Why this shot exists in the story, written as cause and effect rather than visuals.
-   * Example: "Julian publicly rejects Mara, causing her humiliation." The next shot must
-   * respond to this beat; no isolated exposition.
+   * The next shot must respond to this beat; no isolated exposition.
    */
   storyBeat: string;
   /**
@@ -114,12 +103,8 @@ export type ScriptScene = {
    */
   continuityOut: string;
   /**
-   * `single`: one visible speaking/acting character. `reaction`: one visible character
-   * reacts while another may speak off-screen. `twoShot`: two visible people establish or
-   * refresh their shared space. Start each conversation/entrant with a two-shot, then cut to
-   * singles; return to a two-shot after several singles or when the active pair changes.
-   * In video, only the speaker moves their mouth; explicitly keep the listener silent with
-   * a closed mouth and restrained reaction.
+   * `single`: one speaking/acting character. `reaction`: one silent listener. `twoShot`:
+   * two visible people in a brief silent spatial anchor; put dialogue in following singles.
    */
   shotType: "single" | "reaction" | "twoShot";
   /**
@@ -158,32 +143,12 @@ export type ScriptScene = {
    */
   imagePrompt: string;
   /**
-   * LTX motion continuing directly from the first frame. A silent shot gets one meaningful,
-   * achievable action that starts immediately. A dialogue shot starts speech immediately
-   * and gets only natural acting during/after the line—never put a step, turn, or prop action
-   * before speech, because LTX often performs it after the words instead.
-   *
-   * At most one quoted line of 16 words, spoken by `speakerId` to `addresseeId`. Put the
-   * quoted line near the beginning and explicitly say speech begins immediately with no
-   * silent pause. Specify projected volume, emotional intensity, pace, and vocal texture;
-   * vary these by beat instead of defaulting to flat/quiet speech. Outside quoted dialogue,
-   * name only visible `characterIds`; direct eyelines toward the frame edge instead of
-   * naming an absent addressee, or LTX may invent them. For a reaction shot, keep an
-   * off-screen voice brief and animate only the visible listener. Do not alternate speakers,
-   * cut angles inside a clip, introduce a new person, or repeat the first frame.
-   *
-   * Dialogue shots keep the camera, body position, body angle, and off-camera eyeline fixed
-   * for the full clip. Do not add an after-line turn, step, approach, exit, zoom, push-in,
-   * lighting change, fade, or transition: distilled LTX often converts such end beats into
-   * spatial drift or a different face. Use only blinks, breathing, lip movement, and a small
-   * expression change during the line. End with one short ambience/foley sentence. If the
-   * beat needs a reply or physical action, create the next shot.
+   * LTX motion as one chronological, present-tense continuous take. Describe one speaker or
+   * one simple visible action, camera behavior, and sound. Do not recap the opening frame.
    */
   videoPrompt: string;
   /**
-   * Clip length in seconds. Dialogue shots are 6 seconds so a substantial line can begin
-   * immediately and land emotionally. Silent inserts/reactions are 4 or 6 seconds. Episode
-   * scenes together must total at least 60 seconds.
+   * Target clip duration. The sum of episode scenes should be about 60 seconds.
    */
   durationSeconds: number;
 };
@@ -193,14 +158,20 @@ export type ShowEpisode = {
   title: string;
   isFree: boolean;
   coinCost: number;
+  /** One-sentence conflict promise for this episode. */
+  logline: string;
+  /** The urgent question that drives every beat until the final reversal. */
+  dramaticQuestion: string;
+  /** Mute-readable conflict image delivered in the first three seconds. */
+  hook: string;
+  /** Mid/late episode fact or choice that changes the price of the conflict. */
+  reversal: string;
+  /** Unresolved final action or revelation that forces the next episode. */
+  cliffhanger: string;
+  /** Concrete image that episode two would open on. */
+  nextEpisodeOpening: string;
   /**
-   * Persistent 180-degree-axis plan for every recurring location in this episode. Assign
-   * each character a fixed screen side before writing shots, then derive every off-camera
-   * eyeline from that map. Example: "At the desk, Elena is screen left and always looks
-   * frame right toward Marcus; Marcus is screen right and always looks frame left. Theo
-   * enters from farther screen left and looks frame right." Never independently choose
-   * left/right per prompt. A character may reverse eyeline only after an establishing shot
-   * or a visible turn shows that their addressee changed.
+   * Persistent 180-degree-axis map. Change an eyeline only after a new anchor establishes it.
    */
   screenDirection: string;
   scenes: ScriptScene[];

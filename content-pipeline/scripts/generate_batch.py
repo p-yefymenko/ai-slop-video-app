@@ -619,6 +619,8 @@ def load_show(path: Path) -> dict:
             cleaned_scenes.append(
                 {
                     "sceneNumber": scene_number,
+                    "beatType": str(scene.get("beatType") or ""),
+                    "coverageRole": str(scene.get("coverageRole") or ""),
                     "locationId": loc_id,
                     "storyBeat": require_text(scene, "storyBeat", scene_label),
                     "continuityIn": require_text(scene, "continuityIn", scene_label),
@@ -638,6 +640,12 @@ def load_show(path: Path) -> dict:
                 "title": require_text(episode, "title", f"episode {ep_num}"),
                 "isFree": bool(episode.get("isFree")),
                 "coinCost": int(episode.get("coinCost") or 0),
+                "logline": str(episode.get("logline") or ""),
+                "dramaticQuestion": str(episode.get("dramaticQuestion") or ""),
+                "hook": str(episode.get("hook") or ""),
+                "reversal": str(episode.get("reversal") or ""),
+                "cliffhanger": str(episode.get("cliffhanger") or ""),
+                "nextEpisodeOpening": str(episode.get("nextEpisodeOpening") or ""),
                 "screenDirection": str(episode.get("screenDirection") or ""),
                 "scenes": cleaned_scenes,
             }

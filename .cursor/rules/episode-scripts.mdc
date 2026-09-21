@@ -1,17 +1,37 @@
 ---
-description: Author one ShowScript JSON per show
+description: Write production-ready vertical microdrama ShowScript JSON
 globs: content-pipeline/scripts_input/*.json
 alwaysApply: false
 ---
 
-# Show scripts
+# Vertical drama screenwriting
 
-One file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Do not invent a different schema.
+Write the episode as drama before writing generation prompts.
 
-- Character `promptBlock` is face and body for the identity still. Scene stills attach that PNG, not this text.
-- `locations.promptBlock` is a short environment clause (where they are). Not a camera.
-- `characterIds` is at most two: Qwen Picture 1, then Picture 2.
-- `imagePrompt` is who is where, facing whom, wardrobe. Identity is the PNG.
-- `videoPrompt` is what happens next: action, camera, audio. Spoken lines in quotes with voice quality and one acting beat between phrases. Audio at the end. Do not redescribe the start frame.
-- Every instruction sent to Qwen or LTX comes from `prompts` with `{placeholders}` filled. Do not hide prompts in Python.
-- Valid show JSON only unless the human asked for a plan first.
+## Episode engine
+- Draft a timestamp skeleton first: visual hook 0–3s, pressure 3–35s, reversal 35–50s, irreversible cliffhanger 50–60s.
+- Give the episode one urgent want, one active obstacle, one emotional turn, and one unanswered final question.
+- Open in conflict, not arrival or explanation. The hook must read with audio muted.
+- Conflict must be filmable: a deadline, blocked exit, dangerous prop, public choice, or physical constraint.
+- Dialogue is action. Every line attacks, refuses, bargains, reveals, or forces a choice; cut greetings, recap, and lore lectures.
+- The cliffhanger opens a new question, cuts before resolution, and implies the next episode's opening image.
+
+## Coverage and space
+- Establish each active pair and the 180-degree axis with a 2–3 second silent two-shot, then cut dialogue to singles.
+- For three people, use pairwise anchors when the active pair changes: A+B, entrant C+B, then C+A.
+- Never animate dialogue in an anchor two-shot: distilled LTX makes the listener move, speak, or disappear.
+- Preserve fixed screen positions and reciprocal eyelines until a new anchor visibly establishes a changed axis.
+- Default to close/medium faces in 9:16. Use wide shots only when a large visible event carries story information.
+
+## Generation unit
+- One JSON scene is one continuous shot with one speaker or one simple visible action.
+- `imagePrompt` is the exact opening frame: visible cast (maximum two), wardrobe, prop state, placement, eyeline, and emotion.
+- `videoPrompt` is a short chronological present-tense paragraph describing only motion, performance, camera, dialogue, and sound.
+- Prefer positive motion instructions. Do not bury LTX in continuity recaps, prohibition lists, or multiple sequential actions.
+- Keep fantasy dense in consequence and lore, but visually simple: one set, one hero prop, one magical effect, readable faces.
+
+## Final audit
+- Read only `storyBeat` fields: they must form cause → pressure → choice → reversal → cliffhanger.
+- Read only quoted dialogue: it must sound like characters fighting for incompatible outcomes, not narrating the plot.
+- Read only opening images: hook, reversal, and cliffhanger must remain understandable with sound off.
+- Sources: Script Magazine vertical-writer interview; Real Reel vertical-drama guide; Filmmakers Academy eyeline/180° guide; official LTX prompting guide.
