@@ -135,10 +135,12 @@ export type ScriptScene = {
   addresseeId: string | null;
   /**
    * Qwen description of the clip's exact first frame. Repeat complete wardrobe and visible
-   * props. Specify shot size, left/right placement, gaze target, and emotion. Singles and
-   * reactions should be chest-up or medium close-ups with the subject looking toward the
-   * established off-screen addressee, never into the camera. Two-shots keep both faces
-   * readable but need not be symmetrical or posed.
+   * props. Specify shot size, left/right placement, gaze target, and emotion. For a single,
+   * put the subject on the opposite third from the addressee and leave obvious empty
+   * conversation space on the addressee's side. Require a strong three-quarter side profile:
+   * torso, nose, and pupils point into that empty space, the far cheek is partly hidden, and
+   * the camera is outside the eyeline. This is more reliable than saying only "looks left."
+   * Two-shots keep both faces readable but need not be symmetrical or posed.
    *
    * Establish the beginning of one achievable action. Simple turns, one step, raising or
    * lowering an already-held prop, and restrained gestures are allowed. Avoid readable
@@ -175,9 +177,11 @@ export type ScriptScene = {
    */
   videoPrompt: string;
   /**
-   * Clip length in seconds. Dialogue shots are 6 seconds so a substantial line can begin
-   * immediately and land emotionally. Silent inserts/reactions are 4 or 6 seconds. Episode
-   * scenes together must total at least 60 seconds.
+   * Clip length in seconds. Use the shortest clip that fits the beat: usually 4-5 seconds
+   * for dialogue and 2-3 seconds for a silent reaction. Six seconds is only for a line or
+   * reveal that genuinely fills the full duration; unused tail time makes distilled LTX
+   * invent turns, steps, exits, and lighting changes. Add more short shots rather than
+   * padding clips. Episode scenes together should still total at least 60 seconds.
    */
   durationSeconds: number;
 };
