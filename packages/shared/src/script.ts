@@ -65,6 +65,11 @@ export type ShowPrompts = {
    */
   sceneStill: string;
   /**
+   * Qwen template for establishing shots and prop inserts with no identity references.
+   * Uses `{locationPromptBlock}` and `{imagePrompt}` from a blank canvas.
+   */
+  environmentStill: string;
+  /**
    * LTX-2.3 I2V template. State that the attached image is the exact first frame, must keep
    * its people/composition/wardrobe/set, and then include only the chronological motion.
    * Do not ask LTX to add a person or repair/change anything visible in the still.
@@ -84,7 +89,7 @@ export type ScriptScene = {
   /** Dramatic function in the one-minute episode, independent of camera coverage. */
   beatType: "hook" | "pressure" | "reversal" | "cliffhanger";
   /** Editing function: spatial anchor, speaking close-up, silent reaction, or prop detail. */
-  coverageRole: "anchor" | "closeup" | "reaction" | "insert";
+  coverageRole: "establishing" | "anchor" | "closeup" | "reaction" | "insert";
   locationId: string;
   /**
    * Why this shot exists in the story, written as cause and effect rather than visuals.
@@ -103,14 +108,13 @@ export type ScriptScene = {
    */
   continuityOut: string;
   /**
-   * `single`: one speaking/acting character. `reaction`: one silent listener. `twoShot`:
-   * two visible people in a brief silent spatial anchor; put dialogue in following singles.
+   * `establishing`/`insert`: no visible character. `single`: one speaking/acting character.
+   * `reaction`: one silent listener. `twoShot`: two people in a brief silent spatial anchor.
    */
-  shotType: "single" | "reaction" | "twoShot";
+  shotType: "establishing" | "insert" | "single" | "reaction" | "twoShot";
   /**
-   * One ID preferred, two maximum. Order is exact: first ID = Qwen Picture 1, second ID =
-   * Picture 2. Every listed character must be clearly visible exactly once in `imagePrompt`;
-   * no unlisted visible people.
+   * Empty for establishing/insert shots; otherwise one ID preferred and two maximum. Order
+   * is exact: first ID = Qwen Picture 1, second ID = Picture 2.
    */
   characterIds: string[];
   /**

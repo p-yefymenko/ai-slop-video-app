@@ -21,14 +21,15 @@ Write the episode as drama before writing generation prompts.
 - For three people, use pairwise anchors when the active pair changes: A+B, entrant C+B, then C+A.
 - Never animate dialogue in an anchor two-shot: distilled LTX makes the listener move, speak, or disappear.
 - Preserve fixed screen positions and reciprocal eyelines until a new anchor visibly establishes a changed axis.
-- Default to close/medium faces in 9:16. Use wide shots only when a large visible event carries story information.
+- Build a scale ladder: geography/exterior → threat or prop insert → master/anchor → close performance → visual cliffhanger.
+- Use 2–3 connected locations or zones when the premise promises scale; return to a stable axis inside each dialogue space.
 
 ## Generation unit
 - One JSON scene is one continuous shot with one speaker or one simple visible action.
-- `imagePrompt` is the exact opening frame: visible cast (maximum two), wardrobe, prop state, placement, eyeline, and emotion.
+- `imagePrompt` is the exact opening frame. Establishing/inserts use no cast; performance shots use at most two identities.
 - `videoPrompt` is a short chronological present-tense paragraph describing only motion, performance, camera, dialogue, and sound.
 - Prefer positive motion instructions. Do not bury LTX in continuity recaps, prohibition lists, or multiple sequential actions.
-- Keep fantasy dense in consequence and lore, but visually simple: one set, one hero prop, one magical effect, readable faces.
+- Make fantasy dense through visible world evidence—architecture, weather, creatures, magic, ritual, rank—not lore speeches.
 
 ## Final audit
 - Read only `storyBeat` fields: they must form cause → pressure → choice → reversal → cliffhanger.

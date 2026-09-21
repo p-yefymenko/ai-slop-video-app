@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
+OPTIONAL_PROMPT_KEYS = ("environmentStill",)
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -564,6 +565,9 @@ def load_show(path: Path) -> dict:
     if not isinstance(prompts, dict):
         raise SystemExit(f"{path.name} is missing prompts")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
+    for key in OPTIONAL_PROMPT_KEYS:
+        if key in prompts:
+            show["prompts"][key] = require_text(prompts, key, "prompts")
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
         raise SystemExit(f"{path.name} is missing episodes")
@@ -594,8 +598,6 @@ def load_show(path: Path) -> dict:
                 known = ", ".join(sorted(cleaned_locs))
                 raise SystemExit(f"Unknown locationId {loc_id!r}. Known: {known}")
             character_ids = [str(cid) for cid in (scene.get("characterIds") or []) if cid]
-            if not character_ids:
-                raise SystemExit(f"{scene_label} is missing characterIds")
             if len(character_ids) > 2:
                 raise SystemExit(
                     f"{scene_label} has {len(character_ids)} characterIds; "
@@ -1016,30 +1018,51 @@ def generate_show(
                     "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
                 )
             if stage == "frames":
-                characters = resolve_scene_characters(show, scene)
-                prompt = show_prompt(
-                    show,
-                    "sceneStill",
-                    {
-                        "referenceMap": "; ".join(
-                            f"Picture {index} = {character_id}"
-                            for index, character_id in enumerate(scene["characterIds"], start=1)
-                        ),
-                        "characterCount": str(len(scene["characterIds"])),
-                        "characterIds": ", ".join(scene["characterIds"]),
-                        "locationPromptBlock": location["promptBlock"],
-                        "imagePrompt": scene["imagePrompt"],
-                    },
+                seed = (
+                    seed_override
+                    if seed_override is not None
+                    else stable_seed(show_id, episode_number, scene_number, "frame")
                 )
+                if scene["characterIds"]:
+                    characters = resolve_scene_characters(show, scene)
+                    prompt = show_prompt(
+                        show,
+                        "sceneStill",
+                        {
+                            "referenceMap": "; ".join(
+                                f"Picture {index} = {character_id}"
+                                for index, character_id in enumerate(scene["characterIds"], start=1)
+                            ),
+                            "characterCount": str(len(scene["characterIds"])),
+                            "characterIds": ", ".join(scene["characterIds"]),
+                            "locationPromptBlock": location["promptBlock"],
+                            "imagePrompt": scene["imagePrompt"],
+                        },
+                    )
+                    inject_images = (
+                        lambda graph, chars=characters: inject_qwen_character_refs(graph, chars)
+                    )
+                else:
+                    if "environmentStill" not in show["prompts"]:
+                        raise SystemExit(
+                            f"{scene_label} has no characterIds and requires prompts.environmentStill"
+                        )
+                    prompt = show_prompt(
+                        show,
+                        "environmentStill",
+                        {
+                            "locationPromptBlock": location["promptBlock"],
+                            "imagePrompt": scene["imagePrompt"],
+                        },
+                    )
+                    inject_images = inject_qwen_character_canvas
                 run_qwen_image(
                     workflow_template,
                     dest,
                     prompt,
-                    f"Qwen scene still ({names} @ {location['id']})",
-                    lambda graph, chars=characters: inject_qwen_character_refs(graph, chars),
-                    seed_override
-                    if seed_override is not None
-                    else stable_seed(show_id, episode_number, scene_number, "frame"),
+                    f"Qwen scene still ({names or 'environment'} @ {location['id']})",
+                    inject_images,
+                    seed,
                 )
             else:
                 prompt = show_prompt(
