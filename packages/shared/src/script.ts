@@ -80,7 +80,10 @@ export type ShowPrompts = {
    * Exact template:
    * `Continue directly from this image as the exact first frame. Keep the same people,
    * faces, wardrobe, props, composition, lighting, and set. Do not add people or objects.
-   * {videoPrompt}`
+   * Use one locked continuous take with constant framing, exposure, and color. Keep each
+   * person planted at the same distance and preserve the starting body angle and eyeline
+   * unless the motion prompt explicitly changes them. The final frame remains a normally
+   * lit continuation of the shot, not a fade or transition. {videoPrompt}`
    *
    * `{videoPrompt}`
    */
@@ -163,8 +166,12 @@ export type ScriptScene = {
    * off-screen voice brief and animate only the visible listener. Do not alternate speakers,
    * cut angles inside a clip, introduce a new person, or repeat the first frame.
    *
-   * Use a locked camera for speech or one slow push-in for a major reaction. End with one
-   * short ambience/foley sentence. If the beat needs a reply, create the next shot.
+   * Dialogue shots keep the camera, body position, body angle, and off-camera eyeline fixed
+   * for the full clip. Do not add an after-line turn, step, approach, exit, zoom, push-in,
+   * lighting change, fade, or transition: distilled LTX often converts such end beats into
+   * spatial drift or a different face. Use only blinks, breathing, lip movement, and a small
+   * expression change during the line. End with one short ambience/foley sentence. If the
+   * beat needs a reply or physical action, create the next shot.
    */
   videoPrompt: string;
   /**
@@ -180,6 +187,16 @@ export type ShowEpisode = {
   title: string;
   isFree: boolean;
   coinCost: number;
+  /**
+   * Persistent 180-degree-axis plan for every recurring location in this episode. Assign
+   * each character a fixed screen side before writing shots, then derive every off-camera
+   * eyeline from that map. Example: "At the desk, Elena is screen left and always looks
+   * frame right toward Marcus; Marcus is screen right and always looks frame left. Theo
+   * enters from farther screen left and looks frame right." Never independently choose
+   * left/right per prompt. A character may reverse eyeline only after an establishing shot
+   * or a visible turn shows that their addressee changed.
+   */
+  screenDirection: string;
   scenes: ScriptScene[];
 };
 

@@ -20,7 +20,7 @@
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
     "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
+    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. Use one locked continuous take with constant framing, exposure, and color. Keep each person planted at the same distance and preserve the starting body angle and eyeline unless the motion prompt explicitly changes them. The final frame remains a normally lit continuation of the shot, not a fade or transition. {videoPrompt}"
   },
   "episodes": [
     {
@@ -28,6 +28,7 @@
       "title": "The Source",
       "isFree": true,
       "coinCost": 0,
+      "screenDirection": "Ballroom axis: Aria occupies screen left and always looks frame right when addressing Nolan. Nolan occupies screen right and always looks frame left toward Aria or Roman. Roman enters from farther screen left and always looks frame right toward Nolan or Aria. Aria looks frame left only after Roman has entered and she is reacting to him. No shot reverses this axis.",
       "scenes": [
         {
           "sceneNumber": 1,
@@ -41,8 +42,8 @@
           ],
           "speakerId": "nolan",
           "addresseeId": "aria",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in a fitted midnight-blue tuxedo jacket over a black dress shirt with no tie. He faces empty space beyond frame left with polished contempt, arms low out of frame, never looking at the camera.",
-          "videoPrompt": "Nolan speaks immediately with no silent pause, his clipped voice cold and loud enough to command the ballroom: \"You're fired, Aria. Retract the Vale investigation before security walks you out.\" His mouth settles into a thin line. Camera locked. The room falls silent.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Nolan ending above his waist, with no legs or open floor in the foreground. He wears a fitted midnight-blue tuxedo jacket over a black dress shirt with no tie. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame left; the camera is outside his eyeline. He holds polished contempt and never looks toward the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, his clipped voice cold and loud enough to command the ballroom: \"You're fired, Aria. Retract the Vale investigation before security walks you out.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame left. Only his lips, breathing, and eyelids move. The final frame holds the same pose and warm exposure. The room falls silent.",
           "durationSeconds": 6
         },
         {
@@ -57,8 +58,8 @@
           ],
           "speakerId": null,
           "addresseeId": "nolan",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Aria in a deep emerald satin evening dress with a slim black belt, straight black hair in a low ponytail, and silver stud earrings. She looks toward empty space beyond frame right with stunned, wounded eyes, hands low out of frame, never at the camera.",
-          "videoPrompt": "Aria takes one tight breath immediately as shock leaves her face and defiance replaces it. One slow push-in. A distant glass clinks once.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Aria ending above her waist, with no legs or open floor in the foreground. She wears a deep emerald satin evening dress with a slim black belt, straight black hair in a low ponytail, and silver stud earrings. Her torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame right; the camera is outside her eyeline. She holds stunned, wounded eyes and never looks toward the camera.",
+          "videoPrompt": "Aria remains planted at the same distance with torso, head, and gaze fixed toward frame right. She takes one tight breath immediately as shock changes into defiance using only her eyes and facial muscles. The framing and warm exposure remain unchanged through the final frame. A distant glass clinks once.",
           "durationSeconds": 4
         },
         {
@@ -89,8 +90,8 @@
           ],
           "speakerId": "nolan",
           "addresseeId": "aria",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in the midnight-blue tuxedo jacket and black dress shirt with no tie. He faces empty space beyond frame left with a smooth, threatening calm, arms low out of frame, never looking at the camera.",
-          "videoPrompt": "Nolan speaks immediately with no silent pause, lowering his voice without losing its cutting force: \"Refuse, and our lawyers will take your apartment before sunrise.\" A satisfied smile barely touches his lips. Camera locked. The room tone turns still.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Nolan ending above his waist, with no legs or open floor in the foreground. He wears the midnight-blue tuxedo jacket and black dress shirt with no tie. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame left; the camera is outside his eyeline. He holds smooth, threatening calm and never looks toward the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, his quiet voice controlled but cutting: \"Refuse, and our lawyers will take your apartment before sunrise.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame left. Only his lips, breathing, and eyelids move. The final frame holds the same pose and warm exposure. The room tone stays quiet.",
           "durationSeconds": 6
         },
         {
@@ -112,17 +113,17 @@
         {
           "sceneNumber": 6,
           "locationId": "hotel_ballroom",
-          "storyBeat": "Roman steps from the curtained side entrance and interrupts the confrontation.",
+          "storyBeat": "Roman interrupts the confrontation with a short command that immediately establishes authority.",
           "continuityIn": "Aria has refused Nolan's threat in front of the room.",
-          "continuityOut": "An imposing stranger has entered and taken control of the silence.",
+          "continuityOut": "An imposing stranger has stopped Nolan and taken control of the silence.",
           "shotType": "single",
           "characterIds": [
             "roman"
           ],
-          "speakerId": null,
+          "speakerId": "roman",
           "addresseeId": "nolan",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in a black wool overcoat over a tailored black suit and open-collar white shirt. He stands beside the dark navy curtain facing empty space beyond frame left with contained authority, hands low out of frame, never looking at the camera.",
-          "videoPrompt": "Roman takes one deliberate step immediately from beside the curtain and stops with calm, squared posture. Camera locked. His shoe lands sharply on the stone floor.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Roman ending above his waist, with no legs or open floor in the foreground. He wears a black wool overcoat over a tailored black suit and open-collar white shirt. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame right; the camera is outside his eyeline. He is already stopped beside the dark navy curtain with contained authority and never looks toward the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his deep command sharp and fully audible: \"That's enough, Nolan.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame right. Only his lips, breathing, and eyelids move. The final frame holds the same pose and warm exposure. The room becomes silent.",
           "durationSeconds": 4
         },
         {
@@ -137,8 +138,8 @@
           ],
           "speakerId": "roman",
           "addresseeId": "nolan",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame left with restrained fury, shoulders motionless, never looking at the camera.",
-          "videoPrompt": "Roman speaks immediately with no silent pause, his deep voice quiet but resonant enough to carry through the room: \"Her source told the truth. I have the original evidence.\" His eyes harden after the claim. Camera locked. The curtain shifts softly.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Roman ending above his waist, with no legs or open floor in the foreground. He wears the black wool overcoat, tailored black suit, and open-collar white shirt. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame right; the camera is outside his eyeline. He holds restrained fury and never looks toward the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his deep voice quiet but resonant enough to carry through the room: \"Her source told the truth. I have the original evidence.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame right. Only his lips, breathing, and eyelids move. The final frame holds the same pose, identity, and warm exposure. The curtain rustles softly.",
           "durationSeconds": 6
         },
         {
@@ -153,8 +154,8 @@
           ],
           "speakerId": "nolan",
           "addresseeId": "roman",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Nolan in the midnight-blue tuxedo jacket and black dress shirt with no tie. He faces empty space beyond frame right with anger masking sudden uncertainty, arms low out of frame, never looking at the camera.",
-          "videoPrompt": "Nolan speaks immediately with no silent pause, his raised voice brittle as confidence begins to crack: \"Who are you to walk in here and threaten my company?\" His nostrils flare at the final word. Camera locked. A low murmur begins off-screen.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Nolan ending above his waist, with no legs or open floor in the foreground. He wears the midnight-blue tuxedo jacket and black dress shirt with no tie. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame left; the camera is outside his eyeline. Anger masks sudden uncertainty, and he never looks toward the camera.",
+          "videoPrompt": "Nolan speaks immediately with no silent pause, his raised voice brittle as confidence begins to crack: \"Who are you to walk in here and threaten my company?\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame left. Only his lips, breathing, and eyelids move. The final frame holds the same pose and warm exposure. A low murmur begins off-screen.",
           "durationSeconds": 6
         },
         {
@@ -169,8 +170,8 @@
           ],
           "speakerId": "roman",
           "addresseeId": "nolan",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame left with cool, absolute control, shoulders relaxed, never looking at the camera.",
-          "videoPrompt": "Roman speaks immediately with no silent pause, his measured baritone calm enough to make the revelation more threatening: \"Roman Vale. As of ten minutes ago, it is my company.\" One eyebrow lifts slightly afterward. Camera locked. The off-screen murmur swells.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Roman ending above his waist, with no legs or open floor in the foreground. He wears the black wool overcoat, tailored black suit, and open-collar white shirt. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame right; the camera is outside his eyeline. He holds cool, absolute control and never looks toward the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his measured baritone calm enough to make the revelation more threatening: \"Roman Vale. As of ten minutes ago, it is my company.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame right. Only his lips, breathing, and eyelids move. The final frame holds the same pose and warm exposure. The off-screen murmur swells.",
           "durationSeconds": 6
         },
         {
@@ -186,7 +187,7 @@
           "speakerId": null,
           "addresseeId": "roman",
           "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Medium close-up of Aria in the deep emerald satin evening dress with slim black belt, low black ponytail, and silver stud earrings. She looks toward empty space beyond frame left with wary shock and the first trace of hope, hands low out of frame, never at the camera.",
-          "videoPrompt": "Aria's expression shifts immediately from guarded disbelief to wary hope while her eyes remain fixed toward the left frame edge. One slow push-in. She releases a breath she had been holding.",
+          "videoPrompt": "Aria remains planted at the same distance with torso, head, and gaze fixed toward frame left. Her expression shifts immediately from guarded disbelief to wary hope using only her eyes and facial muscles. The framing and warm exposure remain unchanged through the final frame. She releases a quiet breath.",
           "durationSeconds": 6
         },
         {
@@ -201,8 +202,8 @@
           ],
           "speakerId": "roman",
           "addresseeId": "aria",
-          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Chest-up single of Roman in the black wool overcoat, tailored black suit, and open-collar white shirt. He faces empty space beyond frame right with grief breaking through his controlled expression, never looking at the camera.",
-          "videoPrompt": "Roman speaks immediately with no silent pause, his low voice fully audible as grief roughens every word: \"Your source was my sister, and her killer is still inside this company.\" Pain flashes across his eyes. One slow push-in. The ballroom doors close with a heavy thud.",
+          "imagePrompt": "Exactly one person is visible; no foreground shoulder or background person. Tight chest-up crop of Roman ending above his waist, with no legs or open floor in the foreground. He wears the black wool overcoat, tailored black suit, and open-collar white shirt. His torso, nose, and pupils are clearly angled forty-five degrees toward empty space beyond frame right; the camera is outside his eyeline. He holds controlled grief and never looks toward the camera.",
+          "videoPrompt": "Roman speaks immediately with no silent pause, his low voice fully audible as grief roughens every word: \"Your source was my sister. Her killer still works inside this company.\" Throughout the line he remains planted at the same distance with torso, head, and gaze fixed toward frame right. Only his lips, breathing, and eyelids move. The final frame holds the same face, wardrobe, framing, and warm exposure. A low air vent hum continues.",
           "durationSeconds": 6
         }
       ]

@@ -255,7 +255,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
     "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. {videoPrompt}"
+    "sceneVideo": "Continue directly from this image as the exact first frame. Keep the same people, faces, wardrobe, props, composition, lighting, and set. Do not add people or objects. Use one locked continuous take with constant framing, exposure, and color. Keep each person planted at the same distance and preserve the starting body angle and eyeline unless the motion prompt explicitly changes them. The final frame remains a normally lit continuation of the shot, not a fade or transition. {videoPrompt}"
   },
   "episodes": [
     {
@@ -263,6 +263,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
       "title": "The Return",
       "isFree": true,
       "coinCost": 0,
+      "screenDirection": "At the gates, Elena is screen left and looks frame right toward the estate.",
       "scenes": [
         {
           "sceneNumber": 1,
@@ -288,6 +289,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Authoring guidance lives in `packages/shared/src/script.ts`, not in creative runtime checks. Aim for 10-12 causal shots totaling at least 60 seconds: setup, escalating pressure, choice/reveal, reactions, and cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit.
 - `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. The IDs remain Qwen Picture 1 / Picture 2 order.
+- `screenDirection` fixes the 180-degree axis per recurring location before shots are written. Every scene derives left/right eyelines from it; never choose eyelines independently per prompt.
 - `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
 - `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.

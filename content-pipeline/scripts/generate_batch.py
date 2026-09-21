@@ -632,6 +632,7 @@ def load_show(path: Path) -> dict:
                 "title": require_text(episode, "title", f"episode {ep_num}"),
                 "isFree": bool(episode.get("isFree")),
                 "coinCost": int(episode.get("coinCost") or 0),
+                "screenDirection": str(episode.get("screenDirection") or ""),
                 "scenes": cleaned_scenes,
             }
         )
