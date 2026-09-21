@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
-import random
 import re
 import shutil
 import struct
@@ -472,6 +472,12 @@ def require_text(obj: dict, key: str, where: str) -> str:
     return text
 
 
+def stable_seed(*parts: object) -> int:
+    """Return a reproducible unsigned 32-bit seed for one render identity."""
+    key = "|".join(str(part) for part in parts).encode("utf-8")
+    return int.from_bytes(hashlib.blake2s(key, digest_size=4).digest(), "big")
+
+
 def render_prompt(template: str, values: dict[str, str]) -> str:
     unused = set(values)
 
@@ -906,8 +912,14 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
-def run_qwen_image(workflow_template: dict, dest: Path, prompt: str, mode: str, inject_images) -> None:
-    seed = random.randint(0, 2**32 - 1)
+def run_qwen_image(
+    workflow_template: dict,
+    dest: Path,
+    prompt: str,
+    mode: str,
+    inject_images,
+    seed: int,
+) -> None:
     graph = clone_workflow(workflow_template)
     inject_qwen_prompt(graph, prompt)
     inject_seed(graph, seed)
@@ -916,7 +928,14 @@ def run_qwen_image(workflow_template: dict, dest: Path, prompt: str, mode: str, 
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
-def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool = False) -> None:
+def generate_show(
+    show: dict,
+    workflow_template: dict,
+    stage: str,
+    partial: bool = False,
+    force: bool = False,
+    seed_override: int | None = None,
+) -> None:
     show_id = show["id"]
     started = time.time()
     generated = 0
@@ -943,6 +962,7 @@ def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool
                 prompt,
                 f"Qwen character ({character_id})",
                 inject_qwen_character_canvas,
+                stable_seed(show_id, "character", character_id),
             )
             generated += 1
 
@@ -975,7 +995,7 @@ def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool
             location = resolve_location(show, scene)
             names = ", ".join(scene["characterIds"])
             print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
-            if present(dest):
+            if present(dest) and not force:
                 print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
                 if stage == "video":
                     scene_files.append(dest)
@@ -1009,6 +1029,9 @@ def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool
                     prompt,
                     f"Qwen scene still ({names} @ {location['id']})",
                     lambda graph, chars=characters: inject_qwen_character_refs(graph, chars),
+                    seed_override
+                    if seed_override is not None
+                    else stable_seed(show_id, episode_number, scene_number, "frame"),
                 )
             else:
                 prompt = show_prompt(
@@ -1018,7 +1041,11 @@ def generate_show(show: dict, workflow_template: dict, stage: str, partial: bool
                         "videoPrompt": scene["videoPrompt"],
                     },
                 )
-                seed = random.randint(0, 2**32 - 1)
+                seed = (
+                    seed_override
+                    if seed_override is not None
+                    else stable_seed(show_id, episode_number, scene_number, "video")
+                )
                 graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
                 inject_seed(graph, seed)
                 inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
@@ -1083,9 +1110,25 @@ def main() -> None:
     parser.add_argument("--show", help="Render only this show id")
     parser.add_argument("--episode", type=int, help="Render only this episode number")
     parser.add_argument("--scene", type=int, help="Render only this scene number (requires --episode)")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate an existing selected scene (requires --scene)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Override the deterministic seed for one selected scene (requires --scene)",
+    )
     args = parser.parse_args()
     if args.scene is not None and args.episode is None:
         parser.error("--scene requires --episode")
+    if args.force and args.scene is None:
+        parser.error("--force requires --scene")
+    if args.seed is not None and args.scene is None:
+        parser.error("--seed requires --scene")
+    if args.seed is not None and not 0 <= args.seed <= 2**32 - 1:
+        parser.error("--seed must be between 0 and 4294967295")
     load_dotenv()
     workflow_path = QWEN_WORKFLOW_PATH if args.stage == "frames" else LTX_WORKFLOW_PATH
     if not workflow_path.is_file():
@@ -1118,7 +1161,7 @@ def main() -> None:
                     f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}"
                 )
             show["episodes"][0]["scenes"] = scenes
-    needs_comfy = stage_needs_comfy(shows, args.stage)
+    needs_comfy = args.force or stage_needs_comfy(shows, args.stage)
     if needs_comfy:
         if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
             raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
@@ -1147,6 +1190,8 @@ def main() -> None:
             workflow_template,
             args.stage,
             partial=args.scene is not None,
+            force=args.force,
+            seed_override=args.seed,
         )
 
 

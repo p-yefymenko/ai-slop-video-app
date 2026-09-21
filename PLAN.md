@@ -203,7 +203,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from those portraits plus location text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped; delete a file to regenerate it.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from those portraits plus location text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped unless one selected scene uses `--force`.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -288,16 +288,17 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Authoring guidance lives in `packages/shared/src/script.ts`, not in creative runtime checks. Aim for 10-12 causal shots totaling at least 60 seconds: setup, escalating pressure, choice/reveal, reactions, and cliffhanger. `storyBeat`, `continuityIn`, and `continuityOut` make the chain explicit.
-- `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. The IDs remain Qwen Picture 1 / Picture 2 order.
+- `shotType` is `single`, `reaction`, or `twoShot`. Singles/reactions have one `characterId`; two-shots have exactly two. Ground each conversation with a two-shot before close coverage. For three people, use pairwise anchors (A+B, then entrant C+B, then C+A) because Qwen receives at most two identities. Only the speaker moves their mouth in an animated two-shot. The IDs remain Qwen Picture 1 / Picture 2 order.
 - `screenDirection` fixes the 180-degree axis per recurring location before shots are written. Every scene derives left/right eyelines from it; never choose eyelines independently per prompt.
 - `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
-- `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. For singles, place the subject on one third with empty conversation space toward the addressee; use a strong three-quarter profile rather than only saying "looks left/right." Identity is the PNG.
+- `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
 - `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.
 - A dialogue `videoPrompt` starts speech immediately with no lead-in action and specifies concrete volume, emotion, pace, and vocal texture. Any meaningful action before dialogue becomes its own silent shot. Do not alternate speakers or repeat the still.
-- `durationSeconds` is flexible and converted to `8n+1` frames at 24 fps. Prefer 4-5 seconds for dialogue and 2-3 seconds for silent reactions; reserve 6 seconds for content that fills it. Unused tail time causes motion drift.
+- `durationSeconds` is 4 or 6 seconds (`8n+1` frames at 24 fps). Dialogue uses 6 seconds; silent inserts and reactions use 4 or 6.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
-- Iterate on one shot with `pnpm run content:frame -- --show <show-id> --episode <n> --scene <n>`, then test only its video with the same filters through `pnpm run content:clip`. A partial clip render never overwrites `episode.mp4`.
+- Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.
+- Iterate on one shot with `pnpm run content:frame -- --show <show-id> --episode <n> --scene <n> --force`, then test only its video with the same filters through `pnpm run content:clip`. To intentionally reroll a bad still or clip, add `--seed <0-4294967295>` to that selected `--force` command. A partial clip render never overwrites `episode.mp4`.
 
 
 ## Deployment
