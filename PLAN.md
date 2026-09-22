@@ -67,7 +67,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:frame": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:clip": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
-    "content:render": "pnpm run content:frames && pnpm run content:generate",
+    "content:render": "node scripts/render-content.cjs",
     "content:archive": "node scripts/archive-content-output.cjs",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
@@ -124,7 +124,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives identity portraits plus the proxy; dialogue singles also receive their photorealistic coverage master. Qwen therefore styles a known projection instead of inventing space from prose. **LTX-2.3 distilled-1.1** receives the reviewed start frame, an optional pinned end guide, and literal motion compiled from timeline deltas. Gemma API supplies text conditioning within 16GB VRAM. Generated motion remains stochastic between pinned guides.
+- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives identity portraits plus the proxy; dialogue singles also receive their photorealistic coverage master. Qwen therefore styles a known projection instead of inventing space from prose. Silent anchors with camera tracks use a deterministic pan/creep render so cast members cannot drift or disappear. Other shots use **LTX-2.3 distilled-1.1** with the reviewed start frame, an optional pinned end guide, and literal motion compiled from timeline deltas. Gemma API supplies text conditioning within 16GB VRAM.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -217,6 +217,8 @@ reelshort-clone/
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
+`content:render` runs `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all three stages.
+
 The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clips. Both are near 9:16; the LTX size is divisible by 32 and uses fewer pixels than the old 512x768 2:3 profile, which is necessary on the 16GB card.
 
 ### Local ComfyUI (required before `content:frames` / `content:generate`)
@@ -301,7 +303,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
-- `spatialTimeline` is the physical source of truth. Character tracks define timed location-local position, body yaw, eye target, stance, and hand targets; props have one timed position or owner. Shots select `timeRangeSeconds` and a physical camera. Run `content:previs` before GPU generation.
+- `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
 - `endGuideFrame` is reserved for action shots whose final blocking differs from the start. Static dialogue stays on one mark and camera; pinning an identical LTX guide adds substantial render cost without adding spatial information.
 - `shotType` is `establishing`, `insert`, `single`, `reaction`, or `twoShot`. Use 2–3 second silent two-shots as spatial anchors, then set each related single's `coverageReferenceSceneNumber` to that anchor. This makes the coverage share a rendered set and axis instead of resembling unrelated portraits. For three people, establish pairwise anchors when the active pair changes.
 - `establishing` and `insert` shots use empty `characterIds` and `prompts.environmentStill`; the pipeline supplies a blank canvas instead of identity references. Use these shots for geography, architecture, creatures, weather, and hero props that create visual scale.

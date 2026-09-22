@@ -17,10 +17,106 @@
   },
   "locations": {
     "citadel_exterior": {
-      "promptBlock": "An enormous black-stone citadel clings to a jagged mountain above a sea of clouds during a blood-red solar eclipse. Needle towers, torn crimson banners, icy wind, and distant lightning establish vast dark-fantasy scale; no people, text, or modern objects."
+      "promptBlock": "An enormous black-stone citadel clings to a jagged mountain above a sea of clouds during a blood-red solar eclipse. Needle towers, torn crimson banners, icy wind, and distant lightning establish vast dark-fantasy scale; no people, text, or modern objects.",
+      "spatial": {
+        "sizeMeters": [
+          120.0,
+          180.0,
+          110.0
+        ],
+        "landmarks": {
+          "mountain_keep": {
+            "kind": "box",
+            "position": [
+              0.0,
+              25.0,
+              0.0
+            ],
+            "size": [
+              42.0,
+              48.0,
+              52.0
+            ]
+          },
+          "coronation_tower": {
+            "kind": "column",
+            "position": [
+              0.0,
+              42.0,
+              0.0
+            ],
+            "size": [
+              16.0,
+              16.0,
+              92.0
+            ]
+          },
+          "foreground_roofs": {
+            "kind": "box",
+            "position": [
+              0.0,
+              -28.0,
+              0.0
+            ],
+            "size": [
+              72.0,
+              32.0,
+              18.0
+            ]
+          },
+          "dragon_shadow_path": {
+            "kind": "box",
+            "position": [
+              0.0,
+              -20.0,
+              18.2
+            ],
+            "size": [
+              58.0,
+              18.0,
+              0.2
+            ]
+          }
+        }
+      }
     },
     "oubliette": {
-      "promptBlock": "A deep circular dungeon of wet black stone with an iron-barred cell, a narrow shaft of red eclipse light, heavy wall chains, and one guttering torch. No text, windows, mirrors, or other rooms."
+      "promptBlock": "A deep circular dungeon of wet black stone with an iron-barred cell, a narrow shaft of red eclipse light, heavy wall chains, and one guttering torch. No text, windows, mirrors, or other rooms.",
+      "spatial": {
+        "sizeMeters": [
+          8.0,
+          8.0,
+          5.0
+        ],
+        "landmarks": {
+          "barred_cell": {
+            "kind": "box",
+            "position": [
+              0.0,
+              3.6,
+              0.0
+            ],
+            "size": [
+              5.0,
+              0.3,
+              4.2
+            ]
+          },
+          "chain_wall": {
+            "kind": "box",
+            "position": [
+              -3.6,
+              0.8,
+              0.0
+            ],
+            "size": [
+              0.2,
+              2.0,
+              2.5
+            ]
+          }
+        }
+      }
     },
     "eclipse_throne_hall": {
       "promptBlock": "A monumental black-basalt throne hall with cracked columns, bronze braziers, a towering arched eclipse window, and a waist-high black stone pedestal holding a jagged obsidian crown. No text, mirrors, or background people.",
@@ -85,6 +181,70 @@
           }
         }
       }
+    },
+    "citadel_rooftops": {
+      "promptBlock": "A top-down composition filled edge-to-edge by snow-dusted black slate roofs and a pale rectangular stone courtyard between them, lit by diffuse red storm light.",
+      "spatial": {
+        "sizeMeters": [
+          80.0,
+          80.0,
+          30.0
+        ],
+        "landmarks": {
+          "left_roof": {
+            "kind": "box",
+            "position": [
+              -24.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              24.0,
+              68.0,
+              14.0
+            ]
+          },
+          "right_roof": {
+            "kind": "box",
+            "position": [
+              24.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              24.0,
+              68.0,
+              14.0
+            ]
+          },
+          "stone_courtyard": {
+            "kind": "box",
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              20.0,
+              52.0,
+              0.3
+            ]
+          },
+          "dragon_shadow_path": {
+            "kind": "box",
+            "position": [
+              0.0,
+              0.0,
+              14.2
+            ],
+            "size": [
+              58.0,
+              18.0,
+              0.2
+            ]
+          }
+        }
+      }
     }
   },
   "prompts": {
@@ -95,7 +255,9 @@
     "coverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the rendered coverage master. Reframe the same cinematic moment as a new vertical 9:16 shot, not a collage. Preserve the identity from the identity picture(s), and inherit the set architecture, wardrobe, lighting direction, color, axis, and screen geography from the coverage master. The finished frame contains exactly {characterCount} visible people: {characterIds}. Do not retain, duplicate, or invent any other person from the master. {imagePrompt}",
     "spatialStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {proxyPictureNumber} = a 3D blocking projection. Create one new photorealistic vertical 9:16 film frame. Use the proxy only as ground-truth geometry for camera, framing, character positions, body directions, scale, occlusion, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Preserve the identity picture faces. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}. Each appears once. No duplicates, extra people, portraits, mirrors, or reflections. {locationPromptBlock} {imagePrompt}",
     "spatialCoverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = a crop of this character from the photorealistic coverage master; Picture {proxyPictureNumber} = the 3D blocking projection. Create a new photorealistic vertical 9:16 angle from the same moment. Use the coverage crop for the established profile, wardrobe, set style, light, and color. Preserve identity from the identity picture. Obey the proxy as ground-truth camera, framing, screen side, body direction, scale, and occlusion, but do not copy its grid, labels, lines, mannequin colors, or graphic style. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}; remove all other people from the master. No collage, duplicate, portrait, mirror, or reflection. {locationPromptBlock} {imagePrompt}",
-    "spatialEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the identity of {characterId}. Picture 3 is the 3D blocking projection at the end of the shot. Create the matching photorealistic end frame, not a collage. Preserve identity, wardrobe, set, light, color, lens, and camera from Picture 2. Obey Picture 3 only for final body position, facing, pose, framing, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Exactly one person is visible. {imagePrompt}"
+    "spatialEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the identity of {characterId}. Picture 3 is the 3D blocking projection at the end of the shot. Create the matching photorealistic end frame, not a collage. Preserve identity, wardrobe, set, light, color, lens, and camera from Picture 1. Obey Picture 3 only for final body position, facing, pose, framing, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Exactly one person is visible. {imagePrompt}",
+    "spatialEnvironmentStill": "Picture {proxyPictureNumber} is a 3D blocking projection. Transform its camera, framing, scale, landmark placement, and occlusion into one new photorealistic cinematic vertical 9:16 environment frame. Do not copy the grid, boxes, labels, lines, mannequin colors, or graphic style. The finished frame contains no people, faces, portraits, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
+    "spatialGroupEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the 3D blocking projection at the end of the camera move. Create the matching photorealistic end frame, not a collage. Preserve both original people, their identities, wardrobe, set, light, and color from Picture 1. Obey Picture 2 only for the final camera, framing, positions, scale, and landmarks; do not copy its boxes, lines, or graphic style. Exactly {characterCount} people remain visible: {characterIds}. {imagePrompt}"
   },
   "episodes": [
     {
@@ -123,15 +285,43 @@
           "characterIds": [],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Extreme aerial establishing frame: the entire cliffside citadel sits far below the red eclipse, tiny against the mountain and storm. Torn banners stream from needle towers and lightning glows inside distant clouds.",
-          "videoPrompt": "Cloud banks roll below the citadel while torn banners snap in the high wind. Distant lightning reveals the mountain ridges. A low dragon roar travels across the sky. The camera descends slowly toward the tallest tower.",
-          "durationSeconds": 2
+          "imagePrompt": "A remote black-stone mountain citadel hangs above a sea of clouds beneath a blood-red eclipse. The fortress is small within a vast storm landscape; no dragon is visible.",
+          "videoPrompt": "VISUAL: storm clouds roll below the fortress and torn banners snap in the wind. AUDIO: high wind, distant thunder, and one far-off dragon roar.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            0.0,
+            2.0
+          ],
+          "camera": {
+            "position": [
+              70.0,
+              -110.0,
+              66.0
+            ],
+            "lookAt": [
+              0.0,
+              25.0,
+              34.0
+            ],
+            "verticalFovDegrees": 55.0,
+            "endPosition": [
+              55.0,
+              -92.0,
+              56.0
+            ],
+            "endLookAt": [
+              0.0,
+              28.0,
+              32.0
+            ]
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 2,
           "beatType": "hook",
           "coverageRole": "insert",
-          "locationId": "citadel_exterior",
+          "locationId": "citadel_rooftops",
           "storyBeat": "A dragon shadow crossing the fortress promises an approaching power before any character speaks.",
           "continuityIn": "A distant roar has reached the citadel.",
           "continuityOut": "The unseen dragon is directly above the coronation tower.",
@@ -139,9 +329,27 @@
           "characterIds": [],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Steep downward view over black citadel rooftops and torn crimson banners. One enormous winged dragon shadow stretches across several towers under the red eclipse; the creature itself remains above the frame.",
-          "videoPrompt": "The enormous winged shadow glides rapidly across the rooftops from left to right. Banners whip beneath it and loose ash spirals upward. One heavy wingbeat shakes the air. The camera remains fixed.",
-          "durationSeconds": 2
+          "imagePrompt": "The camera points almost straight down at the completely empty courtyard. One enormous reptilian dragon shadow crosses it: long horned head, broad bat-like membranous wings, four claws, and a long barbed tail.",
+          "videoPrompt": "VISUAL: the winged shadow sweeps once across roofs and courtyard from left to right while banners snap. AUDIO: one heavy wingbeat.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            2.0,
+            4.0
+          ],
+          "camera": {
+            "position": [
+              0.0,
+              -18.0,
+              105.0
+            ],
+            "lookAt": [
+              0.0,
+              -12.0,
+              10.0
+            ],
+            "verticalFovDegrees": 48.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 3,
@@ -157,9 +365,27 @@
           ],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Exactly one person is visible in a tight cinematic head-and-shoulders close-up. Oren's face fills most of the vertical frame, cropped at the upper chest. He wears a torn charcoal tunic and plain iron collar; shoulder-length silver-streaked hair is disordered. Red eclipse light crosses his exhausted face. No hands or other person are visible.",
-          "videoPrompt": "VISUAL: Silent tight close-up. Oren remains seated and breathes shallowly; his exhausted eyes stay open in the red light. CAMERA: locked. AUDIO: low dungeon room tone.",
-          "durationSeconds": 2
+          "imagePrompt": "Oren wears a torn charcoal tunic and plain iron collar. His exhausted face is crossed by a narrow stripe of red eclipse light; his mouth remains closed.",
+          "videoPrompt": "PERFORMANCE: Oren remains seated, breathing shallowly with exhausted open eyes. AUDIO: low dungeon room tone.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            4.0,
+            6.0
+          ],
+          "camera": {
+            "position": [
+              0.0,
+              -2.2,
+              1.45
+            ],
+            "lookAt": [
+              0.0,
+              1.0,
+              1.15
+            ],
+            "verticalFovDegrees": 28.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 4,
@@ -177,7 +403,7 @@
           "speakerId": null,
           "addresseeId": null,
           "imagePrompt": "Lyra wears her torn ivory ceremonial gown, fitted black leather bodice, and plain iron collar with defiant tension. Malrec wears his dark crimson brocade coat and black steel gorget with absolute control. The obsidian crown remains on its pedestal.",
-          "videoPrompt": "PERFORMANCE: Lyra and Malrec remain silent with restrained breathing. AUDIO: low throne-hall room tone.",
+          "videoPrompt": "PERFORMANCE: Lyra and Malrec hold their opposing marks across the crown with restrained breathing. AUDIO: low throne-hall room tone.",
           "durationSeconds": 2,
           "timeRangeSeconds": [
             6.0,
@@ -194,8 +420,19 @@
               1.0,
               1.25
             ],
-            "verticalFovDegrees": 70.0
-          }
+            "verticalFovDegrees": 70.0,
+            "endPosition": [
+              -1.2,
+              -5.2,
+              1.85
+            ],
+            "endLookAt": [
+              0.0,
+              1.0,
+              1.35
+            ]
+          },
+          "endGuideFrame": true
         },
         {
           "sceneNumber": 5,
@@ -320,9 +557,27 @@
           "characterIds": [],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Extreme close-up of the jagged obsidian crown alone on the black stone pedestal. Hairline ember-red light glows from deep cracks inside the black metal while the red eclipse window towers out of focus behind it.",
-          "videoPrompt": "A single ember-red vein travels through the crown's black metal and stops. Fine ash lifts from the pedestal. The coronation bell falters for one beat. The camera makes a very slow push toward the crown.",
-          "durationSeconds": 2
+          "imagePrompt": "The jagged obsidian crown rests alone on its black stone pedestal. Hairline ember-red light glows inside one crack; no person or hand is visible.",
+          "videoPrompt": "VISUAL: one ember-red vein travels through the crown and fine ash rises from the pedestal. AUDIO: the coronation bell falters for one beat.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            23.0,
+            25.0
+          ],
+          "camera": {
+            "position": [
+              0.0,
+              -1.4,
+              1.4
+            ],
+            "lookAt": [
+              0.0,
+              0.2,
+              1.0
+            ],
+            "verticalFovDegrees": 25.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 9,
@@ -339,9 +594,27 @@
           ],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Exactly two people are visible in a tense medium two-shot. Kael stands frame left in matte black scale armor and a dark red cloak, looking right with controlled menace. Malrec stands frame right in the crimson coat and black gorget, looking left in startled anger. The vast eclipse window rises behind them; no other person is visible.",
-          "videoPrompt": "VISUAL: Silent medium two-shot. Kael and Malrec hold a hostile stare with subtle breathing only. CAMERA: locked. AUDIO: low throne-hall room tone.",
-          "durationSeconds": 2
+          "imagePrompt": "Kael wears matte black scale armor and a dark red cloak with controlled menace. Malrec wears the established crimson coat and black gorget with startled anger.",
+          "videoPrompt": "PERFORMANCE: Kael and Malrec hold a silent hostile stare with restrained breathing. AUDIO: low throne-hall room tone.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            25.0,
+            27.0
+          ],
+          "camera": {
+            "position": [
+              -1.0,
+              -6.5,
+              1.8
+            ],
+            "lookAt": [
+              -1.0,
+              1.0,
+              1.3
+            ],
+            "verticalFovDegrees": 76.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 10,
@@ -357,10 +630,28 @@
           ],
           "speakerId": "kael",
           "addresseeId": "malrec",
-          "imagePrompt": "Low-angle tight close-up derived from the established axis. Kael occupies the left two-thirds of frame, cropped through the shoulders of his black scale armor, with his three-quarter face turned right. Retain the same arched eclipse window and bronze fire light from the master. His expression is controlled authority.",
-          "videoPrompt": "VISUAL: Kael remains in tight close-up, face angled frame right, speaking with minimal movement. DIALOGUE (deep, steady, commanding): \"Step away from the crown, Regent. The dragon covenant names her.\" CAMERA: locked.",
+          "imagePrompt": "Kael wears the same matte black scale armor and dark red cloak. His expression is controlled authority.",
+          "videoPrompt": "PERFORMANCE: minimal movement and a steady commanding eyeline. DIALOGUE (deep, steady, commanding): \"Step away from the crown, Regent. The dragon covenant names her.\"",
           "durationSeconds": 5,
-          "coverageReferenceSceneNumber": 9
+          "coverageReferenceSceneNumber": 9,
+          "timeRangeSeconds": [
+            27.0,
+            32.0
+          ],
+          "camera": {
+            "position": [
+              -1.5,
+              -2.7,
+              1.72
+            ],
+            "lookAt": [
+              -3.3,
+              1.0,
+              1.5
+            ],
+            "verticalFovDegrees": 22.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 11,
@@ -376,10 +667,28 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "kael",
-          "imagePrompt": "Reciprocal eye-level close-up derived from the established axis. Malrec occupies the right two-thirds of frame, cropped below the black gorget, with his three-quarter face turned left. Retain the same eclipse window and firelight from the master. His expression is open contempt.",
-          "videoPrompt": "VISUAL: Malrec remains in tight close-up, face angled frame left, speaking with restrained disgust. DIALOGUE (sharp, contemptuous): \"She is bloodless, kingdomless, and condemned by every throne still standing.\" CAMERA: locked.",
+          "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is open contempt.",
+          "videoPrompt": "PERFORMANCE: restrained disgust and precise articulation. DIALOGUE (sharp, contemptuous): \"She is bloodless, kingdomless, and condemned by every throne still standing.\"",
           "durationSeconds": 5,
-          "coverageReferenceSceneNumber": 9
+          "coverageReferenceSceneNumber": 9,
+          "timeRangeSeconds": [
+            32.0,
+            37.0
+          ],
+          "camera": {
+            "position": [
+              -1.0,
+              -2.7,
+              1.72
+            ],
+            "lookAt": [
+              1.3,
+              1.0,
+              1.5
+            ],
+            "verticalFovDegrees": 22.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 12,
@@ -396,9 +705,27 @@
           ],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Exactly two people are visible in an intimate medium two-shot. Kael stands frame left in black scale armor and dark red cloak, looking right with solemn intent. Lyra stands frame right in the torn ivory gown, black bodice, and iron collar, looking left with wary hostility. The glowing crown sits behind them; no other person is visible.",
-          "videoPrompt": "VISUAL: Silent medium two-shot. Kael and Lyra study each other with subtle breathing only; Kael gives one slight respectful nod. CAMERA: locked. AUDIO: low room tone.",
-          "durationSeconds": 2
+          "imagePrompt": "Kael wears black scale armor and a dark red cloak with solemn intent. Lyra wears the established torn ivory gown, black bodice, and iron collar with wary hostility.",
+          "videoPrompt": "PERFORMANCE: Kael and Lyra silently study each other; Kael gives one slight respectful nod. AUDIO: low throne-hall room tone.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            37.0,
+            39.0
+          ],
+          "camera": {
+            "position": [
+              -2.5,
+              -5.5,
+              1.75
+            ],
+            "lookAt": [
+              -2.5,
+              1.0,
+              1.3
+            ],
+            "verticalFovDegrees": 58.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 13,
@@ -414,10 +741,28 @@
           ],
           "speakerId": "lyra",
           "addresseeId": "kael",
-          "imagePrompt": "Tight close-up derived from the established axis. Lyra occupies the right two-thirds of frame, cropped at the upper chest, with her three-quarter face turned left. Keep the glowing crown as a soft red shape behind her and preserve the master's light direction. Her expression is proud hostility.",
-          "videoPrompt": "VISUAL: Lyra remains in tight close-up, face angled frame left, speaking with controlled fury. DIALOGUE (low, proud, forceful): \"I escaped one tyrant. I will not become a dragon lord's prize.\" CAMERA: locked.",
+          "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Her expression is proud hostility.",
+          "videoPrompt": "PERFORMANCE: controlled fury with a fixed eyeline. DIALOGUE (low, proud, forceful): \"I escaped one tyrant. I will not become a dragon lord's prize.\"",
           "durationSeconds": 5,
-          "coverageReferenceSceneNumber": 12
+          "coverageReferenceSceneNumber": 12,
+          "timeRangeSeconds": [
+            39.0,
+            44.0
+          ],
+          "camera": {
+            "position": [
+              0.0,
+              -2.6,
+              1.7
+            ],
+            "lookAt": [
+              -1.4,
+              1.0,
+              1.48
+            ],
+            "verticalFovDegrees": 22.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 14,
@@ -433,10 +778,28 @@
           ],
           "speakerId": "kael",
           "addresseeId": "lyra",
-          "imagePrompt": "Reciprocal medium close-up derived from the established axis. Kael occupies the left two-thirds of frame, cropped through the shoulders of his black scale armor, with his three-quarter face turned right. Keep the same crown glow and basalt columns behind him. His expression is grave sincerity.",
-          "videoPrompt": "VISUAL: Kael remains in tight close-up, face angled frame right, speaking with quiet conviction. DIALOGUE (deep, sincere, controlled): \"Take the crown and command me—or let Oren die unavenged.\" CAMERA: locked.",
+          "imagePrompt": "Kael wears the established black scale armor and dark red cloak. His expression is grave sincerity.",
+          "videoPrompt": "PERFORMANCE: quiet conviction and a steady eyeline. DIALOGUE (deep, sincere, controlled): \"Take the crown and command me—or let Oren die unavenged.\"",
           "durationSeconds": 5,
-          "coverageReferenceSceneNumber": 12
+          "coverageReferenceSceneNumber": 12,
+          "timeRangeSeconds": [
+            44.0,
+            49.0
+          ],
+          "camera": {
+            "position": [
+              -4.8,
+              -2.6,
+              1.72
+            ],
+            "lookAt": [
+              -3.38,
+              1.0,
+              1.5
+            ],
+            "verticalFovDegrees": 24.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 15,
@@ -450,9 +813,37 @@
           "characterIds": [],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Low-angle exterior view of the highest citadel tower against the giant red eclipse. A colossal black dragon silhouette circles the tower with wings spread, small against the eclipse but unmistakable; no people are visible.",
-          "videoPrompt": "The black dragon silhouette crosses the red eclipse in one powerful glide. Storm clouds churn around the tower and banners strain in the wind. One immense wingbeat rolls over the citadel. The camera tilts upward slightly.",
-          "durationSeconds": 2
+          "imagePrompt": "The coronation tower rises close in the foreground against the blood-red eclipse. A colossal black dragon silhouette crosses high above it; no people are visible.",
+          "videoPrompt": "VISUAL: the dragon silhouette completes one powerful glide above the tower as storm clouds churn. AUDIO: one immense wingbeat rolls over the citadel.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            49.0,
+            51.0
+          ],
+          "camera": {
+            "position": [
+              -28.0,
+              -52.0,
+              23.0
+            ],
+            "lookAt": [
+              0.0,
+              42.0,
+              62.0
+            ],
+            "verticalFovDegrees": 52.0,
+            "endPosition": [
+              -24.0,
+              -47.0,
+              27.0
+            ],
+            "endLookAt": [
+              0.0,
+              42.0,
+              67.0
+            ]
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 16,
@@ -468,10 +859,28 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "lyra",
-          "imagePrompt": "Dutch-tilted extreme close-up derived from the established axis. Malrec occupies the right side, face turned left and cropped tightly above the black gorget. Preserve the master's red eclipse rim light and one blurred crown spike at lower left. His expression is cruel anticipation.",
-          "videoPrompt": "VISUAL: Malrec remains in tight close-up, face angled frame left, speaking with eager cruelty. DIALOGUE (low, precise, threatening): \"Touch it, and the Ash Crown burns a false heir alive.\" CAMERA: locked.",
+          "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is cruel anticipation.",
+          "videoPrompt": "PERFORMANCE: eager cruelty and precise articulation. DIALOGUE (low, threatening): \"Touch it, and the Ash Crown burns a false heir alive.\"",
           "durationSeconds": 4,
-          "coverageReferenceSceneNumber": 4
+          "coverageReferenceSceneNumber": 4,
+          "timeRangeSeconds": [
+            51.0,
+            55.0
+          ],
+          "camera": {
+            "position": [
+              0.3,
+              -1.6,
+              1.75
+            ],
+            "lookAt": [
+              1.38,
+              1.0,
+              1.52
+            ],
+            "verticalFovDegrees": 18.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 17,
@@ -487,15 +896,57 @@
           ],
           "speakerId": "lyra",
           "addresseeId": "malrec",
-          "imagePrompt": "Intimate high-angle close-up derived from the established axis. Lyra occupies the left half of frame, her face and shoulders filling the upper area while the jagged obsidian crown dominates the lower-right foreground. Preserve the master's eclipse light, black pedestal, and throne-hall color. She looks down at the crown with final resolve.",
-          "videoPrompt": "VISUAL: Tight portrait. Lyra lifts only her eyes from the crown while ember-red light pulses once across her face. DIALOGUE (calm, final): \"Then let it judge me.\" CAMERA: locked.",
+          "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Ember-red crown light reaches her face as she looks down with final resolve.",
+          "videoPrompt": "PERFORMANCE: Lyra lifts only her eyes from the crown. DIALOGUE (calm, final): \"Then let it judge me.\"",
           "durationSeconds": 5,
-          "coverageReferenceSceneNumber": 4
+          "coverageReferenceSceneNumber": 4,
+          "timeRangeSeconds": [
+            55.0,
+            60.0
+          ],
+          "camera": {
+            "position": [
+              0.8,
+              -1.8,
+              2.35
+            ],
+            "lookAt": [
+              -1.15,
+              0.9,
+              1.25
+            ],
+            "verticalFovDegrees": 32.0
+          },
+          "endGuideFrame": false
         }
       ],
       "spatialTimeline": {
         "durationSeconds": 60.0,
         "characterTracks": {
+          "oren": [
+            {
+              "timeSeconds": 4.0,
+              "locationId": "oubliette",
+              "position": [
+                0.0,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 180.0,
+              "stance": "sitting"
+            },
+            {
+              "timeSeconds": 6.0,
+              "locationId": "oubliette",
+              "position": [
+                0.0,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 180.0,
+              "stance": "sitting"
+            }
+          ],
           "lyra": [
             {
               "timeSeconds": 6.0,
@@ -510,7 +961,7 @@
               "stance": "standing"
             },
             {
-              "timeSeconds": 23.0,
+              "timeSeconds": 25.0,
               "locationId": "eclipse_throne_hall",
               "position": [
                 -1.5,
@@ -519,6 +970,54 @@
               ],
               "bodyYawDegrees": 90.0,
               "lookAtId": "malrec",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 37.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "kael",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 49.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "kael",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 51.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "malrec",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "crown_pedestal",
               "stance": "standing"
             }
           ],
@@ -536,7 +1035,7 @@
               "stance": "standing"
             },
             {
-              "timeSeconds": 23.0,
+              "timeSeconds": 25.0,
               "locationId": "eclipse_throne_hall",
               "position": [
                 1.5,
@@ -544,6 +1043,80 @@
                 0.0
               ],
               "bodyYawDegrees": -90.0,
+              "lookAtId": "kael",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 37.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "kael",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 51.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "lyra",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 55.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "lyra",
+              "stance": "standing"
+            }
+          ],
+          "kael": [
+            {
+              "timeSeconds": 25.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -3.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "malrec",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 37.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -3.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "lyra",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 49.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -3.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
               "lookAtId": "lyra",
               "stance": "standing"
             }
@@ -561,7 +1134,7 @@
               ]
             },
             {
-              "timeSeconds": 23.0,
+              "timeSeconds": 60.0,
               "locationId": "eclipse_throne_hall",
               "position": [
                 0.0,

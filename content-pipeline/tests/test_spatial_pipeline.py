@@ -64,6 +64,36 @@ class SpatialPipelineTests(unittest.TestCase):
         ]
         self.assertEqual(len(loaders), 3)
 
+    def test_environment_shot_uses_spatial_proxy(self) -> None:
+        scene = self.episode["scenes"][0]
+        graph = pipeline.clone_workflow(self.qwen)
+        pipeline.inject_qwen_environment_proxy(
+            graph,
+            pipeline.proxy_frame_path(self.show["id"], 1, scene["sceneNumber"], "start_condition"),
+        )
+        loaders = [
+            node for node in graph.values() if node.get("class_type") == "LoadImage"
+        ]
+        self.assertEqual(len(loaders), 1)
+        self.assertIn("spatialEnvironmentStill", self.show["prompts"])
+
+    def test_two_character_camera_move_uses_group_end_refs(self) -> None:
+        scene = self.episode["scenes"][3]
+        self.assertTrue(scene["endGuideFrame"])
+        graph = pipeline.clone_workflow(self.qwen)
+        output_dir = pipeline.OUTPUT_DIR / self.show["id"] / "1"
+        pipeline.inject_qwen_group_end_refs(
+            graph,
+            pipeline.start_still_path(output_dir, scene["sceneNumber"]),
+            pipeline.proxy_frame_path(
+                self.show["id"], 1, scene["sceneNumber"], "end_condition"
+            ),
+        )
+        loaders = [
+            node for node in graph.values() if node.get("class_type") == "LoadImage"
+        ]
+        self.assertEqual(len(loaders), 2)
+
     def test_end_guide_is_added_before_av_sampling_and_cropped(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
         pipeline.inject_scene_length(graph, duration_seconds=5)

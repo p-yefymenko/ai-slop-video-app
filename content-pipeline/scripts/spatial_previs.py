@@ -84,6 +84,9 @@ def timeline_state(track: list[dict], time_seconds: float) -> dict:
         return dict(frames[0])
     if time_seconds >= float(frames[-1]["timeSeconds"]):
         return dict(frames[-1])
+    for frame in frames:
+        if abs(time_seconds - float(frame["timeSeconds"])) < 1e-6:
+            return dict(frame)
     for before, after in zip(frames, frames[1:]):
         start = float(before["timeSeconds"])
         finish = float(after["timeSeconds"])
@@ -370,10 +373,25 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
 
     for scene in episode["scenes"]:
         if not scene.get("camera") or not scene.get("timeRangeSeconds"):
+            errors.append(
+                f"scene {scene['sceneNumber']}: every scene in a spatial episode requires "
+                "timeRangeSeconds and camera"
+            )
             continue
         start, finish = (float(value) for value in scene["timeRangeSeconds"])
         if finish <= start:
             errors.append(f"scene {scene['sceneNumber']}: invalid time range")
+            continue
+        if abs((finish - start) - float(scene["durationSeconds"])) > 0.05:
+            errors.append(
+                f"scene {scene['sceneNumber']}: timeline range does not match durationSeconds"
+            )
+        location = show["locations"].get(scene["locationId"]) or {}
+        if not location.get("spatial"):
+            errors.append(
+                f"scene {scene['sceneNumber']}: location {scene['locationId']!r} "
+                "has no spatial stage"
+            )
             continue
         camera = scene["camera"]
         try:
@@ -427,11 +445,19 @@ def compile_spatial_video_prompt(episode: dict, scene: dict) -> str:
                 direction = "right" if displacement[0] > 0 else "left"
             statements.append(f"{character_id} moves one controlled step {direction}")
     camera = scene["camera"]
-    camera_text = (
-        "CAMERA: locked."
-        if not camera.get("endPosition") and not camera.get("endLookAt")
-        else "CAMERA: moves smoothly between the established camera marks."
-    )
+    if not camera.get("endPosition") and not camera.get("endLookAt"):
+        camera_text = "CAMERA: locked."
+    else:
+        camera_delta = sub(
+            vec(camera.get("endPosition") or camera["position"]),
+            vec(camera["position"]),
+        )
+        if abs(camera_delta[0]) > max(abs(camera_delta[1]), abs(camera_delta[2])):
+            camera_text = "CAMERA: makes one smooth lateral flyby along the established path."
+        elif camera_delta[2] > 0.2:
+            camera_text = "CAMERA: cranes upward smoothly along the established path."
+        else:
+            camera_text = "CAMERA: dollies smoothly along the established path."
     spatial_text = "VISUAL: " + "; ".join(statements) + "." if statements else ""
     return " ".join(part for part in (spatial_text, scene["videoPrompt"], camera_text) if part)
 
@@ -611,6 +637,16 @@ def main() -> None:
     parser.add_argument("--show", help="Generate only this show id")
     parser.add_argument("--episode", type=int, help="Generate only this episode")
     parser.add_argument("--scene", type=int, help="Generate only this scene")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Accepted for compatibility with the unified content:render command",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Accepted for compatibility with the unified content:render command",
+    )
     args = parser.parse_args()
     if args.scene is not None and args.episode is None:
         parser.error("--scene requires --episode")

@@ -69,13 +69,20 @@ class SpatialPrevisTests(unittest.TestCase):
 
     def test_migrated_coverage_has_valid_geometry(self) -> None:
         self.assertEqual(validate_spatial_episode(self.show, self.episode), [])
-        migrated = [
-            scene
-            for scene in self.episode["scenes"]
-            if scene["sceneNumber"] in {4, 5, 6, 7}
-        ]
-        self.assertTrue(all(scene.get("camera") for scene in migrated))
-        self.assertTrue(all(scene.get("timeRangeSeconds") for scene in migrated))
+        self.assertTrue(
+            all(location.get("spatial") for location in self.show["locations"].values())
+        )
+        self.assertTrue(all(scene.get("camera") for scene in self.episode["scenes"]))
+        self.assertTrue(
+            all(scene.get("timeRangeSeconds") for scene in self.episode["scenes"])
+        )
+
+    def test_opening_shots_have_distinct_physical_views(self) -> None:
+        first, second = self.episode["scenes"][:2]
+        self.assertNotEqual(first["camera"]["position"], second["camera"]["position"])
+        self.assertGreater(first["camera"]["position"][1], -120)
+        self.assertGreater(second["camera"]["position"][2], 100)
+        self.assertIn("endPosition", self.episode["scenes"][3]["camera"])
 
     def test_prompt_compiler_does_not_expose_coordinates(self) -> None:
         scene = next(

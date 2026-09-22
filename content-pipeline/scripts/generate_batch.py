@@ -18,7 +18,7 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-from ffmpeg_tools import concat_videos
+from ffmpeg_tools import concat_videos, render_camera_move
 from PIL import Image, ImageFilter
 from spatial_previs import (
     character_screen_position,
@@ -39,6 +39,8 @@ OPTIONAL_PROMPT_KEYS = (
     "coverageStill",
     "spatialStill",
     "spatialCoverageStill",
+    "spatialEnvironmentStill",
+    "spatialGroupEndStill",
     "spatialEndStill",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
@@ -943,6 +945,13 @@ def inject_qwen_spatial_refs(
     inject_qwen_image_slots(graph, refs)
 
 
+def inject_qwen_environment_proxy(graph: dict, proxy_path: Path) -> None:
+    inject_qwen_image_slots(
+        graph,
+        [(stage_named_image(proxy_path, "proxy"), "3D spatial projection")],
+    )
+
+
 def inject_qwen_end_refs(
     graph: dict,
     character: dict,
@@ -957,6 +966,20 @@ def inject_qwen_end_refs(
                 stage_start_still(character["image_path"]),
                 f"Character reference ({character['id']})",
             ),
+            (stage_named_image(proxy_path, "proxy_end"), "3D spatial end projection"),
+        ],
+    )
+
+
+def inject_qwen_group_end_refs(
+    graph: dict,
+    start_frame_path: Path,
+    proxy_path: Path,
+) -> None:
+    inject_qwen_image_slots(
+        graph,
+        [
+            (stage_named_image(start_frame_path, "shot_start"), "Photorealistic shot start"),
             (stage_named_image(proxy_path, "proxy_end"), "3D spatial end projection"),
         ],
     )
@@ -1374,20 +1397,47 @@ def generate_show(
                                 chars=characters: inject_qwen_character_refs(graph, chars)
                             )
                     else:
-                        if "environmentStill" not in show["prompts"]:
-                            raise SystemExit(
-                                f"{scene_label} has no characterIds and requires "
-                                "prompts.environmentStill"
+                        if scene.get("camera") and scene.get("timeRangeSeconds"):
+                            if "spatialEnvironmentStill" not in show["prompts"]:
+                                raise SystemExit(
+                                    f"{scene_label} requires prompts.spatialEnvironmentStill"
+                                )
+                            spatial_proxy_path = proxy_frame_path(
+                                show_id,
+                                episode_number,
+                                scene_number,
+                                "start_condition",
                             )
-                        prompt = show_prompt(
-                            show,
-                            "environmentStill",
-                            {
-                                "locationPromptBlock": location["promptBlock"],
-                                "imagePrompt": scene["imagePrompt"],
-                            },
-                        )
-                        inject_images = inject_qwen_character_canvas
+                            prompt = show_prompt(
+                                show,
+                                "spatialEnvironmentStill",
+                                {
+                                    "proxyPictureNumber": "1",
+                                    "locationPromptBlock": location["promptBlock"],
+                                    "imagePrompt": scene["imagePrompt"],
+                                },
+                            )
+                            inject_images = (
+                                lambda graph,
+                                proxy=spatial_proxy_path: inject_qwen_environment_proxy(
+                                    graph, proxy
+                                )
+                            )
+                        else:
+                            if "environmentStill" not in show["prompts"]:
+                                raise SystemExit(
+                                    f"{scene_label} has no characterIds and requires "
+                                    "prompts.environmentStill"
+                                )
+                            prompt = show_prompt(
+                                show,
+                                "environmentStill",
+                                {
+                                    "locationPromptBlock": location["promptBlock"],
+                                    "imagePrompt": scene["imagePrompt"],
+                                },
+                            )
+                            inject_images = inject_qwen_character_canvas
                     run_qwen_image(
                         workflow_template,
                         still_path,
@@ -1407,57 +1457,109 @@ def generate_show(
                         generated += 1
                         continue
                     characters = resolve_scene_characters(show, scene)
-                    if len(characters) != 1:
-                        raise SystemExit(
-                            f"{scene_label} endGuideFrame currently supports one character"
-                        )
-                    if "spatialEndStill" not in show["prompts"]:
-                        raise SystemExit(f"{scene_label} requires prompts.spatialEndStill")
                     proxy_end_path = proxy_frame_path(
                         show_id, episode_number, scene_number, "end_condition"
                     )
-                    end_prompt = show_prompt(
-                        show,
-                        "spatialEndStill",
-                        {
-                            "characterId": scene["characterIds"][0],
-                            "imagePrompt": scene["imagePrompt"],
-                        },
-                    )
+                    if len(characters) == 1:
+                        if "spatialEndStill" not in show["prompts"]:
+                            raise SystemExit(
+                                f"{scene_label} requires prompts.spatialEndStill"
+                            )
+                        end_prompt = show_prompt(
+                            show,
+                            "spatialEndStill",
+                            {
+                                "characterId": scene["characterIds"][0],
+                                "imagePrompt": scene["imagePrompt"],
+                            },
+                        )
+                        inject_end_images = (
+                            lambda graph,
+                            character=characters[0],
+                            start=still_path,
+                            proxy=proxy_end_path: inject_qwen_end_refs(
+                                graph, character, start, proxy
+                            )
+                        )
+                    else:
+                        if "spatialGroupEndStill" not in show["prompts"]:
+                            raise SystemExit(
+                                f"{scene_label} requires prompts.spatialGroupEndStill"
+                            )
+                        end_prompt = show_prompt(
+                            show,
+                            "spatialGroupEndStill",
+                            {
+                                "characterCount": str(len(characters)),
+                                "characterIds": ", ".join(scene["characterIds"]),
+                                "imagePrompt": scene["imagePrompt"],
+                            },
+                        )
+                        inject_end_images = (
+                            lambda graph,
+                            start=still_path,
+                            proxy=proxy_end_path: inject_qwen_group_end_refs(
+                                graph, start, proxy
+                            )
+                        )
                     run_qwen_image(
                         workflow_template,
                         end_path,
                         end_prompt,
                         f"Qwen spatial end guide ({names} @ {location['id']})",
-                        lambda graph,
-                        character=characters[0],
-                        start=still_path,
-                        proxy=proxy_end_path: inject_qwen_end_refs(
-                            graph, character, start, proxy
-                        ),
+                        inject_end_images,
                         stable_seed(show_id, episode_number, scene_number, "end-frame"),
                     )
             else:
-                prompt = show_prompt(
-                    show,
-                    "sceneVideo",
-                    {
-                        "videoPrompt": compile_spatial_video_prompt(episode, scene),
-                    },
-                )
-                seed = (
-                    seed_override
-                    if seed_override is not None
-                    else stable_seed(show_id, episode_number, scene_number, "video")
-                )
-                graph = inject_prompt(workflow_template, prompt, os.environ.get("LTXV_API_KEY", ""))
-                inject_seed(graph, seed)
-                inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
-                inject_start_frame(graph, stage_start_still(still_path))
-                if needs_end_guide:
-                    inject_end_frame(graph, stage_named_image(end_path, "ltx_end"))
-                print(f"  Graph seed {seed}", flush=True)
-                execute_queued_graph(graph, dest, prefer="video", mode=f"I2V ({names} @ {location['id']})")
+                camera = scene.get("camera") or {}
+                if scene.get("coverageRole") == "anchor" and camera.get("endPosition"):
+                    start_position = camera["position"]
+                    end_position = camera["endPosition"]
+                    delta_x = float(end_position[0]) - float(start_position[0])
+                    delta_z = float(end_position[2]) - float(start_position[2])
+                    render_camera_move(
+                        still_path,
+                        dest,
+                        float(scene["durationSeconds"]),
+                        horizontal_direction=(
+                            -1.0 if delta_x > 0 else 1.0 if delta_x < 0 else 0.0
+                        ),
+                        vertical_direction=(
+                            -1.0 if delta_z > 0 else 1.0 if delta_z < 0 else 0.0
+                        ),
+                    )
+                    print(
+                        "  Rendered deterministic silent-anchor camera move",
+                        flush=True,
+                    )
+                else:
+                    prompt = show_prompt(
+                        show,
+                        "sceneVideo",
+                        {
+                            "videoPrompt": compile_spatial_video_prompt(episode, scene),
+                        },
+                    )
+                    seed = (
+                        seed_override
+                        if seed_override is not None
+                        else stable_seed(show_id, episode_number, scene_number, "video")
+                    )
+                    graph = inject_prompt(
+                        workflow_template, prompt, os.environ.get("LTXV_API_KEY", "")
+                    )
+                    inject_seed(graph, seed)
+                    inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
+                    inject_start_frame(graph, stage_start_still(still_path))
+                    if needs_end_guide:
+                        inject_end_frame(graph, stage_named_image(end_path, "ltx_end"))
+                    print(f"  Graph seed {seed}", flush=True)
+                    execute_queued_graph(
+                        graph,
+                        dest,
+                        prefer="video",
+                        mode=f"I2V ({names} @ {location['id']})",
+                    )
                 scene_files.append(dest)
             episode_generated += 1
             generated += 1

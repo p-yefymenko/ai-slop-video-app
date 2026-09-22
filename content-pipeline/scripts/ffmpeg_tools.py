@@ -94,6 +94,72 @@ def concat_videos(scene_files: list[Path], dest: Path) -> None:
         list_file.unlink(missing_ok=True)
 
 
+def render_camera_move(
+    still: Path,
+    dest: Path,
+    duration_seconds: float,
+    horizontal_direction: float,
+    vertical_direction: float = 0.0,
+    frame_rate: int = 24,
+) -> None:
+    """Render a deterministic pan/creep for a silent anchor without generative drift."""
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError(
+            "ffmpeg is missing. Re-run `pnpm run content:setup-comfy` so imageio-ffmpeg is installed."
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    frames = max(2, round(duration_seconds * frame_rate))
+    horizontal = max(-1.0, min(1.0, horizontal_direction))
+    vertical = max(-1.0, min(1.0, vertical_direction))
+    progress = f"on/{frames - 1}"
+    zoom = f"min(1.08,1+0.08*{progress})"
+    x = f"(iw-iw/zoom)/2*(1+({horizontal:.4f})*{progress})"
+    y = f"(ih-ih/zoom)/2*(1+({vertical:.4f})*{progress})"
+    video_filter = (
+        f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s=448x800:fps={frame_rate},"
+        "format=yuv420p"
+    )
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(still),
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=44100:cl=stereo",
+            "-vf",
+            video_filter,
+            "-frames:v",
+            str(frames),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            "-movflags",
+            "+faststart",
+            str(dest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not dest.exists() or dest.stat().st_size <= 1024:
+        detail = (result.stderr or "").strip()[-2000:]
+        raise RuntimeError(f"Failed to render deterministic camera move {dest}\n{detail}")
+
+
 def extract_thumbnail(mp4: Path, dest: Path) -> bool:
     ffmpeg = find_ffmpeg()
     if not ffmpeg:

@@ -38,8 +38,8 @@ export type StageGeometry = {
  */
 export type ShowLocation = {
   promptBlock: string;
-  /** Deterministic blocking space. Required when a scene has a spatial camera. */
-  spatial?: StageGeometry;
+  /** Deterministic blocking space used by every scene at this location. */
+  spatial: StageGeometry;
 };
 
 export type CharacterSpatialKeyframe = {
@@ -129,18 +129,28 @@ export type ShowPrompts = {
    * Uses `{referenceMap}`, `{proxyPictureNumber}`, `{characterCount}`, `{characterIds}`,
    * `{locationPromptBlock}`, `{blockingSummary}`, and `{imagePrompt}`.
    */
-  spatialStill?: string;
+  spatialStill: string;
   /**
    * Qwen dialogue-single template using identity, photorealistic coverage master, then proxy.
    * Adds `{coverageReferencePictureNumber}` to the `spatialStill` placeholders.
    */
-  spatialCoverageStill?: string;
+  spatialCoverageStill: string;
+  /**
+   * Qwen environment/insert template using the 3D proxy as Picture 1.
+   * Uses `{proxyPictureNumber}`, `{locationPromptBlock}`, and `{imagePrompt}`.
+   */
+  spatialEnvironmentStill: string;
+  /**
+   * Qwen end-guide template for a moving two-character shot. Picture 1 is the
+   * photorealistic start and Picture 2 is the end-state proxy.
+   */
+  spatialGroupEndStill: string;
   /**
    * Qwen final-guide template: Picture 1 photorealistic start, Picture 2 identity, Picture 3
    * end-state proxy. Use only for action shots; static dialogue copies its start guide.
    * Uses `{characterId}` and `{imagePrompt}`.
    */
-  spatialEndStill?: string;
+  spatialEndStill: string;
   /**
    * Qwen template for establishing shots and prop inserts with no identity references.
    * Uses `{locationPromptBlock}` and `{imagePrompt}` from a blank canvas.
@@ -215,9 +225,9 @@ export type ScriptScene = {
    * Interval on the episode spatial timeline projected into this edit shot.
    * Omit only for legacy scenes that have not yet been migrated.
    */
-  timeRangeSeconds?: [number, number];
+  timeRangeSeconds: [number, number];
   /** Physical camera used to project the timeline into a proxy guide. */
-  camera?: SpatialCamera;
+  camera: SpatialCamera;
   /** Additional timeline times to pin as photorealistic LTX guides. */
   guideKeyframesSeconds?: number[];
   /** Generate and pin a photorealistic guide at the shot's final timeline state. */
@@ -276,7 +286,7 @@ export type ShowEpisode = {
    */
   screenDirection: string;
   /** Ground truth for character and prop state before camera coverage is authored. */
-  spatialTimeline?: SpatialTimeline;
+  spatialTimeline: SpatialTimeline;
   scenes: ScriptScene[];
 };
 

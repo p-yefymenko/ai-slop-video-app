@@ -10,9 +10,9 @@ Write the episode as drama before writing generation prompts.
 
 ## Spatial ground truth
 - Block the episode as an animated 3D scene before writing coverage. `spatialTimeline` is authoritative; prose must never redefine a character position, facing, stance, hand target, prop owner, or camera.
-- Use location-local meters: X is left/right, Y is depth, Z is height. Place stable landmarks in `locations[].spatial`.
+- Use location-local meters: X is left/right, Y is depth, Z is height. Every location must define measured landmarks in `locations[].spatial`.
 - Give every on-screen character timed keyframes for feet position, body yaw, eye target, stance, and relevant hand/prop targets. Interpolate simple motion between keyframes.
-- A shot selects a `timeRangeSeconds` interval and projects it through one physical `camera`. Dialogue does not create a new world state.
+- Every shot—including establishing shots and inserts—selects a `timeRangeSeconds` interval and projects it through one physical `camera`. Prompt-only scenes are forbidden.
 - Run `pnpm run content:previs` and inspect the proxy contact sheet before generating stills. Fix blocking or cameras in the timeline; never patch a geometry problem with prompt wording.
 
 ## Episode engine
@@ -42,6 +42,7 @@ Write the episode as drama before writing generation prompts.
 - Include only literal visible motion and essential sound. LTX may visualize off-screen foley nouns or metaphoric acting directions.
 - Prefer positive instructions. Do not include continuity recaps, decorative prose, or multiple sequential actions.
 - Use `endGuideFrame` only for a simple action with a different final blocking state. Static dialogue keeps one camera/state and does not spend an extra guide generation.
+- Give a silent anchor `camera.endPosition` when it needs a flyby, push, or crane. The renderer turns this into deterministic camera motion so LTX cannot make the cast turn, walk away, or disappear.
 - Make fantasy dense through visible world evidence—architecture, weather, creatures, magic, ritual, rank—not lore speeches.
 
 ## Final audit
