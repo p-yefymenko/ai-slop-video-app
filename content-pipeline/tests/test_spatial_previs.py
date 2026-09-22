@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 from spatial_previs import (  # noqa: E402
     PROXY_HEIGHT,
     PROXY_WIDTH,
+    camera_at,
     character_facing_direction,
     compile_spatial_video_prompt,
     project,
@@ -80,10 +81,83 @@ class SpatialPrevisTests(unittest.TestCase):
 
     def test_opening_shots_have_distinct_physical_views(self) -> None:
         first, second = self.episode["scenes"][:2]
-        self.assertNotEqual(first["camera"]["position"], second["camera"]["position"])
-        self.assertGreater(first["camera"]["position"][1], -120)
-        self.assertGreater(second["camera"]["position"][2], 100)
-        self.assertIn("endPosition", self.episode["scenes"][3]["camera"])
+        first_pose = first["camera"]["keyframes"][0]
+        second_pose = second["camera"]["keyframes"][0]
+        self.assertNotEqual(first_pose["position"], second_pose["position"])
+        self.assertGreater(first_pose["position"][1], -120)
+        self.assertGreater(second_pose["position"][2], 100)
+        self.assertGreater(len(self.episode["scenes"][3]["camera"]["keyframes"]), 1)
+
+    def test_overhead_and_rolled_cameras_project(self) -> None:
+        overhead = project(
+            (0.0, 0.0, 0.0),
+            {
+                "position": [0.0, 0.0, 5.0],
+                "lookAt": [0.0, 0.0, 0.0],
+                "verticalFovDegrees": 50.0,
+            },
+        )
+        self.assertIsNotNone(overhead)
+        assert overhead is not None
+        self.assertAlmostEqual(overhead[0], PROXY_WIDTH / 2.0)
+        self.assertAlmostEqual(overhead[1], PROXY_HEIGHT / 2.0)
+        level = project(
+            (1.0, 0.0, 1.5),
+            {
+                "position": [0.0, -5.0, 1.5],
+                "lookAt": [0.0, 0.0, 1.5],
+                "verticalFovDegrees": 40.0,
+            },
+        )
+        rolled = project(
+            (1.0, 0.0, 1.5),
+            {
+                "position": [0.0, -5.0, 1.5],
+                "lookAt": [0.0, 0.0, 1.5],
+                "verticalFovDegrees": 40.0,
+                "rollDegrees": 90.0,
+            },
+        )
+        self.assertIsNotNone(level)
+        self.assertIsNotNone(rolled)
+        assert level is not None and rolled is not None
+        self.assertGreater(level[0], PROXY_WIDTH / 2.0)
+        self.assertAlmostEqual(level[1], PROXY_HEIGHT / 2.0, delta=2)
+        self.assertAlmostEqual(rolled[0], PROXY_WIDTH / 2.0, delta=2)
+        self.assertGreater(rolled[1], PROXY_HEIGHT / 2.0)
+
+    def test_offscreen_head_is_allowed(self) -> None:
+        scene = next(
+            item for item in self.episode["scenes"] if item["sceneNumber"] == 3
+        )
+        original = scene["camera"]
+        scene["camera"] = {
+            "keyframes": [
+                {
+                    "timeSeconds": 4.0,
+                    "position": [20.0, -2.2, 1.45],
+                    "lookAt": [20.0, -12.0, 1.45],
+                    "verticalFovDegrees": 28.0,
+                }
+            ]
+        }
+        try:
+            errors = validate_spatial_episode(self.show, self.episode)
+        finally:
+            scene["camera"] = original
+        self.assertFalse(any("head is outside" in error for error in errors))
+        self.assertEqual(errors, [])
+
+    def test_camera_keyframes_interpolate(self) -> None:
+        scene = self.episode["scenes"][3]
+        start, finish = scene["timeRangeSeconds"]
+        mid = camera_at(scene, (start + finish) / 2.0)
+        first = scene["camera"]["keyframes"][0]
+        last = scene["camera"]["keyframes"][-1]
+        self.assertAlmostEqual(
+            mid["position"][0],
+            (first["position"][0] + last["position"][0]) / 2.0,
+        )
 
     def test_prompt_compiler_does_not_expose_coordinates(self) -> None:
         scene = next(

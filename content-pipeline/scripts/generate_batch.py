@@ -613,11 +613,6 @@ def load_show(path: Path) -> dict:
                 known = ", ".join(sorted(cleaned_locs))
                 raise SystemExit(f"Unknown locationId {loc_id!r}. Known: {known}")
             character_ids = [str(cid) for cid in (scene.get("characterIds") or []) if cid]
-            if len(character_ids) > 2:
-                raise SystemExit(
-                    f"{scene_label} has {len(character_ids)} characterIds; "
-                    "keep at most two people on camera."
-                )
             for cid in character_ids:
                 if cid not in cleaned_chars:
                     raise SystemExit(f"{scene_label} names unknown character {cid!r}")
@@ -627,10 +622,6 @@ def load_show(path: Path) -> dict:
                 if speaker_id not in character_ids:
                     raise SystemExit(
                         f"{scene_label} speakerId {speaker_id!r} is not on camera"
-                    )
-                if len(character_ids) != 1:
-                    raise SystemExit(
-                        f"{scene_label} dialogue must be a single; two-shots stay silent"
                     )
             else:
                 speaker_id = None
@@ -646,6 +637,14 @@ def load_show(path: Path) -> dict:
                 raise SystemExit(
                     f"{scene_label} still has coverageReferenceSceneNumber or "
                     "focusTargetId; geometry comes from this shot's camera and timeline"
+                )
+            camera = scene.get("camera")
+            if not isinstance(camera, dict) or not camera.get("keyframes"):
+                raise SystemExit(f"{scene_label} requires camera.keyframes")
+            if any(key in camera for key in ("position", "endPosition", "endLookAt")):
+                raise SystemExit(
+                    f"{scene_label} still has a two-sample camera; "
+                    "put poses on camera.keyframes"
                 )
             time_range = scene.get("timeRangeSeconds")
             if (
@@ -664,7 +663,7 @@ def load_show(path: Path) -> dict:
                     "characterIds": character_ids,
                     "speakerId": speaker_id,
                     "timeRangeSeconds": [float(time_range[0]), float(time_range[1])],
-                    "camera": scene.get("camera"),
+                    "camera": camera,
                     "imagePrompt": image_prompt,
                     "videoPrompt": video_prompt,
                     "durationSeconds": duration_seconds,
@@ -1251,15 +1250,16 @@ def generate_show(
                         raise SystemExit(f"Missing spatial proxy {spatial_proxy_path}")
                     characters = resolve_scene_characters(show, scene)
                     character_ids = scene["characterIds"]
+                    identity_ids = character_ids[:MAX_QWEN_REFS]
                     reference_map = "; ".join(
                         [
                             *(
                                 f"Picture {index} = identity of {character_id}"
                                 for index, character_id in enumerate(
-                                    character_ids, start=1
+                                    identity_ids, start=1
                                 )
                             ),
-                            f"Picture {len(character_ids) + 1} = a 3D blocking projection",
+                            f"Picture {len(identity_ids) + 1} = a 3D blocking projection",
                         ]
                     )
                     prompt = show_prompt(

@@ -67,12 +67,18 @@ export type SpatialTimeline = {
   propTracks: Record<string, PropSpatialKeyframe[]>;
 };
 
-export type SpatialCamera = {
+export type SpatialCameraKeyframe = {
+  timeSeconds: number;
   position: Vec3;
   lookAt: Vec3;
   verticalFovDegrees: number;
-  endPosition?: Vec3;
-  endLookAt?: Vec3;
+  /** Rotation around the view axis. Omit or `0` for a level horizon. */
+  rollDegrees?: number;
+};
+
+export type SpatialCamera = {
+  /** Timed poses on the episode clock. One keyframe is a locked-off shot. */
+  keyframes: SpatialCameraKeyframe[];
 };
 
 export type ScriptScene = {
@@ -84,13 +90,12 @@ export type ScriptScene = {
    */
   storyBeat: string;
   /**
-   * Visible people, at most two. Empty for environments and prop inserts.
-   * Order is Qwen Picture 1, then Picture 2.
+   * Visible people. Empty for environments and prop inserts.
+   * The first two are Qwen identity Pictures; everyone is in the proxy.
    */
   characterIds: string[];
   /**
-   * On-camera speaker. Omit on silent shots. Exactly one visible person when set;
-   * dialogue is never authored on a two-shot.
+   * Who speaks. Omit on silent shots. Must be in `characterIds`.
    */
   speakerId?: string;
   /**

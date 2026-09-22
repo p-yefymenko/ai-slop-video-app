@@ -25,3 +25,4 @@ apps/mobile/ios
 .vscode
 *.log
 coverage
+packages/shared/src/reel-short-content-reference

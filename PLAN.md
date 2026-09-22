@@ -250,15 +250,15 @@ episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once i
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Screenwriting guidance lives in `.cursor/rules/Short-reel-scripts-writer.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
 - `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
+- Each shot camera is a keyframe path (`position`, `lookAt`, `verticalFovDegrees`, optional `rollDegrees`) on the episode clock. One keyframe is locked-off; more than one interpolates. Heads may leave the frame (OTS, inserts, ECU).
 - Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: shots whose timeline or camera actually change get one; static shots do not.
-- Spatial stills use identity references plus that shot's previs proxy. Empty `characterIds` are environments generated from the same proxy.
-- Empty `characterIds` are environments. Two silent people are a spatial anchor. Dialogue is one on-camera `speakerId` only.
-- `spatialTimeline` and each shot camera define the 180-degree axis and eyelines; no parallel prose screen-direction field exists.
-- `speakerId` enables dialogue-specific audio-video guidance. One quoted line maximum, 16 words maximum.
+- Spatial stills use identity references plus that shot's previs proxy. Empty `characterIds` are environments. The first two `characterIds` are Qwen identity Pictures (two identity slots plus the proxy); additional people exist in the blocking projection. Dialogue may be a group; `speakerId` names who talks and must be in `characterIds`.
+- `spatialTimeline` and each shot camera define eyelines; no parallel prose screen-direction field exists.
+- `speakerId` turns on LTX MultimodalGuider for lip-sync. Omit on silent shots.
 - `imagePrompt` is optional wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera. Omit it when the location block and proxy are enough.
 - `imagePrompt` may name only characters in `characterIds`.
 - `videoPrompt` is the spoken line and non-spatial performance. Camera and blocking come from the timeline and start/end frames. Omit it on silent shots.
-- The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
+- The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.
 - Iterate on one shot with `pnpm run content:frame -- --show <show-id> --episode <n> --scene <n> --force`, then test only its video with the same filters through `pnpm run content:clip`. To intentionally reroll a bad still or clip, add `--seed <0-4294967295>` to that selected `--force` command. A partial clip render never overwrites `episode.mp4`.

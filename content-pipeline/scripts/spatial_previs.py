@@ -123,11 +123,72 @@ def episode_character_state(episode: dict, character_id: str, time_seconds: floa
     return timeline_state(tracks[character_id], time_seconds)
 
 
+def _camera_pose(frame: dict) -> dict:
+    return {
+        "position": list(vec(frame["position"])),
+        "lookAt": list(vec(frame["lookAt"])),
+        "verticalFovDegrees": float(frame["verticalFovDegrees"]),
+        "rollDegrees": float(frame.get("rollDegrees") or 0.0),
+    }
+
+
+def camera_keyframes(scene: dict) -> list[dict]:
+    camera = scene.get("camera") or {}
+    frames = camera.get("keyframes")
+    if not isinstance(frames, list) or not frames:
+        raise ValueError(
+            f"scene {scene.get('sceneNumber', '?')} requires camera.keyframes"
+        )
+    return sorted(frames, key=lambda item: float(item["timeSeconds"]))
+
+
+def camera_at(scene: dict, time_seconds: float) -> dict:
+    frames = camera_keyframes(scene)
+    if time_seconds <= float(frames[0]["timeSeconds"]):
+        return _camera_pose(frames[0])
+    if time_seconds >= float(frames[-1]["timeSeconds"]):
+        return _camera_pose(frames[-1])
+    for before, after in zip(frames, frames[1:]):
+        start = float(before["timeSeconds"])
+        finish = float(after["timeSeconds"])
+        if start <= time_seconds <= finish:
+            amount = (time_seconds - start) / max(finish - start, 1e-6)
+            start_pose = _camera_pose(before)
+            end_pose = _camera_pose(after)
+            return {
+                "position": list(
+                    lerp(vec(start_pose["position"]), vec(end_pose["position"]), amount)
+                ),
+                "lookAt": list(
+                    lerp(vec(start_pose["lookAt"]), vec(end_pose["lookAt"]), amount)
+                ),
+                "verticalFovDegrees": start_pose["verticalFovDegrees"]
+                + (end_pose["verticalFovDegrees"] - start_pose["verticalFovDegrees"])
+                * amount,
+                "rollDegrees": lerp_angle(
+                    start_pose["rollDegrees"],
+                    end_pose["rollDegrees"],
+                    amount,
+                ),
+            }
+    return _camera_pose(frames[-1])
+
+
 def _camera_basis(camera: dict) -> tuple[Vec3, Vec3, Vec3, Vec3, float]:
     position = vec(camera["position"])
     forward = normalize(sub(vec(camera["lookAt"]), position))
-    right = normalize(cross(forward, (0.0, 0.0, 1.0)))
+    world_up: Vec3 = (0.0, 0.0, 1.0)
+    if abs(dot(forward, world_up)) > 0.999:
+        world_up = (0.0, 1.0, 0.0)
+    right = normalize(cross(forward, world_up))
     up = normalize(cross(right, forward))
+    roll = math.radians(float(camera.get("rollDegrees") or 0.0))
+    if abs(roll) > 1e-8:
+        cos_r, sin_r = math.cos(roll), math.sin(roll)
+        right, up = (
+            add(mul(right, cos_r), mul(up, sin_r)),
+            add(mul(mul(right, -1.0), sin_r), mul(up, cos_r)),
+        )
     focal = (PROXY_HEIGHT / 2.0) / math.tan(
         math.radians(float(camera["verticalFovDegrees"])) / 2.0
     )
@@ -263,20 +324,6 @@ def _draw_character(
             )
 
 
-def _interpolated_camera(scene: dict, amount: float) -> dict:
-    camera = scene["camera"]
-    result = dict(camera)
-    if camera.get("endPosition"):
-        result["position"] = list(
-            lerp(vec(camera["position"]), vec(camera["endPosition"]), amount)
-        )
-    if camera.get("endLookAt"):
-        result["lookAt"] = list(
-            lerp(vec(camera["lookAt"]), vec(camera["endLookAt"]), amount)
-        )
-    return result
-
-
 def render_scene_proxy(
     show: dict,
     episode: dict,
@@ -285,9 +332,7 @@ def render_scene_proxy(
     destination: Path,
     debug: bool = True,
 ) -> None:
-    start, finish = (float(value) for value in scene["timeRangeSeconds"])
-    amount = min(1.0, max(0.0, (time_seconds - start) / max(finish - start, 1e-6)))
-    camera = _interpolated_camera(scene, amount)
+    camera = camera_at(scene, time_seconds)
     location = show["locations"][scene["locationId"]]
     spatial = location["spatial"]
     image = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (13, 17, 25))
@@ -396,12 +441,29 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
                 "has no spatial stage"
             )
             continue
-        camera = scene["camera"]
         try:
-            _camera_basis(camera)
+            frames = camera_keyframes(scene)
         except ValueError as exc:
-            errors.append(f"scene {scene['sceneNumber']}: {exc}")
+            errors.append(str(exc))
             continue
+        previous_time: float | None = None
+        pose_ok = True
+        for frame in frames:
+            frame_time = float(frame["timeSeconds"])
+            if previous_time is not None and frame_time <= previous_time:
+                errors.append(f"scene {scene['sceneNumber']}: camera keyframe times must increase")
+                pose_ok = False
+                break
+            previous_time = frame_time
+            try:
+                _camera_basis(_camera_pose(frame))
+            except ValueError as exc:
+                errors.append(f"scene {scene['sceneNumber']}: {exc}")
+                pose_ok = False
+                break
+        if not pose_ok:
+            continue
+        camera = camera_at(scene, start)
         for character_id in scene["characterIds"]:
             try:
                 state = episode_character_state(episode, character_id, start)
@@ -414,16 +476,6 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
                     f"{state['locationId']}, not {scene['locationId']}"
                 )
                 continue
-            _, _, head_height = _stance_heights(state["stance"])
-            head = add(vec(state["position"]), (0.0, 0.0, head_height))
-            projected = project(head, camera)
-            if not projected or not (
-                -0.1 * PROXY_WIDTH <= projected[0] <= 1.1 * PROXY_WIDTH
-                and -0.1 * PROXY_HEIGHT <= projected[1] <= 1.1 * PROXY_HEIGHT
-            ):
-                errors.append(
-                    f"scene {scene['sceneNumber']}: {character_id}'s head is outside camera"
-                )
             if length(sub(vec(state["position"]), vec(camera["position"]))) < 0.3:
                 errors.append(f"scene {scene['sceneNumber']}: camera intersects {character_id}")
     return errors
@@ -444,10 +496,26 @@ def compile_spatial_video_prompt(scene: dict) -> str:
 def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return False
-    camera = scene["camera"]
-    if camera.get("endPosition") or camera.get("endLookAt"):
-        return True
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    try:
+        first_camera = camera_at(scene, start)
+        last_camera = camera_at(scene, finish)
+    except ValueError:
+        return False
+    if length(sub(vec(last_camera["position"]), vec(first_camera["position"]))) >= 0.02:
+        return True
+    if length(sub(vec(last_camera["lookAt"]), vec(first_camera["lookAt"]))) >= 0.02:
+        return True
+    if abs(last_camera["verticalFovDegrees"] - first_camera["verticalFovDegrees"]) >= 0.5:
+        return True
+    if (
+        abs(
+            (last_camera["rollDegrees"] - first_camera["rollDegrees"] + 180.0) % 360.0
+            - 180.0
+        )
+        >= 0.5
+    ):
+        return True
     for character_id in scene["characterIds"]:
         first = episode_character_state(episode, character_id, start)
         last = episode_character_state(episode, character_id, finish)
@@ -473,10 +541,11 @@ def character_facing_direction(
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return None
     start = float(scene["timeRangeSeconds"][0])
+    camera = camera_at(scene, start)
     state = episode_character_state(episode, character_id, start)
     _, _, head_height = _stance_heights(state["stance"])
     head = add(vec(state["position"]), (0.0, 0.0, head_height))
-    projected = project(head, scene["camera"])
+    projected = project(head, camera)
     if projected is None:
         return None
     target_id = state.get("lookAtId")
@@ -486,13 +555,13 @@ def character_facing_direction(
         _, _, target_head_height = _stance_heights(target["stance"])
         target_projected = project(
             add(vec(target["position"]), (0.0, 0.0, target_head_height)),
-            scene["camera"],
+            camera,
         )
     else:
         yaw = math.radians(float(state["bodyYawDegrees"]))
         target_projected = project(
             add(head, (math.sin(yaw), math.cos(yaw), 0.0)),
-            scene["camera"],
+            camera,
         )
     if target_projected is None:
         return None
@@ -530,7 +599,7 @@ def spatial_target_screen_position(
         raise ValueError(
             f"Unknown spatial focus target {target_id!r} in scene {scene['sceneNumber']}"
         )
-    projected = project(vec(position), scene["camera"])
+    projected = project(vec(position), camera_at(scene, start))
     if not projected:
         raise ValueError(
             f"Spatial focus target {target_id!r} is behind scene "

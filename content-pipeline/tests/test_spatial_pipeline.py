@@ -35,7 +35,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIsNotNone(self.episode["spatialTimeline"])
         scene = self.episode["scenes"][3]
         self.assertEqual(scene["timeRangeSeconds"], [6.0, 8.0])
-        self.assertEqual(scene["camera"]["verticalFovDegrees"], 70.0)
+        self.assertEqual(scene["camera"]["keyframes"][0]["verticalFovDegrees"], 70.0)
 
     def test_show_json_contains_no_renderer_templates_or_legacy_prose_state(self) -> None:
         raw = json.loads(
@@ -59,6 +59,8 @@ class SpatialPipelineTests(unittest.TestCase):
             "coverageReferenceSceneNumber",
             "focusTargetId",
             "motionMode",
+            "endPosition",
+            "endLookAt",
         }
         self.assertTrue(obsolete.isdisjoint(raw["episodes"][0]))
         for scene in raw["episodes"][0]["scenes"]:
@@ -82,6 +84,44 @@ class SpatialPipelineTests(unittest.TestCase):
                     "image_path": self._inject_png(temp_dir, f"{character_id}.png"),
                 }
                 for character_id in scene["characterIds"]
+            ]
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                characters,
+                self._inject_png(temp_dir, "proxy.png"),
+            )
+        loaders = [
+            node for node in graph.values() if node.get("class_type") == "LoadImage"
+        ]
+        self.assertEqual(len(loaders), 3)
+
+    def test_loader_allows_group_dialogue_and_more_than_two_people(self) -> None:
+        raw = json.loads(
+            (
+                self.root / "scripts_input" / "crown-of-the-last-dragon.json"
+            ).read_text(encoding="utf-8")
+        )
+        scene = raw["episodes"][0]["scenes"][3]
+        scene["characterIds"] = ["lyra", "malrec", "kael"]
+        scene["speakerId"] = "lyra"
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "crown-of-the-last-dragon.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            loaded = pipeline.load_show(path)
+        loaded_scene = loaded["episodes"][0]["scenes"][3]
+        self.assertEqual(loaded_scene["characterIds"], ["lyra", "malrec", "kael"])
+        self.assertEqual(loaded_scene["speakerId"], "lyra")
+
+    def test_crowd_still_attaches_two_identities_and_proxy(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen)
+        with tempfile.TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            characters = [
+                {
+                    "id": f"person_{index}",
+                    "image_path": self._inject_png(temp_dir, f"person_{index}.png"),
+                }
+                for index in range(4)
             ]
             pipeline.inject_qwen_spatial_refs(
                 graph,
