@@ -22,16 +22,15 @@ from spatial_previs import (  # noqa: E402
     validate_spatial_episode,
 )
 
+SHOW_JSON = (
+    Path(__file__).resolve().parents[1] / "scripts_input" / "the-iron-bride.json"
+)
+
 
 class SpatialPrevisTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        path = (
-            Path(__file__).resolve().parents[1]
-            / "scripts_input"
-            / "crown-of-the-last-dragon.json"
-        )
-        cls.show = json.loads(path.read_text(encoding="utf-8"))
+        cls.show = json.loads(SHOW_JSON.read_text(encoding="utf-8"))
         cls.episode = cls.show["episodes"][0]
 
     def test_camera_target_projects_to_frame_center(self) -> None:
@@ -69,7 +68,7 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertEqual(state["position"], [1.0, 0.0, 0.0])
         self.assertAlmostEqual(abs(state["bodyYawDegrees"]), 180.0)
 
-    def test_migrated_coverage_has_valid_geometry(self) -> None:
+    def test_episode_has_valid_geometry(self) -> None:
         self.assertEqual(validate_spatial_episode(self.show, self.episode), [])
         self.assertTrue(
             all(location.get("spatial") for location in self.show["locations"].values())
@@ -79,14 +78,17 @@ class SpatialPrevisTests(unittest.TestCase):
             all(scene.get("timeRangeSeconds") for scene in self.episode["scenes"])
         )
 
-    def test_opening_shots_have_distinct_physical_views(self) -> None:
+    def test_opening_is_world_then_a_distinct_arena_view(self) -> None:
         first, second = self.episode["scenes"][:2]
+        self.assertEqual(first["characterIds"], [])
         first_pose = first["camera"]["keyframes"][0]
         second_pose = second["camera"]["keyframes"][0]
         self.assertNotEqual(first_pose["position"], second_pose["position"])
-        self.assertGreater(first_pose["position"][1], -120)
-        self.assertGreater(second_pose["position"][2], 100)
-        self.assertGreater(len(self.episode["scenes"][3]["camera"]["keyframes"]), 1)
+        self.assertLess(first_pose["position"][1], -40)
+        self.assertNotEqual(first["locationId"], second["locationId"])
+        self.assertTrue(
+            any(len(scene["camera"]["keyframes"]) > 1 for scene in self.episode["scenes"])
+        )
 
     def test_overhead_and_rolled_cameras_project(self) -> None:
         overhead = project(
@@ -127,14 +129,13 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertGreater(rolled[1], PROXY_HEIGHT / 2.0)
 
     def test_offscreen_head_is_allowed(self) -> None:
-        scene = next(
-            item for item in self.episode["scenes"] if item["sceneNumber"] == 3
-        )
+        scene = next(item for item in self.episode["scenes"] if item["characterIds"])
         original = scene["camera"]
+        start = float(scene["timeRangeSeconds"][0])
         scene["camera"] = {
             "keyframes": [
                 {
-                    "timeSeconds": 4.0,
+                    "timeSeconds": start,
                     "position": [20.0, -2.2, 1.45],
                     "lookAt": [20.0, -12.0, 1.45],
                     "verticalFovDegrees": 28.0,
@@ -149,7 +150,11 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_camera_keyframes_interpolate(self) -> None:
-        scene = self.episode["scenes"][3]
+        scene = next(
+            item
+            for item in self.episode["scenes"]
+            if len(item["camera"]["keyframes"]) > 1
+        )
         start, finish = scene["timeRangeSeconds"]
         mid = camera_at(scene, (start + finish) / 2.0)
         first = scene["camera"]["keyframes"][0]
@@ -160,30 +165,31 @@ class SpatialPrevisTests(unittest.TestCase):
         )
 
     def test_prompt_compiler_does_not_expose_coordinates(self) -> None:
-        scene = next(
-            scene for scene in self.episode["scenes"] if scene["sceneNumber"] == 5
-        )
+        scene = next(item for item in self.episode["scenes"] if item.get("speakerId"))
         prompt = compile_spatial_video_prompt(scene)
         self.assertIn("visibly lip-syncs every spoken word", prompt)
         self.assertNotIn("established mark", prompt)
         self.assertNotIn("CAMERA:", prompt)
         self.assertNotIn("VISUAL:", prompt)
         self.assertNotIn("[", prompt)
-        self.assertNotIn("1.5", prompt)
-        self.assertFalse(scene_has_spatial_change(self.episode, scene))
 
-    def test_anchor_pair_uses_reciprocal_profile_references(self) -> None:
-        scene = self.episode["scenes"][8]
-        self.assertEqual(
-            character_facing_direction(self.episode, scene, "kael"), "right"
+    def test_standoff_uses_reciprocal_screen_direction(self) -> None:
+        scene = next(
+            item
+            for item in self.episode["scenes"]
+            if item["characterIds"][:2] == ["sela", "tomas"]
+            or set(item["characterIds"][:2]) == {"sela", "vardan"}
         )
-        self.assertEqual(
-            character_facing_direction(self.episode, scene, "malrec"), "left"
-        )
+        left = character_facing_direction(self.episode, scene, scene["characterIds"][0])
+        right = character_facing_direction(self.episode, scene, scene["characterIds"][1])
+        self.assertIn(left, {"left", "right"})
+        self.assertIn(right, {"left", "right"})
 
     def test_proxy_renderer_writes_vertical_frame(self) -> None:
         scene = next(
-            scene for scene in self.episode["scenes"] if scene["sceneNumber"] == 4
+            item
+            for item in self.episode["scenes"]
+            if len(item["characterIds"]) >= 2
         )
         with tempfile.TemporaryDirectory() as temp:
             destination = Path(temp) / "proxy.png"

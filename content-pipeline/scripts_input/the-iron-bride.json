@@ -1,0 +1,672 @@
+{
+  "id": "the-iron-bride",
+  "title": "The Iron Bride",
+  "characters": {
+    "sela": {
+      "promptBlock": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair."
+    },
+    "tomas": {
+      "promptBlock": "Adult man, 22, lean build, fair skin, gray irises, a copper birthmark under the right eye, copper-red hair."
+    },
+    "vardan": {
+      "promptBlock": "Adult man, 52, tall narrow build, pale skin, ice-blue irises, a gold ring tattoo encircling the throat, silver-white cropped hair."
+    },
+    "nira": {
+      "promptBlock": "Adult woman, 45, broad-shouldered build, dark umber skin, gold-flecked brown irises, shaved sides with a copper-brown crest of hair."
+    },
+    "kesh": {
+      "promptBlock": "Adult man, 38, heavy build, weathered tan skin, black irises, a split-lip scar, salt-and-pepper stubble, shaved scalp."
+    },
+    "rhel": {
+      "promptBlock": "Adult man, 30, thin build, sallow skin, dark brown irises, a branded sun-disk on the forehead, black hair bound at the nape."
+    }
+  },
+  "locations": {
+    "sky_forge_exterior": {
+      "promptBlock": "A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains.",
+      "spatial": {
+        "sizeMeters": [200, 240, 140],
+        "landmarks": {
+          "citadel_core": {
+            "kind": "box",
+            "position": [0, 24, 36],
+            "size": [48, 56, 52]
+          },
+          "chain_pylon": {
+            "kind": "column",
+            "position": [36, -48, 0],
+            "size": [5, 5, 90]
+          }
+        }
+      }
+    },
+    "sun_well_court": {
+      "promptBlock": "An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls.",
+      "spatial": {
+        "sizeMeters": [22, 30, 18],
+        "landmarks": {
+          "sun_well": {
+            "kind": "pedestal",
+            "position": [0, 4.5, 0],
+            "size": [2.2, 2.2, 1.2]
+          },
+          "anvil_altar": {
+            "kind": "box",
+            "position": [-6.2, 4.5, 0],
+            "size": [1.8, 1.2, 0.9]
+          },
+          "throne_dais": {
+            "kind": "box",
+            "position": [0, 12.2, 0],
+            "size": [5.0, 3.0, 0.4]
+          },
+          "gate_column_l": {
+            "kind": "column",
+            "position": [-4.2, -12.4, 0],
+            "size": [0.8, 0.8, 4.2]
+          },
+          "gate_column_r": {
+            "kind": "column",
+            "position": [4.2, -12.4, 0],
+            "size": [0.8, 0.8, 4.2]
+          }
+        }
+      }
+    }
+  },
+  "episodes": [
+    {
+      "episodeNumber": 1,
+      "title": "The Sun-Well",
+      "isFree": true,
+      "coinCost": 0,
+      "spatialTimeline": {
+        "durationSeconds": 60,
+        "characterTracks": {
+          "sela": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [-1.4, -2.0, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 29,
+              "locationId": "sun_well_court",
+              "position": [-1.4, -2.0, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan",
+              "stance": "walking"
+            },
+            {
+              "timeSeconds": 31,
+              "locationId": "sun_well_court",
+              "position": [-0.4, 1.0, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sun_well",
+              "stance": "walking"
+            },
+            {
+              "timeSeconds": 38,
+              "locationId": "sun_well_court",
+              "position": [0.0, 2.4, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [0.0, 2.4, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sun_well",
+              "stance": "standing"
+            }
+          ],
+          "tomas": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [1.3, -2.2, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [1.3, -2.2, 0],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sela",
+              "stance": "standing"
+            }
+          ],
+          "vardan": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [0.0, 6.0, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 45,
+              "locationId": "sun_well_court",
+              "position": [0.0, 6.0, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 47,
+              "locationId": "sun_well_court",
+              "position": [0.0, 7.4, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [0.0, 7.4, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            }
+          ],
+          "nira": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [-1.8, 6.8, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 45,
+              "locationId": "sun_well_court",
+              "position": [-1.8, 6.8, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 47,
+              "locationId": "sun_well_court",
+              "position": [-2.3, 8.1, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [-2.3, 8.1, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            }
+          ],
+          "kesh": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [1.9, 6.6, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "tomas",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 45,
+              "locationId": "sun_well_court",
+              "position": [1.9, 6.6, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "tomas",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 47,
+              "locationId": "sun_well_court",
+              "position": [2.5, 7.9, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [2.5, 7.9, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            }
+          ],
+          "rhel": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "position": [-3.4, 7.2, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "position": [-3.6, 8.0, 0],
+              "bodyYawDegrees": 180,
+              "lookAtId": "sela",
+              "stance": "standing"
+            }
+          ]
+        },
+        "propTracks": {
+          "iron_collar": [
+            {
+              "timeSeconds": 0,
+              "locationId": "sun_well_court",
+              "heldByCharacterId": "sela",
+              "heldInHand": "left"
+            },
+            {
+              "timeSeconds": 60,
+              "locationId": "sun_well_court",
+              "heldByCharacterId": "sela",
+              "heldInHand": "left"
+            }
+          ]
+        }
+      },
+      "scenes": [
+        {
+          "sceneNumber": 1,
+          "locationId": "sky_forge_exterior",
+          "storyBeat": "The hanging citadel and burning sky establish a kingdom that can be dropped.",
+          "characterIds": [],
+          "imagePrompt": "No people. The citadel hangs small inside a vast storm of ash and molten rivers.",
+          "timeRangeSeconds": [0, 2],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 0,
+                "position": [72, -128, 70],
+                "lookAt": [0, 26, 42],
+                "verticalFovDegrees": 55
+              },
+              {
+                "timeSeconds": 2,
+                "position": [52, -98, 58],
+                "lookAt": [0, 28, 40],
+                "verticalFovDegrees": 52
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 2,
+          "locationId": "sun_well_court",
+          "storyBeat": "The sun-well is shown as a killing machine before anyone speaks.",
+          "characterIds": [],
+          "imagePrompt": "No people. White-gold fire stands in the well like a blade.",
+          "timeRangeSeconds": [2, 4],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 2,
+                "position": [0, -9.5, 1.35],
+                "lookAt": [0, 4.5, 1.15],
+                "verticalFovDegrees": 32
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 3,
+          "locationId": "sun_well_court",
+          "storyBeat": "The condemned bride is seen before she is allowed a voice.",
+          "characterIds": ["sela"],
+          "imagePrompt": "Sela wears a soot-stained ivory wrap and a plain iron bridal collar. Her mouth stays closed. Both hands grip the collar.",
+          "timeRangeSeconds": [4, 6],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 4,
+                "position": [-1.4, -3.7, 1.48],
+                "lookAt": [-1.4, -2.0, 1.32],
+                "verticalFovDegrees": 24
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 4,
+          "locationId": "sun_well_court",
+          "storyBeat": "The well proves it can unmake a body, so the threat is physical.",
+          "characterIds": [],
+          "imagePrompt": "No people. A column of white fire punches from the well into the storm.",
+          "timeRangeSeconds": [6, 8],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 6,
+                "position": [0, -7.2, 1.8],
+                "lookAt": [0, 4.5, 2.4],
+                "verticalFovDegrees": 44
+              },
+              {
+                "timeSeconds": 8,
+                "position": [0, -5.8, 2.4],
+                "lookAt": [0, 4.5, 4.0],
+                "verticalFovDegrees": 38
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "sun_well_court",
+          "storyBeat": "The outsider and the last prince are spatially trapped in front of the priesthood.",
+          "characterIds": ["sela", "tomas", "vardan", "nira", "kesh", "rhel"],
+          "imagePrompt": "Sela wears the ivory wrap and iron collar. Tomas wears a torn sky-blue court coat. Vardan, Nira, Kesh, and Rhel wear black sun-priest plate and gold gorgets.",
+          "timeRangeSeconds": [8, 10],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 8,
+                "position": [0, -8.8, 1.72],
+                "lookAt": [0, 2.4, 1.3],
+                "verticalFovDegrees": 62
+              },
+              {
+                "timeSeconds": 10,
+                "position": [-1.1, -7.6, 1.86],
+                "lookAt": [0, 3.0, 1.36],
+                "verticalFovDegrees": 58
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "sun_well_court",
+          "storyBeat": "The high priest sentences her in front of his wall of rank.",
+          "characterIds": ["sela", "tomas", "vardan", "nira", "kesh", "rhel"],
+          "speakerId": "vardan",
+          "imagePrompt": "Vardan wears black sun-priest plate and a gold gorget, ice-cold authority. The others hold the established wardrobe.",
+          "videoPrompt": "PERFORMANCE: still face, merciless articulation. DIALOGUE (low, ceremonial, cruel): \"The sun-well takes a false bride tonight.\"",
+          "timeRangeSeconds": [10, 15],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 10,
+                "position": [0, -7.4, 1.68],
+                "lookAt": [0, 5.8, 1.5],
+                "verticalFovDegrees": 48
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "sun_well_court",
+          "storyBeat": "The prince is forced to answer while still standing in the priest's eyeline.",
+          "characterIds": ["tomas", "vardan"],
+          "imagePrompt": "Tomas wears the torn sky-blue court coat, jaw locked. Vardan wears black sun-priest plate, waiting.",
+          "timeRangeSeconds": [15, 17],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 15,
+                "position": [1.55, -3.9, 1.62],
+                "lookAt": [0.2, 6.0, 1.52],
+                "verticalFovDegrees": 30
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 8,
+          "locationId": "sun_well_court",
+          "storyBeat": "Tomas claims her house is still alive, which is treason if he is wrong.",
+          "characterIds": ["tomas", "sela"],
+          "speakerId": "tomas",
+          "imagePrompt": "Tomas wears the torn sky-blue court coat, desperate control. Sela wears the ivory wrap and iron collar, listening without looking at him.",
+          "videoPrompt": "PERFORMANCE: urgent, clear articulation. DIALOGUE (strained, loud): \"She is the last Voss. You cannot burn a living house.\"",
+          "timeRangeSeconds": [17, 22],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 17,
+                "position": [0.2, -4.4, 1.62],
+                "lookAt": [0.0, -2.1, 1.46],
+                "verticalFovDegrees": 34
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 9,
+          "locationId": "sun_well_court",
+          "storyBeat": "The priesthood answers the claim with a hand, not a debate.",
+          "characterIds": ["kesh"],
+          "imagePrompt": "Kesh wears black sun-priest plate. Only the armored torso and closing gauntlet; no face.",
+          "timeRangeSeconds": [22, 24],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 22,
+                "position": [1.9, 5.3, 1.12],
+                "lookAt": [1.9, 6.6, 1.08],
+                "verticalFovDegrees": 22
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 10,
+          "locationId": "sun_well_court",
+          "storyBeat": "The marshal erases House Voss in public so the well can take her.",
+          "characterIds": ["nira", "vardan", "kesh", "rhel"],
+          "speakerId": "nira",
+          "imagePrompt": "Nira wears black sun-priest plate and a gold gorget, contempt. Vardan, Kesh, and Rhel wear the same order's plate as a wall behind her.",
+          "videoPrompt": "PERFORMANCE: clipped, public scorn. DIALOGUE (sharp, dismissive): \"House Voss died with the old emperor.\"",
+          "timeRangeSeconds": [24, 29],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 24,
+                "position": [-0.4, -6.2, 1.7],
+                "lookAt": [-0.4, 6.6, 1.46],
+                "verticalFovDegrees": 50
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 11,
+          "locationId": "sun_well_court",
+          "storyBeat": "Sela walks toward the machine that is supposed to kill her.",
+          "characterIds": ["sela"],
+          "imagePrompt": "Sela wears the ivory wrap and iron collar. Only boots, wrap, and collar as she walks; head may leave the frame.",
+          "timeRangeSeconds": [29, 31],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 29,
+                "position": [0.0, 2.6, 0.32],
+                "lookAt": [-1.0, -1.4, 1.05],
+                "verticalFovDegrees": 40
+              },
+              {
+                "timeSeconds": 31,
+                "position": [0.2, 2.8, 0.38],
+                "lookAt": [-0.4, 0.4, 1.1],
+                "verticalFovDegrees": 36
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 12,
+          "locationId": "sun_well_court",
+          "storyBeat": "The well answers her blood before she speaks.",
+          "characterIds": ["sela"],
+          "imagePrompt": "Sela's amber eyes catch forge-gold. Closed mouth. Iron collar at the bottom of frame.",
+          "timeRangeSeconds": [31, 33],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 31,
+                "position": [-0.4, 0.15, 1.56],
+                "lookAt": [-0.4, 1.0, 1.55],
+                "verticalFovDegrees": 16
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 13,
+          "locationId": "sun_well_court",
+          "storyBeat": "She turns the sentence back on the priesthood.",
+          "characterIds": ["vardan", "sela"],
+          "speakerId": "sela",
+          "imagePrompt": "Vardan's black plate fills the foreground. Sela beyond him in the ivory wrap and iron collar, unburned.",
+          "videoPrompt": "PERFORMANCE: quiet, certain, no blink. DIALOGUE (low, final): \"Then the well will refuse you.\"",
+          "timeRangeSeconds": [33, 38],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 33,
+                "position": [-0.25, 7.7, 1.66],
+                "lookAt": [0.0, 2.2, 1.48],
+                "verticalFovDegrees": 28
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 14,
+          "locationId": "sun_well_court",
+          "storyBeat": "The fire fails to take her, so the machine has chosen.",
+          "characterIds": ["sela"],
+          "imagePrompt": "Sela's bare feet and the hem of the ivory wrap stand in white-gold well-fire. No face.",
+          "timeRangeSeconds": [38, 40],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 38,
+                "position": [0.0, 3.5, 0.22],
+                "lookAt": [0.0, 2.4, 0.12],
+                "verticalFovDegrees": 28
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 15,
+          "locationId": "sun_well_court",
+          "storyBeat": "Vardan names the political cost of a well that will not kill her.",
+          "characterIds": ["vardan"],
+          "speakerId": "vardan",
+          "imagePrompt": "Vardan's ice-blue eyes and gold throat-tattoo fill the frame. Fury breaking through ceremony.",
+          "videoPrompt": "PERFORMANCE: teeth bared, precise. DIALOGUE (harsh, rising): \"If it spares her, it names her empress.\"",
+          "timeRangeSeconds": [40, 45],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 40,
+                "position": [0.0, 5.05, 1.62],
+                "lookAt": [0.0, 6.0, 1.58],
+                "verticalFovDegrees": 15
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 16,
+          "locationId": "sun_well_court",
+          "storyBeat": "The wall of rank breaks, proving they believed the well would obey them.",
+          "characterIds": ["vardan", "nira", "kesh", "rhel"],
+          "imagePrompt": "Vardan, Nira, Kesh, and Rhel wear black sun-priest plate. Shock, not ceremony.",
+          "timeRangeSeconds": [45, 47],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 45,
+                "position": [0, -5.4, 1.72],
+                "lookAt": [0, 6.6, 1.4],
+                "verticalFovDegrees": 54
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 17,
+          "locationId": "sun_well_court",
+          "storyBeat": "She offers them the same death they wrote for her.",
+          "characterIds": ["sela"],
+          "speakerId": "sela",
+          "imagePrompt": "Sela wears the ivory wrap; the iron collar now glows slag-gold. Unblinking.",
+          "videoPrompt": "PERFORMANCE: almost a smile, no shout. DIALOGUE (soft, lethal): \"Then kneel. Or burn.\"",
+          "timeRangeSeconds": [47, 52],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 47,
+                "position": [0.9, 0.35, 1.58],
+                "lookAt": [0.0, 2.4, 1.46],
+                "verticalFovDegrees": 26
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 18,
+          "locationId": "sun_well_court",
+          "storyBeat": "The last prince realizes he crowned her by defending her.",
+          "characterIds": ["tomas"],
+          "imagePrompt": "Tomas wears the torn sky-blue court coat. Shock breaking into awe. Closed mouth.",
+          "timeRangeSeconds": [52, 55],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 52,
+                "position": [1.3, -3.7, 1.6],
+                "lookAt": [1.3, -2.2, 1.5],
+                "verticalFovDegrees": 22
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 19,
+          "locationId": "sky_forge_exterior",
+          "storyBeat": "The citadel's chains fail, so her claim can drop the kingdom.",
+          "characterIds": [],
+          "imagePrompt": "No people. Sky-chains above the citadel snap, throwing gold sparks into the storm.",
+          "timeRangeSeconds": [55, 60],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 55,
+                "position": [38, -92, 48],
+                "lookAt": [0, 22, 58],
+                "verticalFovDegrees": 58
+              },
+              {
+                "timeSeconds": 60,
+                "position": [28, -74, 64],
+                "lookAt": [0, 18, 72],
+                "verticalFovDegrees": 52
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
