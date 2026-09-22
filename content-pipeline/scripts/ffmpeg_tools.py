@@ -102,7 +102,7 @@ def render_camera_move(
     vertical_direction: float = 0.0,
     frame_rate: int = 24,
 ) -> None:
-    """Render a deterministic pan/creep for a silent anchor without generative drift."""
+    """Render a deterministic pan/creep without generative drift."""
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
         raise RuntimeError(

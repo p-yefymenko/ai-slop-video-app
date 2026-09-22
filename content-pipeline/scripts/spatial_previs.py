@@ -359,7 +359,9 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
     errors: list[str] = []
     timeline = episode.get("spatialTimeline")
     if not timeline:
-        return errors
+        return [
+            f"episode {episode.get('episodeNumber', '?')}: spatialTimeline is required"
+        ]
     for character_id, track in timeline.get("characterTracks", {}).items():
         previous: dict | None = None
         for frame in sorted(track, key=lambda item: float(item["timeSeconds"])):
@@ -391,10 +393,6 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
         if finish <= start:
             errors.append(f"scene {scene['sceneNumber']}: invalid time range")
             continue
-        if abs((finish - start) - float(scene["durationSeconds"])) > 0.05:
-            errors.append(
-                f"scene {scene['sceneNumber']}: timeline range does not match durationSeconds"
-            )
         location = show["locations"].get(scene["locationId"]) or {}
         if not location.get("spatial"):
             errors.append(
@@ -476,7 +474,12 @@ def compile_spatial_video_prompt(episode: dict, scene: dict) -> str:
         )
     return " ".join(
         part
-        for part in (spatial_text, lip_sync_text, scene["videoPrompt"], camera_text)
+        for part in (
+            spatial_text,
+            lip_sync_text,
+            scene.get("videoPrompt") or "",
+            camera_text,
+        )
         if part
     )
 
@@ -657,10 +660,6 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
             continue
         start, finish = (float(value) for value in scene["timeRangeSeconds"])
         samples = [("start", start), ("end", finish)]
-        samples.extend(
-            (f"guide_{index:02d}", float(time_seconds))
-            for index, time_seconds in enumerate(scene.get("guideKeyframesSeconds") or [], start=1)
-        )
         for label, time_seconds in samples:
             destination = proxy_frame_path(
                 show["id"], episode["episodeNumber"], scene["sceneNumber"], label

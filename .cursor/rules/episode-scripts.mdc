@@ -38,13 +38,12 @@ Write the episode as drama before writing generation prompts.
 
 ## Generation unit
 - One JSON scene is one continuous shot with one speaker or one simple visible action.
-- `imagePrompt` is the exact opening frame. Establishing/inserts use no cast; performance shots use at most two identities.
+- `imagePrompt` is wardrobe, expression, and atmosphere. Environments use no cast; performance shots use at most two identities. Do not restate blocking the timeline already owns.
 - Prop inserts inside an established set require `coverageReferenceSceneNumber` and `focusTargetId`; derive the prop from the master instead of asking Qwen to reinvent it from a proxy box.
-- Use compact `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:` clauses in `videoPrompt`.
+- `videoPrompt` is optional and only for generative shots: the spoken line and non-spatial performance. Camera and blocking are compiled from the timeline.
 - Include only literal visible motion and essential sound. LTX may visualize off-screen foley nouns or metaphoric acting directions.
 - Prefer positive instructions. Do not include continuity recaps, decorative prose, or multiple sequential actions.
-- Use `endGuideFrame` only for a simple action with a different final blocking state. Static dialogue keeps one camera/state and does not spend an extra guide generation.
-- Establishing shots, inserts, reactions, and silent anchors default to `cameraOnly`; use `generative` only for a visible action that cannot be achieved by a stable camera move. This prevents LTX from materializing shadows, mutating props, or making silent actors wander.
+- Silent shots default to `cameraOnly`. Set `motionMode: "generative"` only for one visible action a camera move cannot do. End guides are derived from timeline change; do not author `endGuideFrame`.
 - Dialogue prompts must explicitly require visible lip sync. Dialogue rendering uses audio-video modality guidance; do not assume ordinary text prompting guarantees mouth articulation.
 - Make fantasy dense through visible world evidence—architecture, weather, creatures, magic, ritual, rank—not lore speeches.
 

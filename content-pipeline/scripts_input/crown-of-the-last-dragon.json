@@ -247,50 +247,19 @@
       }
     }
   },
-  "prompts": {
-    "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
-    "characterProfile": "Picture 1 is the approved frontal identity of {characterId}. Create a new photorealistic vertical 9:16 neutral identity reference of exactly the same person in a strong three-quarter profile with the nose, chin, both pupils, head, and shoulders turned toward frame {direction}. Exactly one person is visible. Preserve face, hair, age, and skin tone. Plain fitted shirt, warm-grey studio backdrop, even light, closed mouth, hands out of frame. No costume, props, text, mirrors, or second person.",
-    "setPlate": "Picture 1 is an approved photorealistic coverage master. Remove every person, face, body, costume, and character-held object while preserving the exact camera, architecture, windows, permanent landmarks, furniture, lighting, shadows, and color. Reconstruct the empty background behind the removed people. Create one photorealistic vertical 9:16 empty-set plate, not a collage. No people, portraits, statues, mirrors, reflections, or readable text. {locationPromptBlock}",
-    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
-    "environmentStill": "Create a new photorealistic cinematic vertical 9:16 frame from the attached blank canvas. The finished frame contains no people, faces, portraits, statues shaped like people, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}",
-    "coverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the rendered coverage master. Reframe the same cinematic moment as a new vertical 9:16 shot, not a collage. Preserve the identity from the identity picture(s), and inherit the set architecture, wardrobe, lighting direction, color, axis, and screen geography from the coverage master. The finished frame contains exactly {characterCount} visible people: {characterIds}. Do not retain, duplicate, or invent any other person from the master. {imagePrompt}",
-    "spatialStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {proxyPictureNumber} = a 3D blocking projection. Create one new photorealistic vertical 9:16 film frame. Use the proxy only as ground-truth geometry for camera, framing, character positions, body directions, scale, occlusion, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Preserve the identity picture faces. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}. Each appears once. No duplicates, extra people, portraits, mirrors, or reflections. {locationPromptBlock} {imagePrompt}",
-    "spatialCoverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the established person-free photorealistic set plate; Picture {proxyPictureNumber} = a character-only 3D pose projection with no set landmarks. Create a new photorealistic vertical 9:16 angle from the same moment. Preserve the architecture, window design, permanent landmarks, lighting, and color from the set plate exactly once. Preserve identity and facing from the identity picture. Obey the proxy only for character framing, screen side, body direction, and scale; do not copy its graphic style. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}. Each appears once. No duplicate person or duplicated set landmark, collage, portrait, mirror, or reflection. {locationPromptBlock} {imagePrompt}",
-    "spatialEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the identity of {characterId}. Picture 3 is the 3D blocking projection at the end of the shot. Create the matching photorealistic end frame, not a collage. Preserve identity, wardrobe, set, light, color, lens, and camera from Picture 1. Obey Picture 3 only for final body position, facing, pose, framing, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Exactly one person is visible. {imagePrompt}",
-    "spatialEnvironmentStill": "Picture {proxyPictureNumber} is a 3D blocking projection. Transform its camera, framing, scale, landmark placement, and occlusion into one new photorealistic cinematic vertical 9:16 environment frame. Do not copy the grid, boxes, labels, lines, mannequin colors, or graphic style. The finished frame contains no people, faces, portraits, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
-    "spatialInsertStill": "Picture 1 is a close crop of the established photorealistic prop {focusTargetId} from an earlier coverage master. Picture 2 is the 3D projection for the new insert camera. Create a new photorealistic vertical 9:16 detail shot. Preserve the exact prop design, material, set lighting, and color from Picture 1. Use Picture 2 only for camera, framing, scale, and landmark placement; do not copy its graphic style. The finished frame contains no people, faces, hands, extra copies of the prop, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
-    "spatialGroupEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the 3D blocking projection at the end of the camera move. Create the matching photorealistic end frame, not a collage. Preserve both original people, their identities, wardrobe, set, light, and color from Picture 1. Obey Picture 2 only for the final camera, framing, positions, scale, and landmarks; do not copy its boxes, lines, or graphic style. Exactly {characterCount} people remain visible: {characterIds}. {imagePrompt}"
-  },
   "episodes": [
     {
       "episodeNumber": 1,
       "title": "The Eclipse Crown",
       "isFree": true,
       "coinCost": 0,
-      "logline": "During a blood eclipse, a captive princess must crown the regent holding her brother hostage until an enemy dragon lord invokes her forbidden claim.",
-      "dramaticQuestion": "Will Lyra submit to Malrec to save Oren, or risk the lethal Ash Crown?",
-      "hook": "A dragon shadow crosses an eclipse citadel while Lyra's imprisoned brother waits below its coronation hall.",
-      "reversal": "Kael arrives with a living dragon and declares that the covenant recognizes Lyra.",
-      "cliffhanger": "Lyra accepts the crown's lethal judgment before anyone knows whether it will crown or kill her.",
-      "nextEpisodeOpening": "The Ash Crown erupts while the dragon lands on the coronation tower.",
-      "screenDirection": "In the throne hall, Kael stands far screen left, Lyra occupies center, and Malrec stands screen right. Lyra looks right to Malrec and left to Kael. Malrec looks left. Kael looks right. Pair changes use silent anchors.",
       "scenes": [
         {
           "sceneNumber": 1,
-          "beatType": "hook",
-          "coverageRole": "establishing",
           "locationId": "citadel_exterior",
           "storyBeat": "The eclipse and mountain citadel establish a kingdom-scale supernatural deadline.",
-          "continuityIn": "The final minute of the blood eclipse has begun.",
-          "continuityOut": "The citadel is isolated beneath the eclipse as something enormous approaches.",
-          "shotType": "establishing",
           "characterIds": [],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "A remote black-stone mountain citadel hangs above a sea of clouds beneath a blood-red eclipse. The fortress is small within a vast storm landscape; no dragon is visible.",
-          "videoPrompt": "VISUAL: storm clouds roll below the fortress and torn banners snap in the wind. AUDIO: high wind, distant thunder, and one far-off dragon roar.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             0.0,
             2.0
@@ -317,24 +286,14 @@
               28.0,
               32.0
             ]
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 2,
-          "beatType": "hook",
-          "coverageRole": "insert",
           "locationId": "citadel_rooftops",
           "storyBeat": "A dragon shadow crossing the fortress promises an approaching power before any character speaks.",
-          "continuityIn": "A distant roar has reached the citadel.",
-          "continuityOut": "The unseen dragon is directly above the coronation tower.",
-          "shotType": "insert",
           "characterIds": [],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "The camera points almost straight down at the completely empty courtyard. One enormous reptilian dragon shadow crosses it: long horned head, broad bat-like membranous wings, four claws, and a long barbed tail.",
-          "videoPrompt": "VISUAL: the winged shadow sweeps once across roofs and courtyard from left to right while banners snap. AUDIO: one heavy wingbeat.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             2.0,
             4.0
@@ -351,26 +310,16 @@
               10.0
             ],
             "verticalFovDegrees": 48.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 3,
-          "beatType": "hook",
-          "coverageRole": "insert",
           "locationId": "oubliette",
           "storyBeat": "The hostage is shown alive before Malrec can use him as leverage.",
-          "continuityIn": "The eclipse shadow has reached the citadel.",
-          "continuityOut": "Oren is alive, imprisoned, and running out of time.",
-          "shotType": "single",
           "characterIds": [
             "oren"
           ],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "Oren wears a torn charcoal tunic and plain iron collar. His exhausted face is crossed by a narrow stripe of red eclipse light; his mouth remains closed.",
-          "videoPrompt": "PERFORMANCE: Oren remains seated, breathing shallowly with exhausted open eyes. AUDIO: low dungeon room tone.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             4.0,
             6.0
@@ -387,27 +336,17 @@
               1.15
             ],
             "verticalFovDegrees": 28.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 4,
-          "beatType": "hook",
-          "coverageRole": "anchor",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Lyra and Malrec are spatially established across the crown that will decide the kingdom.",
-          "continuityIn": "Oren is alive below the hall while the eclipse closes.",
-          "continuityOut": "Lyra and Malrec face each other over the obsidian crown.",
-          "shotType": "twoShot",
           "characterIds": [
             "lyra",
             "malrec"
           ],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "Lyra wears her torn ivory ceremonial gown, fitted black leather bodice, and plain iron collar with defiant tension. Malrec wears his dark crimson brocade coat and black steel gorget with absolute control. The obsidian crown remains on its pedestal.",
-          "videoPrompt": "PERFORMANCE: Lyra and Malrec hold their opposing marks across the crown with restrained breathing. AUDIO: low throne-hall room tone.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             6.0,
             8.0
@@ -434,26 +373,18 @@
               1.0,
               1.35
             ]
-          },
-          "endGuideFrame": true
+          }
         },
         {
           "sceneNumber": 5,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Malrec forces Lyra to choose between crowning him and losing her brother.",
-          "continuityIn": "Lyra and Malrec face the crown during the last eclipse minute.",
-          "continuityOut": "Lyra knows refusal will kill Oren.",
-          "shotType": "single",
           "characterIds": [
             "malrec"
           ],
           "speakerId": "malrec",
-          "addresseeId": "lyra",
           "imagePrompt": "Malrec wears the same dark crimson brocade coat and black steel gorget. His expression is cold certainty, with restrained authority rather than a pose.",
           "videoPrompt": "PERFORMANCE: controlled mouth movement and a still, merciless expression. DIALOGUE (low, calm, merciless): \"Crown me before the eclipse closes, or Oren dies beneath us.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             8.0,
@@ -471,26 +402,18 @@
               1.48
             ],
             "verticalFovDegrees": 20.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 6,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Lyra rejects the threat because she believes Malrec already murdered her family.",
-          "continuityIn": "Malrec claims Oren is alive below the hall.",
-          "continuityOut": "Malrec must prove Oren survived.",
-          "shotType": "single",
           "characterIds": [
             "lyra"
           ],
           "speakerId": "lyra",
-          "addresseeId": "malrec",
           "imagePrompt": "Lyra wears the same torn ivory gown, fitted black leather bodice, and plain iron collar. Her expression is controlled anger and wounded disbelief.",
           "videoPrompt": "PERFORMANCE: controlled anger with a steady eyeline and clear articulation. DIALOGUE (clear, hurt, forceful): \"Oren died when you burned House Aster from the sky.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             13.0,
@@ -508,26 +431,18 @@
               1.46
             ],
             "verticalFovDegrees": 24.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 7,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Malrec proves the hostage is real and makes the choice immediate.",
-          "continuityIn": "Lyra has called Malrec's threat a lie.",
-          "continuityOut": "Lyra believes Oren is alive and the crown becomes her only apparent option.",
-          "shotType": "single",
           "characterIds": [
             "malrec"
           ],
           "speakerId": "malrec",
-          "addresseeId": "lyra",
           "imagePrompt": "Malrec wears the same crimson brocade coat and black gorget. A small restrained smile reveals quiet pleasure without changing his established body mark.",
           "videoPrompt": "PERFORMANCE: a small restrained smile and deliberate articulation. DIALOGUE (quiet, deliberate, cruel): \"He lives. One command, and the oubliette becomes his tomb.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             18.0,
@@ -545,24 +460,14 @@
               1.53
             ],
             "verticalFovDegrees": 22.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 8,
-          "beatType": "pressure",
-          "coverageRole": "insert",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "The crown visibly reacts to Lyra, hinting that Malrec's coronation is already failing.",
-          "continuityIn": "Lyra believes Oren is alive and may submit.",
-          "continuityOut": "The Ash Crown has begun responding to Lyra before she touches it.",
-          "shotType": "insert",
           "characterIds": [],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "The jagged obsidian crown rests alone on its black stone pedestal. Hairline ember-red light glows inside one crack; no person or hand is visible.",
-          "videoPrompt": "VISUAL: one ember-red vein travels through the crown and fine ash rises from the pedestal. AUDIO: the coronation bell falters for one beat.",
-          "durationSeconds": 2,
           "coverageReferenceSceneNumber": 4,
           "focusTargetId": "ash_crown",
           "timeRangeSeconds": [
@@ -581,27 +486,17 @@
               1.0
             ],
             "verticalFovDegrees": 25.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 9,
-          "beatType": "reversal",
-          "coverageRole": "anchor",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Kael's arrival introduces a rival power and a new interpretation of Lyra's claim.",
-          "continuityIn": "The crown has reacted to Lyra while Malrec expects surrender.",
-          "continuityOut": "Malrec must confront the dragon lord who entered on Lyra's behalf.",
-          "shotType": "twoShot",
           "characterIds": [
             "kael",
             "malrec"
           ],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "Kael wears matte black scale armor and a dark red cloak with controlled menace. Malrec wears the established crimson coat and black gorget with startled anger.",
-          "videoPrompt": "PERFORMANCE: Kael and Malrec hold a silent hostile stare with restrained breathing. AUDIO: low throne-hall room tone.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             25.0,
             27.0
@@ -618,26 +513,18 @@
               1.3
             ],
             "verticalFovDegrees": 76.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 10,
-          "beatType": "reversal",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Kael invokes the dragon covenant and challenges Malrec's coronation.",
-          "continuityIn": "Kael has interrupted before Lyra crowns Malrec.",
-          "continuityOut": "The crown's ownership is now a supernatural claim backed by dragons.",
-          "shotType": "single",
           "characterIds": [
             "kael"
           ],
           "speakerId": "kael",
-          "addresseeId": "malrec",
           "imagePrompt": "Kael wears the same matte black scale armor and dark red cloak. His expression is controlled authority.",
           "videoPrompt": "PERFORMANCE: minimal movement and a steady commanding eyeline. DIALOGUE (deep, steady, commanding): \"Step away from the crown, Regent. The dragon covenant names her.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 9,
           "timeRangeSeconds": [
             27.0,
@@ -655,26 +542,18 @@
               1.5
             ],
             "verticalFovDegrees": 22.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 11,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Malrec declares Lyra powerless and condemned by every surviving kingdom.",
-          "continuityIn": "Kael claims the covenant recognizes Lyra.",
-          "continuityOut": "Lyra's claim threatens the political order beyond this citadel.",
-          "shotType": "single",
           "characterIds": [
             "malrec"
           ],
           "speakerId": "malrec",
-          "addresseeId": "kael",
           "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is open contempt.",
           "videoPrompt": "PERFORMANCE: restrained disgust and precise articulation. DIALOGUE (sharp, contemptuous): \"She is bloodless, kingdomless, and condemned by every throne still standing.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 9,
           "timeRangeSeconds": [
             32.0,
@@ -692,27 +571,17 @@
               1.5
             ],
             "verticalFovDegrees": 22.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 12,
-          "beatType": "pressure",
-          "coverageRole": "anchor",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Lyra and Kael are spatially joined, but she distrusts the enemy offering rescue.",
-          "continuityIn": "Kael has defended Lyra's right to the crown.",
-          "continuityOut": "Lyra must decide whether Kael offers freedom or another form of captivity.",
-          "shotType": "twoShot",
           "characterIds": [
             "kael",
             "lyra"
           ],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "Kael wears black scale armor and a dark red cloak with solemn intent. Lyra wears the established torn ivory gown, black bodice, and iron collar with wary hostility.",
-          "videoPrompt": "PERFORMANCE: Kael and Lyra silently study each other; Kael gives one slight respectful nod. AUDIO: low throne-hall room tone.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             37.0,
             39.0
@@ -729,26 +598,18 @@
               1.3
             ],
             "verticalFovDegrees": 58.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 13,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Lyra refuses to exchange Malrec's captivity for possession by Kael.",
-          "continuityIn": "Kael has offered power but Lyra distrusts his motive.",
-          "continuityOut": "Kael must offer Lyra command rather than ownership.",
-          "shotType": "single",
           "characterIds": [
             "lyra"
           ],
           "speakerId": "lyra",
-          "addresseeId": "kael",
           "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Her expression is proud hostility.",
           "videoPrompt": "PERFORMANCE: controlled fury with a fixed eyeline. DIALOGUE (low, proud, forceful): \"I escaped one tyrant. I will not become a dragon lord's prize.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 12,
           "timeRangeSeconds": [
             39.0,
@@ -766,26 +627,18 @@
               1.48
             ],
             "verticalFovDegrees": 22.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 14,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Kael gives Lyra command over him and ties the crown to saving Oren.",
-          "continuityIn": "Lyra has rejected any alliance that owns her.",
-          "continuityOut": "Lyra can take the crown without surrendering autonomy.",
-          "shotType": "single",
           "characterIds": [
             "kael"
           ],
           "speakerId": "kael",
-          "addresseeId": "lyra",
           "imagePrompt": "Kael wears the established black scale armor and dark red cloak. His expression is grave sincerity.",
           "videoPrompt": "PERFORMANCE: quiet conviction and a steady eyeline. DIALOGUE (deep, sincere, controlled): \"Take the crown and command me—or let Oren die unavenged.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 12,
           "timeRangeSeconds": [
             44.0,
@@ -803,24 +656,14 @@
               1.5
             ],
             "verticalFovDegrees": 24.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 15,
-          "beatType": "pressure",
-          "coverageRole": "insert",
           "locationId": "citadel_exterior",
           "storyBeat": "The dragon circles close enough to make Kael's promise physically real.",
-          "continuityIn": "Kael has offered Lyra command of dragons.",
-          "continuityOut": "A living dragon is waiting for Lyra's decision above the tower.",
-          "shotType": "establishing",
           "characterIds": [],
-          "speakerId": null,
-          "addresseeId": null,
           "imagePrompt": "The coronation tower rises close in the foreground against the blood-red eclipse. A colossal black dragon silhouette crosses high above it; no people are visible.",
-          "videoPrompt": "VISUAL: the dragon silhouette completes one powerful glide above the tower as storm clouds churn. AUDIO: one immense wingbeat rolls over the citadel.",
-          "durationSeconds": 2,
           "timeRangeSeconds": [
             49.0,
             51.0
@@ -847,26 +690,18 @@
               42.0,
               67.0
             ]
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 16,
-          "beatType": "pressure",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Malrec reveals that taking the crown may execute Lyra as a false heir.",
-          "continuityIn": "A dragon is waiting above while Lyra considers the crown.",
-          "continuityOut": "The crown becomes a lethal public test of Lyra's blood.",
-          "shotType": "single",
           "characterIds": [
             "malrec"
           ],
           "speakerId": "malrec",
-          "addresseeId": "lyra",
           "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is cruel anticipation.",
           "videoPrompt": "PERFORMANCE: eager cruelty and precise articulation. DIALOGUE (low, threatening): \"Touch it, and the Ash Crown burns a false heir alive.\"",
-          "durationSeconds": 4,
           "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             51.0,
@@ -884,26 +719,18 @@
               1.52
             ],
             "verticalFovDegrees": 18.0
-          },
-          "endGuideFrame": false
+          }
         },
         {
           "sceneNumber": 17,
-          "beatType": "cliffhanger",
-          "coverageRole": "closeup",
           "locationId": "eclipse_throne_hall",
           "storyBeat": "Lyra accepts the crown's lethal judgment before Malrec can stop the test.",
-          "continuityIn": "Malrec expects the crown either to kill Lyra or frighten her into obedience.",
-          "continuityOut": "Lyra has chosen the test, but the verdict is withheld.",
-          "shotType": "single",
           "characterIds": [
             "lyra"
           ],
           "speakerId": "lyra",
-          "addresseeId": "malrec",
           "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Ember-red crown light reaches her face as she looks down with final resolve.",
           "videoPrompt": "PERFORMANCE: Lyra lifts only her eyes from the crown. DIALOGUE (calm, final): \"Then let it judge me.\"",
-          "durationSeconds": 5,
           "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             55.0,
@@ -921,8 +748,7 @@
               1.25
             ],
             "verticalFovDegrees": 32.0
-          },
-          "endGuideFrame": false
+          }
         }
       ],
       "spatialTimeline": {

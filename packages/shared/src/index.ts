@@ -69,6 +69,5 @@ export type {
   ShowCharacter,
   ShowEpisode,
   ShowLocation,
-  ShowPrompts,
   ShowScript,
 } from "./script";

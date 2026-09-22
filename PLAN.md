@@ -205,7 +205,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json`. `pnpm run content:frames` generates missing character stills, then each scene still from those portraits plus location text. `pnpm run content:generate` animates each scene still with LTX I2V. Every instruction string comes from that JSON’s `prompts` templates — nothing is hardcoded in the Python. Existing PNGs/MP4s are skipped unless one selected scene uses `--force`.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities, profiles, set plates, and scene stills; `pnpm run content:generate` renders camera-only or LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -213,7 +213,7 @@ reelshort-clone/
 
 1. Character stills — `output/<show>/characters/<id>.png` (human review, then Qwen Picture 1 / Picture 2 on scene stills)
 2. Spatial previs — `output/<show>/<episode>/previs/` (proxy start/end frames and contact sheet)
-3. Scene stills — `scene_XX_start.png`, plus `scene_XX_end.png` when `endGuideFrame` is enabled
+3. Scene stills — `scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
@@ -243,79 +243,22 @@ The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clip
 
 One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Filename stem must match `id`.
 
-```json
-{
-  "id": "midnight-heiress",
-  "title": "Midnight Heiress",
-  "characters": {
-    "elena-heiress": {
-      "promptBlock": "Elena, late 20s, dark hair, navy wool coat over a metallic bronze wrap top."
-    }
-  },
-  "locations": {
-    "mansion-gates": {
-      "promptBlock": "Grey stone mansion, open iron gates, dusk, gravel drive."
-    }
-  },
-  "prompts": {
-    "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
-    "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
-    "coverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the rendered coverage master. Reframe the same cinematic moment as a new vertical 9:16 shot, not a collage. Preserve the identity from the identity picture(s), and inherit the set architecture, wardrobe, lighting direction, color, axis, and screen geography from the coverage master. The finished frame contains exactly {characterCount} visible people: {characterIds}. Do not retain, duplicate, or invent any other person from the master. {imagePrompt}",
-    "environmentStill": "Create a new photorealistic cinematic vertical 9:16 frame from the attached blank canvas. The finished frame contains no people, faces, portraits, statues shaped like people, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}"
-  },
-  "episodes": [
-    {
-      "episodeNumber": 1,
-      "title": "The Return",
-      "isFree": true,
-      "coinCost": 0,
-      "logline": "Elena reaches the estate before her enemy can destroy her inheritance.",
-      "dramaticQuestion": "Will Elena enter before the gates close?",
-      "hook": "Elena stands outside the closing gates.",
-      "reversal": "She recognizes the person ordering the gates shut.",
-      "cliffhanger": "Elena crosses the threshold and the gates lock behind her.",
-      "nextEpisodeOpening": "Elena faces the enemy waiting inside the locked gates.",
-      "screenDirection": "At the gates, Elena is screen left and looks frame right toward the estate.",
-      "scenes": [
-        {
-          "sceneNumber": 1,
-          "beatType": "hook",
-          "coverageRole": "closeup",
-          "locationId": "mansion-gates",
-          "storyBeat": "Elena returns to the estate and chooses to confront her past.",
-          "continuityIn": "Elena has just arrived alone outside the open gates.",
-          "continuityOut": "Elena commits to entering the estate.",
-          "shotType": "single",
-          "characterIds": ["elena-heiress"],
-          "speakerId": "elena-heiress",
-          "addresseeId": null,
-          "imagePrompt": "Chest-up single of Elena in a navy wool coat, facing the estate off-frame right with guarded resolve, never looking at camera.",
-          "videoPrompt": "Elena speaks immediately with no silent pause, her low voice fully audible and weighted with dread: \"Ten years, and this place still knows how to frighten me.\" Her resolve hardens afterward. Camera locked. Outdoor wind stirs.",
-          "durationSeconds": 6
-        }
-      ]
-    }
-  ]
-}
-```
+Show JSON contains only show-specific authoring data: identity descriptions, measured locations,
+episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once in
+`content-pipeline/prompts.json`; they are renderer configuration, not show content.
 
-- `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
 - `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
-- `endGuideFrame` is reserved for action shots whose final blocking differs from the start. Static dialogue stays on one mark and camera; pinning an identical LTX guide adds substantial render cost without adding spatial information.
-- `motionMode` is `cameraOnly` or `generative`. Silent anchors, inserts, reactions, and establishing shots default to `cameraOnly`; opt into generative motion only for one simple visible action.
-- Spatial singles use left/right profile identity references plus an abstracted continuity plate. The plate must contain no recognizable person or landmark copy. In-set prop inserts require `coverageReferenceSceneNumber` and `focusTargetId`.
-- `shotType` is `establishing`, `insert`, `single`, `reaction`, or `twoShot`. Use 2–3 second silent two-shots as spatial anchors, then set each related single's `coverageReferenceSceneNumber` to that anchor. This makes the coverage share a rendered set and axis instead of resembling unrelated portraits. For three people, establish pairwise anchors when the active pair changes.
-- `establishing` and `insert` shots use empty `characterIds` and `prompts.environmentStill`; the pipeline supplies a blank canvas instead of identity references. Use these shots for geography, architecture, creatures, weather, and hero props that create visual scale.
-- `screenDirection` fixes the 180-degree axis per recurring location before shots are written. Every scene derives left/right eyelines from it; never choose eyelines independently per prompt.
-- `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
-- `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
-- `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.
-- Dialogue singles use tight head-and-shoulders stills so identity detail survives animation.
-- A `videoPrompt` uses compact `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:` clauses. Include only literal motion and essential sound; LTX may visualize decorative foley or metaphoric directions.
-- `durationSeconds` is flexible and converted to `8n+1` frames at 24 fps. Episode scenes should total about 60 seconds.
+- Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: generative shots whose timeline or camera actually change get one; silent/static shots do not.
+- `motionMode` is optional. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`. Opt into generative motion only for one simple visible action a camera move cannot do.
+- Spatial singles use left/right profile identity references, a person-free photorealistic set plate, and a character-only pose proxy. In-set prop inserts require `coverageReferenceSceneNumber` and `focusTargetId`.
+- Empty `characterIds` are environments. Two silent people are a spatial anchor; set each related single's `coverageReferenceSceneNumber` to that anchor. Dialogue is one on-camera `speakerId` only.
+- `spatialTimeline` and each shot camera define the 180-degree axis and eyelines; no parallel prose screen-direction field exists.
+- `speakerId` enables dialogue-specific audio-video guidance. One quoted line maximum, 16 words maximum.
+- `imagePrompt` is wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera.
+- `imagePrompt` may name only characters in `characterIds`.
+- `videoPrompt` is the spoken line and non-spatial performance for generative shots. Camera and blocking are compiled from the timeline. Omit it on camera-only shots.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.

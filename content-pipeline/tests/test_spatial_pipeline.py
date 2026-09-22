@@ -35,6 +35,32 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(scene["timeRangeSeconds"], [6.0, 8.0])
         self.assertEqual(scene["camera"]["verticalFovDegrees"], 70.0)
 
+    def test_show_json_contains_no_renderer_templates_or_legacy_prose_state(self) -> None:
+        raw = json.loads(
+            (
+                self.root / "scripts_input" / "crown-of-the-last-dragon.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertNotIn("prompts", raw)
+        obsolete = {
+            "beatType",
+            "coverageRole",
+            "continuityIn",
+            "continuityOut",
+            "addresseeId",
+            "screenDirection",
+            "shotType",
+            "durationSeconds",
+            "endGuideFrame",
+            "logline",
+            "dramaticQuestion",
+        }
+        self.assertTrue(obsolete.isdisjoint(raw["episodes"][0]))
+        for scene in raw["episodes"][0]["scenes"]:
+            self.assertTrue(obsolete.isdisjoint(scene))
+            if "speakerId" in scene:
+                self.assertIsInstance(scene["speakerId"], str)
+
     def test_master_uses_two_identities_and_proxy(self) -> None:
         scene = self.episode["scenes"][3]
         graph = pipeline.clone_workflow(self.qwen)
@@ -90,6 +116,13 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["29"]["inputs"]["modality_scale"], 3.0)
         self.assertEqual(graph["30"]["inputs"]["modality"], "AUDIO")
 
+    def test_face_landmarks_detect_wrong_screen_direction(self) -> None:
+        face = [0.0] * 15
+        face[4], face[6], face[8] = 100.0, 200.0, 80.0
+        self.assertEqual(pipeline.face_facing_direction(face), "left")
+        face[8] = 220.0
+        self.assertEqual(pipeline.face_facing_direction(face), "right")
+
     def test_prop_insert_projects_established_crown(self) -> None:
         coverage = self.episode["_allScenes"][3]
         x, y = pipeline.spatial_target_screen_position(
@@ -100,9 +133,10 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertGreater(y, 0)
         self.assertLess(y, 1360)
 
-    def test_two_character_camera_move_uses_group_end_refs(self) -> None:
+    def test_two_character_end_refs_use_start_and_proxy(self) -> None:
         scene = self.episode["scenes"][3]
-        self.assertTrue(scene["endGuideFrame"])
+        self.assertEqual(pipeline.scene_motion_mode(scene), "cameraOnly")
+        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, scene))
         graph = pipeline.clone_workflow(self.qwen)
         output_dir = pipeline.OUTPUT_DIR / self.show["id"] / "1"
         pipeline.inject_qwen_group_end_refs(

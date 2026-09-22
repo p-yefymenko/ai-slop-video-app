@@ -36,23 +36,23 @@ from spatial_previs import (
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
-PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
-OPTIONAL_PROMPT_KEYS = (
+PROMPT_KEYS = (
+    "characterImage",
     "characterProfile",
     "setPlate",
-    "environmentStill",
-    "coverageStill",
     "spatialStill",
     "spatialCoverageStill",
     "spatialEnvironmentStill",
     "spatialGroupEndStill",
     "spatialInsertStill",
     "spatialEndStill",
+    "sceneVideo",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
+PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 FACE_DETECTOR_PATH = (
     ROOT / ".comfyui" / "models" / "quality" / "face_detection_yunet_2023mar.onnx"
@@ -589,13 +589,10 @@ def load_show(path: Path) -> dict:
             "spatial": loc.get("spatial"),
         }
     show["locations"] = cleaned_locs
-    prompts = show.get("prompts")
+    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
     if not isinstance(prompts, dict):
-        raise SystemExit(f"{path.name} is missing prompts")
+        raise SystemExit(f"{PROMPTS_PATH} must contain a JSON object")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
-    for key in OPTIONAL_PROMPT_KEYS:
-        if key in prompts:
-            show["prompts"][key] = require_text(prompts, key, "prompts")
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
         raise SystemExit(f"{path.name} is missing episodes")
@@ -634,15 +631,21 @@ def load_show(path: Path) -> dict:
             for cid in character_ids:
                 if cid not in cleaned_chars:
                     raise SystemExit(f"{scene_label} names unknown character {cid!r}")
-            shot_type = require_text(scene, "shotType", scene_label)
             speaker_id = scene.get("speakerId")
-            if speaker_id is not None:
+            if speaker_id:
                 speaker_id = str(speaker_id)
-            addressee_id = scene.get("addresseeId")
-            if addressee_id is not None:
-                addressee_id = str(addressee_id)
-            video_prompt = require_text(scene, "videoPrompt", scene_label)
+                if speaker_id not in character_ids:
+                    raise SystemExit(
+                        f"{scene_label} speakerId {speaker_id!r} is not on camera"
+                    )
+                if len(character_ids) != 1:
+                    raise SystemExit(
+                        f"{scene_label} dialogue must be a single; two-shots stay silent"
+                    )
+            else:
+                speaker_id = None
             image_prompt = require_text(scene, "imagePrompt", scene_label)
+            video_prompt = str(scene.get("videoPrompt") or "")
             coverage_reference_scene_number = scene.get("coverageReferenceSceneNumber")
             if coverage_reference_scene_number is not None:
                 coverage_reference_scene_number = int(coverage_reference_scene_number)
@@ -650,29 +653,27 @@ def load_show(path: Path) -> dict:
                     raise SystemExit(
                         f"{scene_label} coverageReferenceSceneNumber must name an earlier scene"
                     )
-            duration_seconds = float(scene.get("durationSeconds") or 0)
+            time_range = scene.get("timeRangeSeconds")
+            if (
+                not isinstance(time_range, list)
+                or len(time_range) != 2
+            ):
+                raise SystemExit(f"{scene_label} requires timeRangeSeconds [start, end]")
+            duration_seconds = float(time_range[1]) - float(time_range[0])
             if duration_seconds <= 0:
-                raise SystemExit(f"{scene_label} durationSeconds must be positive")
+                raise SystemExit(f"{scene_label} timeRangeSeconds must increase")
             cleaned_scenes.append(
                 {
                     "sceneNumber": scene_number,
-                    "beatType": str(scene.get("beatType") or ""),
-                    "coverageRole": str(scene.get("coverageRole") or ""),
                     "locationId": loc_id,
                     "storyBeat": require_text(scene, "storyBeat", scene_label),
-                    "continuityIn": require_text(scene, "continuityIn", scene_label),
-                    "continuityOut": require_text(scene, "continuityOut", scene_label),
-                    "shotType": shot_type,
                     "characterIds": character_ids,
                     "speakerId": speaker_id,
-                    "addresseeId": addressee_id,
                     "motionMode": str(scene.get("motionMode") or ""),
                     "coverageReferenceSceneNumber": coverage_reference_scene_number,
                     "focusTargetId": str(scene.get("focusTargetId") or ""),
-                    "timeRangeSeconds": scene.get("timeRangeSeconds"),
+                    "timeRangeSeconds": [float(time_range[0]), float(time_range[1])],
                     "camera": scene.get("camera"),
-                    "guideKeyframesSeconds": scene.get("guideKeyframesSeconds") or [],
-                    "endGuideFrame": bool(scene.get("endGuideFrame")),
                     "imagePrompt": image_prompt,
                     "videoPrompt": video_prompt,
                     "durationSeconds": duration_seconds,
@@ -684,13 +685,6 @@ def load_show(path: Path) -> dict:
                 "title": require_text(episode, "title", f"episode {ep_num}"),
                 "isFree": bool(episode.get("isFree")),
                 "coinCost": int(episode.get("coinCost") or 0),
-                "logline": str(episode.get("logline") or ""),
-                "dramaticQuestion": str(episode.get("dramaticQuestion") or ""),
-                "hook": str(episode.get("hook") or ""),
-                "reversal": str(episode.get("reversal") or ""),
-                "cliffhanger": str(episode.get("cliffhanger") or ""),
-                "nextEpisodeOpening": str(episode.get("nextEpisodeOpening") or ""),
-                "screenDirection": str(episode.get("screenDirection") or ""),
                 "spatialTimeline": episode.get("spatialTimeline"),
                 "scenes": cleaned_scenes,
                 "_allScenes": cleaned_scenes,
@@ -761,11 +755,14 @@ def scene_motion_mode(scene: dict) -> str:
     explicit = scene.get("motionMode")
     if explicit in {"generative", "cameraOnly"}:
         return explicit
-    if scene.get("speakerId"):
-        return "generative"
-    if scene.get("shotType") in {"establishing", "insert", "twoShot", "reaction"}:
-        return "cameraOnly"
-    return "generative"
+    return "generative" if scene.get("speakerId") else "cameraOnly"
+
+
+def scene_needs_end_guide(episode: dict, scene: dict) -> bool:
+    return (
+        scene_motion_mode(scene) == "generative"
+        and scene_has_spatial_change(episode, scene)
+    )
 
 
 def clone_workflow(workflow_template: dict) -> dict:
@@ -1263,8 +1260,9 @@ def run_qwen_image(
     inject_images,
     seed: int,
     expected_max_faces: int | None = None,
+    expected_facing: str | None = None,
 ) -> None:
-    attempts = 3 if expected_max_faces is not None else 1
+    attempts = 3 if expected_max_faces is not None or expected_facing else 1
     for attempt in range(attempts):
         attempt_seed = (seed + attempt * 104729) & 0xFFFFFFFF
         graph = clone_workflow(workflow_template)
@@ -1275,20 +1273,34 @@ def run_qwen_image(
         execute_queued_graph(graph, dest, prefer="image", mode=mode)
         if expected_max_faces is None:
             return
-        observed_faces = detect_face_count(dest)
-        if observed_faces <= expected_max_faces:
-            return
-        print(
-            f"  Rejected: detected {observed_faces} faces, expected at most "
-            f"{expected_max_faces}. Rerolling...",
-            flush=True,
+        faces = detect_faces(dest)
+        observed_faces = len(faces)
+        face_count_ok = (
+            expected_max_faces is None or observed_faces <= expected_max_faces
         )
+        if face_count_ok:
+            if expected_facing and observed_faces == 1:
+                observed_facing = face_facing_direction(faces[0])
+                if observed_facing != expected_facing:
+                    print(
+                        f"  Rejected: face looks {observed_facing}, expected "
+                        f"{expected_facing}. Rerolling...",
+                        flush=True,
+                    )
+                    continue
+            return
+        if expected_max_faces is not None:
+            print(
+                f"  Rejected: detected {observed_faces} faces, expected at most "
+                f"{expected_max_faces}. Rerolling...",
+                flush=True,
+            )
     raise RuntimeError(
-        f"{dest} repeatedly contained more than {expected_max_faces} visible faces"
+        f"{dest} repeatedly failed face count or facing validation"
     )
 
 
-def detect_face_count(image_path: Path) -> int:
+def detect_faces(image_path: Path) -> list:
     if not present(FACE_DETECTOR_PATH):
         raise RuntimeError(
             f"Missing duplicate-face detector {FACE_DETECTOR_PATH}. "
@@ -1307,7 +1319,24 @@ def detect_face_count(image_path: Path) -> int:
         5000,
     )
     _, faces = detector.detect(image)
-    return 0 if faces is None else len(faces)
+    return [] if faces is None else list(faces)
+
+
+def detect_face_count(image_path: Path) -> int:
+    return len(detect_faces(image_path))
+
+
+def face_facing_direction(face) -> str:
+    left_eye_x = float(face[4])
+    right_eye_x = float(face[6])
+    nose_x = float(face[8])
+    eye_midpoint = (left_eye_x + right_eye_x) / 2.0
+    tolerance = abs(right_eye_x - left_eye_x) * 0.15
+    if nose_x < eye_midpoint - tolerance:
+        return "left"
+    if nose_x > eye_midpoint + tolerance:
+        return "right"
+    return "center"
 
 
 def generate_show(
@@ -1399,6 +1428,7 @@ def generate_show(
                     ),
                     stable_seed(show_id, "profile", character_id, direction),
                     expected_max_faces=1,
+                    expected_facing=direction,
                 )
                 generated += 1
 
@@ -1436,7 +1466,7 @@ def generate_show(
             location = resolve_location(show, scene)
             names = ", ".join(scene["characterIds"])
             print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
-            needs_end_guide = bool(scene["endGuideFrame"])
+            needs_end_guide = scene_needs_end_guide(episode, scene)
             frame_outputs_present = present(still_path) and (
                 not needs_end_guide or present(end_path)
             )
@@ -1756,6 +1786,13 @@ def generate_show(
                         inject_images,
                         seed,
                         expected_max_faces=len(scene["characterIds"]),
+                        expected_facing=(
+                            character_facing_direction(
+                                episode, scene, scene["characterIds"][0]
+                            )
+                            if len(scene["characterIds"]) == 1
+                            else None
+                        ),
                     )
                 if needs_end_guide and (not present(end_path) or force):
                     if not scene_has_spatial_change(episode, scene):
@@ -1841,7 +1878,7 @@ def generate_show(
                         ),
                     )
                     print(
-                        "  Rendered deterministic silent-anchor camera move",
+                        "  Rendered deterministic camera-only shot",
                         flush=True,
                     )
                 else:
@@ -1914,7 +1951,7 @@ def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
                 for scene in episode["scenes"]:
                     if not present(start_still_path(out_dir, scene["sceneNumber"])):
                         return True
-                    if scene["endGuideFrame"] and not present(
+                    if scene_needs_end_guide(episode, scene) and not present(
                         end_still_path(out_dir, scene["sceneNumber"])
                     ):
                         return True
