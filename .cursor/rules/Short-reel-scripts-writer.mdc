@@ -6,11 +6,14 @@ alwaysApply: false
 
 /**
  * Types from `packages/shared/src/script.ts`.
+ * Comments are how to author any vertical microdrama, not a particular plot.
  */
 
 export type ShowCharacter = {
   /**
-   * Identity source only. Scene stills attach the generated PNG and never receive this text.
+   * One adult's stable face: age, build, skin, eyes, hair, one distinctive mark.
+   * Rank and role must still read in a packed group and in an eye-filling ECU.
+   * Scene stills attach the PNG and never receive this text.
    * No wardrobe, pose, expression, action, location, or camera.
    */
   promptBlock: string;
@@ -20,18 +23,27 @@ export type ShowCharacter = {
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
+  /** Object the cast stands on, grabs, or is staged against. */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
 };
 
 export type StageGeometry = {
+  /**
+   * Large enough that one ground plane can take a crowd, a body in motion,
+   * and a world-scale camera. A tight box forces isolated talking heads.
+   * `[width X, depth Y, height Z]`.
+   */
   sizeMeters: Vec3;
   landmarks: Record<string, StageLandmark>;
 };
 
 export type ShowLocation = {
-  /** Materials and light. Not a viewpoint. */
+  /**
+   * Materials and light of this world's arena (palace, alley, boardroom, forest).
+   * One charged space, reused for wides, groups, and ECUs. Not a viewpoint.
+   */
   promptBlock: string;
   spatial: StageGeometry;
 };
@@ -39,12 +51,18 @@ export type ShowLocation = {
 export type CharacterSpatialKeyframe = {
   timeSeconds: number;
   locationId: string;
-  /** Feet. */
+  /**
+   * Feet. Status stands as a line or cluster facing the outsider.
+   * Do not park each speaker on an isolated mark so coverage becomes singles.
+   */
   position: Vec3;
   /** `0` faces +Y; positive turns toward +X. */
   bodyYawDegrees: number;
-  /** Character ID or landmark ID. */
+  /** Enemy, ally, or landmark they eye. Reciprocal in a standoff. */
   lookAtId?: string;
+  /**
+   * Proxy body height only. Strike, fall, and transform live in `videoPrompt`.
+   */
   stance: "standing" | "sitting" | "kneeling" | "walking";
   leftHandTargetId?: string;
   rightHandTargetId?: string;
@@ -59,6 +77,10 @@ export type PropSpatialKeyframe = {
 };
 
 export type SpatialTimeline = {
+  /**
+   * One continuous physical crisis. The edit cuts cameras around the cast.
+   * People do not teleport to manufacture a close-up.
+   */
   durationSeconds: number;
   characterTracks: Record<string, CharacterSpatialKeyframe[]>;
   propTracks: Record<string, PropSpatialKeyframe[]>;
@@ -68,60 +90,86 @@ export type SpatialCameraKeyframe = {
   timeSeconds: number;
   position: Vec3;
   lookAt: Vec3;
+  /**
+   * World/empty ~50–70; group ~40–55; single ~20–28; eye or mouth ECU ~12–18.
+   */
   verticalFovDegrees: number;
+  /** Dutch. Omit or `0` for a level horizon. */
   rollDegrees?: number;
 };
 
 export type SpatialCamera = {
+  /**
+   * Coverage of the same blocking, not a new scene. An episode needs all of:
+   * silent world open, character before they speak, proof of power (action/VFX),
+   * group or OTS dialogue, ECU on the wounding line, body/hand/foot insert,
+   * approach or fight. Heads may leave the frame.
+   * One keyframe is locked-off; more than one interpolates.
+   */
   keyframes: SpatialCameraKeyframe[];
 };
 
 export type ScriptScene = {
+  /** Sequential cut number. */
   sceneNumber: number;
+  /** Confrontation stays in the arena. Hook may be its exterior. */
   locationId: string;
-  /** Cause and effect. Not visuals, blocking, or camera. */
+  /**
+   * Cause and effect of this cut, written before prompts.
+   * Episode skeleton: hook (world + threat) → pressure (status as a group) →
+   * reversal → cliffhanger. Not framing, blocking, or camera.
+   */
   storyBeat: string;
   /**
-   * Visible people. Empty for environments.
+   * Everyone visible, including bodies behind the speaker.
+   * Empty for world, VFX, and inserts with no face.
    * First two are Qwen identity Pictures; everyone is in the proxy.
+   * A group argument is a group shot, not a rotation of talking singles.
    */
   characterIds: string[];
   /**
-   * Who speaks. Omit on silent shots. Must be in `characterIds`.
+   * Who is speaking in this camera, including inside a crowd or two-shot.
+   * Omit on silent spectacle. Must be in `characterIds`.
    */
   speakerId?: string;
   /**
-   * Shot duration is this interval. Required on every shot.
+   * Shot duration. ~2s for world, inserts, and VFX; 3–6s for one spoken line.
    * Do not also store `durationSeconds`.
    */
   timeRangeSeconds: [number, number];
   /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
   /**
-   * Wardrobe, expression, and atmosphere only. Omit when the location block
-   * and proxy are enough. Never restate position, facing, eyeline, framing,
-   * or set geometry.
+   * Wardrobe, expression, and atmosphere for this world's rank and mood.
+   * Nameplates and captions are not this field. Omit when location + proxy
+   * are enough. Never restate position, facing, eyeline, framing, or set geometry.
    */
   imagePrompt?: string;
   /**
-   * Spoken line and non-spatial performance. Omit on silent shots.
-   * Camera and blocking come from the timeline and start/end frames.
+   * One short line and the non-spatial performance (shout, smile, strike).
+   * Camera and blocking come from the timeline. Omit on silent shots.
    */
   videoPrompt?: string;
 };
 
 export type ShowEpisode = {
   episodeNumber: number;
+  /** Episode title, not a shot list. */
   title: string;
   isFree: boolean;
   coinCost: number;
   spatialTimeline: SpatialTimeline;
+  /**
+   * One crisis, ~0–60s. Cut order: world → face → power proof → group pressure
+   * → ECU/reversal → cliffhanger. Do not open on a talking single.
+   */
   scenes: ScriptScene[];
 };
 
 export type ShowScript = {
   /** Filename stem of `content-pipeline/scripts_input/<id>.json`. */
   id: string;
+  /** Series title. Genre can be anything; coverage grammar stays the same. */
   title: string;
   characters: Record<string, ShowCharacter>;
   locations: Record<string, ShowLocation>;
