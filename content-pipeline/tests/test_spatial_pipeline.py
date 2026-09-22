@@ -77,6 +77,29 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(len(loaders), 1)
         self.assertIn("spatialEnvironmentStill", self.show["prompts"])
 
+    def test_safe_shots_default_to_camera_only(self) -> None:
+        insert = self.episode["scenes"][7]
+        dialogue = self.episode["scenes"][9]
+        self.assertEqual(pipeline.scene_motion_mode(insert), "cameraOnly")
+        self.assertEqual(pipeline.scene_motion_mode(dialogue), "generative")
+
+    def test_dialogue_uses_multimodal_guidance(self) -> None:
+        graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
+        pipeline.inject_dialogue_multimodal_guider(graph)
+        self.assertEqual(graph["17"]["class_type"], "MultimodalGuider")
+        self.assertEqual(graph["29"]["inputs"]["modality_scale"], 3.0)
+        self.assertEqual(graph["30"]["inputs"]["modality"], "AUDIO")
+
+    def test_prop_insert_projects_established_crown(self) -> None:
+        coverage = self.episode["_allScenes"][3]
+        x, y = pipeline.spatial_target_screen_position(
+            self.show, self.episode, coverage, "ash_crown"
+        )
+        self.assertGreater(x, 0)
+        self.assertLess(x, 768)
+        self.assertGreater(y, 0)
+        self.assertLess(y, 1360)
+
     def test_two_character_camera_move_uses_group_end_refs(self) -> None:
         scene = self.episode["scenes"][3]
         self.assertTrue(scene["endGuideFrame"])

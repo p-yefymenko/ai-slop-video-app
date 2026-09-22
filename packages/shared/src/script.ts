@@ -99,6 +99,17 @@ export type ShowPrompts = {
    */
   characterImage: string;
   /**
+   * Qwen identity-turnaround template. Picture 1 is the approved frontal identity.
+   * Uses `{characterId}` and `{direction}` (`left` or `right`) to create exactly one
+   * neutral three-quarter/profile reference on the same studio backdrop.
+   */
+  characterProfile: string;
+  /**
+   * Qwen template that removes all people from a coverage master while preserving the
+   * exact set, camera, permanent landmarks, and light. Uses `{locationPromptBlock}`.
+   */
+  setPlate: string;
+  /**
    * Qwen-Image-Edit-2511 template. Give an exact per-shot picture map and output person
    * count. Never mention a nonexistent Picture 2: the four-step model may duplicate Picture
    * 1 when given conditional multi-picture wording.
@@ -131,8 +142,8 @@ export type ShowPrompts = {
    */
   spatialStill: string;
   /**
-   * Qwen dialogue-single template using identity, photorealistic coverage master, then proxy.
-   * Adds `{coverageReferencePictureNumber}` to the `spatialStill` placeholders.
+   * Qwen dialogue-single template using an eyeline-matched identity, person-free set plate,
+   * then character-only pose proxy. Adds `{coverageReferencePictureNumber}`.
    */
   spatialCoverageStill: string;
   /**
@@ -140,6 +151,11 @@ export type ShowPrompts = {
    * Uses `{proxyPictureNumber}`, `{locationPromptBlock}`, and `{imagePrompt}`.
    */
   spatialEnvironmentStill: string;
+  /**
+   * Qwen prop-insert template using a crop from an earlier coverage master plus proxy.
+   * Uses `{focusTargetId}`, `{locationPromptBlock}`, and `{imagePrompt}`.
+   */
+  spatialInsertStill: string;
   /**
    * Qwen end-guide template for a moving two-character shot. Picture 1 is the
    * photorealistic start and Picture 2 is the end-state proxy.
@@ -200,6 +216,12 @@ export type ScriptScene = {
    */
   shotType: "establishing" | "insert" | "single" | "reaction" | "twoShot";
   /**
+   * `cameraOnly` preserves the approved still and applies deterministic camera motion.
+   * Use it for establishing shots, prop inserts, reactions, and silent anchors unless a
+   * visible action truly requires synthesis. `generative` invokes LTX.
+   */
+  motionMode?: "cameraOnly" | "generative";
+  /**
    * Empty for establishing/insert shots; otherwise one ID preferred and two maximum. Order
    * is exact: first ID = Qwen Picture 1, second ID = Picture 2.
    */
@@ -221,6 +243,11 @@ export type ScriptScene = {
    * The pipeline attaches it after the identity portrait(s); omit it for masters and inserts.
    */
   coverageReferenceSceneNumber?: number;
+  /**
+   * Prop or landmark ID centered by an insert. Inserts inside an established set should
+   * combine this with `coverageReferenceSceneNumber` instead of reinventing the prop.
+   */
+  focusTargetId?: string;
   /**
    * Interval on the episode spatial timeline projected into this edit shot.
    * Omit only for legacy scenes that have not yet been migrated.

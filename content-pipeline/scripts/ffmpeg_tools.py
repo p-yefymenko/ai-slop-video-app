@@ -113,12 +113,16 @@ def render_camera_move(
     horizontal = max(-1.0, min(1.0, horizontal_direction))
     vertical = max(-1.0, min(1.0, vertical_direction))
     progress = f"on/{frames - 1}"
-    zoom = f"min(1.08,1+0.08*{progress})"
+    zoom = f"min(1.14,1+0.14*{progress})"
     x = f"(iw-iw/zoom)/2*(1+({horizontal:.4f})*{progress})"
     y = f"(ih-ih/zoom)/2*(1+({vertical:.4f})*{progress})"
+    # zoompan rounds crop coordinates to whole source pixels. Work at 4x and
+    # downsample so the final movement advances in quarter-pixel increments
+    # instead of visibly shaking between integer positions.
     video_filter = (
-        f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s=448x800:fps={frame_rate},"
-        "format=yuv420p"
+        "scale=iw*4:ih*4:flags=lanczos,"
+        f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s=1792x3200:fps={frame_rate},"
+        "scale=448:800:flags=lanczos,format=yuv420p"
     )
     result = subprocess.run(
         [

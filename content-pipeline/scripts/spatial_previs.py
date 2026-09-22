@@ -284,6 +284,7 @@ def render_scene_proxy(
     time_seconds: float,
     destination: Path,
     debug: bool = True,
+    draw_landmarks: bool = True,
 ) -> None:
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     amount = min(1.0, max(0.0, (time_seconds - start) / max(finish - start, 1e-6)))
@@ -300,17 +301,25 @@ def render_scene_proxy(
         for y in range(math.floor(-depth / 2), math.ceil(depth / 2) + 1):
             _line3d(draw, camera, (-width / 2, float(y), 0.0), (width / 2, float(y), 0.0), (39, 51, 66))
 
-    for landmark_id, landmark in spatial.get("landmarks", {}).items():
-        for edge_start, edge_finish in _box_edges(
-            vec(landmark["position"]), vec(landmark["size"])
-        ):
-            _line3d(draw, camera, edge_start, edge_finish, (70, 115, 145), 3)
-        label_point = project(
-            add(vec(landmark["position"]), (0.0, 0.0, float(landmark["size"][2]))),
-            camera,
-        )
-        if debug and label_point:
-            draw.text((label_point[0] + 4, label_point[1]), landmark_id, fill=(110, 180, 210))
+    if draw_landmarks:
+        for landmark_id, landmark in spatial.get("landmarks", {}).items():
+            for edge_start, edge_finish in _box_edges(
+                vec(landmark["position"]), vec(landmark["size"])
+            ):
+                _line3d(draw, camera, edge_start, edge_finish, (70, 115, 145), 3)
+            label_point = project(
+                add(
+                    vec(landmark["position"]),
+                    (0.0, 0.0, float(landmark["size"][2])),
+                ),
+                camera,
+            )
+            if debug and label_point:
+                draw.text(
+                    (label_point[0] + 4, label_point[1]),
+                    landmark_id,
+                    fill=(110, 180, 210),
+                )
 
     states: list[tuple[float, str, dict]] = []
     for character_id in scene["characterIds"]:
@@ -459,7 +468,17 @@ def compile_spatial_video_prompt(episode: dict, scene: dict) -> str:
         else:
             camera_text = "CAMERA: dollies smoothly along the established path."
     spatial_text = "VISUAL: " + "; ".join(statements) + "." if statements else ""
-    return " ".join(part for part in (spatial_text, scene["videoPrompt"], camera_text) if part)
+    lip_sync_text = ""
+    if scene.get("speakerId"):
+        lip_sync_text = (
+            f"LIP SYNC: {scene['speakerId']} visibly lip-syncs every spoken word; "
+            "the lips open on the first syllable and articulate continuously through the line."
+        )
+    return " ".join(
+        part
+        for part in (spatial_text, lip_sync_text, scene["videoPrompt"], camera_text)
+        if part
+    )
 
 
 def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
@@ -485,13 +504,47 @@ def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
     return False
 
 
+def character_facing_direction(
+    episode: dict,
+    scene: dict,
+    character_id: str,
+) -> str | None:
+    """Return the frame edge the character faces from authoritative blocking."""
+    if not scene.get("timeRangeSeconds") or not scene.get("camera"):
+        return None
+    start = float(scene["timeRangeSeconds"][0])
+    state = episode_character_state(episode, character_id, start)
+    _, _, head_height = _stance_heights(state["stance"])
+    head = add(vec(state["position"]), (0.0, 0.0, head_height))
+    projected = project(head, scene["camera"])
+    if projected is None:
+        return None
+    target_id = state.get("lookAtId")
+    tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
+    if target_id in tracks:
+        target = episode_character_state(episode, target_id, start)
+        _, _, target_head_height = _stance_heights(target["stance"])
+        target_projected = project(
+            add(vec(target["position"]), (0.0, 0.0, target_head_height)),
+            scene["camera"],
+        )
+    else:
+        yaw = math.radians(float(state["bodyYawDegrees"]))
+        target_projected = project(
+            add(head, (math.sin(yaw), math.cos(yaw), 0.0)),
+            scene["camera"],
+        )
+    if target_projected is None:
+        return None
+    return "left" if target_projected[0] < projected[0] else "right"
+
+
 def compile_spatial_image_summary(episode: dict, scene: dict) -> str:
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return ""
     start = float(scene["timeRangeSeconds"][0])
     camera = scene["camera"]
     clauses: list[str] = []
-    timeline_tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
     for character_id in scene["characterIds"]:
         state = episode_character_state(episode, character_id, start)
         _, _, head_height = _stance_heights(state["stance"])
@@ -506,31 +559,8 @@ def compile_spatial_image_summary(episode: dict, scene: dict) -> str:
             if projected[0] > PROXY_WIDTH * 0.58
             else "frame center"
         )
-        target_id = state.get("lookAtId")
-        target_direction = None
-        if target_id in timeline_tracks:
-            target = episode_character_state(episode, target_id, start)
-            _, _, target_head_height = _stance_heights(target["stance"])
-            target_projected = project(
-                add(vec(target["position"]), (0.0, 0.0, target_head_height)),
-                camera,
-            )
-            if target_projected:
-                target_direction = (
-                    "frame left"
-                    if target_projected[0] < projected[0]
-                    else "frame right"
-                )
-        if target_direction is None:
-            yaw = math.radians(float(state["bodyYawDegrees"]))
-            facing_point = add(head, (math.sin(yaw), math.cos(yaw), 0.0))
-            facing_projected = project(facing_point, camera)
-            if facing_projected:
-                target_direction = (
-                    "frame left"
-                    if facing_projected[0] < projected[0]
-                    else "frame right"
-                )
+        facing = character_facing_direction(episode, scene, character_id)
+        target_direction = f"frame {facing}" if facing else None
         clause = f"{character_id} appears {side}"
         if target_direction:
             clause += (
@@ -575,6 +605,46 @@ def character_screen_position(
     return projected[0], projected[1]
 
 
+def spatial_target_screen_position(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    target_id: str,
+) -> tuple[float, float]:
+    start = float(scene["timeRangeSeconds"][0])
+    timeline = episode.get("spatialTimeline") or {}
+    prop_frames = (timeline.get("propTracks") or {}).get(target_id)
+    if prop_frames:
+        state = timeline_state(prop_frames, start)
+        position = state.get("position")
+        if position is None and state.get("heldByCharacterId"):
+            holder = episode_character_state(
+                episode, state["heldByCharacterId"], start
+            )
+            position = add(vec(holder["position"]), (0.0, 0.0, 1.1))
+    else:
+        landmark = (
+            show["locations"][scene["locationId"]]
+            .get("spatial", {})
+            .get("landmarks", {})
+            .get(target_id)
+        )
+        position = landmark.get("position") if landmark else None
+        if position is not None:
+            position = add(vec(position), (0.0, 0.0, float(landmark["size"][2])))
+    if position is None:
+        raise ValueError(
+            f"Unknown spatial focus target {target_id!r} in scene {scene['sceneNumber']}"
+        )
+    projected = project(vec(position), scene["camera"])
+    if not projected:
+        raise ValueError(
+            f"Spatial focus target {target_id!r} is behind scene "
+            f"{scene['sceneNumber']} camera"
+        )
+    return projected[0], projected[1]
+
+
 def generate_episode_previs(show: dict, episode: dict, scene_number: int | None = None) -> list[Path]:
     errors = validate_spatial_episode(show, episode)
     if errors:
@@ -612,6 +682,23 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
                 debug=False,
             )
             generated.append(condition_destination)
+            if scene["characterIds"]:
+                pose_destination = proxy_frame_path(
+                    show["id"],
+                    episode["episodeNumber"],
+                    scene["sceneNumber"],
+                    f"{label}_pose_condition",
+                )
+                render_scene_proxy(
+                    show,
+                    episode,
+                    scene,
+                    time_seconds,
+                    pose_destination,
+                    debug=False,
+                    draw_landmarks=False,
+                )
+                generated.append(pose_destination)
     return generated
 
 

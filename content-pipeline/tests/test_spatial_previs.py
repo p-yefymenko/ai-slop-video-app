@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 from spatial_previs import (  # noqa: E402
     PROXY_HEIGHT,
     PROXY_WIDTH,
+    character_facing_direction,
     compile_spatial_video_prompt,
     project,
     render_scene_proxy,
@@ -90,9 +91,19 @@ class SpatialPrevisTests(unittest.TestCase):
         )
         prompt = compile_spatial_video_prompt(self.episode, scene)
         self.assertIn("established mark", prompt)
+        self.assertIn("visibly lip-syncs every spoken word", prompt)
         self.assertNotIn("[", prompt)
         self.assertNotIn("1.5", prompt)
         self.assertFalse(scene_has_spatial_change(self.episode, scene))
+
+    def test_anchor_pair_uses_reciprocal_profile_references(self) -> None:
+        scene = self.episode["scenes"][8]
+        self.assertEqual(
+            character_facing_direction(self.episode, scene, "kael"), "right"
+        )
+        self.assertEqual(
+            character_facing_direction(self.episode, scene, "malrec"), "left"
+        )
 
     def test_proxy_renderer_writes_vertical_frame(self) -> None:
         scene = next(

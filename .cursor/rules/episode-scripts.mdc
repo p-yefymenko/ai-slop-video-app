@@ -29,6 +29,7 @@ Write the episode as drama before writing generation prompts.
 - For three people, use pairwise anchors when the active pair changes: A+B, entrant C+B, then C+A.
 - Never animate dialogue in an anchor two-shot: distilled LTX makes the listener move, speak, or disappear.
 - Preserve fixed screen positions and reciprocal eyelines until a new anchor visibly establishes a changed axis.
+- Use generated left/right three-quarter identity references that match the spatial eyeline; a frontal identity portrait is not sufficient pose conditioning for dialogue coverage.
 - Preserve recognizable set landmarks and lighting from the coverage master. A location name or text description alone is not visual continuity.
 - Build a scale ladder: geography/exterior → threat or prop insert → master/anchor → close performance → visual cliffhanger.
 - Use 2–3 connected locations or zones when the premise promises scale; return to a stable axis inside each dialogue space.
@@ -38,11 +39,13 @@ Write the episode as drama before writing generation prompts.
 ## Generation unit
 - One JSON scene is one continuous shot with one speaker or one simple visible action.
 - `imagePrompt` is the exact opening frame. Establishing/inserts use no cast; performance shots use at most two identities.
+- Prop inserts inside an established set require `coverageReferenceSceneNumber` and `focusTargetId`; derive the prop from the master instead of asking Qwen to reinvent it from a proxy box.
 - Use compact `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:` clauses in `videoPrompt`.
 - Include only literal visible motion and essential sound. LTX may visualize off-screen foley nouns or metaphoric acting directions.
 - Prefer positive instructions. Do not include continuity recaps, decorative prose, or multiple sequential actions.
 - Use `endGuideFrame` only for a simple action with a different final blocking state. Static dialogue keeps one camera/state and does not spend an extra guide generation.
-- Give a silent anchor `camera.endPosition` when it needs a flyby, push, or crane. The renderer turns this into deterministic camera motion so LTX cannot make the cast turn, walk away, or disappear.
+- Establishing shots, inserts, reactions, and silent anchors default to `cameraOnly`; use `generative` only for a visible action that cannot be achieved by a stable camera move. This prevents LTX from materializing shadows, mutating props, or making silent actors wander.
+- Dialogue prompts must explicitly require visible lip sync. Dialogue rendering uses audio-video modality guidance; do not assume ordinary text prompting guarantees mouth articulation.
 - Make fantasy dense through visible world evidence—architecture, weather, creatures, magic, ritual, rank—not lore speeches.
 
 ## Final audit
