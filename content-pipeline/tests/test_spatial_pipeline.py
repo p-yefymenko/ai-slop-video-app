@@ -200,13 +200,6 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["29"]["inputs"]["modality_scale"], 3.0)
         self.assertEqual(graph["30"]["inputs"]["modality"], "AUDIO")
 
-    def test_face_landmarks_detect_wrong_screen_direction(self) -> None:
-        face = [0.0] * 15
-        face[4], face[6], face[8] = 100.0, 200.0, 80.0
-        self.assertEqual(pipeline.face_facing_direction(face), "left")
-        face[8] = 220.0
-        self.assertEqual(pipeline.face_facing_direction(face), "right")
-
     def test_prop_insert_projects_sun_well(self) -> None:
         coverage = next(
             scene

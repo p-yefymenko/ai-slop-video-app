@@ -18,7 +18,6 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-import cv2
 from ffmpeg_tools import concat_videos
 from PIL import Image
 from spatial_previs import (
@@ -44,9 +43,6 @@ LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
-FACE_DETECTOR_PATH = (
-    ROOT / ".comfyui" / "models" / "quality" / "face_detection_yunet_2023mar.onnx"
-)
 COMFYUI_URL = "http://127.0.0.1:8188"
 I2V_STRENGTH = 0.7  # official LTX image-to-video default
 NVIDIA_QUERY_FIELDS = [
@@ -1072,70 +1068,13 @@ def run_qwen_image(
     mode: str,
     inject_images,
     seed: int,
-    expected_max_faces: int | None = None,
 ) -> None:
-    attempts = 3 if expected_max_faces is not None else 1
-    for attempt in range(attempts):
-        attempt_seed = (seed + attempt * 104729) & 0xFFFFFFFF
-        graph = clone_workflow(workflow_template)
-        inject_qwen_prompt(graph, prompt)
-        inject_seed(graph, attempt_seed)
-        inject_images(graph)
-        print(f"  Graph seed {attempt_seed}", flush=True)
-        execute_queued_graph(graph, dest, prefer="image", mode=mode)
-        if expected_max_faces is None:
-            return
-        faces = detect_faces(dest)
-        observed_faces = len(faces)
-        if observed_faces <= expected_max_faces:
-            return
-        print(
-            f"  Rejected: detected {observed_faces} faces, expected at most "
-            f"{expected_max_faces}. Rerolling...",
-            flush=True,
-        )
-    raise RuntimeError(
-        f"{dest} repeatedly failed face count validation"
-    )
-
-
-def detect_faces(image_path: Path) -> list:
-    if not present(FACE_DETECTOR_PATH):
-        raise RuntimeError(
-            f"Missing duplicate-face detector {FACE_DETECTOR_PATH}. "
-            "Run `pnpm run content:models`."
-        )
-    image = cv2.imread(str(image_path))
-    if image is None:
-        raise RuntimeError(f"Could not read generated image {image_path}")
-    height, width = image.shape[:2]
-    detector = cv2.FaceDetectorYN_create(
-        str(FACE_DETECTOR_PATH),
-        "",
-        (width, height),
-        0.55,
-        0.3,
-        5000,
-    )
-    _, faces = detector.detect(image)
-    return [] if faces is None else list(faces)
-
-
-def detect_face_count(image_path: Path) -> int:
-    return len(detect_faces(image_path))
-
-
-def face_facing_direction(face) -> str:
-    left_eye_x = float(face[4])
-    right_eye_x = float(face[6])
-    nose_x = float(face[8])
-    eye_midpoint = (left_eye_x + right_eye_x) / 2.0
-    tolerance = abs(right_eye_x - left_eye_x) * 0.15
-    if nose_x < eye_midpoint - tolerance:
-        return "left"
-    if nose_x > eye_midpoint + tolerance:
-        return "right"
-    return "center"
+    graph = clone_workflow(workflow_template)
+    inject_qwen_prompt(graph, prompt)
+    inject_seed(graph, seed)
+    inject_images(graph)
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
 def generate_show(
@@ -1173,7 +1112,6 @@ def generate_show(
                 f"Qwen character ({character_id})",
                 inject_qwen_character_canvas,
                 stable_seed(show_id, "character", character_id),
-                expected_max_faces=1,
             )
             generated += 1
 
@@ -1287,7 +1225,6 @@ def generate_show(
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
                         inject_images,
                         seed,
-                        expected_max_faces=len(scene["characterIds"]),
                     )
                 if needs_end_guide and (not present(end_path) or force):
                     if not scene_has_spatial_change(episode, scene):
@@ -1324,7 +1261,6 @@ def generate_show(
                         f"Qwen spatial end guide ({names} @ {location['id']})",
                         inject_end_images,
                         stable_seed(show_id, episode_number, scene_number, "end-frame"),
-                        expected_max_faces=len(scene["characterIds"]),
                     )
             else:
                 prompt = show_prompt(
