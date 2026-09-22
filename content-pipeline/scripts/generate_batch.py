@@ -19,12 +19,28 @@ import zlib
 from pathlib import Path
 
 from ffmpeg_tools import concat_videos
+from PIL import Image, ImageFilter
+from spatial_previs import (
+    character_screen_position,
+    compile_spatial_image_summary,
+    compile_spatial_video_prompt,
+    generate_episode_previs,
+    proxy_frame_path,
+    scene_has_spatial_change,
+    validate_spatial_episode,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = ("characterImage", "sceneStill", "sceneVideo")
-OPTIONAL_PROMPT_KEYS = ("environmentStill",)
+OPTIONAL_PROMPT_KEYS = (
+    "environmentStill",
+    "coverageStill",
+    "spatialStill",
+    "spatialCoverageStill",
+    "spatialEndStill",
+)
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -559,6 +575,7 @@ def load_show(path: Path) -> dict:
         cleaned_locs[str(loc_id)] = {
             "id": str(loc_id),
             "promptBlock": require_text(loc, "promptBlock", f"locations[{loc_id!r}]"),
+            "spatial": loc.get("spatial"),
         }
     show["locations"] = cleaned_locs
     prompts = show.get("prompts")
@@ -615,6 +632,13 @@ def load_show(path: Path) -> dict:
                 addressee_id = str(addressee_id)
             video_prompt = require_text(scene, "videoPrompt", scene_label)
             image_prompt = require_text(scene, "imagePrompt", scene_label)
+            coverage_reference_scene_number = scene.get("coverageReferenceSceneNumber")
+            if coverage_reference_scene_number is not None:
+                coverage_reference_scene_number = int(coverage_reference_scene_number)
+                if coverage_reference_scene_number >= scene_number:
+                    raise SystemExit(
+                        f"{scene_label} coverageReferenceSceneNumber must name an earlier scene"
+                    )
             duration_seconds = float(scene.get("durationSeconds") or 0)
             if duration_seconds <= 0:
                 raise SystemExit(f"{scene_label} durationSeconds must be positive")
@@ -631,6 +655,11 @@ def load_show(path: Path) -> dict:
                     "characterIds": character_ids,
                     "speakerId": speaker_id,
                     "addresseeId": addressee_id,
+                    "coverageReferenceSceneNumber": coverage_reference_scene_number,
+                    "timeRangeSeconds": scene.get("timeRangeSeconds"),
+                    "camera": scene.get("camera"),
+                    "guideKeyframesSeconds": scene.get("guideKeyframesSeconds") or [],
+                    "endGuideFrame": bool(scene.get("endGuideFrame")),
                     "imagePrompt": image_prompt,
                     "videoPrompt": video_prompt,
                     "durationSeconds": duration_seconds,
@@ -649,7 +678,9 @@ def load_show(path: Path) -> dict:
                 "cliffhanger": str(episode.get("cliffhanger") or ""),
                 "nextEpisodeOpening": str(episode.get("nextEpisodeOpening") or ""),
                 "screenDirection": str(episode.get("screenDirection") or ""),
+                "spatialTimeline": episode.get("spatialTimeline"),
                 "scenes": cleaned_scenes,
+                "_allScenes": cleaned_scenes,
             }
         )
     show["episodes"] = cleaned_eps
@@ -666,6 +697,10 @@ def episode_dir(show_id: str, episode_number: int) -> Path:
 
 def start_still_path(out_dir: Path, scene_number: int) -> Path:
     return out_dir / f"scene_{int(scene_number):02d}_start.png"
+
+
+def end_still_path(out_dir: Path, scene_number: int) -> Path:
+    return out_dir / f"scene_{int(scene_number):02d}_end.png"
 
 
 def resolve_location(show: dict, scene: dict) -> dict:
@@ -716,6 +751,42 @@ def stage_start_still(image_path: Path) -> str:
     return dest.name
 
 
+def stage_named_image(image_path: Path, prefix: str) -> str:
+    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
+    shutil.copy2(image_path, dest)
+    return dest.name
+
+
+def stage_coverage_crop(
+    image_path: Path,
+    prefix: str,
+    screen_position: tuple[float, float],
+    canvas_size: tuple[float, float],
+) -> str:
+    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
+    with Image.open(image_path) as image:
+        rgb = image.convert("RGB")
+        scale_x = rgb.width / canvas_size[0]
+        scale_y = rgb.height / canvas_size[1]
+        center_x = screen_position[0] * scale_x
+        head_y = screen_position[1] * scale_y
+        crop_width = rgb.width * 0.46
+        crop_height = rgb.height * 0.50
+        left = max(0.0, min(rgb.width - crop_width, center_x - crop_width / 2.0))
+        top = max(0.0, min(rgb.height - crop_height, head_y - crop_height * 0.40))
+        crop = (
+            round(left),
+            round(top),
+            round(left + crop_width),
+            round(top + crop_height),
+        )
+        continuity = rgb.crop(crop).resize(rgb.size, Image.Resampling.LANCZOS)
+        continuity.filter(ImageFilter.GaussianBlur(radius=1.2)).save(dest)
+    return dest.name
+
+
 def inject_start_frame(graph: dict, image_name: str) -> None:
     width, height, length = latent_size(graph)
     graph["19"] = {
@@ -761,6 +832,44 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
         sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
 
 
+def inject_end_frame(graph: dict, image_name: str) -> None:
+    _, _, length = latent_size(graph)
+    graph["21"] = {
+        "inputs": {"image": image_name},
+        "class_type": "LoadImage",
+        "_meta": {"title": "Scene end frame"},
+    }
+    graph["27"] = {
+        "inputs": {
+            "positive": ["20", 0],
+            "negative": ["20", 1],
+            "vae": ["9", 0],
+            "latent": ["20", 2],
+            "image": ["21", 0],
+            "frame_idx": -1,
+            "strength": 0.85,
+        },
+        "class_type": "LTXVAddGuide",
+        "_meta": {"title": "Pin spatial end frame"},
+    }
+    graph["24"]["inputs"]["video_latent"] = ["27", 2]
+    graph["23"]["inputs"]["frames_number"] = length + 8
+    for node_id, key in (("15", "latent"), ("18", "latent")):
+        graph[node_id]["inputs"][key] = ["27", 2]
+    graph["17"]["inputs"]["conditioning"] = ["27", 0]
+    graph["28"] = {
+        "inputs": {
+            "positive": ["27", 0],
+            "negative": ["27", 1],
+            "latent": ["25", 0],
+        },
+        "class_type": "LTXVCropGuides",
+        "_meta": {"title": "Remove guide tokens"},
+    }
+    graph["25"]["inputs"]["av_latent"] = ["6", 0]
+    graph["8"]["inputs"]["samples"] = ["28", 2]
+
+
 def inject_qwen_character_canvas(graph: dict) -> None:
     inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
 
@@ -777,6 +886,80 @@ def inject_qwen_character_refs(graph: dict, characters: list[dict]) -> None:
             )
         )
     inject_qwen_image_slots(graph, refs)
+
+
+def inject_qwen_coverage_refs(
+    graph: dict, characters: list[dict], coverage_reference_path: Path
+) -> None:
+    if not characters:
+        raise RuntimeError("Coverage stills need at least one character reference PNG")
+    refs = [
+        (
+            stage_start_still(character["image_path"]),
+            f"Character reference {index} ({character['id']})",
+        )
+        for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
+    ]
+    refs.append(
+        (
+            stage_start_still(coverage_reference_path),
+            f"Coverage master ({coverage_reference_path.stem})",
+        )
+    )
+    inject_qwen_image_slots(graph, refs)
+
+
+def inject_qwen_spatial_refs(
+    graph: dict,
+    characters: list[dict],
+    proxy_path: Path,
+    coverage_reference_path: Path | None = None,
+    coverage_screen_position: tuple[float, float] | None = None,
+) -> None:
+    refs = [
+        (
+            stage_start_still(character["image_path"]),
+            f"Character reference {index} ({character['id']})",
+        )
+        for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
+    ]
+    if coverage_reference_path is not None:
+        if coverage_screen_position is None:
+            raise RuntimeError("Coverage crop requires the character's master-frame position")
+        refs.append(
+            (
+                stage_coverage_crop(
+                    coverage_reference_path,
+                    "coverage_crop",
+                    coverage_screen_position,
+                    (768.0, 1360.0),
+                ),
+                f"Character coverage crop ({coverage_reference_path.stem})",
+            )
+        )
+    refs.append((stage_named_image(proxy_path, "proxy"), "3D spatial projection"))
+    if len(refs) > 3:
+        raise RuntimeError("Qwen supports at most three spatial references")
+    inject_qwen_image_slots(graph, refs)
+
+
+def inject_qwen_end_refs(
+    graph: dict,
+    character: dict,
+    start_frame_path: Path,
+    proxy_path: Path,
+) -> None:
+    inject_qwen_image_slots(
+        graph,
+        [
+            (stage_named_image(start_frame_path, "shot_start"), "Photorealistic shot start"),
+            (
+                stage_start_still(character["image_path"]),
+                f"Character reference ({character['id']})",
+            ),
+            (stage_named_image(proxy_path, "proxy_end"), "3D spatial end projection"),
+        ],
+    )
 
 
 def inject_qwen_prompt(graph: dict, prompt: str) -> None:
@@ -978,6 +1161,9 @@ def generate_show(
 
     for episode in show["episodes"]:
         episode_number = episode["episodeNumber"]
+        spatial_errors = validate_spatial_episode(show, episode)
+        if spatial_errors:
+            raise SystemExit("Spatial validation failed:\n- " + "\n- ".join(spatial_errors))
         out_dir = episode_dir(show_id, episode_number)
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "manifest.json").write_text(
@@ -999,13 +1185,20 @@ def generate_show(
         episode_skipped = 0
         for scene in episode["scenes"]:
             scene_number = scene["sceneNumber"]
+            scene_label = f"episode {episode_number} scene {scene_number}"
             still_path = start_still_path(out_dir, scene_number)
+            end_path = end_still_path(out_dir, scene_number)
             video_path = out_dir / f"scene_{scene_number:02d}.mp4"
             dest = still_path if stage == "frames" else video_path
             location = resolve_location(show, scene)
             names = ", ".join(scene["characterIds"])
             print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
-            if present(dest) and not force:
+            needs_end_guide = bool(scene["endGuideFrame"])
+            frame_outputs_present = present(still_path) and (
+                not needs_end_guide or present(end_path)
+            )
+            output_present = frame_outputs_present if stage == "frames" else present(dest)
+            if output_present and not force:
                 print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
                 if stage == "video":
                     scene_files.append(dest)
@@ -1017,59 +1210,239 @@ def generate_show(
                     f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
                     "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
                 )
+            if stage == "video" and needs_end_guide and not present(end_path):
+                raise SystemExit(
+                    f"Missing spatial end guide {end_path}. Regenerate this scene with "
+                    "`pnpm run content:frame -- --show <id> --episode <n> --scene <n> --force`."
+                )
             if stage == "frames":
+                if scene.get("camera") and scene.get("timeRangeSeconds"):
+                    generate_episode_previs(show, episode, scene_number)
                 seed = (
                     seed_override
                     if seed_override is not None
                     else stable_seed(show_id, episode_number, scene_number, "frame")
                 )
-                if scene["characterIds"]:
-                    characters = resolve_scene_characters(show, scene)
-                    prompt = show_prompt(
-                        show,
-                        "sceneStill",
-                        {
-                            "referenceMap": "; ".join(
-                                f"Picture {index} = {character_id}"
-                                for index, character_id in enumerate(scene["characterIds"], start=1)
-                            ),
-                            "characterCount": str(len(scene["characterIds"])),
-                            "characterIds": ", ".join(scene["characterIds"]),
-                            "locationPromptBlock": location["promptBlock"],
-                            "imagePrompt": scene["imagePrompt"],
-                        },
-                    )
-                    inject_images = (
-                        lambda graph, chars=characters: inject_qwen_character_refs(graph, chars)
-                    )
-                else:
-                    if "environmentStill" not in show["prompts"]:
-                        raise SystemExit(
-                            f"{scene_label} has no characterIds and requires prompts.environmentStill"
+                if not present(still_path) or force:
+                    if scene["characterIds"]:
+                        characters = resolve_scene_characters(show, scene)
+                        coverage_reference_scene_number = scene["coverageReferenceSceneNumber"]
+                        spatial_proxy_path = proxy_frame_path(
+                            show_id, episode_number, scene_number, "start_condition"
                         )
-                    prompt = show_prompt(
+                        if scene.get("camera") and scene.get("timeRangeSeconds"):
+                            if not present(spatial_proxy_path):
+                                raise SystemExit(f"Missing spatial proxy {spatial_proxy_path}")
+                            coverage_screen_position = None
+                            if coverage_reference_scene_number is not None:
+                                template_key = "spatialCoverageStill"
+                                coverage_reference_path = start_still_path(
+                                    out_dir, coverage_reference_scene_number
+                                )
+                                if not present(coverage_reference_path):
+                                    raise SystemExit(
+                                        f"{scene_label} needs coverage master "
+                                        f"{coverage_reference_path}"
+                                    )
+                                if len(scene["characterIds"]) != 1:
+                                    raise SystemExit(
+                                        f"{scene_label} spatial coverage crop requires one character"
+                                    )
+                                coverage_scene = next(
+                                    candidate
+                                    for candidate in episode["_allScenes"]
+                                    if candidate["sceneNumber"]
+                                    == coverage_reference_scene_number
+                                )
+                                coverage_screen_position = character_screen_position(
+                                    episode, coverage_scene, scene["characterIds"][0]
+                                )
+                                prompt_values = {
+                                    "referenceMap": "; ".join(
+                                        f"Picture {index} = identity of {character_id}"
+                                        for index, character_id in enumerate(
+                                            scene["characterIds"], start=1
+                                        )
+                                    ),
+                                    "coverageReferencePictureNumber": str(
+                                        len(scene["characterIds"]) + 1
+                                    ),
+                                    "proxyPictureNumber": str(
+                                        len(scene["characterIds"]) + 2
+                                    ),
+                                    "characterCount": str(len(scene["characterIds"])),
+                                    "characterIds": ", ".join(scene["characterIds"]),
+                                    "locationPromptBlock": location["promptBlock"],
+                                    "blockingSummary": compile_spatial_image_summary(
+                                        episode, scene
+                                    ),
+                                    "imagePrompt": scene["imagePrompt"],
+                                }
+                            else:
+                                template_key = "spatialStill"
+                                coverage_reference_path = None
+                                prompt_values = {
+                                    "referenceMap": "; ".join(
+                                        f"Picture {index} = identity of {character_id}"
+                                        for index, character_id in enumerate(
+                                            scene["characterIds"], start=1
+                                        )
+                                    ),
+                                    "proxyPictureNumber": str(
+                                        len(scene["characterIds"]) + 1
+                                    ),
+                                    "characterCount": str(len(scene["characterIds"])),
+                                    "characterIds": ", ".join(scene["characterIds"]),
+                                    "locationPromptBlock": location["promptBlock"],
+                                    "blockingSummary": compile_spatial_image_summary(
+                                        episode, scene
+                                    ),
+                                    "imagePrompt": scene["imagePrompt"],
+                                }
+                            if template_key not in show["prompts"]:
+                                raise SystemExit(
+                                    f"{scene_label} requires prompts.{template_key}"
+                                )
+                            prompt = show_prompt(show, template_key, prompt_values)
+                            inject_images = (
+                                lambda graph,
+                                chars=characters,
+                                proxy=spatial_proxy_path,
+                                ref=coverage_reference_path,
+                                screen_position=coverage_screen_position: inject_qwen_spatial_refs(
+                                    graph, chars, proxy, ref, screen_position
+                                )
+                            )
+                        elif coverage_reference_scene_number is not None:
+                            if "coverageStill" not in show["prompts"]:
+                                raise SystemExit(
+                                    f"{scene_label} uses coverageReferenceSceneNumber and "
+                                    "requires prompts.coverageStill"
+                                )
+                            coverage_reference_path = start_still_path(
+                                out_dir, coverage_reference_scene_number
+                            )
+                            if not present(coverage_reference_path):
+                                raise SystemExit(
+                                    f"{scene_label} needs coverage master "
+                                    f"{coverage_reference_path}"
+                                )
+                            prompt = show_prompt(
+                                show,
+                                "coverageStill",
+                                {
+                                    "referenceMap": "; ".join(
+                                        f"Picture {index} = identity of {character_id}"
+                                        for index, character_id in enumerate(
+                                            scene["characterIds"], start=1
+                                        )
+                                    ),
+                                    "coverageReferencePictureNumber": str(
+                                        len(scene["characterIds"]) + 1
+                                    ),
+                                    "characterCount": str(len(scene["characterIds"])),
+                                    "characterIds": ", ".join(scene["characterIds"]),
+                                    "imagePrompt": scene["imagePrompt"],
+                                },
+                            )
+                            inject_images = (
+                                lambda graph,
+                                chars=characters,
+                                ref=coverage_reference_path: inject_qwen_coverage_refs(
+                                    graph, chars, ref
+                                )
+                            )
+                        else:
+                            prompt = show_prompt(
+                                show,
+                                "sceneStill",
+                                {
+                                    "referenceMap": "; ".join(
+                                        f"Picture {index} = {character_id}"
+                                        for index, character_id in enumerate(
+                                            scene["characterIds"], start=1
+                                        )
+                                    ),
+                                    "characterCount": str(len(scene["characterIds"])),
+                                    "characterIds": ", ".join(scene["characterIds"]),
+                                    "locationPromptBlock": location["promptBlock"],
+                                    "imagePrompt": scene["imagePrompt"],
+                                },
+                            )
+                            inject_images = (
+                                lambda graph,
+                                chars=characters: inject_qwen_character_refs(graph, chars)
+                            )
+                    else:
+                        if "environmentStill" not in show["prompts"]:
+                            raise SystemExit(
+                                f"{scene_label} has no characterIds and requires "
+                                "prompts.environmentStill"
+                            )
+                        prompt = show_prompt(
+                            show,
+                            "environmentStill",
+                            {
+                                "locationPromptBlock": location["promptBlock"],
+                                "imagePrompt": scene["imagePrompt"],
+                            },
+                        )
+                        inject_images = inject_qwen_character_canvas
+                    run_qwen_image(
+                        workflow_template,
+                        still_path,
+                        prompt,
+                        f"Qwen scene still ({names or 'environment'} @ {location['id']})",
+                        inject_images,
+                        seed,
+                    )
+                if needs_end_guide and (not present(end_path) or force):
+                    if not scene_has_spatial_change(episode, scene):
+                        shutil.copy2(still_path, end_path)
+                        print(
+                            f"  Copied static spatial endpoint {end_path}",
+                            flush=True,
+                        )
+                        episode_generated += 1
+                        generated += 1
+                        continue
+                    characters = resolve_scene_characters(show, scene)
+                    if len(characters) != 1:
+                        raise SystemExit(
+                            f"{scene_label} endGuideFrame currently supports one character"
+                        )
+                    if "spatialEndStill" not in show["prompts"]:
+                        raise SystemExit(f"{scene_label} requires prompts.spatialEndStill")
+                    proxy_end_path = proxy_frame_path(
+                        show_id, episode_number, scene_number, "end_condition"
+                    )
+                    end_prompt = show_prompt(
                         show,
-                        "environmentStill",
+                        "spatialEndStill",
                         {
-                            "locationPromptBlock": location["promptBlock"],
+                            "characterId": scene["characterIds"][0],
                             "imagePrompt": scene["imagePrompt"],
                         },
                     )
-                    inject_images = inject_qwen_character_canvas
-                run_qwen_image(
-                    workflow_template,
-                    dest,
-                    prompt,
-                    f"Qwen scene still ({names or 'environment'} @ {location['id']})",
-                    inject_images,
-                    seed,
-                )
+                    run_qwen_image(
+                        workflow_template,
+                        end_path,
+                        end_prompt,
+                        f"Qwen spatial end guide ({names} @ {location['id']})",
+                        lambda graph,
+                        character=characters[0],
+                        start=still_path,
+                        proxy=proxy_end_path: inject_qwen_end_refs(
+                            graph, character, start, proxy
+                        ),
+                        stable_seed(show_id, episode_number, scene_number, "end-frame"),
+                    )
             else:
                 prompt = show_prompt(
                     show,
                     "sceneVideo",
                     {
-                        "videoPrompt": scene["videoPrompt"],
+                        "videoPrompt": compile_spatial_video_prompt(episode, scene),
                     },
                 )
                 seed = (
@@ -1081,6 +1454,8 @@ def generate_show(
                 inject_seed(graph, seed)
                 inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
                 inject_start_frame(graph, stage_start_still(still_path))
+                if needs_end_guide:
+                    inject_end_frame(graph, stage_named_image(end_path, "ltx_end"))
                 print(f"  Graph seed {seed}", flush=True)
                 execute_queued_graph(graph, dest, prefer="video", mode=f"I2V ({names} @ {location['id']})")
                 scene_files.append(dest)
@@ -1122,6 +1497,10 @@ def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
                 out_dir = episode_dir(show_id, episode["episodeNumber"])
                 for scene in episode["scenes"]:
                     if not present(start_still_path(out_dir, scene["sceneNumber"])):
+                        return True
+                    if scene["endGuideFrame"] and not present(
+                        end_still_path(out_dir, scene["sceneNumber"])
+                    ):
                         return True
         else:
             for episode in show["episodes"]:

@@ -8,6 +8,13 @@ alwaysApply: false
 
 Write the episode as drama before writing generation prompts.
 
+## Spatial ground truth
+- Block the episode as an animated 3D scene before writing coverage. `spatialTimeline` is authoritative; prose must never redefine a character position, facing, stance, hand target, prop owner, or camera.
+- Use location-local meters: X is left/right, Y is depth, Z is height. Place stable landmarks in `locations[].spatial`.
+- Give every on-screen character timed keyframes for feet position, body yaw, eye target, stance, and relevant hand/prop targets. Interpolate simple motion between keyframes.
+- A shot selects a `timeRangeSeconds` interval and projects it through one physical `camera`. Dialogue does not create a new world state.
+- Run `pnpm run content:previs` and inspect the proxy contact sheet before generating stills. Fix blocking or cameras in the timeline; never patch a geometry problem with prompt wording.
+
 ## Episode engine
 - Draft a timestamp skeleton first: visual hook 0–3s, pressure 3–35s, reversal 35–50s, irreversible cliffhanger 50–60s.
 - Give the episode one urgent want, one active obstacle, one emotional turn, and one unanswered final question.
@@ -17,22 +24,31 @@ Write the episode as drama before writing generation prompts.
 - The cliffhanger opens a new question, cuts before resolution, and implies the next episode's opening image.
 
 ## Coverage and space
-- Establish each active pair and the 180-degree axis with a 2–3 second silent two-shot, then cut dialogue to singles.
+- Treat each conversation as one coverage group, not a list of independent portraits.
+- Establish each active pair and the 180-degree axis with a 2–3 second silent two-shot, then set that scene as `coverageReferenceSceneNumber` on every related single.
 - For three people, use pairwise anchors when the active pair changes: A+B, entrant C+B, then C+A.
 - Never animate dialogue in an anchor two-shot: distilled LTX makes the listener move, speak, or disappear.
 - Preserve fixed screen positions and reciprocal eyelines until a new anchor visibly establishes a changed axis.
+- Preserve recognizable set landmarks and lighting from the coverage master. A location name or text description alone is not visual continuity.
 - Build a scale ladder: geography/exterior → threat or prop insert → master/anchor → close performance → visual cliffhanger.
 - Use 2–3 connected locations or zones when the premise promises scale; return to a stable axis inside each dialogue space.
+- Vary dialogue coverage by dramatic pressure: medium close-up → tight close-up → extreme close-up, while keeping reciprocal frame sides. Do not center every speaker against the same background.
+- Break repeated speaking singles with a motivated anchor, silent reaction, or plot insert when the relationship or power changes.
 
 ## Generation unit
 - One JSON scene is one continuous shot with one speaker or one simple visible action.
 - `imagePrompt` is the exact opening frame. Establishing/inserts use no cast; performance shots use at most two identities.
-- `videoPrompt` is a short chronological present-tense paragraph describing only motion, performance, camera, dialogue, and sound.
-- Prefer positive motion instructions. Do not bury LTX in continuity recaps, prohibition lists, or multiple sequential actions.
+- Use compact `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:` clauses in `videoPrompt`.
+- Include only literal visible motion and essential sound. LTX may visualize off-screen foley nouns or metaphoric acting directions.
+- Prefer positive instructions. Do not include continuity recaps, decorative prose, or multiple sequential actions.
+- Use `endGuideFrame` only for a simple action with a different final blocking state. Static dialogue keeps one camera/state and does not spend an extra guide generation.
 - Make fantasy dense through visible world evidence—architecture, weather, creatures, magic, ritual, rank—not lore speeches.
 
 ## Final audit
 - Read only `storyBeat` fields: they must form cause → pressure → choice → reversal → cliffhanger.
 - Read only quoted dialogue: it must sound like characters fighting for incompatible outcomes, not narrating the plot.
 - Read only opening images: hook, reversal, and cliffhanger must remain understandable with sound off.
+- View opening frames as a silent contact sheet. Reject the sequence if it resembles centered portraits from unrelated movies, if reciprocal speakers occupy the same frame side, or if consecutive singles repeat the same shot size and camera height.
+- For every dialogue run, verify that its singles reference one rendered master and retain its set landmark, light direction, axis, and character screen sides.
+- Audit the proxy animation independently of dialogue: no teleporting, axis reversal, impossible eye target, camera collision, changing prop owner, or character outside the set/camera.
 - Sources: Script Magazine vertical-writer interview; Real Reel vertical-drama guide; Filmmakers Academy eyeline/180° guide; official LTX prompting guide.

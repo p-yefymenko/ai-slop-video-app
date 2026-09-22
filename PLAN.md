@@ -61,6 +61,8 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:comfy-torch": "node scripts/install-comfy-torch.cjs",
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
+    "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
+    "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_spatial_*.py",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:frame": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
@@ -122,7 +124,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** ComfyUI running locally on the GPU machine. Start stills come from **Qwen-Image-Edit-2511** (Q4_K_M GGUF + Lightning 4-step LoRA): character identity stills from text, then each scene still with those portraits as Qwen Picture 1 / Picture 2 plus location text for **one standable set** (not a viewpoint / building tour) and a shot that keeps named faces at portrait scale. Character bibles are not pasted into scene stills. Do not attach a location PNG or a blank canvas on a scene still — extra unrelated images make Qwen collage, and an empty-room plate pastes people at the wrong scale. Those stills are then animated with **LTX-2.3 distilled-1.1** (Q4_K_M GGUF) image-to-video (motion prompt only; the PNG locks look), with Gemma API used for LTX text-encoder conditioning to stay within 16GB VRAM. Qwen and LTX are not meant to stay loaded together; `content:frames` and `content:generate` unload idle models between stages. Output MP4s are uploaded to R2 via a script, not generated at runtime.
+- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives identity portraits plus the proxy; dialogue singles also receive their photorealistic coverage master. Qwen therefore styles a known projection instead of inventing space from prose. **LTX-2.3 distilled-1.1** receives the reviewed start frame, an optional pinned end guide, and literal motion compiled from timeline deltas. Gemma API supplies text conditioning within 16GB VRAM. Generated motion remains stochastic between pinned guides.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -210,7 +212,8 @@ reelshort-clone/
 `content:frames` writes:
 
 1. Character stills — `output/<show>/characters/<id>.png` (human review, then Qwen Picture 1 / Picture 2 on scene stills)
-2. Scene stills — `output/<show>/<episode>/scene_XX_start.png` (identity portraits + location text + shot; do not attach a location PNG)
+2. Spatial previs — `output/<show>/<episode>/previs/` (proxy start/end frames and contact sheet)
+3. Scene stills — `scene_XX_start.png`, plus `scene_XX_end.png` when `endGuideFrame` is enabled
 
 `content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
@@ -255,6 +258,7 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
     "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
+    "coverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the rendered coverage master. Reframe the same cinematic moment as a new vertical 9:16 shot, not a collage. Preserve the identity from the identity picture(s), and inherit the set architecture, wardrobe, lighting direction, color, axis, and screen geography from the coverage master. The finished frame contains exactly {characterCount} visible people: {characterIds}. Do not retain, duplicate, or invent any other person from the master. {imagePrompt}",
     "environmentStill": "Create a new photorealistic cinematic vertical 9:16 frame from the attached blank canvas. The finished frame contains no people, faces, portraits, statues shaped like people, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
     "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}"
   },
@@ -297,13 +301,16 @@ One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `Sh
 - `prompts` is the only place instruction text lives. `{placeholders}` are filled from the matching fields. Do not put lock/blocking copy in Python.
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
-- `shotType` is `establishing`, `insert`, `single`, `reaction`, or `twoShot`. Use 2–3 second silent two-shots only as spatial anchors, then cut dialogue to singles; distilled LTX does not reliably preserve a silent listener during two-shot dialogue. For three people, establish pairwise anchors when the active pair changes. The IDs remain Qwen Picture 1 / Picture 2 order.
+- `spatialTimeline` is the physical source of truth. Character tracks define timed location-local position, body yaw, eye target, stance, and hand targets; props have one timed position or owner. Shots select `timeRangeSeconds` and a physical camera. Run `content:previs` before GPU generation.
+- `endGuideFrame` is reserved for action shots whose final blocking differs from the start. Static dialogue stays on one mark and camera; pinning an identical LTX guide adds substantial render cost without adding spatial information.
+- `shotType` is `establishing`, `insert`, `single`, `reaction`, or `twoShot`. Use 2–3 second silent two-shots as spatial anchors, then set each related single's `coverageReferenceSceneNumber` to that anchor. This makes the coverage share a rendered set and axis instead of resembling unrelated portraits. For three people, establish pairwise anchors when the active pair changes.
 - `establishing` and `insert` shots use empty `characterIds` and `prompts.environmentStill`; the pipeline supplies a blank canvas instead of identity references. Use these shots for geography, architecture, creatures, weather, and hero props that create visual scale.
 - `screenDirection` fixes the 180-degree axis per recurring location before shots are written. Every scene derives left/right eyelines from it; never choose eyelines independently per prompt.
 - `speakerId` and `addresseeId` disambiguate dialogue and eyelines. A reaction shot may use an off-screen `speakerId`; other shot types require a visible speaker. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is the exact first frame: wardrobe, prop state, shot size, placement, and gaze. Identity is the PNG.
 - `imagePrompt` may name only characters in `characterIds`. Off-frame eyelines use empty left/right space without naming the absent addressee, preventing Qwen from inventing an unreferenced extra person.
-- A `videoPrompt` is a short chronological present-tense paragraph describing one speaker or one simple action, camera behavior, and sound. Do not alternate speakers or restate the opening frame.
+- Dialogue singles use tight head-and-shoulders stills so identity detail survives animation.
+- A `videoPrompt` uses compact `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:` clauses. Include only literal motion and essential sound; LTX may visualize decorative foley or metaphoric directions.
 - `durationSeconds` is flexible and converted to `8n+1` frames at 24 fps. Episode scenes should total about 60 seconds.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.

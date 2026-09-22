@@ -23,14 +23,79 @@
       "promptBlock": "A deep circular dungeon of wet black stone with an iron-barred cell, a narrow shaft of red eclipse light, heavy wall chains, and one guttering torch. No text, windows, mirrors, or other rooms."
     },
     "eclipse_throne_hall": {
-      "promptBlock": "A monumental black-basalt throne hall with cracked columns, bronze braziers, a towering arched eclipse window, and a waist-high black stone pedestal holding a jagged obsidian crown. No text, mirrors, or background people."
+      "promptBlock": "A monumental black-basalt throne hall with cracked columns, bronze braziers, a towering arched eclipse window, and a waist-high black stone pedestal holding a jagged obsidian crown. No text, mirrors, or background people.",
+      "spatial": {
+        "sizeMeters": [
+          12.0,
+          16.0,
+          8.0
+        ],
+        "landmarks": {
+          "crown_pedestal": {
+            "kind": "pedestal",
+            "position": [
+              0.0,
+              0.2,
+              0.0
+            ],
+            "size": [
+              0.8,
+              0.8,
+              1.0
+            ]
+          },
+          "eclipse_window": {
+            "kind": "window",
+            "position": [
+              0.0,
+              7.8,
+              0.5
+            ],
+            "size": [
+              5.2,
+              0.2,
+              6.5
+            ]
+          },
+          "left_column": {
+            "kind": "column",
+            "position": [
+              -4.4,
+              2.5,
+              0.0
+            ],
+            "size": [
+              0.8,
+              0.8,
+              6.5
+            ]
+          },
+          "right_column": {
+            "kind": "column",
+            "position": [
+              4.4,
+              2.5,
+              0.0
+            ],
+            "size": [
+              0.8,
+              0.8,
+              6.5
+            ]
+          }
+        }
+      }
     }
   },
   "prompts": {
     "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {characterPromptBlock}",
     "sceneStill": "The attached identity pictures map exactly as follows: {referenceMap} Transform those people into one new photorealistic vertical 9:16 scene. The finished scene contains exactly {characterCount} visible people: {characterIds}. Each appears once only. No duplicates, twins, background people, portraits, paintings, mirrors, or reflections. Preserve each referenced face, hair, apparent age, and skin tone, but do not copy the reference backdrop, shirt, pose, or gaze. This is a dramatic film frame, not a frontal identity portrait; obey the stated eyeline and placement. Do not visualize an off-frame or absent addressee. {locationPromptBlock} {imagePrompt}",
     "environmentStill": "Create a new photorealistic cinematic vertical 9:16 frame from the attached blank canvas. The finished frame contains no people, faces, portraits, statues shaped like people, mirrors, reflections, or readable text. {locationPromptBlock} {imagePrompt}",
-    "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}"
+    "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {videoPrompt}",
+    "coverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = the rendered coverage master. Reframe the same cinematic moment as a new vertical 9:16 shot, not a collage. Preserve the identity from the identity picture(s), and inherit the set architecture, wardrobe, lighting direction, color, axis, and screen geography from the coverage master. The finished frame contains exactly {characterCount} visible people: {characterIds}. Do not retain, duplicate, or invent any other person from the master. {imagePrompt}",
+    "spatialStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {proxyPictureNumber} = a 3D blocking projection. Create one new photorealistic vertical 9:16 film frame. Use the proxy only as ground-truth geometry for camera, framing, character positions, body directions, scale, occlusion, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Preserve the identity picture faces. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}. Each appears once. No duplicates, extra people, portraits, mirrors, or reflections. {locationPromptBlock} {imagePrompt}",
+    "spatialCoverageStill": "The attached pictures map exactly as follows: {referenceMap}; Picture {coverageReferencePictureNumber} = a crop of this character from the photorealistic coverage master; Picture {proxyPictureNumber} = the 3D blocking projection. Create a new photorealistic vertical 9:16 angle from the same moment. Use the coverage crop for the established profile, wardrobe, set style, light, and color. Preserve identity from the identity picture. Obey the proxy as ground-truth camera, framing, screen side, body direction, scale, and occlusion, but do not copy its grid, labels, lines, mannequin colors, or graphic style. {blockingSummary} The finished frame contains exactly {characterCount} visible people: {characterIds}; remove all other people from the master. No collage, duplicate, portrait, mirror, or reflection. {locationPromptBlock} {imagePrompt}",
+    "spatialEndStill": "Picture 1 is the exact photorealistic start frame. Picture 2 is the identity of {characterId}. Picture 3 is the 3D blocking projection at the end of the shot. Create the matching photorealistic end frame, not a collage. Preserve identity, wardrobe, set, light, color, lens, and camera from Picture 2. Obey Picture 3 only for final body position, facing, pose, framing, and landmarks; do not copy its grid, labels, lines, mannequin colors, or graphic style. Exactly one person is visible. {imagePrompt}"
   },
   "episodes": [
     {
@@ -92,8 +157,8 @@
           ],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Exactly one person is visible. Oren kneels inside the iron-barred cell in a torn charcoal tunic, shoulder-length silver-streaked hair disordered. A heavy chain runs from a wall ring to a plain iron collar at his throat. Red eclipse light cuts across his exhausted face; no other person is visible.",
-          "videoPrompt": "Oren raises his exhausted face into the narrow red light as dust falls from the ceiling. The wall chain pulls taut with a dull metallic scrape. He takes one pained breath. The camera stays close.",
+          "imagePrompt": "Exactly one person is visible in a tight cinematic head-and-shoulders close-up. Oren's face fills most of the vertical frame, cropped at the upper chest. He wears a torn charcoal tunic and plain iron collar; shoulder-length silver-streaked hair is disordered. Red eclipse light crosses his exhausted face. No hands or other person are visible.",
+          "videoPrompt": "VISUAL: Silent tight close-up. Oren remains seated and breathes shallowly; his exhausted eyes stay open in the red light. CAMERA: locked. AUDIO: low dungeon room tone.",
           "durationSeconds": 2
         },
         {
@@ -111,9 +176,26 @@
           ],
           "speakerId": null,
           "addresseeId": null,
-          "imagePrompt": "Exactly two people are visible in a medium two-shot. Lyra stands frame left in a torn ivory ceremonial gown, fitted black leather bodice, and plain iron collar. Malrec stands frame right in a dark crimson brocade coat and black steel gorget. The obsidian crown rests on its pedestal between them. Lyra looks right with defiance; Malrec looks left with absolute control.",
-          "videoPrompt": "Lyra and Malrec hold each other's gaze across the obsidian crown. The steady eclipse light outlines both profiles. Bronze braziers hiss in the silence. The camera remains still.",
-          "durationSeconds": 2
+          "imagePrompt": "Lyra wears her torn ivory ceremonial gown, fitted black leather bodice, and plain iron collar with defiant tension. Malrec wears his dark crimson brocade coat and black steel gorget with absolute control. The obsidian crown remains on its pedestal.",
+          "videoPrompt": "PERFORMANCE: Lyra and Malrec remain silent with restrained breathing. AUDIO: low throne-hall room tone.",
+          "durationSeconds": 2,
+          "timeRangeSeconds": [
+            6.0,
+            8.0
+          ],
+          "camera": {
+            "position": [
+              0.0,
+              -6.0,
+              1.7
+            ],
+            "lookAt": [
+              0.0,
+              1.0,
+              1.25
+            ],
+            "verticalFovDegrees": 70.0
+          }
         },
         {
           "sceneNumber": 5,
@@ -129,9 +211,28 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "lyra",
-          "imagePrompt": "Exactly one person is visible. Chest-up Malrec in the crimson brocade coat and black gorget, frame right looking toward empty space beyond frame left. Eclipse light edges his severe face; he holds ceremonial cruelty and never looks at the camera.",
-          "videoPrompt": "Malrec speaks immediately toward frame left, his low voice calm and merciless: \"Crown me before the eclipse closes, or Oren dies beneath us.\" He barely blinks. A deep bell begins tolling. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Malrec wears the same dark crimson brocade coat and black steel gorget. His expression is cold certainty, with restrained authority rather than a pose.",
+          "videoPrompt": "PERFORMANCE: controlled mouth movement and a still, merciless expression. DIALOGUE (low, calm, merciless): \"Crown me before the eclipse closes, or Oren dies beneath us.\"",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 4,
+          "timeRangeSeconds": [
+            8.0,
+            13.0
+          ],
+          "camera": {
+            "position": [
+              -0.8,
+              -2.6,
+              1.72
+            ],
+            "lookAt": [
+              1.2,
+              1.0,
+              1.48
+            ],
+            "verticalFovDegrees": 20.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 6,
@@ -147,9 +248,28 @@
           ],
           "speakerId": "lyra",
           "addresseeId": "malrec",
-          "imagePrompt": "Exactly one person is visible. Chest-up Lyra in the torn ivory gown, black bodice, and iron collar, frame left looking toward empty space beyond frame right. Her amber eyes hold grief sharpened into hatred; she never looks at the camera.",
-          "videoPrompt": "Lyra answers immediately toward frame right, her voice fierce with disbelief: \"Oren died when you burned House Aster from the sky.\" Her jaw tightens through the final words. The bell continues. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Lyra wears the same torn ivory gown, fitted black leather bodice, and plain iron collar. Her expression is controlled anger and wounded disbelief.",
+          "videoPrompt": "PERFORMANCE: controlled anger with a steady eyeline and clear articulation. DIALOGUE (clear, hurt, forceful): \"Oren died when you burned House Aster from the sky.\"",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 4,
+          "timeRangeSeconds": [
+            13.0,
+            18.0
+          ],
+          "camera": {
+            "position": [
+              0.8,
+              -2.6,
+              1.68
+            ],
+            "lookAt": [
+              -1.2,
+              1.0,
+              1.46
+            ],
+            "verticalFovDegrees": 24.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 7,
@@ -165,9 +285,28 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "lyra",
-          "imagePrompt": "Exactly one person is visible. Chest-up Malrec in the crimson coat and black gorget, frame right looking toward empty space beyond frame left. Quiet pleasure enters his grey eyes; he never looks at the camera.",
-          "videoPrompt": "Malrec replies immediately toward frame left, savoring the words: \"He lives. One command, and the oubliette becomes his tomb.\" A chain rattles far below. His restrained smile appears. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Malrec wears the same crimson brocade coat and black gorget. A small restrained smile reveals quiet pleasure without changing his established body mark.",
+          "videoPrompt": "PERFORMANCE: a small restrained smile and deliberate articulation. DIALOGUE (quiet, deliberate, cruel): \"He lives. One command, and the oubliette becomes his tomb.\"",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 4,
+          "timeRangeSeconds": [
+            18.0,
+            23.0
+          ],
+          "camera": {
+            "position": [
+              0.1,
+              -1.0,
+              1.7
+            ],
+            "lookAt": [
+              1.42,
+              1.0,
+              1.53
+            ],
+            "verticalFovDegrees": 22.0
+          },
+          "endGuideFrame": false
         },
         {
           "sceneNumber": 8,
@@ -201,7 +340,7 @@
           "speakerId": null,
           "addresseeId": null,
           "imagePrompt": "Exactly two people are visible in a tense medium two-shot. Kael stands frame left in matte black scale armor and a dark red cloak, looking right with controlled menace. Malrec stands frame right in the crimson coat and black gorget, looking left in startled anger. The vast eclipse window rises behind them; no other person is visible.",
-          "videoPrompt": "Kael and Malrec hold a silent stare across the throne hall. Kael's cloak settles against his armor. Malrec's confidence breaks for one instant. A dragon roar rolls outside the window. The camera remains still.",
+          "videoPrompt": "VISUAL: Silent medium two-shot. Kael and Malrec hold a hostile stare with subtle breathing only. CAMERA: locked. AUDIO: low throne-hall room tone.",
           "durationSeconds": 2
         },
         {
@@ -218,9 +357,10 @@
           ],
           "speakerId": "kael",
           "addresseeId": "malrec",
-          "imagePrompt": "Exactly one person is visible. Chest-up Kael in black scale armor and dark red cloak, frame left looking toward empty space beyond frame right. Eclipse light traces his scar and dark gold eyes; he never looks at the camera.",
-          "videoPrompt": "Kael speaks immediately toward frame right, his voice carrying battlefield authority: \"Step away from the crown, Regent. The dragon covenant names her.\" He remains unnervingly calm. The roar deepens outside. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Low-angle tight close-up derived from the established axis. Kael occupies the left two-thirds of frame, cropped through the shoulders of his black scale armor, with his three-quarter face turned right. Retain the same arched eclipse window and bronze fire light from the master. His expression is controlled authority.",
+          "videoPrompt": "VISUAL: Kael remains in tight close-up, face angled frame right, speaking with minimal movement. DIALOGUE (deep, steady, commanding): \"Step away from the crown, Regent. The dragon covenant names her.\" CAMERA: locked.",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 9
         },
         {
           "sceneNumber": 11,
@@ -236,9 +376,10 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "kael",
-          "imagePrompt": "Exactly one person is visible. Chest-up Malrec in the crimson coat and black gorget, frame right looking toward empty space beyond frame left. His composure becomes open contempt; he never looks at the camera.",
-          "videoPrompt": "Malrec fires back immediately toward frame left, his voice sharp and public: \"She is bloodless, kingdomless, and condemned by every throne still standing.\" His nostrils flare. The braziers crackle. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Reciprocal eye-level close-up derived from the established axis. Malrec occupies the right two-thirds of frame, cropped below the black gorget, with his three-quarter face turned left. Retain the same eclipse window and firelight from the master. His expression is open contempt.",
+          "videoPrompt": "VISUAL: Malrec remains in tight close-up, face angled frame left, speaking with restrained disgust. DIALOGUE (sharp, contemptuous): \"She is bloodless, kingdomless, and condemned by every throne still standing.\" CAMERA: locked.",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 9
         },
         {
           "sceneNumber": 12,
@@ -256,7 +397,7 @@
           "speakerId": null,
           "addresseeId": null,
           "imagePrompt": "Exactly two people are visible in an intimate medium two-shot. Kael stands frame left in black scale armor and dark red cloak, looking right with solemn intent. Lyra stands frame right in the torn ivory gown, black bodice, and iron collar, looking left with wary hostility. The glowing crown sits behind them; no other person is visible.",
-          "videoPrompt": "Kael and Lyra study each other in silence. Kael lowers his chin in restrained respect while Lyra remains guarded. The eclipse bell stops. Wind presses against the tall window. The camera remains still.",
+          "videoPrompt": "VISUAL: Silent medium two-shot. Kael and Lyra study each other with subtle breathing only; Kael gives one slight respectful nod. CAMERA: locked. AUDIO: low room tone.",
           "durationSeconds": 2
         },
         {
@@ -273,9 +414,10 @@
           ],
           "speakerId": "lyra",
           "addresseeId": "kael",
-          "imagePrompt": "Exactly one person is visible. Chest-up Lyra in the ivory gown, black bodice, and iron collar, frame right looking toward empty space beyond frame left. Fear has hardened into royal hostility; she never looks at the camera.",
-          "videoPrompt": "Lyra speaks immediately toward frame left, her voice low and fierce: \"I escaped one tyrant. I will not become a dragon lord's prize.\" She holds the final word without lowering her eyes. Wind moans outside. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Tight close-up derived from the established axis. Lyra occupies the right two-thirds of frame, cropped at the upper chest, with her three-quarter face turned left. Keep the glowing crown as a soft red shape behind her and preserve the master's light direction. Her expression is proud hostility.",
+          "videoPrompt": "VISUAL: Lyra remains in tight close-up, face angled frame left, speaking with controlled fury. DIALOGUE (low, proud, forceful): \"I escaped one tyrant. I will not become a dragon lord's prize.\" CAMERA: locked.",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 12
         },
         {
           "sceneNumber": 14,
@@ -291,9 +433,10 @@
           ],
           "speakerId": "kael",
           "addresseeId": "lyra",
-          "imagePrompt": "Exactly one person is visible. Chest-up Kael in black scale armor and dark red cloak, frame left looking toward empty space beyond frame right. His martial severity softens into grave sincerity; he never looks at the camera.",
-          "videoPrompt": "Kael replies immediately toward frame right, his voice quiet but absolute: \"Take the crown and command me—or let Oren die unavenged.\" He opens one empty hand. The braziers hiss. The camera stays locked.",
-          "durationSeconds": 5
+          "imagePrompt": "Reciprocal medium close-up derived from the established axis. Kael occupies the left two-thirds of frame, cropped through the shoulders of his black scale armor, with his three-quarter face turned right. Keep the same crown glow and basalt columns behind him. His expression is grave sincerity.",
+          "videoPrompt": "VISUAL: Kael remains in tight close-up, face angled frame right, speaking with quiet conviction. DIALOGUE (deep, sincere, controlled): \"Take the crown and command me—or let Oren die unavenged.\" CAMERA: locked.",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 12
         },
         {
           "sceneNumber": 15,
@@ -325,9 +468,10 @@
           ],
           "speakerId": "malrec",
           "addresseeId": "lyra",
-          "imagePrompt": "Exactly one person is visible. Tight close-up of Malrec in the crimson coat and black gorget, frame right looking toward empty space beyond frame left. Cruel anticipation brightens his eyes; he never looks at the camera.",
-          "videoPrompt": "Malrec speaks immediately toward frame left, his voice eager and cruel: \"Touch it, and the Ash Crown burns a false heir alive.\" He waits for fear to break her. The bell strikes once. The camera stays locked.",
-          "durationSeconds": 4
+          "imagePrompt": "Dutch-tilted extreme close-up derived from the established axis. Malrec occupies the right side, face turned left and cropped tightly above the black gorget. Preserve the master's red eclipse rim light and one blurred crown spike at lower left. His expression is cruel anticipation.",
+          "videoPrompt": "VISUAL: Malrec remains in tight close-up, face angled frame left, speaking with eager cruelty. DIALOGUE (low, precise, threatening): \"Touch it, and the Ash Crown burns a false heir alive.\" CAMERA: locked.",
+          "durationSeconds": 4,
+          "coverageReferenceSceneNumber": 4
         },
         {
           "sceneNumber": 17,
@@ -343,11 +487,91 @@
           ],
           "speakerId": "lyra",
           "addresseeId": "malrec",
-          "imagePrompt": "Exactly one person is visible. Tight chest-up Lyra stands directly behind the crown pedestal in the torn ivory gown, black bodice, and iron collar. The obsidian crown rests prominently before her, casting a faint ember-red glow upward across her determined face. She looks down at it; no hands or other people are visible.",
-          "videoPrompt": "Lyra lifts only her eyes from the glowing crown and speaks in a calm final voice: \"Then let it judge me.\" Ember-red light surges across her face. A dragon roars directly above the hall. The crown's verdict remains unknown.",
-          "durationSeconds": 5
+          "imagePrompt": "Intimate high-angle close-up derived from the established axis. Lyra occupies the left half of frame, her face and shoulders filling the upper area while the jagged obsidian crown dominates the lower-right foreground. Preserve the master's eclipse light, black pedestal, and throne-hall color. She looks down at the crown with final resolve.",
+          "videoPrompt": "VISUAL: Tight portrait. Lyra lifts only her eyes from the crown while ember-red light pulses once across her face. DIALOGUE (calm, final): \"Then let it judge me.\" CAMERA: locked.",
+          "durationSeconds": 5,
+          "coverageReferenceSceneNumber": 4
         }
-      ]
+      ],
+      "spatialTimeline": {
+        "durationSeconds": 60.0,
+        "characterTracks": {
+          "lyra": [
+            {
+              "timeSeconds": 6.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "malrec",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 23.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                -1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": 90.0,
+              "lookAtId": "malrec",
+              "stance": "standing"
+            }
+          ],
+          "malrec": [
+            {
+              "timeSeconds": 6.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "lyra",
+              "stance": "standing"
+            },
+            {
+              "timeSeconds": 23.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                1.5,
+                1.0,
+                0.0
+              ],
+              "bodyYawDegrees": -90.0,
+              "lookAtId": "lyra",
+              "stance": "standing"
+            }
+          ]
+        },
+        "propTracks": {
+          "ash_crown": [
+            {
+              "timeSeconds": 6.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                0.0,
+                0.2,
+                1.0
+              ]
+            },
+            {
+              "timeSeconds": 23.0,
+              "locationId": "eclipse_throne_hall",
+              "position": [
+                0.0,
+                0.2,
+                1.0
+              ]
+            }
+          ]
+        }
+      }
     }
   ]
 }

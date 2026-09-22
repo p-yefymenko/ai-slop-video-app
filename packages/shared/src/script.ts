@@ -15,6 +15,21 @@ export type ShowCharacter = {
   promptBlock: string;
 };
 
+export type Vec3 = [number, number, number];
+
+export type StageLandmark = {
+  /** Stable object ID used by blocking, e.g. `crown_pedestal` or `eclipse_window`. */
+  kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
+  position: Vec3;
+  size: Vec3;
+};
+
+export type StageGeometry = {
+  /** Interior dimensions `[width X, depth Y, height Z]` in meters. */
+  sizeMeters: Vec3;
+  landmarks: Record<string, StageLandmark>;
+};
+
 /**
  * Reusable Qwen environment only. Describe one standable set at human scale: the surfaces
  * immediately behind/beside the characters, practical light, and time of day. Keep it to
@@ -23,6 +38,44 @@ export type ShowCharacter = {
  */
 export type ShowLocation = {
   promptBlock: string;
+  /** Deterministic blocking space. Required when a scene has a spatial camera. */
+  spatial?: StageGeometry;
+};
+
+export type CharacterSpatialKeyframe = {
+  timeSeconds: number;
+  locationId: string;
+  /** Feet position in location-local meters. */
+  position: Vec3;
+  /** Body rotation around Z. `0` faces +Y; positive turns toward +X. */
+  bodyYawDegrees: number;
+  /** Character ID or landmark ID the head/eyes face. */
+  lookAtId?: string;
+  stance: "standing" | "sitting" | "kneeling" | "walking";
+  leftHandTargetId?: string;
+  rightHandTargetId?: string;
+};
+
+export type PropSpatialKeyframe = {
+  timeSeconds: number;
+  locationId: string;
+  position?: Vec3;
+  heldByCharacterId?: string;
+  heldInHand?: "left" | "right";
+};
+
+export type SpatialTimeline = {
+  durationSeconds: number;
+  characterTracks: Record<string, CharacterSpatialKeyframe[]>;
+  propTracks: Record<string, PropSpatialKeyframe[]>;
+};
+
+export type SpatialCamera = {
+  position: Vec3;
+  lookAt: Vec3;
+  verticalFovDegrees: number;
+  endPosition?: Vec3;
+  endLookAt?: Vec3;
 };
 
 /**
@@ -64,6 +117,30 @@ export type ShowPrompts = {
    * `{imagePrompt}`
    */
   sceneStill: string;
+  /**
+   * Qwen template for dialogue coverage derived from an already-rendered master shot.
+   * Identity portraits remain the first pictures; the final picture is the coverage master.
+   * Use `{referenceMap}`, `{coverageReferencePictureNumber}`, `{characterCount}`,
+   * `{characterIds}`, and `{imagePrompt}`.
+   */
+  coverageStill?: string;
+  /**
+   * Qwen master-shot template using identity picture(s) followed by the rendered 3D proxy.
+   * Uses `{referenceMap}`, `{proxyPictureNumber}`, `{characterCount}`, `{characterIds}`,
+   * `{locationPromptBlock}`, `{blockingSummary}`, and `{imagePrompt}`.
+   */
+  spatialStill?: string;
+  /**
+   * Qwen dialogue-single template using identity, photorealistic coverage master, then proxy.
+   * Adds `{coverageReferencePictureNumber}` to the `spatialStill` placeholders.
+   */
+  spatialCoverageStill?: string;
+  /**
+   * Qwen final-guide template: Picture 1 photorealistic start, Picture 2 identity, Picture 3
+   * end-state proxy. Use only for action shots; static dialogue copies its start guide.
+   * Uses `{characterId}` and `{imagePrompt}`.
+   */
+  spatialEndStill?: string;
   /**
    * Qwen template for establishing shots and prop inserts with no identity references.
    * Uses `{locationPromptBlock}` and `{imagePrompt}` from a blank canvas.
@@ -129,10 +206,27 @@ export type ScriptScene = {
    */
   addresseeId: string | null;
   /**
+   * Earlier anchor/master scene whose rendered PNG supplies the set, lighting, axis, and
+   * screen geography for this shot. Use it for every single in a dialogue coverage run.
+   * The pipeline attaches it after the identity portrait(s); omit it for masters and inserts.
+   */
+  coverageReferenceSceneNumber?: number;
+  /**
+   * Interval on the episode spatial timeline projected into this edit shot.
+   * Omit only for legacy scenes that have not yet been migrated.
+   */
+  timeRangeSeconds?: [number, number];
+  /** Physical camera used to project the timeline into a proxy guide. */
+  camera?: SpatialCamera;
+  /** Additional timeline times to pin as photorealistic LTX guides. */
+  guideKeyframesSeconds?: number[];
+  /** Generate and pin a photorealistic guide at the shot's final timeline state. */
+  endGuideFrame?: boolean;
+  /**
    * Qwen description of the clip's exact first frame. Repeat complete wardrobe and visible
-   * props. Specify shot size, left/right placement, gaze target, and emotion. Singles and
-   * reactions should be chest-up or medium close-ups with the subject looking toward the
-   * established off-screen addressee, never into the camera. Two-shots keep both faces
+   * props. Specify shot size, left/right placement, gaze target, and emotion. Dialogue
+   * singles should vary between medium close-up, tight close-up, and extreme close-up while
+   * preserving reciprocal frame sides from their coverage master. Two-shots keep both faces
    * readable but need not be symmetrical or posed.
    *
    * Establish the beginning of one achievable action. Simple turns, one step, raising or
@@ -144,11 +238,14 @@ export type ScriptScene = {
    * absent addressee—the four-step Qwen model may render that name as an extra, unreferenced
    * person. Express eyelines as "toward empty space beyond frame left/right." Describe an
    * absent character's clothing or prop generically, without possessive names.
+   *
+   * For a spatially staged scene, geometry comes only from `spatialTimeline` and `camera`.
+   * Limit this field to wardrobe, expression, atmosphere, and non-spatial visual styling.
    */
   imagePrompt: string;
   /**
-   * LTX motion as one chronological, present-tense continuous take. Describe one speaker or
-   * one simple visible action, camera behavior, and sound. Do not recap the opening frame.
+   * Compact LTX instructions using `VISUAL:`, `DIALOGUE:`, `CAMERA:`, and optional `AUDIO:`.
+   * Describe one literal action or speaker; omit recaps, metaphors, and decorative foley.
    */
   videoPrompt: string;
   /**
@@ -178,6 +275,8 @@ export type ShowEpisode = {
    * Persistent 180-degree-axis map. Change an eyeline only after a new anchor establishes it.
    */
   screenDirection: string;
+  /** Ground truth for character and prop state before camera coverage is authored. */
+  spatialTimeline?: SpatialTimeline;
   scenes: ScriptScene[];
 };
 
