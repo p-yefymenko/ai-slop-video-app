@@ -92,10 +92,6 @@ export type ScriptScene = {
    * Do not author `endGuideFrame`.
    */
   motionMode?: "cameraOnly" | "generative";
-  /** Required on dialogue singles and in-set prop inserts. */
-  coverageReferenceSceneNumber?: number;
-  /** Combine with `coverageReferenceSceneNumber`; do not invent the prop from a proxy box. */
-  focusTargetId?: string;
   /**
    * Shot duration is this interval. Required on every shot.
    * Do not also store `durationSeconds`.

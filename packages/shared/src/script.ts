@@ -100,16 +100,6 @@ export type ScriptScene = {
    */
   motionMode?: "cameraOnly" | "generative";
   /**
-   * Earlier master whose rendered PNG supplies set, light, and axis.
-   * Required on dialogue singles and in-set prop inserts.
-   */
-  coverageReferenceSceneNumber?: number;
-  /**
-   * Prop or landmark ID centered by an insert. Combine with
-   * `coverageReferenceSceneNumber`; do not reinvent the prop from a proxy box.
-   */
-  focusTargetId?: string;
-  /**
    * Interval on `spatialTimeline`. Shot duration is this interval; do not also
    * store `durationSeconds`.
    */

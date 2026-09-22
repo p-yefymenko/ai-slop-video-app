@@ -284,7 +284,6 @@ def render_scene_proxy(
     time_seconds: float,
     destination: Path,
     debug: bool = True,
-    draw_landmarks: bool = True,
 ) -> None:
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     amount = min(1.0, max(0.0, (time_seconds - start) / max(finish - start, 1e-6)))
@@ -301,25 +300,24 @@ def render_scene_proxy(
         for y in range(math.floor(-depth / 2), math.ceil(depth / 2) + 1):
             _line3d(draw, camera, (-width / 2, float(y), 0.0), (width / 2, float(y), 0.0), (39, 51, 66))
 
-    if draw_landmarks:
-        for landmark_id, landmark in spatial.get("landmarks", {}).items():
-            for edge_start, edge_finish in _box_edges(
-                vec(landmark["position"]), vec(landmark["size"])
-            ):
-                _line3d(draw, camera, edge_start, edge_finish, (70, 115, 145), 3)
-            label_point = project(
-                add(
-                    vec(landmark["position"]),
-                    (0.0, 0.0, float(landmark["size"][2])),
-                ),
-                camera,
+    for landmark_id, landmark in spatial.get("landmarks", {}).items():
+        for edge_start, edge_finish in _box_edges(
+            vec(landmark["position"]), vec(landmark["size"])
+        ):
+            _line3d(draw, camera, edge_start, edge_finish, (70, 115, 145), 3)
+        label_point = project(
+            add(
+                vec(landmark["position"]),
+                (0.0, 0.0, float(landmark["size"][2])),
+            ),
+            camera,
+        )
+        if debug and label_point:
+            draw.text(
+                (label_point[0] + 4, label_point[1]),
+                landmark_id,
+                fill=(110, 180, 210),
             )
-            if debug and label_point:
-                draw.text(
-                    (label_point[0] + 4, label_point[1]),
-                    landmark_id,
-                    fill=(110, 180, 210),
-                )
 
     states: list[tuple[float, str, dict]] = []
     for character_id in scene["characterIds"]:
@@ -542,72 +540,6 @@ def character_facing_direction(
     return "left" if target_projected[0] < projected[0] else "right"
 
 
-def compile_spatial_image_summary(episode: dict, scene: dict) -> str:
-    if not scene.get("timeRangeSeconds") or not scene.get("camera"):
-        return ""
-    start = float(scene["timeRangeSeconds"][0])
-    camera = scene["camera"]
-    clauses: list[str] = []
-    for character_id in scene["characterIds"]:
-        state = episode_character_state(episode, character_id, start)
-        _, _, head_height = _stance_heights(state["stance"])
-        head = add(vec(state["position"]), (0.0, 0.0, head_height))
-        projected = project(head, camera)
-        if not projected:
-            continue
-        side = (
-            "frame left"
-            if projected[0] < PROXY_WIDTH * 0.42
-            else "frame right"
-            if projected[0] > PROXY_WIDTH * 0.58
-            else "frame center"
-        )
-        facing = character_facing_direction(episode, scene, character_id)
-        target_direction = f"frame {facing}" if facing else None
-        clause = f"{character_id} appears {side}"
-        if target_direction:
-            clause += (
-                f" in three-quarter profile with body, head, and eyes turned "
-                f"toward {target_direction}"
-            )
-        projected_feet = project(vec(state["position"]), camera)
-        if projected_feet:
-            if projected_feet[1] > PROXY_HEIGHT * 1.75:
-                framing = "extreme facial close-up"
-            elif projected_feet[1] > PROXY_HEIGHT * 1.15:
-                framing = "tight head-and-shoulders close-up"
-            elif projected_feet[1] > PROXY_HEIGHT * 0.9:
-                framing = "medium close-up"
-            else:
-                framing = "medium or wider shot"
-            clause += f"; the projected crop is a {framing}"
-        clauses.append(clause)
-    if not clauses:
-        return ""
-    return (
-        "Ground-truth blocking: "
-        + "; ".join(clauses)
-        + ". Follow the mannequin orientation. Keep both pupils toward the stated frame edge; "
-        "no visible character faces or makes eye contact with the viewer."
-    )
-
-
-def character_screen_position(
-    episode: dict, scene: dict, character_id: str
-) -> tuple[float, float]:
-    start = float(scene["timeRangeSeconds"][0])
-    state = episode_character_state(episode, character_id, start)
-    _, _, head_height = _stance_heights(state["stance"])
-    projected = project(
-        add(vec(state["position"]), (0.0, 0.0, head_height)), scene["camera"]
-    )
-    if not projected:
-        raise ValueError(
-            f"Character {character_id!r} is behind scene {scene['sceneNumber']} camera"
-        )
-    return projected[0], projected[1]
-
-
 def spatial_target_screen_position(
     show: dict,
     episode: dict,
@@ -681,23 +613,6 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
                 debug=False,
             )
             generated.append(condition_destination)
-            if scene["characterIds"]:
-                pose_destination = proxy_frame_path(
-                    show["id"],
-                    episode["episodeNumber"],
-                    scene["sceneNumber"],
-                    f"{label}_pose_condition",
-                )
-                render_scene_proxy(
-                    show,
-                    episode,
-                    scene,
-                    time_seconds,
-                    pose_destination,
-                    debug=False,
-                    draw_landmarks=False,
-                )
-                generated.append(pose_destination)
     return generated
 
 

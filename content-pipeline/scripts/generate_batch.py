@@ -20,16 +20,13 @@ from pathlib import Path
 
 import cv2
 from ffmpeg_tools import concat_videos, render_camera_move
-from PIL import Image, ImageFilter
+from PIL import Image
 from spatial_previs import (
     character_facing_direction,
-    character_screen_position,
-    compile_spatial_image_summary,
     compile_spatial_video_prompt,
     generate_episode_previs,
     proxy_frame_path,
     scene_has_spatial_change,
-    spatial_target_screen_position,
     validate_spatial_episode,
 )
 
@@ -38,13 +35,9 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
-    "characterProfile",
-    "setPlate",
     "spatialStill",
-    "spatialCoverageStill",
     "spatialEnvironmentStill",
     "spatialGroupEndStill",
-    "spatialInsertStill",
     "spatialEndStill",
     "sceneVideo",
 )
@@ -646,13 +639,13 @@ def load_show(path: Path) -> dict:
                 speaker_id = None
             image_prompt = require_text(scene, "imagePrompt", scene_label)
             video_prompt = str(scene.get("videoPrompt") or "")
-            coverage_reference_scene_number = scene.get("coverageReferenceSceneNumber")
-            if coverage_reference_scene_number is not None:
-                coverage_reference_scene_number = int(coverage_reference_scene_number)
-                if coverage_reference_scene_number >= scene_number:
-                    raise SystemExit(
-                        f"{scene_label} coverageReferenceSceneNumber must name an earlier scene"
-                    )
+            if scene.get("coverageReferenceSceneNumber") is not None or scene.get(
+                "focusTargetId"
+            ):
+                raise SystemExit(
+                    f"{scene_label} still has coverageReferenceSceneNumber or "
+                    "focusTargetId; geometry comes from this shot's camera and timeline"
+                )
             time_range = scene.get("timeRangeSeconds")
             if (
                 not isinstance(time_range, list)
@@ -670,8 +663,6 @@ def load_show(path: Path) -> dict:
                     "characterIds": character_ids,
                     "speakerId": speaker_id,
                     "motionMode": str(scene.get("motionMode") or ""),
-                    "coverageReferenceSceneNumber": coverage_reference_scene_number,
-                    "focusTargetId": str(scene.get("focusTargetId") or ""),
                     "timeRangeSeconds": [float(time_range[0]), float(time_range[1])],
                     "camera": scene.get("camera"),
                     "imagePrompt": image_prompt,
@@ -698,10 +689,6 @@ def character_image_path(show_id: str, character_id: str) -> Path:
     return OUTPUT_DIR / show_id / "characters" / f"{character_id}.png"
 
 
-def character_profile_path(show_id: str, character_id: str, direction: str) -> Path:
-    return OUTPUT_DIR / show_id / "characters" / f"{character_id}_look_{direction}.png"
-
-
 def episode_dir(show_id: str, episode_number: int) -> Path:
     return OUTPUT_DIR / show_id / str(episode_number)
 
@@ -714,19 +701,11 @@ def end_still_path(out_dir: Path, scene_number: int) -> Path:
     return out_dir / f"scene_{int(scene_number):02d}_end.png"
 
 
-def set_plate_path(out_dir: Path, scene_number: int) -> Path:
-    return out_dir / f"scene_{int(scene_number):02d}_set_plate.png"
-
-
 def resolve_location(show: dict, scene: dict) -> dict:
     return show["locations"][scene["locationId"]]
 
 
-def resolve_scene_characters(
-    show: dict,
-    scene: dict,
-    episode: dict | None = None,
-) -> list[dict]:
+def resolve_scene_characters(show: dict, scene: dict) -> list[dict]:
     resolved: list[dict] = []
     for character_id in scene["characterIds"]:
         image_path = character_image_path(show["id"], character_id)
@@ -735,14 +714,6 @@ def resolve_scene_characters(
                 f"Missing character still {image_path}. Run `pnpm run content:frames` "
                 "so identity portraits exist before scene stills."
             )
-        if episode is not None:
-            direction = character_facing_direction(episode, scene, character_id)
-            if direction:
-                profile_path = character_profile_path(
-                    show["id"], character_id, direction
-                )
-                if present(profile_path):
-                    image_path = profile_path
         resolved.append({"id": character_id, "image_path": image_path})
     return resolved
 
@@ -796,53 +767,6 @@ def stage_named_image(image_path: Path, prefix: str) -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
     shutil.copy2(image_path, dest)
-    return dest.name
-
-
-def stage_coverage_crop(
-    image_path: Path,
-    prefix: str,
-    screen_position: tuple[float, float],
-    canvas_size: tuple[float, float],
-) -> str:
-    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
-    with Image.open(image_path) as image:
-        rgb = image.convert("RGB")
-        # A recognizable character crop plus a separate identity reference causes
-        # Qwen to render the same person twice. Keep only coarse set/light/color.
-        tiny_width = 48
-        tiny_height = max(1, round(tiny_width * rgb.height / rgb.width))
-        continuity = rgb.resize(
-            (tiny_width, tiny_height), Image.Resampling.BILINEAR
-        ).resize(rgb.size, Image.Resampling.BILINEAR)
-        continuity.filter(ImageFilter.GaussianBlur(radius=14.0)).save(dest)
-    return dest.name
-
-
-def stage_insert_crop(
-    image_path: Path,
-    prefix: str,
-    screen_position: tuple[float, float],
-    canvas_size: tuple[float, float],
-) -> str:
-    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
-    with Image.open(image_path) as image:
-        rgb = image.convert("RGB")
-        center_x = screen_position[0] * rgb.width / canvas_size[0]
-        center_y = screen_position[1] * rgb.height / canvas_size[1]
-        crop_width = rgb.width * 0.32
-        crop_height = rgb.height * 0.36
-        left = max(0.0, min(rgb.width - crop_width, center_x - crop_width / 2.0))
-        top = max(0.0, min(rgb.height - crop_height, center_y - crop_height / 2.0))
-        crop = (
-            round(left),
-            round(top),
-            round(left + crop_width),
-            round(top + crop_height),
-        )
-        rgb.crop(crop).resize(rgb.size, Image.Resampling.LANCZOS).save(dest)
     return dest.name
 
 
@@ -933,47 +857,10 @@ def inject_qwen_character_canvas(graph: dict) -> None:
     inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
 
 
-def inject_qwen_character_refs(graph: dict, characters: list[dict]) -> None:
-    if not characters:
-        raise RuntimeError("Scene stills need at least one character reference PNG")
-    refs: list[tuple[str, str]] = []
-    for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1):
-        refs.append(
-            (
-                stage_start_still(character["image_path"]),
-                f"Character reference {index} ({character['id']})",
-            )
-        )
-    inject_qwen_image_slots(graph, refs)
-
-
-def inject_qwen_coverage_refs(
-    graph: dict, characters: list[dict], coverage_reference_path: Path
-) -> None:
-    if not characters:
-        raise RuntimeError("Coverage stills need at least one character reference PNG")
-    refs = [
-        (
-            stage_start_still(character["image_path"]),
-            f"Character reference {index} ({character['id']})",
-        )
-        for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
-    ]
-    refs.append(
-        (
-            stage_start_still(coverage_reference_path),
-            f"Coverage master ({coverage_reference_path.stem})",
-        )
-    )
-    inject_qwen_image_slots(graph, refs)
-
-
 def inject_qwen_spatial_refs(
     graph: dict,
     characters: list[dict],
     proxy_path: Path,
-    coverage_reference_path: Path | None = None,
-    coverage_screen_position: tuple[float, float] | None = None,
 ) -> None:
     refs = [
         (
@@ -982,13 +869,6 @@ def inject_qwen_spatial_refs(
         )
         for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
     ]
-    if coverage_reference_path is not None:
-        refs.append(
-            (
-                stage_named_image(coverage_reference_path, "set_plate"),
-                f"Person-free set continuity plate ({coverage_reference_path.stem})",
-            )
-        )
     refs.append((stage_named_image(proxy_path, "proxy"), "3D spatial projection"))
     if len(refs) > 3:
         raise RuntimeError("Qwen supports at most three spatial references")
@@ -999,36 +879,6 @@ def inject_qwen_environment_proxy(graph: dict, proxy_path: Path) -> None:
     inject_qwen_image_slots(
         graph,
         [(stage_named_image(proxy_path, "proxy"), "3D spatial projection")],
-    )
-
-
-def inject_qwen_set_plate_ref(graph: dict, master_path: Path) -> None:
-    inject_qwen_image_slots(
-        graph,
-        [(stage_named_image(master_path, "set_master"), "Photorealistic coverage master")],
-    )
-
-
-def inject_qwen_spatial_insert_refs(
-    graph: dict,
-    coverage_path: Path,
-    proxy_path: Path,
-    target_screen_position: tuple[float, float],
-) -> None:
-    inject_qwen_image_slots(
-        graph,
-        [
-            (
-                stage_insert_crop(
-                    coverage_path,
-                    "insert_crop",
-                    target_screen_position,
-                    (768.0, 1360.0),
-                ),
-                "Photorealistic prop crop from coverage master",
-            ),
-            (stage_named_image(proxy_path, "proxy"), "3D spatial projection"),
-        ],
     )
 
 
@@ -1377,60 +1227,6 @@ def generate_show(
                 expected_max_faces=1,
             )
             generated += 1
-        if "characterProfile" in show["prompts"]:
-            profile_needs: set[tuple[str, str]] = set()
-            for episode in show["episodes"]:
-                for scene in episode["scenes"]:
-                    for character_id in scene["characterIds"]:
-                        direction = character_facing_direction(
-                            episode, scene, character_id
-                        )
-                        if direction:
-                            profile_needs.add((character_id, direction))
-            for character_id, direction in sorted(profile_needs):
-                source = character_image_path(show_id, character_id)
-                dest = character_profile_path(show_id, character_id, direction)
-                print(
-                    f"Queued character profile {character_id} looking {direction}...",
-                    flush=True,
-                )
-                if present(dest):
-                    print(
-                        f"  Skipped (already present): {dest} "
-                        f"({format_bytes(dest.stat().st_size)})",
-                        flush=True,
-                    )
-                    skipped += 1
-                    continue
-                prompt = show_prompt(
-                    show,
-                    "characterProfile",
-                    {
-                        "characterId": character_id,
-                        "direction": direction,
-                    },
-                )
-                run_qwen_image(
-                    workflow_template,
-                    dest,
-                    prompt,
-                    f"Qwen profile reference ({character_id} looking {direction})",
-                    lambda graph,
-                    source=source,
-                    character_id=character_id: inject_qwen_image_slots(
-                        graph,
-                        [
-                            (
-                                stage_start_still(source),
-                                f"Frontal identity of {character_id}",
-                            )
-                        ],
-                    ),
-                    stable_seed(show_id, "profile", character_id, direction),
-                    expected_max_faces=1,
-                    expected_facing=direction,
-                )
-                generated += 1
 
     for episode in show["episodes"]:
         episode_number = episode["episodeNumber"]
@@ -1489,295 +1285,64 @@ def generate_show(
                     "`pnpm run content:frame -- --show <id> --episode <n> --scene <n> --force`."
                 )
             if stage == "frames":
-                if scene.get("camera") and scene.get("timeRangeSeconds"):
-                    generate_episode_previs(show, episode, scene_number)
+                if not scene.get("camera"):
+                    raise SystemExit(f"{scene_label} requires camera")
+                generate_episode_previs(show, episode, scene_number)
                 seed = (
                     seed_override
                     if seed_override is not None
                     else stable_seed(show_id, episode_number, scene_number, "frame")
                 )
                 if not present(still_path) or force:
+                    spatial_proxy_path = proxy_frame_path(
+                        show_id, episode_number, scene_number, "start_condition"
+                    )
+                    if not present(spatial_proxy_path):
+                        raise SystemExit(f"Missing spatial proxy {spatial_proxy_path}")
                     if scene["characterIds"]:
-                        characters = resolve_scene_characters(show, scene, episode)
-                        coverage_reference_scene_number = scene["coverageReferenceSceneNumber"]
-                        spatial_proxy_path = proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_condition"
+                        characters = resolve_scene_characters(show, scene)
+                        prompt = show_prompt(
+                            show,
+                            "spatialStill",
+                            {
+                                "referenceMap": "; ".join(
+                                    f"Picture {index} = identity of {character_id}"
+                                    for index, character_id in enumerate(
+                                        scene["characterIds"], start=1
+                                    )
+                                ),
+                                "proxyPictureNumber": str(
+                                    len(scene["characterIds"]) + 1
+                                ),
+                                "characterCount": str(len(scene["characterIds"])),
+                                "characterIds": ", ".join(scene["characterIds"]),
+                                "locationPromptBlock": location["promptBlock"],
+                                "imagePrompt": scene["imagePrompt"],
+                            },
                         )
-                        if scene.get("camera") and scene.get("timeRangeSeconds"):
-                            if not present(spatial_proxy_path):
-                                raise SystemExit(f"Missing spatial proxy {spatial_proxy_path}")
-                            coverage_screen_position = None
-                            if coverage_reference_scene_number is not None:
-                                template_key = "spatialCoverageStill"
-                                coverage_master_path = start_still_path(
-                                    out_dir, coverage_reference_scene_number
-                                )
-                                if not present(coverage_master_path):
-                                    raise SystemExit(
-                                        f"{scene_label} needs coverage master "
-                                        f"{coverage_master_path}"
-                                    )
-                                coverage_reference_path = set_plate_path(
-                                    out_dir, coverage_reference_scene_number
-                                )
-                                if not present(coverage_reference_path):
-                                    if "setPlate" not in show["prompts"]:
-                                        raise SystemExit(
-                                            f"{scene_label} requires prompts.setPlate"
-                                        )
-                                    plate_prompt = show_prompt(
-                                        show,
-                                        "setPlate",
-                                        {
-                                            "locationPromptBlock": location[
-                                                "promptBlock"
-                                            ]
-                                        },
-                                    )
-                                    run_qwen_image(
-                                        workflow_template,
-                                        coverage_reference_path,
-                                        plate_prompt,
-                                        f"Qwen person-free set plate "
-                                        f"(scene {coverage_reference_scene_number})",
-                                        lambda graph,
-                                        master=coverage_master_path: inject_qwen_set_plate_ref(
-                                            graph, master
-                                        ),
-                                        stable_seed(
-                                            show_id,
-                                            episode_number,
-                                            coverage_reference_scene_number,
-                                            "set-plate",
-                                        ),
-                                        expected_max_faces=0,
-                                    )
-                                spatial_proxy_path = proxy_frame_path(
-                                    show_id,
-                                    episode_number,
-                                    scene_number,
-                                    "start_pose_condition",
-                                )
-                                if len(scene["characterIds"]) != 1:
-                                    raise SystemExit(
-                                        f"{scene_label} spatial coverage requires one character"
-                                    )
-                                coverage_scene = next(
-                                    candidate
-                                    for candidate in episode["_allScenes"]
-                                    if candidate["sceneNumber"]
-                                    == coverage_reference_scene_number
-                                )
-                                coverage_screen_position = character_screen_position(
-                                    episode, coverage_scene, scene["characterIds"][0]
-                                )
-                                prompt_values = {
-                                    "referenceMap": "; ".join(
-                                        f"Picture {index} = identity of {character_id}"
-                                        for index, character_id in enumerate(
-                                            scene["characterIds"], start=1
-                                        )
-                                    ),
-                                    "coverageReferencePictureNumber": str(
-                                        len(scene["characterIds"]) + 1
-                                    ),
-                                    "proxyPictureNumber": str(
-                                        len(scene["characterIds"]) + 2
-                                    ),
-                                    "characterCount": str(len(scene["characterIds"])),
-                                    "characterIds": ", ".join(scene["characterIds"]),
-                                    "locationPromptBlock": location["promptBlock"],
-                                    "blockingSummary": compile_spatial_image_summary(
-                                        episode, scene
-                                    ),
-                                    "imagePrompt": scene["imagePrompt"],
-                                }
-                            else:
-                                template_key = "spatialStill"
-                                coverage_reference_path = None
-                                prompt_values = {
-                                    "referenceMap": "; ".join(
-                                        f"Picture {index} = identity of {character_id}"
-                                        for index, character_id in enumerate(
-                                            scene["characterIds"], start=1
-                                        )
-                                    ),
-                                    "proxyPictureNumber": str(
-                                        len(scene["characterIds"]) + 1
-                                    ),
-                                    "characterCount": str(len(scene["characterIds"])),
-                                    "characterIds": ", ".join(scene["characterIds"]),
-                                    "locationPromptBlock": location["promptBlock"],
-                                    "blockingSummary": compile_spatial_image_summary(
-                                        episode, scene
-                                    ),
-                                    "imagePrompt": scene["imagePrompt"],
-                                }
-                            if template_key not in show["prompts"]:
-                                raise SystemExit(
-                                    f"{scene_label} requires prompts.{template_key}"
-                                )
-                            prompt = show_prompt(show, template_key, prompt_values)
-                            inject_images = (
-                                lambda graph,
-                                chars=characters,
-                                proxy=spatial_proxy_path,
-                                ref=coverage_reference_path,
-                                screen_position=coverage_screen_position: inject_qwen_spatial_refs(
-                                    graph, chars, proxy, ref, screen_position
-                                )
+                        inject_images = (
+                            lambda graph,
+                            chars=characters,
+                            proxy=spatial_proxy_path: inject_qwen_spatial_refs(
+                                graph, chars, proxy
                             )
-                        elif coverage_reference_scene_number is not None:
-                            if "coverageStill" not in show["prompts"]:
-                                raise SystemExit(
-                                    f"{scene_label} uses coverageReferenceSceneNumber and "
-                                    "requires prompts.coverageStill"
-                                )
-                            coverage_reference_path = start_still_path(
-                                out_dir, coverage_reference_scene_number
-                            )
-                            if not present(coverage_reference_path):
-                                raise SystemExit(
-                                    f"{scene_label} needs coverage master "
-                                    f"{coverage_reference_path}"
-                                )
-                            prompt = show_prompt(
-                                show,
-                                "coverageStill",
-                                {
-                                    "referenceMap": "; ".join(
-                                        f"Picture {index} = identity of {character_id}"
-                                        for index, character_id in enumerate(
-                                            scene["characterIds"], start=1
-                                        )
-                                    ),
-                                    "coverageReferencePictureNumber": str(
-                                        len(scene["characterIds"]) + 1
-                                    ),
-                                    "characterCount": str(len(scene["characterIds"])),
-                                    "characterIds": ", ".join(scene["characterIds"]),
-                                    "imagePrompt": scene["imagePrompt"],
-                                },
-                            )
-                            inject_images = (
-                                lambda graph,
-                                chars=characters,
-                                ref=coverage_reference_path: inject_qwen_coverage_refs(
-                                    graph, chars, ref
-                                )
-                            )
-                        else:
-                            prompt = show_prompt(
-                                show,
-                                "sceneStill",
-                                {
-                                    "referenceMap": "; ".join(
-                                        f"Picture {index} = {character_id}"
-                                        for index, character_id in enumerate(
-                                            scene["characterIds"], start=1
-                                        )
-                                    ),
-                                    "characterCount": str(len(scene["characterIds"])),
-                                    "characterIds": ", ".join(scene["characterIds"]),
-                                    "locationPromptBlock": location["promptBlock"],
-                                    "imagePrompt": scene["imagePrompt"],
-                                },
-                            )
-                            inject_images = (
-                                lambda graph,
-                                chars=characters: inject_qwen_character_refs(graph, chars)
-                            )
+                        )
                     else:
-                        if scene.get("camera") and scene.get("timeRangeSeconds"):
-                            coverage_reference_scene_number = scene[
-                                "coverageReferenceSceneNumber"
-                            ]
-                            focus_target_id = scene.get("focusTargetId")
-                            spatial_proxy_path = proxy_frame_path(
-                                show_id,
-                                episode_number,
-                                scene_number,
-                                "start_condition",
+                        prompt = show_prompt(
+                            show,
+                            "spatialEnvironmentStill",
+                            {
+                                "proxyPictureNumber": "1",
+                                "locationPromptBlock": location["promptBlock"],
+                                "imagePrompt": scene["imagePrompt"],
+                            },
+                        )
+                        inject_images = (
+                            lambda graph,
+                            proxy=spatial_proxy_path: inject_qwen_environment_proxy(
+                                graph, proxy
                             )
-                            if coverage_reference_scene_number and focus_target_id:
-                                if "spatialInsertStill" not in show["prompts"]:
-                                    raise SystemExit(
-                                        f"{scene_label} requires prompts.spatialInsertStill"
-                                    )
-                                coverage_scene = next(
-                                    candidate
-                                    for candidate in episode.get(
-                                        "_allScenes", episode["scenes"]
-                                    )
-                                    if candidate["sceneNumber"]
-                                    == coverage_reference_scene_number
-                                )
-                                coverage_reference_path = start_still_path(
-                                    out_dir, coverage_reference_scene_number
-                                )
-                                if not present(coverage_reference_path):
-                                    raise SystemExit(
-                                        f"{scene_label} needs coverage master "
-                                        f"{coverage_reference_path}"
-                                    )
-                                target_position = spatial_target_screen_position(
-                                    show,
-                                    episode,
-                                    coverage_scene,
-                                    focus_target_id,
-                                )
-                                prompt = show_prompt(
-                                    show,
-                                    "spatialInsertStill",
-                                    {
-                                        "focusTargetId": focus_target_id,
-                                        "locationPromptBlock": location["promptBlock"],
-                                        "imagePrompt": scene["imagePrompt"],
-                                    },
-                                )
-                                inject_images = (
-                                    lambda graph,
-                                    ref=coverage_reference_path,
-                                    proxy=spatial_proxy_path,
-                                    target=target_position: inject_qwen_spatial_insert_refs(
-                                        graph, ref, proxy, target
-                                    )
-                                )
-                            elif "spatialEnvironmentStill" not in show["prompts"]:
-                                raise SystemExit(
-                                    f"{scene_label} requires prompts.spatialEnvironmentStill"
-                                )
-                            else:
-                                prompt = show_prompt(
-                                    show,
-                                    "spatialEnvironmentStill",
-                                    {
-                                        "proxyPictureNumber": "1",
-                                        "locationPromptBlock": location["promptBlock"],
-                                        "imagePrompt": scene["imagePrompt"],
-                                    },
-                                )
-                                inject_images = (
-                                    lambda graph,
-                                    proxy=spatial_proxy_path: inject_qwen_environment_proxy(
-                                        graph, proxy
-                                    )
-                                )
-                        else:
-                            if "environmentStill" not in show["prompts"]:
-                                raise SystemExit(
-                                    f"{scene_label} has no characterIds and requires "
-                                    "prompts.environmentStill"
-                                )
-                            prompt = show_prompt(
-                                show,
-                                "environmentStill",
-                                {
-                                    "locationPromptBlock": location["promptBlock"],
-                                    "imagePrompt": scene["imagePrompt"],
-                                },
-                            )
-                            inject_images = inject_qwen_character_canvas
+                        )
                     run_qwen_image(
                         workflow_template,
                         still_path,
@@ -1804,7 +1369,7 @@ def generate_show(
                         episode_generated += 1
                         generated += 1
                         continue
-                    characters = resolve_scene_characters(show, scene, episode)
+                    characters = resolve_scene_characters(show, scene)
                     proxy_end_path = proxy_frame_path(
                         show_id, episode_number, scene_number, "end_condition"
                     )

@@ -9,6 +9,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import generate_batch as pipeline  # noqa: E402
+from spatial_previs import spatial_target_screen_position  # noqa: E402
 
 
 class SpatialPipelineTests(unittest.TestCase):
@@ -54,6 +55,8 @@ class SpatialPipelineTests(unittest.TestCase):
             "endGuideFrame",
             "logline",
             "dramaticQuestion",
+            "coverageReferenceSceneNumber",
+            "focusTargetId",
         }
         self.assertTrue(obsolete.isdisjoint(raw["episodes"][0]))
         for scene in raw["episodes"][0]["scenes"]:
@@ -74,21 +77,20 @@ class SpatialPipelineTests(unittest.TestCase):
         ]
         self.assertEqual(len(loaders), 3)
 
-    def test_single_uses_identity_master_and_proxy(self) -> None:
+    def test_single_uses_identity_and_proxy(self) -> None:
         scene = self.episode["scenes"][4]
         graph = pipeline.clone_workflow(self.qwen)
-        proxy = pipeline.proxy_frame_path(self.show["id"], 1, 5, "start")
         pipeline.inject_qwen_spatial_refs(
             graph,
             pipeline.resolve_scene_characters(self.show, scene),
-            proxy,
-            proxy,
-            (600.0, 600.0),
+            pipeline.proxy_frame_path(self.show["id"], 1, 5, "start_condition"),
         )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
-        self.assertEqual(len(loaders), 3)
+        self.assertEqual(len(loaders), 2)
+        self.assertNotIn("setPlate", self.show["prompts"])
+        self.assertNotIn("spatialCoverageStill", self.show["prompts"])
 
     def test_environment_shot_uses_spatial_proxy(self) -> None:
         scene = self.episode["scenes"][0]
@@ -102,6 +104,7 @@ class SpatialPipelineTests(unittest.TestCase):
         ]
         self.assertEqual(len(loaders), 1)
         self.assertIn("spatialEnvironmentStill", self.show["prompts"])
+        self.assertNotIn("characterProfile", self.show["prompts"])
 
     def test_safe_shots_default_to_camera_only(self) -> None:
         insert = self.episode["scenes"][7]
@@ -125,7 +128,7 @@ class SpatialPipelineTests(unittest.TestCase):
 
     def test_prop_insert_projects_established_crown(self) -> None:
         coverage = self.episode["_allScenes"][3]
-        x, y = pipeline.spatial_target_screen_position(
+        x, y = spatial_target_screen_position(
             self.show, self.episode, coverage, "ash_crown"
         )
         self.assertGreater(x, 0)

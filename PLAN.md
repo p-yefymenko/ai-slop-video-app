@@ -124,7 +124,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives an eyeline-matched profile identity plus the proxy; dialogue singles receive only an abstracted, person-free continuity plate so reference people and set landmarks cannot be duplicated. Prop inserts derive their subject from an earlier photorealistic master. Generated stills pass a duplicate-face gate before video. Establishing shots, inserts, reactions, and silent anchors default to stable supersampled camera motion. Dialogue/action shots use **LTX-2.3 distilled-1.1**; dialogue additionally uses audio-video modality guidance and explicit lip-sync conditioning. Gemma API supplies text conditioning within 16GB VRAM.
+- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives the frontal identity PNG plus that shot's previs proxy. Generated stills pass a duplicate-face gate before video. Establishing shots, inserts, reactions, and silent anchors default to stable supersampled camera motion. Dialogue/action shots use **LTX-2.3 distilled-1.1**; dialogue additionally uses audio-video modality guidance and explicit lip-sync conditioning. Gemma API supplies text conditioning within 16GB VRAM.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -205,7 +205,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities, profiles, set plates, and scene stills; `pnpm run content:generate` renders camera-only or LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities, profiles, and scene stills from previs; `pnpm run content:generate` renders camera-only or LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -252,8 +252,8 @@ episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once i
 - `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
 - Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: generative shots whose timeline or camera actually change get one; silent/static shots do not.
 - `motionMode` is optional. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`. Opt into generative motion only for one simple visible action a camera move cannot do.
-- Spatial singles use left/right profile identity references, a person-free photorealistic set plate, and a character-only pose proxy. In-set prop inserts require `coverageReferenceSceneNumber` and `focusTargetId`.
-- Empty `characterIds` are environments. Two silent people are a spatial anchor; set each related single's `coverageReferenceSceneNumber` to that anchor. Dialogue is one on-camera `speakerId` only.
+- Spatial stills use identity references plus that shot's previs proxy. Empty `characterIds` are environments generated from the same proxy.
+- Empty `characterIds` are environments. Two silent people are a spatial anchor. Dialogue is one on-camera `speakerId` only.
 - `spatialTimeline` and each shot camera define the 180-degree axis and eyelines; no parallel prose screen-direction field exists.
 - `speakerId` enables dialogue-specific audio-video guidance. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera.

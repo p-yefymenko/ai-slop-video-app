@@ -385,7 +385,6 @@
           "speakerId": "malrec",
           "imagePrompt": "Malrec wears the same dark crimson brocade coat and black steel gorget. His expression is cold certainty, with restrained authority rather than a pose.",
           "videoPrompt": "PERFORMANCE: controlled mouth movement and a still, merciless expression. DIALOGUE (low, calm, merciless): \"Crown me before the eclipse closes, or Oren dies beneath us.\"",
-          "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             8.0,
             13.0
@@ -414,7 +413,6 @@
           "speakerId": "lyra",
           "imagePrompt": "Lyra wears the same torn ivory gown, fitted black leather bodice, and plain iron collar. Her expression is controlled anger and wounded disbelief.",
           "videoPrompt": "PERFORMANCE: controlled anger with a steady eyeline and clear articulation. DIALOGUE (clear, hurt, forceful): \"Oren died when you burned House Aster from the sky.\"",
-          "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             13.0,
             18.0
@@ -443,7 +441,6 @@
           "speakerId": "malrec",
           "imagePrompt": "Malrec wears the same crimson brocade coat and black gorget. A small restrained smile reveals quiet pleasure without changing his established body mark.",
           "videoPrompt": "PERFORMANCE: a small restrained smile and deliberate articulation. DIALOGUE (quiet, deliberate, cruel): \"He lives. One command, and the oubliette becomes his tomb.\"",
-          "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             18.0,
             23.0
@@ -468,8 +465,6 @@
           "storyBeat": "The crown visibly reacts to Lyra, hinting that Malrec's coronation is already failing.",
           "characterIds": [],
           "imagePrompt": "The jagged obsidian crown rests alone on its black stone pedestal. Hairline ember-red light glows inside one crack; no person or hand is visible.",
-          "coverageReferenceSceneNumber": 4,
-          "focusTargetId": "ash_crown",
           "timeRangeSeconds": [
             23.0,
             25.0
@@ -525,7 +520,6 @@
           "speakerId": "kael",
           "imagePrompt": "Kael wears the same matte black scale armor and dark red cloak. His expression is controlled authority.",
           "videoPrompt": "PERFORMANCE: minimal movement and a steady commanding eyeline. DIALOGUE (deep, steady, commanding): \"Step away from the crown, Regent. The dragon covenant names her.\"",
-          "coverageReferenceSceneNumber": 9,
           "timeRangeSeconds": [
             27.0,
             32.0
@@ -554,7 +548,6 @@
           "speakerId": "malrec",
           "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is open contempt.",
           "videoPrompt": "PERFORMANCE: restrained disgust and precise articulation. DIALOGUE (sharp, contemptuous): \"She is bloodless, kingdomless, and condemned by every throne still standing.\"",
-          "coverageReferenceSceneNumber": 9,
           "timeRangeSeconds": [
             32.0,
             37.0
@@ -610,7 +603,6 @@
           "speakerId": "lyra",
           "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Her expression is proud hostility.",
           "videoPrompt": "PERFORMANCE: controlled fury with a fixed eyeline. DIALOGUE (low, proud, forceful): \"I escaped one tyrant. I will not become a dragon lord's prize.\"",
-          "coverageReferenceSceneNumber": 12,
           "timeRangeSeconds": [
             39.0,
             44.0
@@ -639,7 +631,6 @@
           "speakerId": "kael",
           "imagePrompt": "Kael wears the established black scale armor and dark red cloak. His expression is grave sincerity.",
           "videoPrompt": "PERFORMANCE: quiet conviction and a steady eyeline. DIALOGUE (deep, sincere, controlled): \"Take the crown and command me—or let Oren die unavenged.\"",
-          "coverageReferenceSceneNumber": 12,
           "timeRangeSeconds": [
             44.0,
             49.0
@@ -702,7 +693,6 @@
           "speakerId": "malrec",
           "imagePrompt": "Malrec wears the established crimson coat and black gorget. His expression is cruel anticipation.",
           "videoPrompt": "PERFORMANCE: eager cruelty and precise articulation. DIALOGUE (low, threatening): \"Touch it, and the Ash Crown burns a false heir alive.\"",
-          "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             51.0,
             55.0
@@ -731,7 +721,6 @@
           "speakerId": "lyra",
           "imagePrompt": "Lyra wears the established torn ivory gown, black bodice, and iron collar. Ember-red crown light reaches her face as she looks down with final resolve.",
           "videoPrompt": "PERFORMANCE: Lyra lifts only her eyes from the crown. DIALOGUE (calm, final): \"Then let it judge me.\"",
-          "coverageReferenceSceneNumber": 4,
           "timeRangeSeconds": [
             55.0,
             60.0
