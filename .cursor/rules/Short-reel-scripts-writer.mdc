@@ -88,11 +88,6 @@ export type ScriptScene = {
    */
   speakerId?: string;
   /**
-   * Override only. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`.
-   * Do not author `endGuideFrame`.
-   */
-  motionMode?: "cameraOnly" | "generative";
-  /**
    * Shot duration is this interval. Required on every shot.
    * Do not also store `durationSeconds`.
    */
@@ -100,12 +95,13 @@ export type ScriptScene = {
   /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
   /**
-   * Wardrobe, expression, and atmosphere only.
-   * Never restate position, facing, eyeline, framing, or set geometry.
+   * Wardrobe, expression, and atmosphere only. Omit when the location block
+   * and proxy are enough. Never restate position, facing, eyeline, framing,
+   * or set geometry.
    */
-  imagePrompt: string;
+  imagePrompt?: string;
   /**
-   * Spoken line and non-spatial performance. Omit on `cameraOnly` shots.
+   * Spoken line and non-spatial performance. Omit on silent shots.
    * Camera and blocking come from the timeline and start/end frames.
    */
   videoPrompt?: string;

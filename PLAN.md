@@ -124,7 +124,7 @@ bucket_name = "<the R2 bucket created by `pnpm run setup`>"
 - **Storage/CDN:** Cloudflare R2 (video files, thumbnails) — zero egress cost
 - **Hosting:** None to manage — Workers, D1, and R2 are all serverless/managed by Cloudflare on the same account. No droplet, no Docker, no SSH.
 - **Payments:** Google Play Billing (server-side receipt verification inside a Worker)
-- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives the frontal identity PNG plus that shot's previs proxy. Generated stills pass a duplicate-face gate before video. Establishing shots, inserts, reactions, and silent anchors default to stable supersampled camera motion. Dialogue/action shots use **LTX-2.3 distilled-1.1**; dialogue additionally uses audio-video modality guidance and explicit lip-sync conditioning. Gemma API supplies text conditioning within 16GB VRAM.
+- **Content generation (offline, not part of the live app):** Each episode first defines a deterministic 3D blocking timeline: measured sets, character/prop keyframes, and physical cameras. `content:previs` projects that state into proxy frames and a contact sheet. **Qwen-Image-Edit-2511** receives the frontal identity PNG plus that shot's previs proxy. Generated stills pass a duplicate-face gate before video. Every shot is then animated with **LTX-2.3 distilled-1.1** from that still (and an end guide when blocking or camera actually change). Dialogue additionally uses audio-video modality guidance and explicit lip-sync conditioning. Gemma API supplies text conditioning within 16GB VRAM.
 - **Monorepo tooling:** pnpm workspaces
 
 > **Cost model:** Workers + D1 usage is free up to 100K requests/day and 5M D1 row reads/day; R2 is free up to 10GB storage with egress always free. Realistically $0/month until real user traction, then a flat $5/month (Workers Paid, which also raises D1 limits) covers a large jump in headroom. See cost breakdown in the Human-only steps section above.
@@ -205,7 +205,7 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities, profiles, and scene stills from previs; `pnpm run content:generate` renders camera-only or LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities and scene stills from previs; `pnpm run content:generate` renders LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
@@ -250,15 +250,14 @@ episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once i
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
 - Screenwriting guidance lives in `.cursor/rules/Short-reel-scripts-writer.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
 - `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
-- Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: generative shots whose timeline or camera actually change get one; silent/static shots do not.
-- `motionMode` is optional. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`. Opt into generative motion only for one simple visible action a camera move cannot do.
+- Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: shots whose timeline or camera actually change get one; static shots do not.
 - Spatial stills use identity references plus that shot's previs proxy. Empty `characterIds` are environments generated from the same proxy.
 - Empty `characterIds` are environments. Two silent people are a spatial anchor. Dialogue is one on-camera `speakerId` only.
 - `spatialTimeline` and each shot camera define the 180-degree axis and eyelines; no parallel prose screen-direction field exists.
 - `speakerId` enables dialogue-specific audio-video guidance. One quoted line maximum, 16 words maximum.
-- `imagePrompt` is wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera.
+- `imagePrompt` is optional wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera. Omit it when the location block and proxy are enough.
 - `imagePrompt` may name only characters in `characterIds`.
-- `videoPrompt` is the spoken line and non-spatial performance for generative shots. Camera and blocking come from the timeline and start/end frames. Omit it on camera-only shots.
+- `videoPrompt` is the spoken line and non-spatial performance. Camera and blocking come from the timeline and start/end frames. Omit it on silent shots.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.

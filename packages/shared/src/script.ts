@@ -94,12 +94,6 @@ export type ScriptScene = {
    */
   speakerId?: string;
   /**
-   * Override only. Default is `generative` when `speakerId` is set, otherwise
-   * `cameraOnly`. Use `generative` for one visible silent action that a camera
-   * move cannot do.
-   */
-  motionMode?: "cameraOnly" | "generative";
-  /**
    * Interval on `spatialTimeline`. Shot duration is this interval; do not also
    * store `durationSeconds`.
    */
@@ -107,14 +101,14 @@ export type ScriptScene = {
   /** Physical camera that projects the timeline into the proxy guide. */
   camera: SpatialCamera;
   /**
-   * Wardrobe, expression, and atmosphere only. Never restate position, facing,
-   * eyeline, framing, or set geometry.
+   * Optional wardrobe, expression, and atmosphere. Omit when the location
+   * block and proxy are enough. Never restate position, facing, eyeline,
+   * framing, or set geometry.
    */
-  imagePrompt: string;
+  imagePrompt?: string;
   /**
    * Spoken line and non-spatial performance for generative shots. Camera and
-   * blocking come from the timeline and start/end frames. Omit on `cameraOnly`
-   * shots.
+   * blocking come from the timeline and start/end frames. Omit on silent shots.
    */
   videoPrompt?: string;
 };

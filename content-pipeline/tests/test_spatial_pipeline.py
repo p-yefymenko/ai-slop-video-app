@@ -58,6 +58,7 @@ class SpatialPipelineTests(unittest.TestCase):
             "dramaticQuestion",
             "coverageReferenceSceneNumber",
             "focusTargetId",
+            "motionMode",
         }
         self.assertTrue(obsolete.isdisjoint(raw["episodes"][0]))
         for scene in raw["episodes"][0]["scenes"]:
@@ -130,11 +131,13 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("spatialStill", self.show["prompts"])
         self.assertNotIn("spatialEnvironmentStill", self.show["prompts"])
 
-    def test_safe_shots_default_to_camera_only(self) -> None:
+    def test_end_guides_follow_spatial_change(self) -> None:
         insert = self.episode["scenes"][7]
+        master = self.episode["scenes"][3]
         dialogue = self.episode["scenes"][9]
-        self.assertEqual(pipeline.scene_motion_mode(insert), "cameraOnly")
-        self.assertEqual(pipeline.scene_motion_mode(dialogue), "generative")
+        self.assertTrue(pipeline.scene_needs_end_guide(self.episode, master))
+        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, insert))
+        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, dialogue))
 
     def test_dialogue_uses_multimodal_guidance(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
@@ -162,8 +165,7 @@ class SpatialPipelineTests(unittest.TestCase):
 
     def test_two_character_end_refs_use_start_and_proxy(self) -> None:
         scene = self.episode["scenes"][3]
-        self.assertEqual(pipeline.scene_motion_mode(scene), "cameraOnly")
-        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, scene))
+        self.assertTrue(pipeline.scene_needs_end_guide(self.episode, scene))
         graph = pipeline.clone_workflow(self.qwen)
         with tempfile.TemporaryDirectory() as temp:
             temp_dir = Path(temp)

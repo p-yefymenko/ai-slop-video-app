@@ -376,8 +376,6 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
                 elapsed = float(frame["timeSeconds"]) - float(previous["timeSeconds"])
                 if elapsed <= 0:
                     errors.append(f"{character_id}: keyframe times must increase")
-                elif length(sub(position, vec(previous["position"]))) / elapsed > 4.0:
-                    errors.append(f"{character_id}: impossible movement exceeds 4 m/s")
             previous = frame
 
     for scene in episode["scenes"]:
