@@ -214,25 +214,21 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertGreater(y, 0)
         self.assertLess(y, 1360)
 
-    def test_end_refs_use_start_and_proxy(self) -> None:
-        scene = next(
-            item
-            for item in self.episode["scenes"]
-            if pipeline.scene_needs_end_guide(self.episode, item)
-        )
-        self.assertTrue(pipeline.scene_needs_end_guide(self.episode, scene))
+    def test_end_still_uses_end_proxy_not_start_photo(self) -> None:
+        self.assertNotIn("spatialEndStill", pipeline.PROMPT_KEYS)
+        self.assertNotIn("spatialEndStill", self.show["prompts"])
+        self.assertFalse(hasattr(pipeline, "inject_qwen_end_refs"))
         graph = pipeline.clone_workflow(self.qwen)
         with tempfile.TemporaryDirectory() as temp:
-            temp_dir = Path(temp)
-            pipeline.inject_qwen_end_refs(
-                graph,
-                self._inject_png(temp_dir, "start.png"),
-                self._inject_png(temp_dir, "end_proxy.png"),
-            )
+            proxy = self._inject_png(Path(temp), "scene_01_end_condition.png")
+            pipeline.inject_qwen_spatial_refs(graph, [], proxy)
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
-        self.assertEqual(len(loaders), 2)
+        self.assertEqual(
+            [node["inputs"]["image"] for node in loaders],
+            ["proxy_scene_01_end_condition.png"],
+        )
 
     def test_end_guide_is_added_before_av_sampling_and_cropped(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
