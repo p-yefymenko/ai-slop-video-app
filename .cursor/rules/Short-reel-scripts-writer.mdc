@@ -10,64 +10,40 @@ alwaysApply: false
 
 export type ShowCharacter = {
   /**
-   * Stable physical identity only. Scene stills use the generated PNG, never this text.
-   * Generate matching left/right three-quarter identity references for the spatial eyeline;
-   * a frontal portrait is not enough pose conditioning for dialogue coverage.
+   * Identity source only. Scene stills attach the generated PNG and never receive this text.
+   * No wardrobe, pose, expression, action, location, or camera.
    */
   promptBlock: string;
 };
 
+/** `[X left/right, Y depth, Z height]` in meters. */
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /**
-   * Stable object ID used by blocking. Every location must define measured landmarks
-   * in location-local meters: X is left/right, Y is depth, Z is height.
-   */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
 };
 
 export type StageGeometry = {
-  /**
-   * Interior dimensions `[width X, depth Y, height Z]` in meters. Fix blocking here;
-   * never patch a geometry problem with prompt wording.
-   */
   sizeMeters: Vec3;
   landmarks: Record<string, StageLandmark>;
 };
 
 export type ShowLocation = {
-  /**
-   * Materials and light next to the people. Use 2–3 connected locations when the premise
-   * promises scale; return to a stable axis inside each dialogue space. A location name
-   * or text description alone is not visual continuity.
-   */
+  /** Materials and light. Not a viewpoint. */
   promptBlock: string;
-  /**
-   * Deterministic blocking space used by every scene at this location. Block the episode
-   * as an animated 3D scene before writing coverage.
-   */
   spatial: StageGeometry;
 };
 
 export type CharacterSpatialKeyframe = {
-  /**
-   * Timeline time for this mark. Interpolate simple motion between keyframes.
-   * Prose must never redefine a character position, facing, stance, or eye target.
-   */
   timeSeconds: number;
   locationId: string;
-  /** Feet position in location-local meters. */
+  /** Feet. */
   position: Vec3;
-  /**
-   * Body rotation around Z. `0` faces +Y; positive turns toward +X.
-   * Preserve fixed screen positions and reciprocal eyelines until a new anchor
-   * visibly establishes a changed axis.
-   */
+  /** `0` faces +Y; positive turns toward +X. */
   bodyYawDegrees: number;
-  /** Character ID or landmark ID the head/eyes face. */
+  /** Character ID or landmark ID. */
   lookAtId?: string;
   stance: "standing" | "sitting" | "kneeling" | "walking";
   leftHandTargetId?: string;
@@ -75,10 +51,6 @@ export type CharacterSpatialKeyframe = {
 };
 
 export type PropSpatialKeyframe = {
-  /**
-   * Timed prop mark. Prose must never redefine prop owner or position.
-   * Audit the proxy independently: no changing owner, teleport, or object outside the set.
-   */
   timeSeconds: number;
   locationId: string;
   position?: Vec3;
@@ -87,26 +59,12 @@ export type PropSpatialKeyframe = {
 };
 
 export type SpatialTimeline = {
-  /**
-   * Authoritative physical source of truth before cameras are authored.
-   * Draft a timestamp skeleton first: visual hook 0–3s, pressure 3–35s, reversal 35–50s,
-   * irreversible cliffhanger 50–60s. Run `pnpm run content:previs` and inspect the proxy
-   * contact sheet before stills. Reject teleporting, axis reversal, impossible eye target,
-   * camera collision, or a character outside the set/camera.
-   */
   durationSeconds: number;
   characterTracks: Record<string, CharacterSpatialKeyframe[]>;
   propTracks: Record<string, PropSpatialKeyframe[]>;
 };
 
 export type SpatialCamera = {
-  /**
-   * Physical camera that projects a `timeRangeSeconds` interval into the proxy guide.
-   * Prompt-only scenes are forbidden. Vary dialogue coverage by dramatic pressure:
-   * medium close-up → tight close-up → extreme close-up, keeping reciprocal frame sides.
-   * Do not center every speaker against the same background. Consecutive singles must not
-   * repeat the same shot size and camera height.
-   */
   position: Vec3;
   lookAt: Vec3;
   verticalFovDegrees: number;
@@ -115,83 +73,44 @@ export type SpatialCamera = {
 };
 
 export type ScriptScene = {
-  /**
-   * One JSON scene is one continuous shot with one speaker or one simple visible action.
-   */
   sceneNumber: number;
   locationId: string;
-  /**
-   * Why this shot exists, as cause and effect — not visuals or camera.
-   * Give the episode one urgent want, one active obstacle, one emotional turn, and one
-   * unanswered final question. Read only `storyBeat` fields: they must form cause →
-   * pressure → choice → reversal → cliffhanger. Open in conflict, not arrival or
-   * explanation. Conflict must be filmable: a deadline, blocked exit, dangerous prop,
-   * public choice, or physical constraint. The cliffhanger opens a new question, cuts
-   * before resolution, and implies the next episode's opening image.
-   */
+  /** Cause and effect. Not visuals, blocking, or camera. */
   storyBeat: string;
   /**
-   * Visible people, at most two. Empty for environments and prop inserts.
-   * Treat each conversation as one coverage group. Establish each active pair and the
-   * 180-degree axis with a 2–3 second silent two-shot. For three people, use pairwise
-   * anchors when the pair changes: A+B, then C+B, then C+A. Reciprocal speakers must not
-   * occupy the same frame side. Order is Qwen Picture 1, then Picture 2.
+   * At most two. Empty for environments and prop inserts.
+   * Order is Qwen Picture 1, then Picture 2.
    */
   characterIds: string[];
   /**
-   * On-camera speaker. Omit on silent shots. Exactly one visible person when set;
-   * never author dialogue on a two-shot — distilled LTX makes the listener move, speak,
-   * or disappear. Dialogue is action: every line attacks, refuses, bargains, reveals, or
-   * forces a choice; cut greetings, recap, and lore lectures. Dialogue rendering uses
-   * audio-video modality guidance; prompts must require visible lip sync. Read only quoted
-   * dialogue: it must sound like characters fighting for incompatible outcomes.
+   * Omit on silent shots. Exactly one visible person when set.
+   * Never set on a two-shot.
    */
   speakerId?: string;
   /**
    * Override only. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`.
-   * Silent shots default to `cameraOnly`. Set `generative` only for one visible silent
-   * action a camera move cannot do. End guides are derived from timeline change; do not
-   * author `endGuideFrame`.
+   * Do not author `endGuideFrame`.
    */
   motionMode?: "cameraOnly" | "generative";
-  /**
-   * Earlier silent two-shot or master whose rendered PNG supplies set, light, axis, and
-   * screen geography. Required on every related dialogue single and in-set prop insert.
-   * Preserve recognizable set landmarks and lighting from that master.
-   */
+  /** Required on dialogue singles and in-set prop inserts. */
   coverageReferenceSceneNumber?: number;
-  /**
-   * Prop or landmark ID centered by an insert. Combine with `coverageReferenceSceneNumber`;
-   * do not reinvent the prop from a proxy box. Build a scale ladder: geography/exterior →
-   * threat or prop insert → master/anchor → close performance → visual cliffhanger.
-   * Break repeated speaking singles with a motivated anchor, silent reaction, or plot
-   * insert when the relationship or power changes.
-   */
+  /** Combine with `coverageReferenceSceneNumber`; do not invent the prop from a proxy box. */
   focusTargetId?: string;
   /**
-   * Interval on `spatialTimeline`. Shot duration is this interval.
-   * Every shot — including establishing shots and inserts — must select one.
+   * Shot duration is this interval. Required on every shot.
+   * Do not also store `durationSeconds`.
    */
   timeRangeSeconds: [number, number];
-  /**
-   * Physical camera for this shot. Reject the mute contact sheet if it resembles centered
-   * portraits from unrelated movies. Hook, reversal, and cliffhanger must remain
-   * understandable with sound off.
-   */
+  /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
   /**
-   * Wardrobe, expression, and atmosphere only. Never restate position, facing, eyeline,
-   * framing, or set geometry; those come from the timeline. Environments use no cast.
-   * Make fantasy dense through visible world evidence — architecture, weather, creatures,
-   * magic, ritual, rank — not lore speeches.
+   * Wardrobe, expression, and atmosphere only.
+   * Never restate position, facing, eyeline, framing, or set geometry.
    */
   imagePrompt: string;
   /**
-   * Spoken line and non-spatial performance for generative shots. Camera and blocking are
-   * compiled from the timeline. Omit on `cameraOnly` shots. Include only literal visible
-   * motion and essential sound; LTX may visualize off-screen foley or metaphoric acting.
-   * Prefer positive instructions. Do not include continuity recaps, decorative prose, or
-   * multiple sequential actions.
+   * Spoken line and non-spatial performance. Omit on `cameraOnly` shots.
+   * Camera and blocking are compiled from the timeline.
    */
   videoPrompt?: string;
 };
@@ -201,23 +120,12 @@ export type ShowEpisode = {
   title: string;
   isFree: boolean;
   coinCost: number;
-  /**
-   * Block this episode as an animated 3D scene before writing coverage.
-   * `spatialTimeline` is authoritative.
-   */
   spatialTimeline: SpatialTimeline;
-  /**
-   * Coverage shots that project the timeline. Write the episode as drama before
-   * generation prompts. One JSON scene is one continuous shot.
-   */
   scenes: ScriptScene[];
 };
 
 export type ShowScript = {
-  /**
-   * One file per show at `content-pipeline/scripts_input/<id>.json`. Filename stem
-   * must match `id`. Write the episode as drama before writing generation prompts.
-   */
+  /** Filename stem of `content-pipeline/scripts_input/<id>.json`. */
   id: string;
   title: string;
   characters: Record<string, ShowCharacter>;
