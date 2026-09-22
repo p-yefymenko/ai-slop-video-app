@@ -4,6 +4,10 @@ globs: content-pipeline/scripts_input/*.json
 alwaysApply: false
 ---
 
+/**
+ * Types from `packages/shared/src/script.ts`.
+ */
+
 export type ShowCharacter = {
   /**
    * Stable physical identity only. Scene stills use the generated PNG, never this text.
