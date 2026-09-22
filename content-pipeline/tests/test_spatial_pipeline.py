@@ -242,6 +242,18 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["25"]["inputs"]["av_latent"], ["6", 0])
         self.assertEqual(graph["28"]["inputs"]["latent"], ["25", 0])
         self.assertEqual(graph["8"]["inputs"]["samples"], ["28", 2])
+        self.assertEqual(graph["17"]["inputs"]["conditioning"], ["27", 0])
+
+    def test_dialogue_end_guide_does_not_pass_conditioning(self) -> None:
+        graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
+        pipeline.inject_dialogue_multimodal_guider(graph)
+        pipeline.inject_scene_length(graph, duration_seconds=5)
+        pipeline.inject_start_frame(graph, "start.png")
+        pipeline.inject_end_frame(graph, "end.png")
+        self.assertEqual(graph["17"]["class_type"], "MultimodalGuider")
+        self.assertNotIn("conditioning", graph["17"]["inputs"])
+        self.assertEqual(graph["17"]["inputs"]["positive"], ["27", 0])
+        self.assertEqual(graph["17"]["inputs"]["negative"], ["27", 1])
 
 
 if __name__ == "__main__":

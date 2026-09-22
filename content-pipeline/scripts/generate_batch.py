@@ -823,7 +823,13 @@ def inject_end_frame(graph: dict, image_name: str) -> None:
     graph["23"]["inputs"]["frames_number"] = length + 8
     for node_id, key in (("15", "latent"), ("18", "latent")):
         graph[node_id]["inputs"][key] = ["27", 2]
-    graph["17"]["inputs"]["conditioning"] = ["27", 0]
+    guider = graph["17"]
+    guider_inputs = guider.setdefault("inputs", {})
+    if guider.get("class_type") == "MultimodalGuider":
+        guider_inputs["positive"] = ["27", 0]
+        guider_inputs["negative"] = ["27", 1]
+    else:
+        guider_inputs["conditioning"] = ["27", 0]
     graph["28"] = {
         "inputs": {
             "positive": ["27", 0],
