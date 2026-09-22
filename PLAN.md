@@ -248,7 +248,7 @@ episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once i
 `content-pipeline/prompts.json`; they are renderer configuration, not show content.
 
 - `locations` is a short environment clause (where they are), reused verbatim. Not a camera. Scenes point at it with `locationId`.
-- Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
+- Screenwriting guidance lives in `.cursor/rules/Short-reel-scripts-writer.mdc`; renderer field semantics live in `packages/shared/src/script.ts`. Draft the 0–60 second hook/pressure/reversal/cliffhanger skeleton before prompts.
 - `spatialTimeline` is the physical source of truth. Every location has measured geometry and every shot—including establishing shots and inserts—has `timeRangeSeconds` plus a physical camera. Prompt-only scenes are invalid. Character tracks define timed position, body yaw, eye target, stance, and hand targets; props have one timed position or owner.
 - Shot duration is `timeRangeSeconds`. Do not store a parallel `durationSeconds`. End guides are derived: generative shots whose timeline or camera actually change get one; silent/static shots do not.
 - `motionMode` is optional. Default is `generative` when `speakerId` is set, otherwise `cameraOnly`. Opt into generative motion only for one simple visible action a camera move cannot do.

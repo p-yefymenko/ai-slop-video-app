@@ -1,7 +1,7 @@
 /**
  * Authoring JSON for `content-pipeline/scripts_input/<id>.json`. One file per show.
  *
- * Screenwriting guidance lives in `.cursor/rules/episode-scripts.mdc`.
+ * Screenwriting guidance lives in `.cursor/rules/Short-reel-scripts-writer.mdc`.
  * These comments are renderer semantics only. Shared Qwen/LTX templates live in
  * `content-pipeline/prompts.json`, not in show JSON.
  */
