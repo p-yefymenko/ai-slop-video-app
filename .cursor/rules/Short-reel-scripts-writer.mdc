@@ -106,7 +106,7 @@ export type ScriptScene = {
   imagePrompt: string;
   /**
    * Spoken line and non-spatial performance. Omit on `cameraOnly` shots.
-   * Camera and blocking are compiled from the timeline.
+   * Camera and blocking come from the timeline and start/end frames.
    */
   videoPrompt?: string;
 };

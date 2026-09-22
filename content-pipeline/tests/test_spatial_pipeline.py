@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -64,14 +65,28 @@ class SpatialPipelineTests(unittest.TestCase):
             if "speakerId" in scene:
                 self.assertIsInstance(scene["speakerId"], str)
 
+    def _inject_png(self, directory: Path, name: str) -> Path:
+        path = directory / name
+        pipeline.write_black_png(path, 8, 8)
+        return path
+
     def test_master_uses_two_identities_and_proxy(self) -> None:
         scene = self.episode["scenes"][3]
         graph = pipeline.clone_workflow(self.qwen)
-        pipeline.inject_qwen_spatial_refs(
-            graph,
-            pipeline.resolve_scene_characters(self.show, scene),
-            pipeline.proxy_frame_path(self.show["id"], 1, 4, "start"),
-        )
+        with tempfile.TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            characters = [
+                {
+                    "id": character_id,
+                    "image_path": self._inject_png(temp_dir, f"{character_id}.png"),
+                }
+                for character_id in scene["characterIds"]
+            ]
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                characters,
+                self._inject_png(temp_dir, "proxy.png"),
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
@@ -80,31 +95,40 @@ class SpatialPipelineTests(unittest.TestCase):
     def test_single_uses_identity_and_proxy(self) -> None:
         scene = self.episode["scenes"][4]
         graph = pipeline.clone_workflow(self.qwen)
-        pipeline.inject_qwen_spatial_refs(
-            graph,
-            pipeline.resolve_scene_characters(self.show, scene),
-            pipeline.proxy_frame_path(self.show["id"], 1, 5, "start_condition"),
-        )
+        with tempfile.TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                [
+                    {
+                        "id": scene["characterIds"][0],
+                        "image_path": self._inject_png(temp_dir, "identity.png"),
+                    }
+                ],
+                self._inject_png(temp_dir, "proxy.png"),
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(len(loaders), 2)
-        self.assertNotIn("setPlate", self.show["prompts"])
-        self.assertNotIn("spatialCoverageStill", self.show["prompts"])
+        self.assertNotIn("spatialEnvironmentStill", self.show["prompts"])
+        self.assertNotIn("spatialGroupEndStill", self.show["prompts"])
+        self.assertNotIn("characterProfile", self.show["prompts"])
 
     def test_environment_shot_uses_spatial_proxy(self) -> None:
-        scene = self.episode["scenes"][0]
         graph = pipeline.clone_workflow(self.qwen)
-        pipeline.inject_qwen_environment_proxy(
-            graph,
-            pipeline.proxy_frame_path(self.show["id"], 1, scene["sceneNumber"], "start_condition"),
-        )
+        with tempfile.TemporaryDirectory() as temp:
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                [],
+                self._inject_png(Path(temp), "proxy.png"),
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(len(loaders), 1)
-        self.assertIn("spatialEnvironmentStill", self.show["prompts"])
-        self.assertNotIn("characterProfile", self.show["prompts"])
+        self.assertIn("spatialStill", self.show["prompts"])
+        self.assertNotIn("spatialEnvironmentStill", self.show["prompts"])
 
     def test_safe_shots_default_to_camera_only(self) -> None:
         insert = self.episode["scenes"][7]
@@ -141,14 +165,13 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.scene_motion_mode(scene), "cameraOnly")
         self.assertFalse(pipeline.scene_needs_end_guide(self.episode, scene))
         graph = pipeline.clone_workflow(self.qwen)
-        output_dir = pipeline.OUTPUT_DIR / self.show["id"] / "1"
-        pipeline.inject_qwen_group_end_refs(
-            graph,
-            pipeline.start_still_path(output_dir, scene["sceneNumber"]),
-            pipeline.proxy_frame_path(
-                self.show["id"], 1, scene["sceneNumber"], "end_condition"
-            ),
-        )
+        with tempfile.TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            pipeline.inject_qwen_end_refs(
+                graph,
+                self._inject_png(temp_dir, "start.png"),
+                self._inject_png(temp_dir, "end_proxy.png"),
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]

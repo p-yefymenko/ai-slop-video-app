@@ -258,7 +258,7 @@ episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once i
 - `speakerId` enables dialogue-specific audio-video guidance. One quoted line maximum, 16 words maximum.
 - `imagePrompt` is wardrobe, expression, and atmosphere. Identity is the PNG. Geometry comes from the timeline and camera.
 - `imagePrompt` may name only characters in `characterIds`.
-- `videoPrompt` is the spoken line and non-spatial performance for generative shots. Camera and blocking are compiled from the timeline. Omit it on camera-only shots.
+- `videoPrompt` is the spoken line and non-spatial performance for generative shots. Camera and blocking come from the timeline and start/end frames. Omit it on camera-only shots.
 - The Python loader validates only render-critical structure such as required fields, known location/visible-character IDs, at most two Qwen character references, sequential output numbers, and positive duration. It does not reject scripts for creative guidance such as pacing, dialogue length, shot semantics, or prompt wording.
 - Generated files are skipped when present. After a structural script rewrite, use `pnpm run content:archive -- <show-id>` before generating fresh frames. It archives old episode assets while retaining the reviewed character identity PNGs in the active output folder.
 - Character portraits, scene stills, and clips use stable per-shot seeds by default, so an unchanged shot reproduces instead of changing randomly between full renders.

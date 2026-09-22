@@ -36,8 +36,6 @@ OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
     "spatialStill",
-    "spatialEnvironmentStill",
-    "spatialGroupEndStill",
     "spatialEndStill",
     "sceneVideo",
 )
@@ -875,33 +873,7 @@ def inject_qwen_spatial_refs(
     inject_qwen_image_slots(graph, refs)
 
 
-def inject_qwen_environment_proxy(graph: dict, proxy_path: Path) -> None:
-    inject_qwen_image_slots(
-        graph,
-        [(stage_named_image(proxy_path, "proxy"), "3D spatial projection")],
-    )
-
-
 def inject_qwen_end_refs(
-    graph: dict,
-    character: dict,
-    start_frame_path: Path,
-    proxy_path: Path,
-) -> None:
-    inject_qwen_image_slots(
-        graph,
-        [
-            (stage_named_image(start_frame_path, "shot_start"), "Photorealistic shot start"),
-            (
-                stage_start_still(character["image_path"]),
-                f"Character reference ({character['id']})",
-            ),
-            (stage_named_image(proxy_path, "proxy_end"), "3D spatial end projection"),
-        ],
-    )
-
-
-def inject_qwen_group_end_refs(
     graph: dict,
     start_frame_path: Path,
     proxy_path: Path,
@@ -1299,50 +1271,37 @@ def generate_show(
                     )
                     if not present(spatial_proxy_path):
                         raise SystemExit(f"Missing spatial proxy {spatial_proxy_path}")
-                    if scene["characterIds"]:
-                        characters = resolve_scene_characters(show, scene)
-                        prompt = show_prompt(
-                            show,
-                            "spatialStill",
-                            {
-                                "referenceMap": "; ".join(
-                                    f"Picture {index} = identity of {character_id}"
-                                    for index, character_id in enumerate(
-                                        scene["characterIds"], start=1
-                                    )
-                                ),
-                                "proxyPictureNumber": str(
-                                    len(scene["characterIds"]) + 1
-                                ),
-                                "characterCount": str(len(scene["characterIds"])),
-                                "characterIds": ", ".join(scene["characterIds"]),
-                                "locationPromptBlock": location["promptBlock"],
-                                "imagePrompt": scene["imagePrompt"],
-                            },
+                    characters = resolve_scene_characters(show, scene)
+                    character_ids = scene["characterIds"]
+                    reference_map = "; ".join(
+                        [
+                            *(
+                                f"Picture {index} = identity of {character_id}"
+                                for index, character_id in enumerate(
+                                    character_ids, start=1
+                                )
+                            ),
+                            f"Picture {len(character_ids) + 1} = a 3D blocking projection",
+                        ]
+                    )
+                    prompt = show_prompt(
+                        show,
+                        "spatialStill",
+                        {
+                            "referenceMap": reference_map,
+                            "characterCount": str(len(character_ids)),
+                            "characterIds": ", ".join(character_ids) or "none",
+                            "locationPromptBlock": location["promptBlock"],
+                            "imagePrompt": scene["imagePrompt"],
+                        },
+                    )
+                    inject_images = (
+                        lambda graph,
+                        chars=characters,
+                        proxy=spatial_proxy_path: inject_qwen_spatial_refs(
+                            graph, chars, proxy
                         )
-                        inject_images = (
-                            lambda graph,
-                            chars=characters,
-                            proxy=spatial_proxy_path: inject_qwen_spatial_refs(
-                                graph, chars, proxy
-                            )
-                        )
-                    else:
-                        prompt = show_prompt(
-                            show,
-                            "spatialEnvironmentStill",
-                            {
-                                "proxyPictureNumber": "1",
-                                "locationPromptBlock": location["promptBlock"],
-                                "imagePrompt": scene["imagePrompt"],
-                            },
-                        )
-                        inject_images = (
-                            lambda graph,
-                            proxy=spatial_proxy_path: inject_qwen_environment_proxy(
-                                graph, proxy
-                            )
-                        )
+                    )
                     run_qwen_image(
                         workflow_template,
                         still_path,
@@ -1369,52 +1328,24 @@ def generate_show(
                         episode_generated += 1
                         generated += 1
                         continue
-                    characters = resolve_scene_characters(show, scene)
                     proxy_end_path = proxy_frame_path(
                         show_id, episode_number, scene_number, "end_condition"
                     )
-                    if len(characters) == 1:
-                        if "spatialEndStill" not in show["prompts"]:
-                            raise SystemExit(
-                                f"{scene_label} requires prompts.spatialEndStill"
-                            )
-                        end_prompt = show_prompt(
-                            show,
-                            "spatialEndStill",
-                            {
-                                "characterId": scene["characterIds"][0],
-                                "imagePrompt": scene["imagePrompt"],
-                            },
+                    end_prompt = show_prompt(
+                        show,
+                        "spatialEndStill",
+                        {
+                            "characterCount": str(len(scene["characterIds"])),
+                            "characterIds": ", ".join(scene["characterIds"]) or "none",
+                        },
+                    )
+                    inject_end_images = (
+                        lambda graph,
+                        start=still_path,
+                        proxy=proxy_end_path: inject_qwen_end_refs(
+                            graph, start, proxy
                         )
-                        inject_end_images = (
-                            lambda graph,
-                            character=characters[0],
-                            start=still_path,
-                            proxy=proxy_end_path: inject_qwen_end_refs(
-                                graph, character, start, proxy
-                            )
-                        )
-                    else:
-                        if "spatialGroupEndStill" not in show["prompts"]:
-                            raise SystemExit(
-                                f"{scene_label} requires prompts.spatialGroupEndStill"
-                            )
-                        end_prompt = show_prompt(
-                            show,
-                            "spatialGroupEndStill",
-                            {
-                                "characterCount": str(len(characters)),
-                                "characterIds": ", ".join(scene["characterIds"]),
-                                "imagePrompt": scene["imagePrompt"],
-                            },
-                        )
-                        inject_end_images = (
-                            lambda graph,
-                            start=still_path,
-                            proxy=proxy_end_path: inject_qwen_group_end_refs(
-                                graph, start, proxy
-                            )
-                        )
+                    )
                     run_qwen_image(
                         workflow_template,
                         end_path,
@@ -1451,7 +1382,7 @@ def generate_show(
                         show,
                         "sceneVideo",
                         {
-                            "videoPrompt": compile_spatial_video_prompt(episode, scene),
+                            "videoPrompt": compile_spatial_video_prompt(scene),
                         },
                     )
                     seed = (

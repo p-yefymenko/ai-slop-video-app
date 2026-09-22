@@ -89,9 +89,11 @@ class SpatialPrevisTests(unittest.TestCase):
         scene = next(
             scene for scene in self.episode["scenes"] if scene["sceneNumber"] == 5
         )
-        prompt = compile_spatial_video_prompt(self.episode, scene)
-        self.assertIn("established mark", prompt)
+        prompt = compile_spatial_video_prompt(scene)
         self.assertIn("visibly lip-syncs every spoken word", prompt)
+        self.assertNotIn("established mark", prompt)
+        self.assertNotIn("CAMERA:", prompt)
+        self.assertNotIn("VISUAL:", prompt)
         self.assertNotIn("[", prompt)
         self.assertNotIn("1.5", prompt)
         self.assertFalse(scene_has_spatial_change(self.episode, scene))

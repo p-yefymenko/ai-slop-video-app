@@ -431,55 +431,16 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
     return errors
 
 
-def compile_spatial_video_prompt(episode: dict, scene: dict) -> str:
-    if not scene.get("timeRangeSeconds") or not scene.get("camera"):
-        return scene["videoPrompt"]
-    start, finish = (float(value) for value in scene["timeRangeSeconds"])
-    statements: list[str] = []
-    for character_id in scene["characterIds"]:
-        first = episode_character_state(episode, character_id, start)
-        last = episode_character_state(episode, character_id, finish)
-        displacement = sub(vec(last["position"]), vec(first["position"]))
-        if length(displacement) < 0.08 and first["stance"] == last["stance"]:
-            statements.append(
-                f"{character_id} remains at the established mark with the established eyeline"
-            )
-        else:
-            direction = "forward" if displacement[1] >= 0 else "backward"
-            if abs(displacement[0]) > abs(displacement[1]):
-                direction = "right" if displacement[0] > 0 else "left"
-            statements.append(f"{character_id} moves one controlled step {direction}")
-    camera = scene["camera"]
-    if not camera.get("endPosition") and not camera.get("endLookAt"):
-        camera_text = "CAMERA: locked."
-    else:
-        camera_delta = sub(
-            vec(camera.get("endPosition") or camera["position"]),
-            vec(camera["position"]),
-        )
-        if abs(camera_delta[0]) > max(abs(camera_delta[1]), abs(camera_delta[2])):
-            camera_text = "CAMERA: makes one smooth lateral flyby along the established path."
-        elif camera_delta[2] > 0.2:
-            camera_text = "CAMERA: cranes upward smoothly along the established path."
-        else:
-            camera_text = "CAMERA: dollies smoothly along the established path."
-    spatial_text = "VISUAL: " + "; ".join(statements) + "." if statements else ""
-    lip_sync_text = ""
+def compile_spatial_video_prompt(scene: dict) -> str:
+    parts: list[str] = []
     if scene.get("speakerId"):
-        lip_sync_text = (
+        parts.append(
             f"LIP SYNC: {scene['speakerId']} visibly lip-syncs every spoken word; "
             "the lips open on the first syllable and articulate continuously through the line."
         )
-    return " ".join(
-        part
-        for part in (
-            spatial_text,
-            lip_sync_text,
-            scene.get("videoPrompt") or "",
-            camera_text,
-        )
-        if part
-    )
+    if scene.get("videoPrompt"):
+        parts.append(scene["videoPrompt"])
+    return " ".join(parts)
 
 
 def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
