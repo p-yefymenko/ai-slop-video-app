@@ -61,6 +61,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:comfy-torch": "node scripts/install-comfy-torch.cjs",
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
+    "content:validate": "pnpm --filter @reelshort/shared run validate",
     "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
     "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_spatial_*.py",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
@@ -241,7 +242,9 @@ The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clip
 
 ### `scripts_input/` file format
 
-One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Filename stem must match `id`.
+One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Filename stem must match `id`. `pnpm run content:validate` checks every show file and prints a path plus a reason for each problem.
+
+Landmark `need` (`query`, optional `tags` and `style`) and `prefabId` are optional. `kind` stays the primitive fallback. Show-level `props` declares ids used by `propTracks` (`need`, `prefabId`, optional `sizeMeters`). Character `proxy` (`heightMeters`, `build`) is optional; omitted proxies use a 1.72m average mannequin. Scripts written before those fields still validate.
 
 Show JSON contains only show-specific authoring data: identity descriptions, measured locations,
 episode spatial timelines, and edit shots. Shared Qwen/LTX templates live once in

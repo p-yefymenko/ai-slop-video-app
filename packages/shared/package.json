@@ -8,5 +8,18 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "react-native": "./src/index.ts"
+  "react-native": "./src/index.ts",
+  "scripts": {
+    "validate": "tsx src/validate-cli.ts",
+    "test": "tsx --test src/script-schema.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
 }

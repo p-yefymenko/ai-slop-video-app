@@ -9,6 +9,13 @@ alwaysApply: false
  * Comments are how to author any vertical microdrama, not a particular plot.
  */
 
+export type AssetNeed = {
+  /** Catalog noun, e.g. "wooden armchair". Not the plot. */
+  query: string;
+  tags?: string[];
+  style?: string;
+};
+
 export type ShowCharacter = {
   /**
    * One adult's stable face: age, build, skin, eyes, hair, one distinctive mark.
@@ -17,16 +24,25 @@ export type ShowCharacter = {
    * No wardrobe, pose, expression, action, location, or camera.
    */
   promptBlock: string;
+  /**
+   * Clay mannequin only. Standing height in meters, and slim / average / broad.
+   * Omit to use 1.72m average. This is not the identity portrait.
+   */
+  proxy?: { heightMeters: number; build: "slim" | "average" | "broad" };
 };
 
 /** `[X left/right, Y depth, Z height]` in meters. */
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /** Object the cast stands on, grabs, or is staged against. */
+  /** Primitive fallback and search category. The object ID is the landmarks key. */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
+  /** Open-source search. Omit to keep the primitive. */
+  need?: AssetNeed;
+  /** Pins a prefab and skips search. */
+  prefabId?: string;
 };
 
 export type StageGeometry = {
@@ -166,6 +182,13 @@ export type ShowEpisode = {
   scenes: ScriptScene[];
 };
 
+export type ShowProp = {
+  /** What to fetch when this prop is not pinned to a prefab. */
+  need?: AssetNeed;
+  prefabId?: string;
+  sizeMeters?: Vec3;
+};
+
 export type ShowScript = {
   /** Filename stem of `content-pipeline/scripts_input/<id>.json`. */
   id: string;
@@ -173,5 +196,10 @@ export type ShowScript = {
   title: string;
   characters: Record<string, ShowCharacter>;
   locations: Record<string, ShowLocation>;
+  /**
+   * Every propTracks id. A prop with neither need nor prefabId cannot be built.
+   * Omit the object when the show has no props.
+   */
+  props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];
 };

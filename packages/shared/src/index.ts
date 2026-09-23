@@ -65,9 +65,18 @@ export const COIN_PACKAGES: CoinPackage[] = [
 ];
 
 export type {
+  AssetNeed,
+  CharacterProxy,
   ScriptScene,
   ShowCharacter,
   ShowEpisode,
   ShowLocation,
+  ShowProp,
   ShowScript,
+  SpatialCamera,
+  SpatialCameraKeyframe,
+  SpatialTimeline,
+  StageGeometry,
+  StageLandmark,
+  Vec3,
 } from "./script";

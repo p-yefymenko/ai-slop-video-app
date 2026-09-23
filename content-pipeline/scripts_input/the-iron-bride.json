@@ -3,22 +3,28 @@
   "title": "The Iron Bride",
   "characters": {
     "sela": {
-      "promptBlock": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair."
+      "promptBlock": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair.",
+      "proxy": { "heightMeters": 1.68, "build": "slim" }
     },
     "tomas": {
-      "promptBlock": "Adult man, 22, lean build, fair skin, gray irises, a copper birthmark under the right eye, copper-red hair."
+      "promptBlock": "Adult man, 22, lean build, fair skin, gray irises, a copper birthmark under the right eye, copper-red hair.",
+      "proxy": { "heightMeters": 1.78, "build": "slim" }
     },
     "vardan": {
-      "promptBlock": "Adult man, 52, tall narrow build, pale skin, ice-blue irises, a gold ring tattoo encircling the throat, silver-white cropped hair."
+      "promptBlock": "Adult man, 52, tall narrow build, pale skin, ice-blue irises, a gold ring tattoo encircling the throat, silver-white cropped hair.",
+      "proxy": { "heightMeters": 1.9, "build": "slim" }
     },
     "nira": {
-      "promptBlock": "Adult woman, 45, broad-shouldered build, dark umber skin, gold-flecked brown irises, shaved sides with a copper-brown crest of hair."
+      "promptBlock": "Adult woman, 45, broad-shouldered build, dark umber skin, gold-flecked brown irises, shaved sides with a copper-brown crest of hair.",
+      "proxy": { "heightMeters": 1.73, "build": "broad" }
     },
     "kesh": {
-      "promptBlock": "Adult man, 38, heavy build, weathered tan skin, black irises, a split-lip scar, salt-and-pepper stubble, shaved scalp."
+      "promptBlock": "Adult man, 38, heavy build, weathered tan skin, black irises, a split-lip scar, salt-and-pepper stubble, shaved scalp.",
+      "proxy": { "heightMeters": 1.82, "build": "broad" }
     },
     "rhel": {
-      "promptBlock": "Adult man, 30, thin build, sallow skin, dark brown irises, a branded sun-disk on the forehead, black hair bound at the nape."
+      "promptBlock": "Adult man, 30, thin build, sallow skin, dark brown irises, a branded sun-disk on the forehead, black hair bound at the nape.",
+      "proxy": { "heightMeters": 1.76, "build": "slim" }
     }
   },
   "locations": {
@@ -30,12 +36,22 @@
           "citadel_core": {
             "kind": "box",
             "position": [0, 24, 36],
-            "size": [48, 56, 52]
+            "size": [48, 56, 52],
+            "need": {
+              "query": "medieval castle",
+              "tags": ["castle", "fortress", "building"],
+              "style": "black iron citadel"
+            }
           },
           "chain_pylon": {
             "kind": "column",
             "position": [36, -48, 0],
-            "size": [5, 5, 90]
+            "size": [5, 5, 90],
+            "need": {
+              "query": "stone pillar",
+              "tags": ["pillar", "column"],
+              "style": "black iron"
+            }
           }
         }
       }
@@ -48,30 +64,65 @@
           "sun_well": {
             "kind": "pedestal",
             "position": [0, 4.5, 0],
-            "size": [2.2, 2.2, 1.2]
+            "size": [2.2, 2.2, 1.2],
+            "need": {
+              "query": "stone well",
+              "tags": ["well", "fountain"],
+              "style": "white-gold fire"
+            }
           },
           "anvil_altar": {
             "kind": "box",
             "position": [-6.2, 4.5, 0],
-            "size": [1.8, 1.2, 0.9]
+            "size": [1.8, 1.2, 0.9],
+            "need": {
+              "query": "blacksmith anvil",
+              "tags": ["anvil", "forge"],
+              "style": "iron altar"
+            }
           },
           "throne_dais": {
             "kind": "box",
             "position": [0, 12.2, 0],
-            "size": [5.0, 3.0, 0.4]
+            "size": [5.0, 3.0, 0.4],
+            "need": {
+              "query": "stone platform",
+              "tags": ["platform", "plinth"],
+              "style": "basalt dais"
+            }
           },
           "gate_column_l": {
             "kind": "column",
             "position": [-4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2]
+            "size": [0.8, 0.8, 4.2],
+            "need": {
+              "query": "stone column",
+              "tags": ["column", "pillar"],
+              "style": "basalt gate"
+            }
           },
           "gate_column_r": {
             "kind": "column",
             "position": [4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2]
+            "size": [0.8, 0.8, 4.2],
+            "need": {
+              "query": "stone column",
+              "tags": ["column", "pillar"],
+              "style": "basalt gate"
+            }
           }
         }
       }
+    }
+  },
+  "props": {
+    "iron_collar": {
+      "need": {
+        "query": "iron collar",
+        "tags": ["collar", "metal"],
+        "style": "forged iron"
+      },
+      "sizeMeters": [0.28, 0.22, 0.08]
     }
   },
   "episodes": [

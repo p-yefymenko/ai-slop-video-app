@@ -6,6 +6,28 @@
  * `content-pipeline/prompts.json`, not in show JSON.
  */
 
+/**
+ * Search sent to open-source asset databases. `prefabId` skips this search.
+ */
+export type AssetNeed = {
+  /** Noun phrase a model catalog can match, e.g. "wooden armchair". */
+  query: string;
+  tags?: string[];
+  /** Look used when ranking candidates. Not a second query. */
+  style?: string;
+};
+
+export type CharacterProxy = {
+  /**
+   * Standing height in meters. The clay mannequin scales to this.
+   * Qwen restyles the body; identity faces are painted afterward.
+   * Omit to use 1.72m, the blockout's standing head height.
+   */
+  heightMeters: number;
+  /** Limb thickness of the clay mannequin. */
+  build: "slim" | "average" | "broad";
+};
+
 export type ShowCharacter = {
   /**
    * Qwen identity source only; scene stills attach its PNG and never receive this text.
@@ -13,15 +35,36 @@ export type ShowCharacter = {
    * feature, hair. No wardrobe, pose, expression, action, location, or camera.
    */
   promptBlock: string;
+  /** Clay mannequin proportions. Identity is still the portrait PNG. */
+  proxy?: CharacterProxy;
 };
 
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /** Stable object ID used by blocking. */
+  /**
+   * Primitive used when no prefab is resolved, and the category hint for search.
+   * The object ID is the landmarks key, not this field.
+   */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
+  /** Open-source search that replaces this primitive when a candidate is accepted. */
+  need?: AssetNeed;
+  /** Library or show prefab to instance. Skips search. */
+  prefabId?: string;
+};
+
+/**
+ * A prop named by `propTracks`. Held and moving props stay on the shot;
+ * they are not set dressing.
+ */
+export type ShowProp = {
+  need?: AssetNeed;
+  /** Library or show prefab to instance. Skips search. */
+  prefabId?: string;
+  /** Target size `[width X, depth Y, height Z]` in meters. */
+  sizeMeters?: Vec3;
 };
 
 export type StageGeometry = {
@@ -133,5 +176,10 @@ export type ShowScript = {
   title: string;
   characters: Record<string, ShowCharacter>;
   locations: Record<string, ShowLocation>;
+  /**
+   * Props referenced by `propTracks`. Omit when the show has no props.
+   * Every prop-track id must be a key here.
+   */
+  props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];
 };
