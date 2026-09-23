@@ -33,6 +33,7 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
+    "spatialStructure",
     "spatialStill",
     "sceneVideo",
 )
@@ -40,6 +41,7 @@ PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
+SPATIAL_QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit_spatial.json"
 PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 COMFYUI_URL = "http://127.0.0.1:8188"
@@ -341,8 +343,11 @@ def graph_meta(graph: dict) -> dict:
             continue
         class_type = node.get("class_type")
         inputs = node.get("inputs") or {}
-        if class_type in {"LTXVScheduler", "KSampler"}:
+        if class_type == "LTXVScheduler":
             steps = inputs.get("steps")
+        elif class_type == "KSampler":
+            candidate = int(inputs.get("steps") or 0)
+            steps = candidate if steps is None else max(int(steps), candidate)
         if class_type in {"LTXVConditioning", "VHS_VideoCombine"}:
             frame_rate = inputs.get("frame_rate") or frame_rate
     return {
@@ -733,10 +738,8 @@ def inject_seed(graph: dict, seed: int) -> None:
         inputs = node.setdefault("inputs", {})
         if class_type == "RandomNoise":
             inputs["noise_seed"] = seed
-            return
-        if class_type == "KSampler":
+        elif class_type == "KSampler":
             inputs["seed"] = seed
-            return
 
 
 def stage_start_still(image_path: Path) -> str:
@@ -865,16 +868,76 @@ def inject_qwen_spatial_refs(
     inject_qwen_image_slots(graph, refs)
 
 
-def inject_qwen_prompt(graph: dict, prompt: str) -> None:
+def _qwen_encoder(graph: dict, title: str) -> dict | None:
     for node in graph.values():
         if not isinstance(node, dict) or node.get("class_type") != "TextEncodeQwenImageEditPlus":
             continue
-        title = str((node.get("_meta") or {}).get("title", ""))
-        if title == "Negative instruction":
-            continue
-        node.setdefault("inputs", {})["prompt"] = prompt
+        if str((node.get("_meta") or {}).get("title", "")) == title:
+            return node
+    return None
+
+
+def inject_qwen_prompt(graph: dict, prompt: str, title: str = "Positive instruction") -> None:
+    target = _qwen_encoder(graph, title)
+    if target is None and title == "Positive instruction":
+        for node in graph.values():
+            if not isinstance(node, dict) or node.get("class_type") != "TextEncodeQwenImageEditPlus":
+                continue
+            node_title = str((node.get("_meta") or {}).get("title", ""))
+            if node_title in {"Negative instruction", "Structure instruction"}:
+                continue
+            target = node
+            break
+    if target is None:
+        raise RuntimeError(f"Could not find the Qwen {title} node")
+    target.setdefault("inputs", {})["prompt"] = prompt
+
+
+def _sync_structure_encoder(graph: dict, positive: dict) -> None:
+    structure = _qwen_encoder(graph, "Structure instruction")
+    if structure is None:
         return
-    raise RuntimeError("Could not find the Qwen positive-instruction node in qwen_image_edit.json")
+    inputs = structure.setdefault("inputs", {})
+    for key in ("image1", "image2", "image3"):
+        inputs.pop(key, None)
+    slot = 1
+    for key in ("image1", "image2", "image3"):
+        link = positive.get("inputs", {}).get(key)
+        if not link:
+            continue
+        loader = graph.get(str(link[0]))
+        loader_title = ""
+        if isinstance(loader, dict):
+            loader_title = str((loader.get("_meta") or {}).get("title", ""))
+        if "projection" in loader_title.lower() or "blocking" in loader_title.lower():
+            continue
+        inputs[f"image{slot}"] = link
+        slot += 1
+
+
+def pose_image_is_blank(path: Path) -> bool:
+    with Image.open(path) as image:
+        extrema = image.convert("RGB").getextrema()
+    return all(channel[1] == 0 for channel in extrema)
+
+
+def set_pose_control_strength(graph: dict, enabled: bool) -> None:
+    strengths = {
+        "Pose lock": 1.0 if enabled else 0.0,
+        "Refine pose lock": 0.75 if enabled else 0.0,
+    }
+    found: set[str] = set()
+    for node in graph.values():
+        if not isinstance(node, dict):
+            continue
+        title = str((node.get("_meta") or {}).get("title", ""))
+        if title not in strengths:
+            continue
+        node.setdefault("inputs", {})["strength"] = strengths[title]
+        found.add(title)
+    missing = set(strengths) - found
+    if missing:
+        raise RuntimeError(f"Spatial Qwen workflow is missing {', '.join(sorted(missing))}")
 
 
 def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
@@ -882,15 +945,7 @@ def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
         raise RuntimeError("Qwen-Image-Edit needs at least one reference image")
     extra_ids = ("13", "14")
     image_keys = ("image2", "image3")
-    encoder = None
-    for node in graph.values():
-        if (
-            isinstance(node, dict)
-            and node.get("class_type") == "TextEncodeQwenImageEditPlus"
-            and str((node.get("_meta") or {}).get("title", "")) != "Negative instruction"
-        ):
-            encoder = node
-            break
+    encoder = _qwen_encoder(graph, "Positive instruction")
     if encoder is None:
         raise RuntimeError("Could not find TextEncodeQwenImageEditPlus in qwen_image_edit.json")
     load_node = graph.get("6")
@@ -910,6 +965,7 @@ def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
             "_meta": {"title": title},
         }
         encoder_inputs[image_key] = [extra_id, 0]
+    _sync_structure_encoder(graph, encoder)
 
 
 def latent_size(graph: dict) -> tuple[int, int, int]:
@@ -1056,19 +1112,25 @@ def render_spatial_still(
     show: dict,
     scene: dict,
     location: dict,
-    workflow_template: dict,
     dest: Path,
     proxy_path: Path,
+    depth_path: Path,
+    pose_path: Path,
     seed: int,
     mode: str,
 ) -> None:
-    """Paint one still from identities plus this instant's previs proxy.
+    """Paint one still from identities, with depth and pose locked by ControlNet.
 
-    The proxy is the only geometry reference. Passing the other still as the
-    edit source makes Qwen-Image-Edit keep that still's camera.
+    Stage 1 samples structure at full denoise. Stage 2 refines that latent at
+    low denoise. The proxy sketch is a loose picture reference on the refine
+    only. The other still is never the edit source, because Qwen-Image-Edit
+    would keep that still's camera.
     """
-    if not present(proxy_path):
-        raise SystemExit(f"Missing spatial proxy {proxy_path}")
+    for guide in (proxy_path, depth_path, pose_path):
+        if not present(guide):
+            raise SystemExit(
+                f"Missing spatial guide {guide}. Run `pnpm run content:previs` before frames."
+            )
     characters = resolve_scene_characters(show, scene)
     character_ids = scene["characterIds"]
     identity_ids = character_ids[:MAX_QWEN_REFS]
@@ -1078,30 +1140,34 @@ def render_spatial_still(
                 f"Picture {index} = identity of {character_id}"
                 for index, character_id in enumerate(identity_ids, start=1)
             ),
-            f"Picture {len(identity_ids) + 1} = a 3D blocking projection",
+            f"Picture {len(identity_ids) + 1} = a loose blocking sketch",
         ]
     )
+    prompt_values = {
+        "characterCount": str(len(character_ids)),
+        "characterIds": ", ".join(character_ids) or "none",
+        "locationPromptBlock": location["promptBlock"],
+    }
+    structure_prompt = show_prompt(show, "spatialStructure", prompt_values)
     prompt = show_prompt(
         show,
         "spatialStill",
         {
+            **prompt_values,
             "referenceMap": reference_map,
-            "characterCount": str(len(character_ids)),
-            "characterIds": ", ".join(character_ids) or "none",
-            "locationPromptBlock": location["promptBlock"],
             "imagePrompt": scene["imagePrompt"],
         },
     )
-    run_qwen_image(
-        workflow_template,
-        dest,
-        prompt,
-        mode,
-        lambda graph, chars=characters, proxy=proxy_path: inject_qwen_spatial_refs(
-            graph, chars, proxy
-        ),
-        seed,
-    )
+    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    def inject(graph: dict, chars: list[dict] = characters, proxy: Path = proxy_path) -> None:
+        inject_qwen_spatial_refs(graph, chars, proxy)
+        graph["41"]["inputs"]["image"] = stage_named_image(depth_path, "depth")
+        graph["42"]["inputs"]["image"] = stage_named_image(pose_path, "pose")
+        inject_qwen_prompt(graph, structure_prompt, "Structure instruction")
+        set_pose_control_strength(graph, not pose_image_is_blank(pose_path))
+
+    run_qwen_image(workflow, dest, prompt, mode, inject, seed)
 
 
 def run_qwen_image(
@@ -1228,10 +1294,15 @@ def generate_show(
                         show,
                         scene,
                         location,
-                        workflow_template,
                         still_path,
                         proxy_frame_path(
                             show_id, episode_number, scene_number, "start_condition"
+                        ),
+                        proxy_frame_path(
+                            show_id, episode_number, scene_number, "start_depth"
+                        ),
+                        proxy_frame_path(
+                            show_id, episode_number, scene_number, "start_pose"
                         ),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
@@ -1241,10 +1312,15 @@ def generate_show(
                         show,
                         scene,
                         location,
-                        workflow_template,
                         end_path,
                         proxy_frame_path(
                             show_id, episode_number, scene_number, "end_condition"
+                        ),
+                        proxy_frame_path(
+                            show_id, episode_number, scene_number, "end_depth"
+                        ),
+                        proxy_frame_path(
+                            show_id, episode_number, scene_number, "end_pose"
                         ),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",

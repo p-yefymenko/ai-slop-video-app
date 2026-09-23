@@ -14,9 +14,12 @@ from spatial_previs import (  # noqa: E402
     PROXY_WIDTH,
     camera_at,
     character_facing_direction,
+    character_pose_joints,
     compile_spatial_video_prompt,
+    episode_character_state,
     project,
     render_scene_proxy,
+    render_structure_maps,
     scene_has_spatial_change,
     timeline_state,
     validate_spatial_episode,
@@ -204,6 +207,43 @@ class SpatialPrevisTests(unittest.TestCase):
 
             with Image.open(destination) as image:
                 self.assertEqual(image.size, (PROXY_WIDTH, PROXY_HEIGHT))
+
+    def test_structure_maps_lock_projected_joints(self) -> None:
+        scene = next(
+            item
+            for item in self.episode["scenes"]
+            if len(item["characterIds"]) >= 1
+        )
+        time_seconds = float(scene["timeRangeSeconds"][0])
+        character_id = scene["characterIds"][0]
+        state = episode_character_state(self.episode, character_id, time_seconds)
+        nose = project(
+            character_pose_joints(self.show, self.episode, scene, state, time_seconds)["nose"],
+            camera_at(scene, time_seconds),
+        )
+        self.assertIsNotNone(nose)
+        assert nose is not None
+        with tempfile.TemporaryDirectory() as temp:
+            depth_path = Path(temp) / "depth.png"
+            pose_path = Path(temp) / "pose.png"
+            render_structure_maps(
+                self.show,
+                self.episode,
+                scene,
+                time_seconds,
+                depth_path,
+                pose_path,
+            )
+            from PIL import Image
+
+            with Image.open(pose_path) as pose, Image.open(depth_path) as depth:
+                self.assertEqual(pose.size, (PROXY_WIDTH, PROXY_HEIGHT))
+                self.assertEqual(depth.size, (PROXY_WIDTH, PROXY_HEIGHT))
+                x, y = int(nose[0]), int(nose[1])
+                self.assertGreater(sum(pose.getpixel((x, y))), 0)
+                self.assertGreater(sum(depth.getpixel((x, y))), 0)
+                extrema = depth.getextrema()
+                self.assertGreater(extrema[0][1], extrema[0][0])
 
 
 if __name__ == "__main__":

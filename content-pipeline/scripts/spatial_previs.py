@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -276,52 +277,450 @@ def _stance_heights(stance: str) -> tuple[float, float, float]:
     return 0.95, 1.42, 1.72
 
 
+OPENPOSE_NAMES = (
+    "nose",
+    "neck",
+    "right_shoulder",
+    "right_elbow",
+    "right_wrist",
+    "left_shoulder",
+    "left_elbow",
+    "left_wrist",
+    "right_hip",
+    "right_knee",
+    "right_ankle",
+    "left_hip",
+    "left_knee",
+    "left_ankle",
+    "right_eye",
+    "left_eye",
+    "right_ear",
+    "left_ear",
+)
+OPENPOSE_LIMBS = (
+    (1, 2),
+    (1, 5),
+    (2, 3),
+    (3, 4),
+    (5, 6),
+    (6, 7),
+    (1, 8),
+    (8, 9),
+    (9, 10),
+    (1, 11),
+    (11, 12),
+    (12, 13),
+    (1, 0),
+    (0, 14),
+    (14, 16),
+    (0, 15),
+    (15, 17),
+)
+OPENPOSE_COLORS = (
+    (255, 0, 0),
+    (255, 85, 0),
+    (255, 170, 0),
+    (255, 255, 0),
+    (170, 255, 0),
+    (85, 255, 0),
+    (0, 255, 0),
+    (0, 255, 85),
+    (0, 255, 170),
+    (0, 255, 255),
+    (0, 170, 255),
+    (0, 85, 255),
+    (0, 0, 255),
+    (85, 0, 255),
+    (170, 0, 255),
+    (255, 0, 255),
+    (255, 0, 170),
+    (255, 0, 85),
+)
+BODY_LIMBS = (
+    ("neck", "right_shoulder"),
+    ("neck", "left_shoulder"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_wrist"),
+    ("left_shoulder", "left_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("neck", "right_hip"),
+    ("right_hip", "right_knee"),
+    ("right_knee", "right_ankle"),
+    ("neck", "left_hip"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_ankle"),
+    ("neck", "nose"),
+)
+_VOLUME_LIMBS = (
+    ("neck", "right_hip", 0.12),
+    ("neck", "left_hip", 0.12),
+    ("right_shoulder", "left_shoulder", 0.06),
+    ("right_shoulder", "right_elbow", 0.05),
+    ("right_elbow", "right_wrist", 0.04),
+    ("left_shoulder", "left_elbow", 0.05),
+    ("left_elbow", "left_wrist", 0.04),
+    ("right_hip", "right_knee", 0.07),
+    ("right_knee", "right_ankle", 0.055),
+    ("left_hip", "left_knee", 0.07),
+    ("left_knee", "left_ankle", 0.055),
+)
+
+
+def _yaw_axes(yaw_degrees: float) -> tuple[Vec3, Vec3]:
+    yaw = math.radians(float(yaw_degrees))
+    return (math.sin(yaw), math.cos(yaw), 0.0), (math.cos(yaw), -math.sin(yaw), 0.0)
+
+
+def _anchor_point(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    target_id: str | None,
+    time_seconds: float,
+) -> Vec3 | None:
+    if not target_id:
+        return None
+    tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
+    if target_id in tracks:
+        state = episode_character_state(episode, target_id, time_seconds)
+        _, _, head_height = _stance_heights(state["stance"])
+        return add(vec(state["position"]), (0.0, 0.0, head_height))
+    prop_frames = ((episode.get("spatialTimeline") or {}).get("propTracks") or {}).get(target_id)
+    if prop_frames:
+        state = timeline_state(prop_frames, time_seconds)
+        if state.get("position") is not None:
+            return vec(state["position"])
+        holder_id = state.get("heldByCharacterId")
+        if holder_id:
+            holder = episode_character_state(episode, holder_id, time_seconds)
+            return add(vec(holder["position"]), (0.0, 0.0, 1.1))
+    landmark = (
+        show["locations"][scene["locationId"]].get("spatial", {}).get("landmarks", {}).get(target_id)
+    )
+    if landmark:
+        return add(vec(landmark["position"]), (0.0, 0.0, float(landmark["size"][2])))
+    return None
+
+
+def character_pose_joints(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    state: dict,
+    time_seconds: float,
+) -> dict[str, Vec3]:
+    """OpenPose-18 joints for one blocking state. Right/left are the character's."""
+    feet = vec(state["position"])
+    forward, right = _yaw_axes(state["bodyYawDegrees"])
+    hip_z, shoulder_z, head_z = _stance_heights(state["stance"])
+    neck = add(feet, (0.0, 0.0, shoulder_z + (head_z - shoulder_z) * 0.45))
+    hip = add(feet, (0.0, 0.0, hip_z))
+    shoulder = add(feet, (0.0, 0.0, shoulder_z))
+    gaze = forward
+    look_target = _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds)
+    if look_target is not None:
+        aim = sub(look_target, neck)
+        flat = (aim[0], aim[1], 0.0)
+        if length(flat) > 1e-4:
+            gaze = normalize(flat)
+    nose = add(add(feet, (0.0, 0.0, head_z - 0.04)), mul(gaze, 0.06))
+    right_shoulder = add(shoulder, mul(right, 0.20))
+    left_shoulder = add(shoulder, mul(right, -0.20))
+    right_hip = add(hip, mul(right, 0.11))
+    left_hip = add(hip, mul(right, -0.11))
+
+    def arm(shoulder_point: Vec3, side_sign: float, target_id: str | None) -> tuple[Vec3, Vec3]:
+        target = _anchor_point(show, episode, scene, target_id, time_seconds)
+        if target is not None:
+            wrist = target
+        else:
+            wrist = add(shoulder_point, (0.0, 0.0, -(shoulder_z - hip_z) * 0.92))
+            wrist = add(wrist, mul(forward, 0.06))
+            wrist = add(wrist, mul(right, side_sign * 0.04))
+        elbow = add(lerp(shoulder_point, wrist, 0.48), mul(right, side_sign * 0.05))
+        return elbow, wrist
+
+    right_elbow, right_wrist = arm(right_shoulder, 1.0, state.get("rightHandTargetId"))
+    left_elbow, left_wrist = arm(left_shoulder, -1.0, state.get("leftHandTargetId"))
+
+    def leg(hip_point: Vec3, side_sign: float) -> tuple[Vec3, Vec3]:
+        ankle = add(add(feet, mul(right, side_sign * 0.09)), (0.0, 0.0, 0.06))
+        knee_forward = 0.02
+        stance = state["stance"]
+        if stance == "sitting":
+            knee_forward = 0.30
+        elif stance == "kneeling":
+            knee_forward = 0.12
+            ankle = add(ankle, mul(forward, -0.18))
+        elif stance == "walking":
+            ankle = add(ankle, mul(forward, 0.22 if side_sign < 0 else -0.16))
+        knee = add(lerp(hip_point, ankle, 0.52), mul(forward, knee_forward))
+        return knee, ankle
+
+    right_knee, right_ankle = leg(right_hip, 1.0)
+    left_knee, left_ankle = leg(left_hip, -1.0)
+    return {
+        "nose": nose,
+        "neck": neck,
+        "right_shoulder": right_shoulder,
+        "right_elbow": right_elbow,
+        "right_wrist": right_wrist,
+        "left_shoulder": left_shoulder,
+        "left_elbow": left_elbow,
+        "left_wrist": left_wrist,
+        "right_hip": right_hip,
+        "right_knee": right_knee,
+        "right_ankle": right_ankle,
+        "left_hip": left_hip,
+        "left_knee": left_knee,
+        "left_ankle": left_ankle,
+        "right_eye": add(add(nose, mul(right, 0.032)), (0.0, 0.0, 0.04)),
+        "left_eye": add(add(nose, mul(right, -0.032)), (0.0, 0.0, 0.04)),
+        "right_ear": add(add(nose, mul(right, 0.08)), add(mul(gaze, -0.04), (0.0, 0.0, -0.02))),
+        "left_ear": add(add(nose, mul(right, -0.08)), add(mul(gaze, -0.04), (0.0, 0.0, -0.02))),
+    }
+
+
 def _draw_character(
     draw: ImageDraw.ImageDraw,
     camera: dict,
     character_id: str,
-    state: dict,
+    joints: dict[str, Vec3],
     debug: bool,
 ) -> None:
-    feet = vec(state["position"])
-    hip_height, shoulder_height, head_height = _stance_heights(state["stance"])
-    hip = add(feet, (0.0, 0.0, hip_height))
-    shoulder = add(feet, (0.0, 0.0, shoulder_height))
-    head = add(feet, (0.0, 0.0, head_height))
     color = _character_color(character_id)
-    _line3d(draw, camera, feet, hip, color, 9)
-    _line3d(draw, camera, hip, shoulder, color, 14)
-    yaw = math.radians(float(state["bodyYawDegrees"]))
-    side = (math.cos(yaw) * 0.24, -math.sin(yaw) * 0.24, 0.0)
-    left_shoulder, right_shoulder = add(shoulder, side), sub(shoulder, side)
-    left_hand = add(hip, side)
-    right_hand = sub(hip, side)
-    _line3d(draw, camera, left_shoulder, left_hand, color, 7)
-    _line3d(draw, camera, right_shoulder, right_hand, color, 7)
-    facing = (math.sin(yaw), math.cos(yaw), 0.0)
-    if debug:
-        _line3d(draw, camera, head, add(head, mul(facing, 0.55)), (255, 238, 80), 5)
-    projected_head = project(head, camera)
-    projected_neck = project(add(feet, (0.0, 0.0, 1.52)), camera)
-    if projected_head and projected_neck:
-        radius = max(7, int(abs(projected_head[1] - projected_neck[1]) * 1.5))
+    for start_name, end_name in BODY_LIMBS:
+        _line3d(draw, camera, joints[start_name], joints[end_name], color, 8)
+    nose = project(joints["nose"], camera)
+    neck = project(joints["neck"], camera)
+    if nose and neck:
+        radius = max(7, int(math.hypot(nose[0] - neck[0], nose[1] - neck[1]) * 0.9))
         draw.ellipse(
-            (
-                projected_head[0] - radius,
-                projected_head[1] - radius,
-                projected_head[0] + radius,
-                projected_head[1] + radius,
-            ),
+            (nose[0] - radius, nose[1] - radius, nose[0] + radius, nose[1] + radius),
             fill=color,
             outline=(255, 255, 255),
             width=3,
         )
         if debug:
-            draw.text(
-                (projected_head[0] + radius + 5, projected_head[1] - radius),
-                character_id,
-                fill=(255, 255, 255),
+            facing = sub(joints["nose"], joints["neck"])
+            _line3d(draw, camera, joints["nose"], add(joints["nose"], mul(facing, 2.0)), (255, 238, 80), 5)
+            draw.text((nose[0] + radius + 5, nose[1] - radius), character_id, fill=(255, 255, 255))
+
+
+def _quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
+    return [(a, b, c), (a, c, d)]
+
+
+def _room_triangles(spatial: dict) -> list[tuple[Vec3, Vec3, Vec3]]:
+    width, depth, height = vec(spatial["sizeMeters"])
+    x0, x1 = -width / 2.0, width / 2.0
+    y0, y1 = -depth / 2.0, depth / 2.0
+    z0, z1 = 0.0, height
+    floor_near = ((x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0))
+    ceiling = ((x0, y0, z1), (x0, y1, z1), (x1, y1, z1), (x1, y0, z1))
+    triangles = _quad(*floor_near) + _quad(*ceiling)
+    walls = (
+        ((x0, y0, z0), (x0, y0, z1), (x1, y0, z1), (x1, y0, z0)),
+        ((x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)),
+        ((x1, y1, z0), (x1, y1, z1), (x0, y1, z1), (x0, y1, z0)),
+        ((x0, y1, z0), (x0, y1, z1), (x0, y0, z1), (x0, y0, z0)),
+    )
+    for wall in walls:
+        triangles.extend(_quad(*wall))
+    return triangles
+
+
+def _box_triangles(position: Vec3, size: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
+    half_x, half_y = size[0] / 2.0, size[1] / 2.0
+    x0, x1 = position[0] - half_x, position[0] + half_x
+    y0, y1 = position[1] - half_y, position[1] + half_y
+    z0, z1 = position[2], position[2] + size[2]
+    corners = (
+        (x0, y0, z0),
+        (x1, y0, z0),
+        (x1, y1, z0),
+        (x0, y1, z0),
+        (x0, y0, z1),
+        (x1, y0, z1),
+        (x1, y1, z1),
+        (x0, y1, z1),
+    )
+    faces = (
+        (0, 1, 2, 3),
+        (4, 7, 6, 5),
+        (0, 4, 5, 1),
+        (1, 5, 6, 2),
+        (2, 6, 7, 3),
+        (3, 7, 4, 0),
+    )
+    triangles: list[tuple[Vec3, Vec3, Vec3]] = []
+    for a, b, c, d in faces:
+        triangles.extend(_quad(corners[a], corners[b], corners[c], corners[d]))
+    return triangles
+
+
+def _capsule_triangles(start: Vec3, finish: Vec3, radius: float, sides: int = 8) -> list[tuple[Vec3, Vec3, Vec3]]:
+    delta = sub(finish, start)
+    if length(delta) < 1e-4:
+        finish = add(start, (0.0, 0.0, max(radius, 0.05)))
+        delta = sub(finish, start)
+    axis = normalize(delta)
+    helper = (0.0, 0.0, 1.0) if abs(axis[2]) < 0.9 else (1.0, 0.0, 0.0)
+    across = normalize(cross(axis, helper))
+    around = cross(axis, across)
+    rings: list[list[Vec3]] = []
+    for center in (start, finish):
+        ring: list[Vec3] = []
+        for index in range(sides):
+            angle = 2.0 * math.pi * index / sides
+            offset = add(mul(across, math.cos(angle) * radius), mul(around, math.sin(angle) * radius))
+            ring.append(add(center, offset))
+        rings.append(ring)
+    triangles: list[tuple[Vec3, Vec3, Vec3]] = []
+    for index in range(sides):
+        nxt = (index + 1) % sides
+        triangles.append((rings[0][index], rings[0][nxt], rings[1][nxt]))
+        triangles.append((rings[0][index], rings[1][nxt], rings[1][index]))
+    return triangles
+
+
+def _character_triangles(joints: dict[str, Vec3]) -> list[tuple[Vec3, Vec3, Vec3]]:
+    top = add(joints["nose"], (0.0, 0.0, 0.10))
+    triangles = _capsule_triangles(joints["neck"], top, 0.11, sides=10)
+    for start_name, end_name, radius in _VOLUME_LIMBS:
+        triangles.extend(_capsule_triangles(joints[start_name], joints[end_name], radius))
+    return triangles
+
+
+def _paint_triangle(zbuf: np.ndarray, projected: list[tuple[float, float, float]]) -> None:
+    height, width = zbuf.shape
+    xs = [point[0] for point in projected]
+    ys = [point[1] for point in projected]
+    minx = max(0, int(math.floor(min(xs))))
+    maxx = min(width - 1, int(math.ceil(max(xs))))
+    miny = max(0, int(math.floor(min(ys))))
+    maxy = min(height - 1, int(math.ceil(max(ys))))
+    if minx > maxx or miny > maxy:
+        return
+    p0, p1, p2 = projected
+    grid_x, grid_y = np.meshgrid(
+        np.arange(minx, maxx + 1, dtype=np.float32),
+        np.arange(miny, maxy + 1, dtype=np.float32),
+    )
+    edge_u = (p1[0] - p0[0], p1[1] - p0[1])
+    edge_v = (p2[0] - p0[0], p2[1] - p0[1])
+    denominator = edge_u[0] * edge_v[1] - edge_v[0] * edge_u[1]
+    if abs(denominator) < 1e-6:
+        return
+    offset_x = grid_x - p0[0]
+    offset_y = grid_y - p0[1]
+    inverse = 1.0 / denominator
+    beta = (offset_x * edge_v[1] - edge_v[0] * offset_y) * inverse
+    gamma = (edge_u[0] * offset_y - offset_x * edge_u[1]) * inverse
+    alpha = 1.0 - beta - gamma
+    mask = (alpha >= 0.0) & (beta >= 0.0) & (gamma >= 0.0)
+    if not bool(mask.any()):
+        return
+    depth = alpha * p0[2] + beta * p1[2] + gamma * p2[2]
+    region = zbuf[miny : maxy + 1, minx : maxx + 1]
+    closer = mask & (depth < region)
+    region[closer] = depth[closer]
+
+
+def _raster_depth(triangles: list[tuple[Vec3, Vec3, Vec3]], camera: dict) -> np.ndarray:
+    zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
+    for triangle in triangles:
+        projected: list[tuple[float, float, float]] = []
+        for point in triangle:
+            screen = project(point, camera)
+            if screen is None:
+                projected = []
+                break
+            projected.append(screen)
+        if len(projected) == 3:
+            _paint_triangle(zbuf, projected)
+    return zbuf
+
+
+def _depth_image(zbuf: np.ndarray) -> Image.Image:
+    valid = np.isfinite(zbuf)
+    gray = np.zeros(zbuf.shape, dtype=np.uint8)
+    if bool(valid.any()):
+        near = float(np.percentile(zbuf[valid], 1))
+        far = float(np.percentile(zbuf[valid], 99))
+        span = max(far - near, 1e-3)
+        normalized = np.clip((far - zbuf) / span, 0.0, 1.0)
+        gray[valid] = np.rint(normalized[valid] * 255.0).astype(np.uint8)
+    return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
+
+
+def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[str, Vec3]]) -> None:
+    ordered: list[tuple[float, dict[str, Vec3]]] = []
+    for joints in people:
+        neck = project(joints["neck"], camera)
+        ordered.append((neck[2] if neck else 1e9, joints))
+    for _, joints in sorted(ordered, reverse=True):
+        projected: dict[str, tuple[float, float, float]] = {}
+        for name in OPENPOSE_NAMES:
+            screen = project(joints[name], camera)
+            if screen is not None:
+                projected[name] = screen
+        if "neck" not in projected:
+            continue
+        neck = projected["neck"]
+        hip = projected.get("right_hip") or projected.get("left_hip")
+        torso = 40.0
+        if hip is not None:
+            torso = math.hypot(neck[0] - hip[0], neck[1] - hip[1])
+        width = max(4, min(36, int(torso * 0.18)))
+        radius = max(3, width // 2)
+        for index, (start_index, end_index) in enumerate(OPENPOSE_LIMBS):
+            start_name = OPENPOSE_NAMES[start_index]
+            end_name = OPENPOSE_NAMES[end_index]
+            if start_name not in projected or end_name not in projected:
+                continue
+            start = projected[start_name]
+            finish = projected[end_name]
+            draw.line(
+                (start[0], start[1], finish[0], finish[1]),
+                fill=OPENPOSE_COLORS[index % len(OPENPOSE_COLORS)],
+                width=width,
             )
+        for index, name in enumerate(OPENPOSE_NAMES):
+            if name not in projected:
+                continue
+            point = projected[name]
+            draw.ellipse(
+                (point[0] - radius, point[1] - radius, point[0] + radius, point[1] + radius),
+                fill=OPENPOSE_COLORS[index],
+            )
+
+
+def render_structure_maps(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+    depth_destination: Path,
+    pose_destination: Path,
+) -> None:
+    """Write the depth buffer and OpenPose skeleton that ControlNet has to obey."""
+    camera = camera_at(scene, time_seconds)
+    spatial = show["locations"][scene["locationId"]]["spatial"]
+    triangles = _room_triangles(spatial)
+    for landmark in spatial.get("landmarks", {}).values():
+        triangles.extend(_box_triangles(vec(landmark["position"]), vec(landmark["size"])))
+    people: list[dict[str, Vec3]] = []
+    for character_id in scene["characterIds"]:
+        state = episode_character_state(episode, character_id, time_seconds)
+        joints = character_pose_joints(show, episode, scene, state, time_seconds)
+        people.append(joints)
+        triangles.extend(_character_triangles(joints))
+    depth_destination.parent.mkdir(parents=True, exist_ok=True)
+    _depth_image(_raster_depth(triangles, camera)).save(depth_destination)
+    pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
+    _draw_openpose(ImageDraw.Draw(pose), camera, people)
+    pose.save(pose_destination)
 
 
 def render_scene_proxy(
@@ -375,7 +774,8 @@ def render_scene_proxy(
         depth_from_camera = length(sub(vec(state["position"]), vec(camera["position"])))
         states.append((depth_from_camera, character_id, state))
     for _, character_id, state in sorted(states, reverse=True):
-        _draw_character(draw, camera, character_id, state, debug)
+        joints = character_pose_joints(show, episode, scene, state, time_seconds)
+        _draw_character(draw, camera, character_id, joints, debug)
 
     title = (
         f"scene {scene['sceneNumber']:02d}  t={time_seconds:.2f}s  "
@@ -641,6 +1041,27 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
                 debug=False,
             )
             generated.append(condition_destination)
+            depth_destination = proxy_frame_path(
+                show["id"],
+                episode["episodeNumber"],
+                scene["sceneNumber"],
+                f"{label}_depth",
+            )
+            pose_destination = proxy_frame_path(
+                show["id"],
+                episode["episodeNumber"],
+                scene["sceneNumber"],
+                f"{label}_pose",
+            )
+            render_structure_maps(
+                show,
+                episode,
+                scene,
+                time_seconds,
+                depth_destination,
+                pose_destination,
+            )
+            generated.extend((depth_destination, pose_destination))
     return generated
 
 

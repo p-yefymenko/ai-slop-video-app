@@ -26,6 +26,9 @@ class SpatialPipelineTests(unittest.TestCase):
         cls.qwen = json.loads(
             (cls.root / "workflows" / "qwen_image_edit.json").read_text()
         )
+        cls.qwen_spatial = json.loads(
+            (cls.root / "workflows" / "qwen_image_edit_spatial.json").read_text()
+        )
         cls.ltx = json.loads(
             (cls.root / "workflows" / "ltx_gemma_api.json").read_text()
         )
@@ -229,6 +232,63 @@ class SpatialPipelineTests(unittest.TestCase):
             [node["inputs"]["image"] for node in loaders],
             ["proxy_scene_01_end_condition.png"],
         )
+
+    def test_spatial_still_locks_depth_and_pose_before_refine(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        scene = next(item for item in self.episode["scenes"] if len(item["characterIds"]) >= 2)
+        with tempfile.TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            characters = [
+                {
+                    "id": character_id,
+                    "image_path": self._inject_png(temp_dir, f"{character_id}.png"),
+                }
+                for character_id in scene["characterIds"][:2]
+            ]
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                characters,
+                self._inject_png(temp_dir, "proxy.png"),
+            )
+            pipeline.inject_qwen_prompt(graph, "structure only", "Structure instruction")
+            pipeline.inject_seed(graph, 17)
+        structure = pipeline._qwen_encoder(graph, "Structure instruction")
+        positive = pipeline._qwen_encoder(graph, "Positive instruction")
+        assert structure is not None and positive is not None
+        self.assertEqual(set(structure["inputs"]) & {"image1", "image2", "image3"}, {"image1", "image2"})
+        self.assertIn("image3", positive["inputs"])
+        self.assertEqual(graph["5"]["inputs"]["model"], ["1", 0])
+        self.assertEqual(graph["10"]["inputs"]["steps"], 20)
+        self.assertEqual(graph["10"]["inputs"]["cfg"], 4.0)
+        self.assertEqual(graph["10"]["inputs"]["positive"], ["45", 0])
+        self.assertEqual(graph["50"]["inputs"]["denoise"], 0.4)
+        self.assertEqual(graph["50"]["inputs"]["latent_image"], ["10", 0])
+        self.assertEqual(graph["50"]["inputs"]["seed"], 17)
+        self.assertEqual(graph["10"]["inputs"]["seed"], 17)
+        self.assertEqual(graph["11"]["inputs"]["samples"], ["50", 0])
+        self.assertEqual(
+            graph["40"]["inputs"]["control_net_name"],
+            "Qwen-Image-InstantX-ControlNet-Union.safetensors",
+        )
+        self.assertEqual(graph["44"]["inputs"]["strength"], 0.95)
+        self.assertEqual(graph["45"]["inputs"]["strength"], 1.0)
+        self.assertEqual(structure["inputs"]["prompt"], "structure only")
+        pipeline.set_pose_control_strength(graph, False)
+        self.assertEqual(graph["45"]["inputs"]["strength"], 0.0)
+        self.assertEqual(graph["49"]["inputs"]["strength"], 0.0)
+        self.assertIn("spatialStructure", self.show["prompts"])
+
+    def test_environment_structure_pass_ignores_the_sketch(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        with tempfile.TemporaryDirectory() as temp:
+            pipeline.inject_qwen_spatial_refs(
+                graph,
+                [],
+                self._inject_png(Path(temp), "proxy.png"),
+            )
+        structure = pipeline._qwen_encoder(graph, "Structure instruction")
+        assert structure is not None
+        self.assertFalse({"image1", "image2", "image3"} & set(structure["inputs"]))
 
     def test_end_guide_is_added_before_av_sampling_and_cropped(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")

@@ -1,0 +1,199 @@
+{
+  "prompt": {
+    "1": {
+      "inputs": {
+        "unet_name": "qwen-image-edit-2511-Q4_K_M.gguf"
+      },
+      "class_type": "UnetLoaderGGUF",
+      "_meta": { "title": "Qwen-Image-Edit-2511 GGUF" }
+    },
+    "2": {
+      "inputs": {
+        "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "type": "qwen_image"
+      },
+      "class_type": "CLIPLoader",
+      "_meta": { "title": "Qwen2.5-VL" }
+    },
+    "3": {
+      "inputs": {
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "class_type": "VAELoader"
+    },
+    "5": {
+      "inputs": {
+        "model": ["1", 0],
+        "shift": 3.1
+      },
+      "class_type": "ModelSamplingAuraFlow"
+    },
+    "6": {
+      "inputs": {
+        "image": "CHARACTER_REF.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Character reference" }
+    },
+    "7": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "PROMPT_PLACEHOLDER",
+        "vae": ["3", 0],
+        "image1": ["6", 0]
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Positive instruction" }
+    },
+    "8": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "wireframe, mannequin, diagram, grid overlay, stick figure, extra limbs, duplicate person, text, labels, watermark"
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Negative instruction" }
+    },
+    "9": {
+      "inputs": {
+        "width": 768,
+        "height": 1360,
+        "batch_size": 1
+      },
+      "class_type": "EmptySD3LatentImage"
+    },
+    "40": {
+      "inputs": {
+        "control_net_name": "Qwen-Image-InstantX-ControlNet-Union.safetensors"
+      },
+      "class_type": "ControlNetLoader",
+      "_meta": { "title": "Qwen InstantX Union ControlNet" }
+    },
+    "41": {
+      "inputs": {
+        "image": "DEPTH_CONTROL.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Depth control" }
+    },
+    "42": {
+      "inputs": {
+        "image": "POSE_CONTROL.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Pose control" }
+    },
+    "43": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "STRUCTURE_PROMPT_PLACEHOLDER",
+        "vae": ["3", 0],
+        "image1": ["6", 0]
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Structure instruction" }
+    },
+    "44": {
+      "inputs": {
+        "positive": ["43", 0],
+        "negative": ["8", 0],
+        "control_net": ["40", 0],
+        "image": ["41", 0],
+        "strength": 0.95,
+        "start_percent": 0.0,
+        "end_percent": 1.0,
+        "vae": ["3", 0]
+      },
+      "class_type": "ControlNetApplyAdvanced",
+      "_meta": { "title": "Depth lock" }
+    },
+    "45": {
+      "inputs": {
+        "positive": ["44", 0],
+        "negative": ["44", 1],
+        "control_net": ["40", 0],
+        "image": ["42", 0],
+        "strength": 1.0,
+        "start_percent": 0.0,
+        "end_percent": 1.0,
+        "vae": ["3", 0]
+      },
+      "class_type": "ControlNetApplyAdvanced",
+      "_meta": { "title": "Pose lock" }
+    },
+    "10": {
+      "inputs": {
+        "seed": 0,
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["5", 0],
+        "positive": ["45", 0],
+        "negative": ["45", 1],
+        "latent_image": ["9", 0]
+      },
+      "class_type": "KSampler",
+      "_meta": { "title": "Structure pass" }
+    },
+    "48": {
+      "inputs": {
+        "positive": ["7", 0],
+        "negative": ["8", 0],
+        "control_net": ["40", 0],
+        "image": ["41", 0],
+        "strength": 0.65,
+        "start_percent": 0.0,
+        "end_percent": 1.0,
+        "vae": ["3", 0]
+      },
+      "class_type": "ControlNetApplyAdvanced",
+      "_meta": { "title": "Refine depth lock" }
+    },
+    "49": {
+      "inputs": {
+        "positive": ["48", 0],
+        "negative": ["48", 1],
+        "control_net": ["40", 0],
+        "image": ["42", 0],
+        "strength": 0.75,
+        "start_percent": 0.0,
+        "end_percent": 1.0,
+        "vae": ["3", 0]
+      },
+      "class_type": "ControlNetApplyAdvanced",
+      "_meta": { "title": "Refine pose lock" }
+    },
+    "50": {
+      "inputs": {
+        "seed": 0,
+        "steps": 8,
+        "cfg": 3.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 0.4,
+        "model": ["5", 0],
+        "positive": ["49", 0],
+        "negative": ["49", 1],
+        "latent_image": ["10", 0]
+      },
+      "class_type": "KSampler",
+      "_meta": { "title": "Photoreal refine" }
+    },
+    "11": {
+      "inputs": {
+        "samples": ["50", 0],
+        "vae": ["3", 0]
+      },
+      "class_type": "VAEDecode"
+    },
+    "12": {
+      "inputs": {
+        "filename_prefix": "reelshort_start",
+        "images": ["11", 0]
+      },
+      "class_type": "SaveImage",
+      "_meta": { "title": "Start still" }
+    }
+  }
+}

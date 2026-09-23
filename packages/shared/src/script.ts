@@ -91,7 +91,8 @@ export type ScriptScene = {
   storyBeat: string;
   /**
    * Visible people. Empty for environments and prop inserts.
-   * The first two are Qwen identity Pictures; everyone is in the proxy.
+   * The first two are Qwen identity Pictures. Depth and pose controls lock
+   * placement; the proxy sketch is only loose context.
    */
   characterIds: string[];
   /**
@@ -107,8 +108,8 @@ export type ScriptScene = {
   camera: SpatialCamera;
   /**
    * Optional wardrobe, expression, and atmosphere. Omit when the location
-   * block and proxy are enough. Never restate position, facing, eyeline,
-   * framing, or set geometry.
+   * block and the depth/pose guides are enough. Never restate position,
+   * facing, eyeline, framing, or set geometry.
    */
   imagePrompt?: string;
   /**
