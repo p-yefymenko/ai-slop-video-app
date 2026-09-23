@@ -1,17 +1,101 @@
 # Reelshort
 
-Vertical episodes are authored as one show script and rendered on a local GPU. The command menu is `pnpm run`. `PLAN.md` is the contract for setup, deploy, and the content pipeline.
+Vertical episodes are authored as one `ShowScript` JSON file and rendered on a local GPU. Every command lives in the root `package.json`. Run `pnpm run` with no arguments to list them. Do not run raw `wrangler` or `python` commands.
 
-## Content pipeline
+`PLAN.md` is the setup and deploy contract. This file is daily usage.
 
-`content-pipeline/shows/<id>/script.json` is the authored show. Hand-placed models go in `shows/<id>/assets/`. Everything built from the script — fallback meshes, sets, clay previs, stills, and clips — goes in `content-pipeline/output/<id>/`. `content-pipeline/library/` is the shared prefab cache.
+## Render an episode
 
+`content:render` still does the full pass. It runs assets → previs → frames → video, and forwards the same flags to every stage. It does **not** pause for review between stills and clips.
+
+Leave ComfyUI running in another terminal before the GPU stages:
+
+```bash
+pnpm run content:comfy
 ```
+
+Then either:
+
+```bash
 pnpm run content:validate
-pnpm run content:assets
-pnpm run content:previs
-pnpm run content:render
-pnpm run view
+pnpm run content:render -- --show the-iron-bride --episode 1
 ```
 
-`content:render` builds prefabs, the clay blockout, the Qwen stills, and the LTX clips. `pnpm run view` opens the Y-up stage viewer at `http://127.0.0.1:5174`. Catalog terms, licenses, and the credit file are in `docs/ASSETS.md` and `docs/CREDITS.md`.
+or the same four stages by hand, so you can inspect the clay blockout and stills:
+
+```bash
+pnpm run content:validate
+pnpm run content:assets -- --show the-iron-bride
+pnpm run content:previs -- --show the-iron-bride --episode 1
+pnpm run view
+pnpm run content:frames -- --show the-iron-bride --episode 1
+pnpm run content:generate -- --show the-iron-bride --episode 1
+```
+
+Use `pnpm run view`, not `pnpm view` (that is pnpm’s package lookup). The viewer is `http://127.0.0.1:5174`.
+
+Useful flags (all stages accept them; assets ignores `--episode` / `--scene` / `--seed` for which prefabs it builds):
+
+| Flag | Meaning |
+| --- | --- |
+| `--show <id>` | One show |
+| `--episode N` | One episode |
+| `--scene N` | One scene (needs `--episode`) |
+| `--force` | Rebuild that selected scene (needs `--scene`) |
+| `--offline` | Assets only: locks and primitives, no catalog search |
+| `--review` | Assets only: keep candidate meshes for the viewer |
+
+Existing files are skipped unless `--force` is set on a selected scene. After a structural script rewrite, archive first:
+
+```bash
+pnpm run content:archive -- the-iron-bride
+```
+
+## Where files live
+
+| Path | What it is |
+| --- | --- |
+| `content-pipeline/shows/<id>/script.json` | Authored show. Folder name must match `id`. |
+| `content-pipeline/shows/<id>/assets/` | Hand-placed GLBs only |
+| `content-pipeline/library/` | Shared prefab cache (`raw/` is gitignored) |
+| `content-pipeline/output/<id>/` | Everything generated from the script |
+
+Per episode, generated stages sort as:
+
+```text
+output/<show>/<episode>/
+  01_previs/scene_XX/{blockout.mp4, start.png, shot.json, guides/}
+  02_postvis/stills/scene_XX_start.png
+  03_postvis/clips/scene_XX.mp4
+  04_edit/episode.mp4
+```
+
+Character identity PNGs stay at `output/<show>/characters/`, not per episode. Sets live at `output/<show>/sets/<locationId>/`.
+
+Write the script, then `pnpm run content:validate`. Field semantics are in `packages/shared/src/script.ts`. Screenwriting guidance is `.cursor/rules/Short-reel-scripts-writer.mdc`.
+
+## Viewer
+
+`pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`, `/review/<show>/<needHash>`.
+
+God camera (OrbitControls):
+
+- Left-drag: orbit
+- Right-drag, middle-drag, or Ctrl/Cmd + left-drag: pan
+- Scroll: zoom
+
+**Shot camera** is the authored lens; orbit/pan/zoom are off. Play / Pause and the timeline slider only change time.
+
+## GPU setup (once)
+
+Needed for `content:frames` and `content:generate`. Clay previs does not need it.
+
+1. `pnpm run content:setup-comfy`
+2. `pnpm run content:models`
+3. Put `LTXV_API_KEY` in `content-pipeline/.env` (copy from `content-pipeline/.env.example`)
+4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
+5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
+
+`pnpm run content:asset-deps` installs trimesh into that same Python so downloaded glTF/OBJ files can be read. Optional catalog keys: `SKETCHFAB_TOKEN`, `SMITHSONIAN_API_KEY`.
+
+Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).
