@@ -1,0 +1,15 @@
+---
+description: Where authored shows, generated output, and shared prefabs live
+globs: content-pipeline/**/*
+alwaysApply: false
+---
+
+# Content pipeline layout
+
+`shows/<id>/script.json` and `shows/<id>/assets/` are authored. Do not write generated meshes, sets, previs, or postvis there.
+
+Pictures and meshes built from the script go in `output/<id>/`. `library/` is the shared prefab cache. `library/raw/` is gitignored and is not a place for show output.
+
+Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The stage viewer reads Y-up and does not convert.
+
+Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.

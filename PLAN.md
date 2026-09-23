@@ -225,7 +225,9 @@ reelshort-clone/
 
 `pnpm run content:assets` resolves each landmark and prop need into a prefab and writes one set per location under `output/<show>/sets`. An unchanged need reuses `library/lock.json`. A missing or unacceptable model becomes a primitive in `output/<show>/assets/fallback` so the pipeline still runs. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY model from Poly Haven, Sketchfab, or Smithsonian Open Access.
 
-`content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages. `pnpm view` opens the stage viewer at `http://127.0.0.1:5174`. It reads prefabs, sets, and shots as glTF Y-up and can lock a reviewed candidate. Open VSX has file-level GLB previews (`slevesque.vscode-3dviewer`, and the OHZI GLTF/GLB Viewer); the stage viewer does not depend on them.
+`content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages. `pnpm run view` opens the stage viewer at `http://127.0.0.1:5174`. It reads prefabs, sets, and shots as glTF Y-up and can lock a reviewed candidate. Open VSX has file-level GLB previews (`slevesque.vscode-3dviewer`, and the OHZI GLTF/GLB Viewer); the stage viewer does not depend on them.
+
+Authored files stay in `shows/<id>/` (`script.json` and hand-placed `assets/`). Meshes and pictures built from the script stay in `output/<id>/`. `library/` is the shared prefab cache. Schema space is Z-up and +Y forward; glTF is Y-up. `content-pipeline/scripts/coords.py` is the only module that converts between them. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md` from `library/sources.json`.
 
 The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clips. Both are near 9:16; the LTX size is divisible by 32 and uses fewer pixels than the old 512x768 2:3 profile, which is necessary on the 16GB card.
 
@@ -241,7 +243,7 @@ The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clip
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
 5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA/ControlNet file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
-7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/` and each episode’s `02_postvis/stills/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
+7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/` and each episode’s `02_postvis/stills/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs assets, previs, frames, and video in sequence with no still-review pause.
 
 `content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 

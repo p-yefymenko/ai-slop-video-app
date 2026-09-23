@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_resolver import AssetResolver, apply_lock_override  # noqa: E402
+from asset_resolver import AssetResolver, apply_lock_override, export_credits  # noqa: E402
 from pipeline_paths import (  # noqa: E402
     LIBRARY_DIR,
     discover_show_scripts,
@@ -65,7 +65,13 @@ def main() -> None:
     parser.add_argument("--review", action="store_true", help="Keep the top candidates for review")
     parser.add_argument("--rank", choices=("keyword", "clip"), default="keyword")
     parser.add_argument("--pick", nargs=2, metavar=("NEED_HASH", "PREFAB_ID"))
+    parser.add_argument("--credits", action="store_true", help="Rewrite docs/CREDITS.md from library/sources.json")
     args = parser.parse_args()
+    if args.credits:
+        destination = Path(__file__).resolve().parents[2] / "docs" / "CREDITS.md"
+        export_credits(LIBRARY_DIR / "sources.json", destination)
+        print(destination)
+        return
     if args.pick:
         apply_lock_override(LIBRARY_DIR / "lock.json", args.pick[0], args.pick[1])
         print(f"Locked {args.pick[0]} to {args.pick[1]}")
