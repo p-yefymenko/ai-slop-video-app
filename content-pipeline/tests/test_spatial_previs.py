@@ -29,7 +29,7 @@ from spatial_previs import (  # noqa: E402
 )
 
 SHOW_JSON = (
-    Path(__file__).resolve().parents[1] / "scripts_input" / "the-iron-bride.json"
+    Path(__file__).resolve().parents[1] / "shows" / "the-iron-bride" / "script.json"
 )
 
 

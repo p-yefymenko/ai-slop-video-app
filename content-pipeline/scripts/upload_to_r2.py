@@ -10,8 +10,7 @@ from pathlib import Path
 
 from ffmpeg_tools import extract_thumbnail
 
-ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = ROOT / "output"
+from pipeline_paths import OUTPUT_DIR, episode_video_path, thumbnail_path
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8787")
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "dev-admin-secret")
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
@@ -102,6 +101,31 @@ def upload_object(local_path: Path, key: str, content_type: str) -> None:
     upload_via_worker(local_path, key)
 
 
+def locate_episode_video(episode_directory: Path) -> Path | None:
+    """Prefer the stage layout, then the flat layout from before the path refactor."""
+    show_id = episode_directory.parent.name
+    episode_number = int(episode_directory.name)
+    current = episode_video_path(show_id, episode_number)
+    if current.is_file():
+        return current
+    legacy = episode_directory / "episode.mp4"
+    if legacy.is_file():
+        return legacy
+    clips = sorted((episode_directory / "03_postvis" / "clips").glob("scene_*.mp4"))
+    if clips:
+        return clips[0]
+    legacy_scenes = sorted(
+        path for path in episode_directory.glob("scene_*.mp4") if path.is_file()
+    )
+    return legacy_scenes[0] if legacy_scenes else None
+
+
+def locate_thumbnail(episode_directory: Path, video: Path) -> Path:
+    if video.parent.name == "04_edit":
+        return thumbnail_path(episode_directory.parent.name, int(episode_directory.name))
+    return episode_directory / "thumbnail.jpg"
+
+
 def main() -> None:
     manifests = sorted(OUTPUT_DIR.glob("*/*/manifest.json"))
     if not manifests:
@@ -111,18 +135,15 @@ def main() -> None:
     for manifest_path in manifests:
         script = json.loads(manifest_path.read_text(encoding="utf-8"))
         episode_dir = manifest_path.parent
-        mp4 = episode_dir / "episode.mp4"
-        if not mp4.exists():
-            scenes = sorted(episode_dir.glob("scene_*.mp4"))
-            if not scenes:
-                print(f"Skipping {episode_dir}: no mp4 output")
-                continue
-            mp4 = scenes[0]
+        mp4 = locate_episode_video(episode_dir)
+        if mp4 is None:
+            print(f"Skipping {episode_dir}: no mp4 output")
+            continue
         slug = script["series"]
         title = script.get("title") or f"Episode {script['episodeNumber']}"
         video_key = f"{slug}/{script['episodeNumber']}/episode.mp4"
         upload_object(mp4, video_key, "video/mp4")
-        thumb = episode_dir / "thumbnail.jpg"
+        thumb = locate_thumbnail(episode_dir, mp4)
         thumb_key = None
         if extract_thumbnail(mp4, thumb):
             thumb_key = f"{slug}/{script['episodeNumber']}/thumbnail.jpg"

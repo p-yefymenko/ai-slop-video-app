@@ -9,7 +9,7 @@ import { parseShowScript } from "./script-schema";
 
 const ironBridePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../../content-pipeline/scripts_input/the-iron-bride.json",
+  "../../../content-pipeline/shows/the-iron-bride/script.json",
 );
 
 function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {

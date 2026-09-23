@@ -20,19 +20,29 @@ from pathlib import Path
 
 from ffmpeg_tools import concat_videos
 from PIL import Image
+from pipeline_paths import (
+    OUTPUT_DIR,
+    character_image_path,
+    clay_frame_path,
+    clip_path,
+    discover_show_scripts,
+    end_still_path,
+    episode_video_path,
+    guide_path,
+    manifest_path,
+    show_id_for_script,
+    start_still_path,
+)
 from spatial_previs import (
     PROXY_HEIGHT,
     PROXY_WIDTH,
     compile_spatial_video_prompt,
     generate_episode_previs,
-    proxy_frame_path,
     scene_has_spatial_change,
     validate_spatial_episode,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = ROOT / "scripts_input"
-OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
     "spatialBlockout",
@@ -562,8 +572,9 @@ def ensure_neutral_canvas() -> str:
 def load_show(path: Path) -> dict:
     show = load_json(path)
     show_id = require_text(show, "id", path.name)
-    if path.stem != show_id:
-        raise SystemExit(f"{path.name}: id {show_id!r} must match the filename stem")
+    expected_id = show_id_for_script(path)
+    if show_id != expected_id:
+        raise SystemExit(f"{path.name}: id {show_id!r} must match {expected_id!r}")
     require_text(show, "title", path.name)
     characters = show.get("characters")
     if not isinstance(characters, dict) or not characters:
@@ -576,6 +587,8 @@ def load_show(path: Path) -> dict:
             "id": str(cid),
             "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
         }
+        if isinstance(character.get("proxy"), dict):
+            cleaned_chars[str(cid)]["proxy"] = character["proxy"]
     show["characters"] = cleaned_chars
     if "locationCharacters" in show:
         raise SystemExit(
@@ -698,22 +711,6 @@ def load_show(path: Path) -> dict:
         )
     show["episodes"] = cleaned_eps
     return show
-
-
-def character_image_path(show_id: str, character_id: str) -> Path:
-    return OUTPUT_DIR / show_id / "characters" / f"{character_id}.png"
-
-
-def episode_dir(show_id: str, episode_number: int) -> Path:
-    return OUTPUT_DIR / show_id / str(episode_number)
-
-
-def start_still_path(out_dir: Path, scene_number: int) -> Path:
-    return out_dir / f"scene_{int(scene_number):02d}_start.png"
-
-
-def end_still_path(out_dir: Path, scene_number: int) -> Path:
-    return out_dir / f"scene_{int(scene_number):02d}_end.png"
 
 
 def resolve_location(show: dict, scene: dict) -> dict:
@@ -1252,9 +1249,9 @@ def generate_show(
         spatial_errors = validate_spatial_episode(show, episode)
         if spatial_errors:
             raise SystemExit("Spatial validation failed:\n- " + "\n- ".join(spatial_errors))
-        out_dir = episode_dir(show_id, episode_number)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "manifest.json").write_text(
+        manifest = manifest_path(show_id, episode_number)
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
             json.dumps(
                 {
                     "series": show_id,
@@ -1274,9 +1271,9 @@ def generate_show(
         for scene in episode["scenes"]:
             scene_number = scene["sceneNumber"]
             scene_label = f"episode {episode_number} scene {scene_number}"
-            still_path = start_still_path(out_dir, scene_number)
-            end_path = end_still_path(out_dir, scene_number)
-            video_path = out_dir / f"scene_{scene_number:02d}.mp4"
+            still_path = start_still_path(show_id, episode_number, scene_number)
+            end_path = end_still_path(show_id, episode_number, scene_number)
+            video_path = clip_path(show_id, episode_number, scene_number)
             dest = still_path if stage == "frames" else video_path
             location = resolve_location(show, scene)
             names = ", ".join(scene["characterIds"])
@@ -1318,12 +1315,8 @@ def generate_show(
                         scene,
                         location,
                         still_path,
-                        proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_blockout"
-                        ),
-                        proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_faces"
-                        ),
+                        clay_frame_path(show_id, episode_number, scene_number, "start"),
+                        guide_path(show_id, episode_number, scene_number, "start", "faces"),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
                     )
@@ -1333,12 +1326,8 @@ def generate_show(
                         scene,
                         location,
                         end_path,
-                        proxy_frame_path(
-                            show_id, episode_number, scene_number, "end_blockout"
-                        ),
-                        proxy_frame_path(
-                            show_id, episode_number, scene_number, "end_faces"
-                        ),
+                        clay_frame_path(show_id, episode_number, scene_number, "end"),
+                        guide_path(show_id, episode_number, scene_number, "end", "faces"),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
                     )
@@ -1376,7 +1365,7 @@ def generate_show(
             episode_generated += 1
             generated += 1
         if stage == "video" and not partial:
-            episode_mp4 = out_dir / "episode.mp4"
+            episode_mp4 = episode_video_path(show_id, episode_number)
             concat_videos(scene_files, episode_mp4)
             print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
         print(
@@ -1388,7 +1377,7 @@ def generate_show(
     if stage == "frames":
         print(
             f"Stills for {show_id} are in {OUTPUT_DIR / show_id}. "
-            "Review characters/, then each episode's scene_*_start.png. "
+            "Review characters/, then each episode's 02_postvis/stills/scene_*_start.png. "
             "Replace a file by hand, or delete it and rerun `pnpm run content:frames`. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,
@@ -1408,19 +1397,20 @@ def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
                 if not present(character_image_path(show_id, character_id)):
                     return True
             for episode in show["episodes"]:
-                out_dir = episode_dir(show_id, episode["episodeNumber"])
+                episode_number = episode["episodeNumber"]
                 for scene in episode["scenes"]:
-                    if not present(start_still_path(out_dir, scene["sceneNumber"])):
+                    scene_number = scene["sceneNumber"]
+                    if not present(start_still_path(show_id, episode_number, scene_number)):
                         return True
                     if scene_needs_end_guide(episode, scene) and not present(
-                        end_still_path(out_dir, scene["sceneNumber"])
+                        end_still_path(show_id, episode_number, scene_number)
                     ):
                         return True
         else:
             for episode in show["episodes"]:
-                out_dir = episode_dir(show_id, episode["episodeNumber"])
+                episode_number = episode["episodeNumber"]
                 for scene in episode["scenes"]:
-                    dest = out_dir / f"scene_{int(scene['sceneNumber']):02d}.mp4"
+                    dest = clip_path(show_id, episode_number, scene["sceneNumber"])
                     if not present(dest):
                         return True
     return False
@@ -1458,12 +1448,10 @@ def main() -> None:
     if not workflow_path.is_file():
         raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
     workflow_template = load_json(workflow_path)
-    scripts = sorted(SCRIPTS_DIR.glob("*.json"))
-    if args.show:
-        scripts = [path for path in scripts if path.stem == args.show]
+    scripts = discover_show_scripts(args.show)
     if not scripts:
         target = f" for show {args.show!r}" if args.show else ""
-        raise SystemExit(f"No show JSON files found{target} in {SCRIPTS_DIR}")
+        raise SystemExit(f"No show JSON files found{target}")
     shows = [load_show(path) for path in scripts]
     for show in shows:
         if args.episode is not None:

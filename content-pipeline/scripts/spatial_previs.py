@@ -12,10 +12,14 @@ from typing import Iterable
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from pipeline_paths import (
+    blockout_video_path,
+    clay_frame_path,
+    contact_sheet_path,
+    discover_show_scripts,
+    guide_path,
+)
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = ROOT / "scripts_input"
-OUTPUT_DIR = ROOT / "output"
 PROXY_WIDTH = 768
 PROXY_HEIGHT = 1360
 NEAR_CLIP = 0.05
@@ -933,16 +937,6 @@ def render_scene_proxy(
     image.save(destination)
 
 
-def previs_dir(show_id: str, episode_number: int) -> Path:
-    return OUTPUT_DIR / show_id / str(episode_number) / "previs"
-
-
-def proxy_frame_path(
-    show_id: str, episode_number: int, scene_number: int, label: str
-) -> Path:
-    return previs_dir(show_id, episode_number) / f"scene_{scene_number:02d}_{label}.png"
-
-
 def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
     errors: list[str] = []
     timeline = episode.get("spatialTimeline")
@@ -1166,7 +1160,13 @@ def render_blocked_scene(
     scene: dict,
 ) -> list[Path]:
     """Write the clay playblast and the start/end frames the realism pass edits."""
-    from ffmpeg_tools import encode_rgb_frames
+    from pipeline_paths import (
+    blockout_video_path,
+    clay_frame_path,
+    contact_sheet_path,
+    discover_show_scripts,
+    guide_path,
+)
 
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     times = blockout_sample_times(start, finish)
@@ -1180,25 +1180,44 @@ def render_blocked_scene(
         label = guides.get(time_seconds)
         if label is None:
             continue
-        blockout_path = proxy_frame_path(
+        blockout_path = clay_frame_path(
             show["id"],
             episode["episodeNumber"],
             scene["sceneNumber"],
-            f"{label}_blockout",
+            label,
         )
-        mask_path = proxy_frame_path(
+        mask_path = guide_path(
             show["id"],
             episode["episodeNumber"],
             scene["sceneNumber"],
-            f"{label}_faces",
+            label,
+            "faces",
+        )
+        depth_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "depth",
+        )
+        pose_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "pose",
         )
         blockout_path.parent.mkdir(parents=True, exist_ok=True)
+        mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
         camera = camera_at(scene, time_seconds)
         _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
-        written.extend((blockout_path, mask_path))
-    video_path = previs_dir(show["id"], episode["episodeNumber"]) / (
-        f"scene_{scene['sceneNumber']:02d}_blockout.mp4"
+        render_structure_maps(
+            show, episode, scene, time_seconds, depth_path, pose_path
+        )
+        written.extend((blockout_path, mask_path, depth_path, pose_path))
+    video_path = blockout_video_path(
+        show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )
     raw = b"".join(frame.convert("RGB").tobytes() for frame in frames)
     encode_rgb_frames(raw, PROXY_WIDTH, PROXY_HEIGHT, BLOCKOUT_FPS, video_path)
@@ -1225,7 +1244,7 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
 
 
 def write_contact_sheet(paths: list[Path], destination: Path) -> None:
-    starts = [path for path in paths if path.name.endswith("_start_blockout.png")]
+    starts = [path for path in paths if path.name == "start.png"]
     if not starts:
         return
     thumb_width = 240
@@ -1260,9 +1279,7 @@ def main() -> None:
     if args.scene is not None and args.episode is None:
         parser.error("--scene requires --episode")
 
-    scripts = sorted(SCRIPTS_DIR.glob("*.json"))
-    if args.show:
-        scripts = [path for path in scripts if path.stem == args.show]
+    scripts = discover_show_scripts(args.show)
     if not scripts:
         raise SystemExit("No matching show scripts")
     for script in scripts:
@@ -1271,7 +1288,7 @@ def main() -> None:
             if args.episode is not None and episode["episodeNumber"] != args.episode:
                 continue
             paths = generate_episode_previs(show, episode, args.scene)
-            contact_sheet = previs_dir(show["id"], episode["episodeNumber"]) / "contact_sheet.png"
+            contact_sheet = contact_sheet_path(show["id"], episode["episodeNumber"])
             write_contact_sheet(paths, contact_sheet)
             print(
                 f"Wrote {len(paths)} blocked-scene files for {show['id']}/{episode['episodeNumber']} "

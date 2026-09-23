@@ -1,6 +1,6 @@
 ---
 description: Write production-ready vertical microdrama ShowScript JSON
-globs: content-pipeline/scripts_input/*.json
+globs: content-pipeline/shows/**/script.json,content-pipeline/scripts_input/*.json
 alwaysApply: false
 ---
 
@@ -190,7 +190,7 @@ export type ShowProp = {
 };
 
 export type ShowScript = {
-  /** Filename stem of `content-pipeline/scripts_input/<id>.json`. */
+  /** Folder name of `content-pipeline/shows/<id>/script.json`. */
   id: string;
   /** Series title. Genre can be anything; coverage grammar stays the same. */
   title: string;

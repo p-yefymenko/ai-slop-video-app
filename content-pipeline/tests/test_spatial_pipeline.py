@@ -13,7 +13,7 @@ import generate_batch as pipeline  # noqa: E402
 from spatial_previs import spatial_target_screen_position  # noqa: E402
 
 SHOW_JSON = (
-    Path(__file__).resolve().parents[1] / "scripts_input" / "the-iron-bride.json"
+    Path(__file__).resolve().parents[1] / "shows" / "the-iron-bride" / "script.json"
 )
 
 

@@ -15,8 +15,8 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key: sign up at the LTX Developer Console (docs.ltx.video) and generate a key there. Text encoding via this API is free — you're only using it to offload the text-encoder step, not for paid video generation, since video generation itself runs locally on your GPU. Add it to `content-pipeline/.env` as `LTXV_API_KEY` (the agent's ComfyUI workflow config should reference this env var, not a hardcoded key) — this is what the `GemmaAPITextEncode` node in the LTX workflow uses to authenticate.
 7. [ ] **Install ComfyUI + models locally on the GPU machine** — run `pnpm run content:setup-comfy` once (clones ComfyUI and the LTX/GGUF/VHS custom nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (downloads the ~14GB LTX-2.3 distilled-1.1 Q4_K_M GGUF + matching video VAE + audio VAE + Gemma API stub, and the Qwen-Image-Edit-2511 still stack: ~13GB Q4_K_M GGUF, 9.4GB Qwen2.5-VL encoder, VAE, and the 4-step Lightning LoRA). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. Open that URL, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix any missing-node / missing-file errors before generating. The blocked scenes themselves do not need ComfyUI: `pnpm run content:previs` renders them from the stage timeline.
-8. [ ] **Write a show JSON.** One file per show at `content-pipeline/scripts_input/<id>.json` (`ShowScript` in `packages/shared/src/script.ts`). Put characters, locations (text only), every prompt template, and episodes in that file. `pnpm run content:frames` generates character stills from it — no handmade PNGs in `characters/`.
-9. [ ] Run `pnpm run content:frames`. Review `characters/` then `scene_*_start.png` in `content-pipeline/output/<show>/`. Keep, replace, or delete any file you do not like. Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
+8. [ ] **Write a show JSON.** One file per show at `content-pipeline/shows/<id>/script.json` (`ShowScript` in `packages/shared/src/script.ts`). Put characters, locations (text only), every prompt template, and episodes in that file. `pnpm run content:frames` generates character stills from it — no handmade PNGs in `characters/`.
+9. [ ] Run `pnpm run content:frames`. Review `characters/` then `02_postvis/stills/scene_*_start.png` in `content-pipeline/output/<show>/<episode>/`. Keep, replace, or delete any file you do not like. Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
 11. [ ] Trigger the production build via `eas build` (Expo's build service)
 12. [ ] Upload the build to a Closed Testing track in Play Console
@@ -63,13 +63,14 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:comfy": "node scripts/start-comfyui.cjs",
     "content:validate": "pnpm --filter @reelshort/shared run validate",
     "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
-    "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_spatial_*.py",
+    "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_*.py",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:frame": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:clip": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:render": "node scripts/render-content.cjs",
     "content:archive": "node scripts/archive-content-output.cjs",
+    "content:migrate-output": "node scripts/run-python.cjs content-pipeline/scripts/migrate_output.py",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
@@ -161,7 +162,7 @@ reelshort-clone/
 │   ├── scripts/
 │   │   ├── generate_batch.py     # calls ComfyUI API to render a batch of episodes from a script/prompt list
 │   │   └── upload_to_r2.py       # pushes finished MP4s + thumbnails to R2, registers them via the backend API
-│   ├── scripts_input/            # one ShowScript JSON per show (`<id>.json`)
+│   ├── shows/<id>/script.json   # one ShowScript per show
 ├── packages/
 │   └── shared/                   # shared TypeScript types (Episode, Series, User, Purchase, ShowScript) used by mobile, server, and the content pipeline
 ├── pnpm-workspace.yaml
@@ -206,17 +207,17 @@ reelshort-clone/
 
 ## Content Pipeline — v1 scope
 
-- `generate_batch.py`: reads one `ShowScript` JSON per show from `scripts_input/<id>.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities and scene stills from previs; `pnpm run content:generate` renders LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
+- `generate_batch.py`: reads one `ShowScript` JSON per show from `shows/<id>/script.json` and shared renderer templates from `content-pipeline/prompts.json`. `pnpm run content:frames` generates identities and scene stills from previs; `pnpm run content:generate` renders LTX clips. Existing outputs are skipped unless one selected scene uses `--force`.
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
 `content:frames` writes:
 
-1. Blocked scenes — `output/<show>/<episode>/previs/scene_XX_blockout.mp4` plus `scene_XX_start_blockout.png` / `scene_XX_end_blockout.png` (no model; review this before spending GPU time)
+1. Blocked scenes — `output/<show>/<episode>/01_previs/scene_XX/blockout.mp4` plus `start.png` / `end.png` (no model; review this before spending GPU time)
 2. Character stills — `output/<show>/characters/<id>.png` (human review, then the masked face pass)
-3. Scene stills — `scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
+3. Scene stills — `02_postvis/stills/scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
 
-`content:generate` writes `scene_XX.mp4` and concatenates `episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
+`content:generate` writes `03_postvis/clips/scene_XX.mp4` and concatenates `04_edit/episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
 `content:render` runs `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all three stages.
 
@@ -234,15 +235,15 @@ The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clip
 4. `pnpm run content:comfy` — starts ComfyUI on `127.0.0.1:8188` using the ComfyUI venv (not system Python). Leave this process running in its own terminal.
 5. Open `http://127.0.0.1:8188` → **Load** → `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, then `ltx_gemma_api.json`. If ComfyUI reports missing nodes, the custom-node clone did not finish; rerun setup. If it reports a missing model/VAE/LoRA/ControlNet file, the filename in the workflow does not match a file on disk — point the loader node at the downloaded file.
 6. Confirm `content-pipeline/.env` has `LTXV_API_KEY=...`. `content:generate` injects that key into the `GemmaAPITextEncode` node; do not hardcode it in the workflow JSON. `content:frames` does not need the LTX API key.
-7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/` and each episode’s `scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
+7. Then `pnpm run content:frames`. Review `content-pipeline/output/<show>/characters/` and each episode’s `02_postvis/stills/scene_*_start.png`. Then `pnpm run content:generate`. `pnpm run content:render` runs those two in sequence with no still-review pause.
 
 `content:frames` / `content:generate` post the matching workflow graph to ComfyUI’s `/prompt` API. The UI load step is only so you can see missing nodes/files before a long batch run. Both stages unload idle models first so the 16GB card is not holding Qwen and LTX at once.
 
 
 
-### `scripts_input/` file format
+### Show script
 
-One JSON file per show: `content-pipeline/scripts_input/<id>.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. Filename stem must match `id`. `pnpm run content:validate` checks every show file and prints a path plus a reason for each problem.
+One JSON file per show: `content-pipeline/shows/<id>/script.json`. Shape is `ShowScript` in `packages/shared/src/script.ts`. The show folder name must match `id`. `pnpm run content:validate` checks every show file and prints a path plus a reason for each problem. A file left at `scripts_input/<id>.json` is still read when `shows/<id>/script.json` is absent. `pnpm run content:migrate-output` prints the move from the old flat episode folders into `01_previs`, `02_postvis`, `03_postvis`, and `04_edit`. It changes nothing until `--apply`.
 
 Landmark `need` (`query`, optional `tags` and `style`) and `prefabId` are optional. `kind` stays the primitive fallback. Show-level `props` declares ids used by `propTracks` (`need`, `prefabId`, optional `sizeMeters`). Character `proxy` (`heightMeters`, `build`) is optional; omitted proxies use a 1.72m average mannequin. Scripts written before those fields still validate.
 
@@ -281,7 +282,7 @@ See the **Command Interface** section above — `pnpm run setup` provisions R2/D
 - [ ] 4. Build the mobile Feed → Series detail → Player flow against those dummy endpoints, using Expo's video component for vertical playback.
 - [ ] 5. Add coin wallet + unlock logic (backend routes) and paywall UI (mobile) using dummy coin balances (no real payment yet).
 - [ ] 6. Integrate Google Play Billing purchase flow in mobile + server-side verification route in the Worker.
-- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume one `ShowScript` JSON per show (`scripts_input/<id>.json`: characters, locations, prompt templates, episodes) and the R2 binding/upload logic in the Worker.
+- [x] 7. Build the content-pipeline scripts (`generate_batch.py`, `upload_to_r2.py`) to consume one `ShowScript` JSON per show (`shows/<id>/script.json`: characters, locations, prompt templates, episodes) and the R2 binding/upload logic in the Worker.
 - [ ] 8. Wire everything together: real generated episodes flowing from the pipeline into R2 into the app.
 - [ ] 9. Write `scripts/setup-cloudflare.sh` and `scripts/deploy.sh`, wire them into root `package.json` as `setup` and `deploy` scripts, finalize `wrangler.toml` bindings with placeholder IDs, and document the first real deploy in `DEPLOY.md` — the human only needs to run `wrangler login`, then `pnpm run setup` and paste the printed IDs into `wrangler.toml`.
 - [ ] 10. Add a minimal privacy policy static page and any other Play Store listing requirements (app description, screenshots).
