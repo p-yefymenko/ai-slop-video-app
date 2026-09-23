@@ -120,11 +120,23 @@ test("rejects a prop track whose id was never declared", () => {
   assert.match(report, /not declared/);
 });
 
-test("rejects a prop with nothing to resolve", () => {
-  const show = minimalShow({ props: { cup: {} } });
+test("rejects a catalog search on a landmark", () => {
+  const show = minimalShow();
+  (show.locations.room.spatial.landmarks.bench as { need?: { query: string } }).need = {
+    query: "stone well",
+  };
   const report = messages(show);
-  assert.match(report, /props\.cup/);
-  assert.match(report, /need\.query or prefabId/);
+  assert.match(report, /need/);
+});
+
+test("accepts a catalog asset id", () => {
+  const show = minimalShow();
+  show.locations.room.spatial.landmarks.bench.assetId = "polyhaven:coast_rocks_05";
+  const result = parseShowScript(show, {
+    showId: "demo-show",
+    showIdLabel: "the filename stem",
+  });
+  assert.equal(result.ok, true);
 });
 
 test("rejects an unknown landmark kind", () => {

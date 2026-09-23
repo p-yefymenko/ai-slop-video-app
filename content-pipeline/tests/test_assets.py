@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import sys
@@ -18,9 +17,9 @@ sys.path.insert(0, str(SCRIPTS))
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     apply_lock_override,
+    asset_hash,
     export_credits,
     keyword_score,
-    need_hash,
 )
 from asset_sources import (  # noqa: E402
     Candidate,
@@ -33,11 +32,12 @@ from asset_sources import (  # noqa: E402
     normalize_license,
     objaverse_license_allowed,
 )
-from build_assets import load_clip_score  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
 from fetch_asset import candidate_for_url  # noqa: E402
 from mesh_io import (  # noqa: E402
+    TRIANGLE_BUDGET,
     box_mesh,
+    decimate,
     primitive_mesh,
     proportions_match,
     read_schema_mesh,
@@ -52,9 +52,15 @@ class CountingSource:
         self.candidates = candidates
         self.calls = 0
 
-    def search(self, need: Need, limit: int = 4) -> list[Candidate]:
+    def lookup(self, source_id: str) -> Candidate | None:
         self.calls += 1
-        return list(self.candidates)[:limit]
+        for candidate in self.candidates:
+            if candidate.source_id == source_id:
+                return candidate
+        return None
+
+    def search(self, need: Need, limit: int = 4) -> list[Candidate]:
+        raise AssertionError("catalog search is not used")
 
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         raise AssertionError("local_path should skip the network fetch")
@@ -95,10 +101,16 @@ class AssetTests(unittest.TestCase):
         pack = self.library / "raw" / "kenney"
         pack.mkdir(parents=True)
         (pack / "wooden-chair.glb").write_bytes(self.cube.read_bytes())
-        found = LocalPackSource("kenney", pack, "Kenney").search(Need("wooden chair"))
+        source = LocalPackSource("kenney", pack, "Kenney")
+        found = source.search(Need("wooden chair"))
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].license, "CC0")
-        self.assertTrue(found[0].local_path)
+        named = source.lookup("wooden-chair.glb")
+        self.assertIsNotNone(named)
+        assert named is not None
+        self.assertEqual(named.license, "CC0")
+        self.assertTrue(named.local_path)
+        self.assertIsNone(source.lookup("../secret.glb"))
 
     def test_keyword_score_prefers_the_matching_title(self) -> None:
         need = Need("stone column", ("castle",))
@@ -119,6 +131,26 @@ class AssetTests(unittest.TestCase):
             self.assertAlmostEqual(float(mesh[:, 2].min()), 0.0, places=5)
         self.assertFalse(proportions_match(np.array([1.0, 1.0, 1.0]), (8.0, 0.2, 0.2)))
         self.assertTrue(proportions_match(np.array([2.0, 2.0, 2.0]), (1.0, 1.0, 1.0)))
+
+    def test_decimate_stays_under_the_previs_budget(self) -> None:
+        xs = np.linspace(0.0, 1.0, 160)
+        ys = np.linspace(0.0, 1.0, 160)
+        grid_x, grid_y = np.meshgrid(xs, ys)
+        vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
+        faces = []
+        width = len(xs)
+        for y in range(len(ys) - 1):
+            for x in range(width - 1):
+                index = y * width + x
+                faces.append((index, index + 1, index + width))
+                faces.append((index + 1, index + width + 1, index + width))
+        dense = np.array(faces, dtype=np.int64)
+        self.assertGreater(len(dense), TRIANGLE_BUDGET)
+        reduced_vertices, reduced_faces = decimate(vertices, dense)
+        self.assertLessEqual(len(reduced_faces), TRIANGLE_BUDGET)
+        self.assertGreater(len(reduced_faces), 0)
+        self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
+        self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
 
     def test_polyhaven_fetch_creates_texture_directories(self) -> None:
         payload = {
@@ -177,40 +209,40 @@ class AssetTests(unittest.TestCase):
         self.assertGreater(len(faces), 0)
         self.assertEqual(len(vertices), 8)
 
-    def test_show_prefab_beats_the_library_and_skips_search(self) -> None:
-        need = Need("wooden chair")
+    def test_show_prefab_beats_the_library_and_skips_lookup(self) -> None:
         size = (1.0, 1.0, 1.0)
-        digest = need_hash(need, size)
+        digest = asset_hash("fake", "wooden-chair", size)
         self._plant(self.shows / "demo" / "assets", "blocks/show-chair", digest, "from show", "show")
         self._plant(self.library / "prefabs", "blocks/library-chair", digest, "from library", "library")
-        source = CountingSource([self._candidate("remote", "wooden chair")])
+        source = CountingSource([self._candidate("wooden-chair", "wooden chair")])
         resolver = self._resolver(source)
-        resolved = resolver.resolve_show(self._show(need="wooden chair"))
+        resolved = resolver.resolve_show(self._show(asset_id="fake:wooden-chair"))
         item = resolved["landmark:room/bench"]
         self.assertEqual(item.origin, "show")
         self.assertEqual(item.title, "from show")
         self.assertEqual(source.calls, 0)
 
-    def test_pinned_prefab_skips_search(self) -> None:
+    def test_pinned_prefab_skips_lookup(self) -> None:
         self._plant(self.shows / "demo" / "assets", "blocks/custom-chair", None, "pinned", "show")
-        source = CountingSource([self._candidate("remote", "wooden chair")])
+        source = CountingSource([self._candidate("wooden-chair", "wooden chair")])
         resolver = self._resolver(source)
-        show = self._show(need="wooden chair", prefab_id="blocks/custom-chair")
+        show = self._show(asset_id="fake:wooden-chair", prefab_id="blocks/custom-chair")
         resolved = resolver.resolve_show(show)
         self.assertEqual(resolved["landmark:room/bench"].prefab_id, "blocks/custom-chair")
         self.assertEqual(source.calls, 0)
 
-    def test_download_is_normalized_and_a_second_resolve_does_not_search(self) -> None:
+    def test_download_is_normalized_and_a_second_resolve_does_not_fetch(self) -> None:
         source = CountingSource([self._candidate("stone-chair", "stone chair", license_name="CC-BY")])
         first = self._resolver(source)
-        show = self._show(need="stone chair")
+        show = self._show(asset_id="fake:stone-chair")
         resolved = first.resolve_show(show)
         item = resolved["landmark:room/bench"]
         self.assertEqual(item.origin, "downloaded")
         self.assertEqual(source.calls, 1)
-        vertices, _faces = read_schema_mesh(item.glb)
-        np.testing.assert_allclose(vertices.min(axis=0), [ -0.5, -0.5, 0.0], atol=1e-4)
+        vertices, faces = read_schema_mesh(item.glb)
+        np.testing.assert_allclose(vertices.min(axis=0), [-0.5, -0.5, 0.0], atol=1e-4)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [1.0, 1.0, 1.0], atol=1e-4)
+        self.assertLessEqual(len(faces), TRIANGLE_BUDGET)
         raw_copy = self.library / "raw" / "fake" / "stone-chair" / "cube.glb"
         self.assertTrue(raw_copy.is_file())
         second = self._resolver(source)
@@ -223,9 +255,9 @@ class AssetTests(unittest.TestCase):
         self.assertIn("CC-BY", text)
         self.assertIn("Powered by Poly Haven", text)
 
-    def test_same_need_shares_one_prefab(self) -> None:
+    def test_same_asset_id_shares_one_prefab(self) -> None:
         source = CountingSource([self._candidate("column", "stone column")])
-        show = self._show(need="stone column")
+        show = self._show(asset_id="fake:column")
         show["locations"]["room"]["spatial"]["landmarks"]["column_r"] = dict(
             show["locations"]["room"]["spatial"]["landmarks"]["bench"]
         )
@@ -235,54 +267,43 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(left, right)
         self.assertEqual(source.calls, 1)
 
-    def test_bad_license_and_bad_proportions_fall_back(self) -> None:
+    def test_bad_license_falls_back_and_a_named_mesh_is_scaled(self) -> None:
         forbidden = CountingSource([self._candidate("collar", "iron collar", license_name="CC-BY-NC")])
         forbidden_resolver = self._resolver(forbidden)
-        forbidden_resolved = forbidden_resolver.resolve_show(self._show(need="iron collar"))
+        forbidden_resolved = forbidden_resolver.resolve_show(self._show(asset_id="fake:collar"))
         self.assertEqual(forbidden_resolved["landmark:room/bench"].origin, "fallback")
         self.assertTrue(any("primitive" in warning for warning in forbidden_resolver.warnings))
 
-        long_request = self._show(need="spear", size=(8.0, 0.2, 0.2))
+        long_request = self._show(asset_id="fake:spear", size=(8.0, 0.2, 0.2))
         spear = CountingSource([self._candidate("spear", "spear")])
         spear_resolver = self._resolver(spear)
         spear_resolved = spear_resolver.resolve_show(long_request)
-        self.assertEqual(spear_resolved["landmark:room/bench"].origin, "fallback")
-        self.assertTrue(any("proportions" in warning for warning in spear_resolver.warnings))
+        item = spear_resolved["landmark:room/bench"]
+        self.assertEqual(item.origin, "downloaded")
+        vertices, _faces = read_schema_mesh(item.glb)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [8.0, 0.2, 0.2], atol=1e-3)
 
-    def test_offline_never_searches_and_online_retries_a_provisional_lock(self) -> None:
+    def test_offline_never_looks_up_and_online_retries_a_provisional_lock(self) -> None:
         offline_source = CountingSource([self._candidate("chair", "wooden chair")])
         offline = self._resolver(offline_source, offline=True)
-        show = self._show(need="wooden chair")
+        show = self._show(asset_id="fake:chair")
         offline.resolve_show(show)
         self._resolver(offline_source, offline=True).resolve_show(show)
         self.assertEqual(offline_source.calls, 0)
         lock = json.loads((self.library / "lock.json").read_text(encoding="utf-8"))
         digest = next(iter(lock["needs"]))
         self.assertTrue(lock["needs"][digest]["provisional"])
+        self.assertEqual(lock["needs"][digest]["assetId"], "fake:chair")
 
         empty = CountingSource([])
-        self._resolver(empty).resolve_show(self._show(need="missing prop"))
-        self._resolver(empty).resolve_show(self._show(need="missing prop"))
+        self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
+        self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
         self.assertEqual(empty.calls, 2)
 
-    def test_clip_can_override_keyword_rank(self) -> None:
-        if importlib.util.find_spec("open_clip") is None:
-            with self.assertRaises(SystemExit):
-                load_clip_score()
-        worse = self._candidate("worse-chair", "stone column")
-        better = self._candidate("better-chair", "apple")
-        source = CountingSource([worse, better])
-
-        def clip_fn(query: str, thumb: Path) -> float:
-            return 5.0 if "better-chair" in thumb.as_posix() else 0.1
-
-        resolved = self._resolver(source, clip_fn=clip_fn).resolve_show(self._show(need="stone column"))
-        self.assertEqual(resolved["landmark:room/bench"].source_id, "better-chair")
-
     def test_set_is_gltf_y_up_and_has_no_characters(self) -> None:
-        show = self._show(need="bench")
+        show = self._show(asset_id="fake:bench")
         show["characters"] = {"ada": {"name": "Ada"}}
-        show["props"] = {"cup": {"need": {"query": "cup"}, "sizeMeters": [0.1, 0.1, 0.12]}}
+        show["props"] = {"cup": {"assetId": "fake:cup", "sizeMeters": [0.1, 0.1, 0.12]}}
         self._resolver(CountingSource([]), offline=True).resolve_show(show)
         document = json.loads((self.output / "demo" / "sets" / "room" / "set.json").read_text(encoding="utf-8"))
         self.assertEqual(document["space"], "gltf-y-up")
@@ -293,9 +314,9 @@ class AssetTests(unittest.TestCase):
         self.assertTrue((self.output / "demo" / "sets" / "room" / "set.glb").is_file())
         self.assertIn("prop:cup", json.loads((self.output / "demo" / "assets" / "resolved.json").read_text())["prefabs"])
 
-    def test_lock_override_pins_a_known_need(self) -> None:
+    def test_lock_override_pins_a_known_asset(self) -> None:
         source = CountingSource([self._candidate("stone-chair", "stone chair")])
-        self._resolver(source).resolve_show(self._show(need="stone chair"))
+        self._resolver(source).resolve_show(self._show(asset_id="fake:stone-chair"))
         lock_path = self.library / "lock.json"
         digest = next(iter(json.loads(lock_path.read_text(encoding="utf-8"))["needs"]))
         apply_lock_override(lock_path, digest, "blocks/picked")
@@ -343,7 +364,7 @@ class AssetTests(unittest.TestCase):
 
     def _show(
         self,
-        need: str,
+        asset_id: str | None = None,
         size: tuple[float, float, float] = (1.0, 1.0, 1.0),
         prefab_id: str | None = None,
     ) -> dict:
@@ -351,8 +372,9 @@ class AssetTests(unittest.TestCase):
             "kind": "box",
             "position": [1.0, 2.0, 0.0],
             "size": list(size),
-            "need": {"query": need},
         }
+        if asset_id:
+            landmark["assetId"] = asset_id
         if prefab_id:
             landmark["prefabId"] = prefab_id
         return {
@@ -374,7 +396,7 @@ class AssetTests(unittest.TestCase):
         write_schema_glb(directory / "model.glb", *box_mesh((1.0, 1.0, 1.0)))
         record = {
             "id": prefab_id,
-            "needHash": digest,
+            "assetHash": digest,
             "sizeMeters": [1, 1, 1],
             "origin": origin,
             "source": origin,

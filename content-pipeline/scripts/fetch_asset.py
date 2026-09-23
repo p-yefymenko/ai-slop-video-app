@@ -15,10 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_resolver import AssetRequest, AssetResolver, need_hash  # noqa: E402
+from asset_resolver import AssetRequest, AssetResolver, asset_hash  # noqa: E402
 from asset_sources import (  # noqa: E402
     Candidate,
-    Need,
     PolyHavenSource,
     SketchfabSource,
     _download,
@@ -63,7 +62,6 @@ def main() -> None:
         local_path=str(fetched),
         size_meters=size,
     )
-    need = Need(query=candidate.title or candidate.source_id, size_meters=size)
     request = AssetRequest(
         consumer_id=f"fetch:{candidate.source_id}",
         label=candidate.source_id,
@@ -71,15 +69,15 @@ def main() -> None:
         size=size,
         position=None,
         location_id=None,
-        need=need,
+        asset_id=f"{candidate.source}:{candidate.source_id}",
         prefab_id=None,
     )
 
     class OneShot:
         name = candidate.source
 
-        def search(self, need, limit=4):
-            return [candidate]
+        def lookup(self, source_id: str):
+            return candidate if source_id == candidate.source_id else None
 
         def fetch(self, item, directory):
             return Path(item.local_path)
@@ -92,7 +90,7 @@ def main() -> None:
         print(warning)
     if resolved.origin == "fallback":
         raise SystemExit(f"Kept a primitive instead of {args.url}")
-    print(f"{resolved.prefab_id}  {need_hash(need, size)}")
+    print(f"{resolved.prefab_id}  {asset_hash(candidate.source, candidate.source_id, size)}")
 
 
 def candidate_for_url(url: str):

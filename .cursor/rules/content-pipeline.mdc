@@ -13,3 +13,5 @@ Pictures and meshes built from the script go in `output/<id>/`. `library/` is th
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The stage viewer reads Y-up and does not convert.
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
+
+Landmarks and props name a catalog model as `source:id` (`assetId`). There is no search query. Prefab meshes are capped at 25,000 triangles.

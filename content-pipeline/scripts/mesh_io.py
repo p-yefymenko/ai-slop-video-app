@@ -11,6 +11,8 @@ import numpy as np
 from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
+# Clay previs walks every triangle in Python. Downloaded scans stay under this.
+TRIANGLE_BUDGET = 25_000
 
 
 def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
@@ -98,6 +100,76 @@ def proportions_match(
     target = target / target.max()
     ratio = actual / target
     return bool(np.all((ratio >= low) & (ratio <= high)))
+
+
+def decimate(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    budget: int = TRIANGLE_BUDGET,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reduce a mesh until it has at most ``budget`` triangles.
+
+    Vertex clustering keeps the silhouette. A stride of the original faces is
+    the fallback when clustering cannot get under the budget.
+    """
+    vertices = np.asarray(vertices, dtype=np.float64)
+    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    if len(faces) <= budget:
+        return vertices, faces
+    best: tuple[np.ndarray, np.ndarray] | None = None
+    low = 2
+    high = 128
+    while low <= high:
+        divisions = (low + high) // 2
+        clustered_vertices, clustered_faces = _cluster_vertices(vertices, faces, divisions)
+        if 0 < len(clustered_faces) <= budget:
+            best = (clustered_vertices, clustered_faces)
+            low = divisions + 1
+        else:
+            high = divisions - 1
+    if best is not None:
+        return _compact(best[0], best[1])
+    step = int(np.ceil(len(faces) / budget))
+    return _compact(vertices, np.ascontiguousarray(faces[::step]))
+
+
+def _cluster_vertices(
+    vertices: np.ndarray, faces: np.ndarray, divisions: int
+) -> tuple[np.ndarray, np.ndarray]:
+    minimum = vertices.min(axis=0)
+    extent = np.maximum(vertices.max(axis=0) - minimum, 1e-9)
+    quantized = np.floor((vertices - minimum) / extent * divisions).astype(np.int64)
+    quantized = np.clip(quantized, 0, divisions - 1)
+    keys = (
+        quantized[:, 0]
+        + quantized[:, 1] * divisions
+        + quantized[:, 2] * divisions * divisions
+    )
+    _unique, inverse = np.unique(keys, return_inverse=True)
+    count = int(inverse.max()) + 1 if len(inverse) else 0
+    if count == 0:
+        return vertices[:0], faces[:0]
+    clustered = np.zeros((count, 3), dtype=np.float64)
+    weights = np.zeros(count, dtype=np.float64)
+    np.add.at(clustered, inverse, vertices)
+    np.add.at(weights, inverse, 1.0)
+    clustered /= weights[:, None]
+    remapped = inverse[faces]
+    keep = (
+        (remapped[:, 0] != remapped[:, 1])
+        & (remapped[:, 1] != remapped[:, 2])
+        & (remapped[:, 0] != remapped[:, 2])
+    )
+    return clustered, remapped[keep]
+
+
+def _compact(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    if len(faces) == 0:
+        return vertices[:0], faces
+    used = np.unique(faces.reshape(-1))
+    remap = np.full(len(vertices), -1, dtype=np.int64)
+    remap[used] = np.arange(len(used))
+    return np.ascontiguousarray(vertices[used]), np.ascontiguousarray(remap[faces])
 
 
 def write_schema_glb(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:

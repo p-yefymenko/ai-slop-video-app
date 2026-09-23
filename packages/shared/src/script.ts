@@ -6,17 +6,6 @@
  * `content-pipeline/prompts.json`, not in show JSON.
  */
 
-/**
- * Search sent to open-source asset databases. `prefabId` skips this search.
- */
-export type AssetNeed = {
-  /** Noun phrase a model catalog can match, e.g. "wooden armchair". */
-  query: string;
-  tags?: string[];
-  /** Look used when ranking candidates. Not a second query. */
-  style?: string;
-};
-
 export type CharacterProxy = {
   /**
    * Standing height in meters. The clay mannequin scales to this.
@@ -43,15 +32,19 @@ export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
   /**
-   * Primitive used when no prefab is resolved, and the category hint for search.
+   * Primitive used when no prefab is resolved.
    * The object ID is the landmarks key, not this field.
    */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
-  /** Open-source search that replaces this primitive when a candidate is accepted. */
-  need?: AssetNeed;
-  /** Library or show prefab to instance. Skips search. */
+  /**
+   * Exact catalog model, `source:id`. Example: `polyhaven:coast_rocks_05`.
+   * Sources: polyhaven, sketchfab, smithsonian, kenney, quaternius.
+   * Omit to keep the primitive.
+   */
+  assetId?: string;
+  /** Library or show prefab to instance. Skips the catalog fetch. */
   prefabId?: string;
 };
 
@@ -60,8 +53,9 @@ export type StageLandmark = {
  * they are not set dressing.
  */
 export type ShowProp = {
-  need?: AssetNeed;
-  /** Library or show prefab to instance. Skips search. */
+  /** Exact catalog model, `source:id`. Example: `polyhaven:metal_collar`. Omit to keep a box. */
+  assetId?: string;
+  /** Library or show prefab to instance. Skips the catalog fetch. */
   prefabId?: string;
   /** Target size `[width X, depth Y, height Z]` in meters. */
   sizeMeters?: Vec3;

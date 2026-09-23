@@ -109,6 +109,9 @@ class ObjaverseSource:
             )
         return []
 
+    def lookup(self, source_id: str) -> Candidate | None:
+        return None
+
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         raise RuntimeError("Objaverse download is disabled")
 
@@ -152,6 +155,40 @@ class LocalPackSource:
             )
         ranked.sort(key=lambda item: (-item[0], item[1].source_id))
         return [candidate for _score, candidate in ranked[:limit]]
+
+    def lookup(self, source_id: str) -> Candidate | None:
+        """One file already in the pack. ``source_id`` is the relative path or the stem."""
+        if not self.root.is_dir():
+            return None
+        needle = source_id.replace("\\", "/").lstrip("/")
+        root = self.root.resolve()
+        direct = (self.root / needle).resolve()
+        try:
+            direct.relative_to(root)
+        except ValueError:
+            return None
+        if direct.is_file() and direct.suffix.lower() in {".glb", ".gltf", ".obj"}:
+            return self._file_candidate(direct)
+        for path in sorted(self.root.rglob("*")):
+            if path.suffix.lower() not in {".glb", ".gltf", ".obj"}:
+                continue
+            relative = path.relative_to(self.root).as_posix()
+            if relative == needle or path.stem == needle:
+                return self._file_candidate(path)
+        return None
+
+    def _file_candidate(self, path: Path) -> Candidate:
+        relative = path.relative_to(self.root).as_posix()
+        return Candidate(
+            source=self.name,
+            source_id=relative,
+            title=path.stem.replace("_", " ").replace("-", " "),
+            author=self.author,
+            license="CC0",
+            page_url=f"local://{self.name}/{relative}",
+            tags=tuple(sorted(set(_tokens(path.stem)))),
+            local_path=str(path),
+        )
 
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         if not candidate.local_path:
@@ -211,6 +248,12 @@ class PolyHavenSource:
             )
         ranked.sort(key=lambda item: (-item[0], item[1].source_id))
         return [candidate for _score, candidate in ranked[:limit]]
+
+    def lookup(self, source_id: str) -> Candidate | None:
+        meta = self._asset_list().get(source_id)
+        if not isinstance(meta, dict):
+            return None
+        return _polyhaven_candidate(source_id, meta)
 
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         payload = _get_json(f"{POLYHAVEN_API}/files/{urllib.parse.quote(candidate.source_id)}")
@@ -284,6 +327,33 @@ class SketchfabSource:
             )
         return found
 
+    def lookup(self, source_id: str) -> Candidate | None:
+        if not self.token or not source_id:
+            return None
+        payload = _get_json(
+            f"{SKETCHFAB_API}/v3/models/{urllib.parse.quote(source_id)}",
+            headers={"Authorization": f"Token {self.token}"},
+        )
+        time.sleep(0.25)
+        license_name = normalize_license(
+            ((payload.get("license") or {}).get("slug")) or ((payload.get("license") or {}).get("label"))
+        )
+        if license_name is None or not payload.get("uid"):
+            return None
+        user = payload.get("user") or {}
+        tags = tuple(tag.get("name", "") for tag in payload.get("tags") or [] if isinstance(tag, dict))
+        uid = str(payload["uid"])
+        return Candidate(
+            source=self.name,
+            source_id=uid,
+            title=str(payload.get("name") or uid),
+            author=str(user.get("username") or user.get("displayName") or "Sketchfab"),
+            license=license_name,
+            page_url=str(payload.get("viewerUrl") or f"https://sketchfab.com/3d-models/{uid}"),
+            tags=tuple(tag for tag in tags if tag),
+            download_url=f"{SKETCHFAB_API}/v3/models/{uid}/download",
+        )
+
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         if not self.token or not candidate.download_url:
             raise RuntimeError("Sketchfab download needs SKETCHFAB_TOKEN")
@@ -346,6 +416,37 @@ class SmithsonianSource:
             )
         return found
 
+    def lookup(self, source_id: str) -> Candidate | None:
+        if not self.api_key or not source_id:
+            return None
+        quoted = urllib.parse.quote(source_id, safe="")
+        try:
+            payload = _get_json(
+                f"{SMITHSONIAN_API}/content/{quoted}?api_key={urllib.parse.quote(self.api_key)}"
+            )
+        except (RuntimeError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            return None
+        row = payload.get("response") if isinstance(payload.get("response"), dict) else payload
+        if not isinstance(row, dict):
+            return None
+        content = row.get("content") or row
+        if not isinstance(content, dict):
+            return None
+        title = _smithsonian_title(content) or source_id
+        urls = [item for item in _walk_strings(content) if item.lower().split("?")[0].endswith((".glb", ".gltf"))]
+        if not urls:
+            return None
+        record_id = str(row.get("id") or source_id)
+        return Candidate(
+            source=self.name,
+            source_id=record_id,
+            title=title,
+            author="Smithsonian Open Access",
+            license="CC0",
+            page_url=str(row.get("url") or "https://www.si.edu/openaccess"),
+            download_url=urls[0],
+        )
+
     def fetch(self, candidate: Candidate, directory: Path) -> Path:
         if not candidate.download_url:
             raise RuntimeError(f"Smithsonian record {candidate.source_id} has no GLB")
@@ -371,11 +472,40 @@ def _tokens(text: str) -> list[str]:
     return [token for token in re.split(r"[^a-z0-9]+", text.lower()) if len(token) > 2]
 
 
+def _polyhaven_candidate(asset_id: str, meta: dict) -> Candidate:
+    tags = tuple(str(tag) for tag in meta.get("tags") or [])
+    name = str(meta.get("name") or asset_id)
+    authors = meta.get("authors") or {}
+    author = ", ".join(authors) if isinstance(authors, dict) else str(authors)
+    dimensions = meta.get("dimensions")
+    size = None
+    if isinstance(dimensions, list) and len(dimensions) >= 3:
+        size = tuple(float(value) / 1000.0 for value in dimensions[:3])
+    return Candidate(
+        source="polyhaven",
+        source_id=asset_id,
+        title=name,
+        author=author or "Poly Haven",
+        license="CC0",
+        page_url=f"https://polyhaven.com/a/{asset_id}",
+        tags=tags,
+        version=str(meta.get("files_hash") or ""),
+        size_meters=size,  # type: ignore[arg-type]
+    )
+
+
 def _polyhaven_gltf(payload: dict) -> dict | None:
+    """Lowest glTF resolution. Texture size does not change the triangle count."""
     gltf = payload.get("gltf") if isinstance(payload, dict) else None
     if not isinstance(gltf, dict):
         return None
-    for _resolution, entry in gltf.items():
+
+    def rank(key: str) -> int:
+        digits = "".join(char for char in key if char.isdigit())
+        return int(digits) if digits else 10**9
+
+    for _resolution in sorted(gltf, key=rank):
+        entry = gltf[_resolution]
         if isinstance(entry, dict) and isinstance(entry.get("gltf"), dict) and entry["gltf"].get("url"):
             return entry["gltf"]
     return None

@@ -65,7 +65,6 @@ export const COIN_PACKAGES: CoinPackage[] = [
 ];
 
 export type {
-  AssetNeed,
   CharacterProxy,
   ScriptScene,
   ShowCharacter,

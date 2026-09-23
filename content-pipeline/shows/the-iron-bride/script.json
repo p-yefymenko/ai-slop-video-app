@@ -36,22 +36,12 @@
           "citadel_core": {
             "kind": "box",
             "position": [0, 24, 36],
-            "size": [48, 56, 52],
-            "need": {
-              "query": "medieval castle",
-              "tags": ["castle", "fortress", "building"],
-              "style": "black iron citadel"
-            }
+            "size": [48, 56, 52]
           },
           "chain_pylon": {
             "kind": "column",
             "position": [36, -48, 0],
-            "size": [5, 5, 90],
-            "need": {
-              "query": "stone pillar",
-              "tags": ["pillar", "column"],
-              "style": "black iron"
-            }
+            "size": [5, 5, 90]
           }
         }
       }
@@ -64,52 +54,27 @@
           "sun_well": {
             "kind": "pedestal",
             "position": [0, 4.5, 0],
-            "size": [2.2, 2.2, 1.2],
-            "need": {
-              "query": "stone well",
-              "tags": ["well", "fountain"],
-              "style": "white-gold fire"
-            }
+            "size": [2.2, 2.2, 1.2]
           },
           "anvil_altar": {
             "kind": "box",
             "position": [-6.2, 4.5, 0],
-            "size": [1.8, 1.2, 0.9],
-            "need": {
-              "query": "blacksmith anvil",
-              "tags": ["anvil", "forge"],
-              "style": "iron altar"
-            }
+            "size": [1.8, 1.2, 0.9]
           },
           "throne_dais": {
             "kind": "box",
             "position": [0, 12.2, 0],
-            "size": [5.0, 3.0, 0.4],
-            "need": {
-              "query": "stone platform",
-              "tags": ["platform", "plinth"],
-              "style": "basalt dais"
-            }
+            "size": [5.0, 3.0, 0.4]
           },
           "gate_column_l": {
             "kind": "column",
             "position": [-4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2],
-            "need": {
-              "query": "stone column",
-              "tags": ["column", "pillar"],
-              "style": "basalt gate"
-            }
+            "size": [0.8, 0.8, 4.2]
           },
           "gate_column_r": {
             "kind": "column",
             "position": [4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2],
-            "need": {
-              "query": "stone column",
-              "tags": ["column", "pillar"],
-              "style": "basalt gate"
-            }
+            "size": [0.8, 0.8, 4.2]
           }
         }
       }
@@ -117,11 +82,6 @@
   },
   "props": {
     "iron_collar": {
-      "need": {
-        "query": "iron collar",
-        "tags": ["collar", "metal"],
-        "style": "forged iron"
-      },
       "sizeMeters": [0.28, 0.22, 0.08]
     }
   },

@@ -69,17 +69,12 @@ function vec3(label: string, positive = false) {
   });
 }
 
-const assetNeedSchema = z
-  .object({
-    query: text("need.query"),
-    tags: z
-      .array(text("need tag"), {
-        invalid_type_error: "need.tags must be an array of strings",
-      })
-      .optional(),
-    style: text("need.style").optional(),
-  })
-  .strict();
+const assetIdSchema = z
+  .string({ invalid_type_error: "assetId must be a string" })
+  .regex(
+    /^(polyhaven|sketchfab|smithsonian|kenney|quaternius):[A-Za-z0-9][A-Za-z0-9._:/-]*$/,
+    "assetId must be source:id, for example polyhaven:coast_rocks_05",
+  );
 
 const prefabIdSchema = z
   .string({ invalid_type_error: "prefabId must be a string" })
@@ -93,7 +88,7 @@ const stageLandmarkSchema = z
     }),
     position: vec3("position"),
     size: vec3("size", true),
-    need: assetNeedSchema.optional(),
+    assetId: assetIdSchema.optional(),
     prefabId: prefabIdSchema.optional(),
   })
   .strict();
@@ -130,7 +125,7 @@ const showCharacterSchema = z
 
 const showPropSchema = z
   .object({
-    need: assetNeedSchema.optional(),
+    assetId: assetIdSchema.optional(),
     prefabId: prefabIdSchema.optional(),
     sizeMeters: vec3("sizeMeters", true).optional(),
   })
@@ -512,14 +507,8 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
       );
     }
   }
-  for (const [propId, prop] of Object.entries(show.props ?? {})) {
+  for (const propId of Object.keys(show.props ?? {})) {
     checkSnakeId(issues, `props.${propId}`, propId, "prop id");
-    if (!prop.need && !prop.prefabId) {
-      issues.push({
-        path: `props.${propId}`,
-        message: "declare need.query or prefabId so asset resolution has something to fetch",
-      });
-    }
   }
 
   const seenEpisodes = new Set<number>();
@@ -552,7 +541,7 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
       if (!(propId in (show.props ?? {}))) {
         issues.push({
           path: trackPath,
-          message: `prop ${JSON.stringify(propId)} is not declared on the show. Add props.${propId} with a need or prefabId.`,
+          message: `prop ${JSON.stringify(propId)} is not declared on the show. Add props.${propId}.`,
         });
       }
       checkIncreasingTimes(issues, trackPath, track);

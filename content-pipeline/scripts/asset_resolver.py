@@ -1,4 +1,4 @@
-"""Resolve landmark and prop needs into prefabs, then build one set per location.
+"""Resolve landmark and prop asset ids into prefabs, then build one set per location.
 
 Characters stay out of the set. Their clay mannequins are built from
 ``ShowCharacter.proxy`` at previs time. A rigged CC0 humanoid can later replace
@@ -25,9 +25,10 @@ from asset_sources import (
 )
 from asset_sources import _tokens as tokens
 from mesh_io import (
+    TRIANGLE_BUDGET,
+    decimate,
     fit_to_size,
     primitive_mesh,
-    proportions_match,
     read_schema_mesh,
     schema_triangles,
     write_schema_glb,
@@ -52,7 +53,7 @@ class AssetRequest:
     size: tuple[float, float, float]
     position: tuple[float, float, float] | None
     location_id: str | None
-    need: Need | None
+    asset_id: str | None
     prefab_id: str | None
 
 
@@ -81,10 +82,6 @@ class AssetResolver:
         sources=None,
         offline: bool = False,
         refresh: bool = False,
-        review: bool = False,
-        fetch_limit: int = 4,
-        score_fn=None,
-        clip_fn=None,
         write_thumbs: bool = False,
     ) -> None:
         self.show_id = show_id
@@ -98,11 +95,7 @@ class AssetResolver:
         )
         self.offline = offline
         self.refresh = refresh
-        self.review = review
-        self.fetch_limit = fetch_limit
-        self.score_fn = score_fn or keyword_score
-        self.clip_fn = clip_fn
-        self.write_thumbs = write_thumbs or review or clip_fn is not None
+        self.write_thumbs = write_thumbs
         self.warnings: list[str] = []
         self.lock = _read_json(library_dir / "lock.json", {"version": 1, "needs": {}})
         self.sources_catalog = _read_json(library_dir / "sources.json", {"assets": []})
@@ -127,27 +120,27 @@ class AssetResolver:
             self.warnings.append(
                 f"{request.consumer_id}: pinned prefab {request.prefab_id} is missing"
             )
-        if request.need is None:
+        parsed = _parse_asset_id(request.asset_id)
+        if parsed is None:
             return self._primitive(request, digest=None, provisional=False)
-        digest = need_hash(request.need, request.size)
-        cached = self._cached(request, digest)
+        source_name, source_id = parsed
+        digest = asset_hash(source_name, source_id, request.size)
+        cached = self._cached(digest)
         if cached is not None and not self.refresh:
             return cached
         if self.offline:
             return self._primitive(request, digest, provisional=True)
-        chosen, reviewed = self._search_and_import(request, digest)
-        if self.review:
-            self._write_review(request, digest, chosen, reviewed)
-        if chosen is not None:
-            return chosen
+        imported = self._fetch_named(request, source_name, source_id, digest)
+        if imported is not None:
+            return imported
         return self._primitive(request, digest, provisional=True)
 
-    def _cached(self, request: AssetRequest, digest: str) -> ResolvedPrefab | None:
+    def _cached(self, digest: str) -> ResolvedPrefab | None:
         for root, origin in (
             (self._show_assets(), "show"),
             (self.library_dir / "prefabs", "library"),
         ):
-            found = self._find_need(root, digest, origin)
+            found = self._find_asset(root, digest, origin)
             if found is not None:
                 return found
         entry = self.lock["needs"].get(digest)
@@ -158,76 +151,37 @@ class AssetResolver:
     def _show_assets(self) -> Path:
         return self.shows_dir / self.show_id / "assets"
 
-    def _search_and_import(
-        self, request: AssetRequest, digest: str
-    ) -> tuple[ResolvedPrefab | None, list[dict]]:
-        assert request.need is not None
-        found: list[Candidate] = []
-        for source in self.sources:
-            try:
-                found.extend(source.search(request.need, limit=self.fetch_limit))
-            except Exception as exc:
-                self.warnings.append(f"{getattr(source, 'name', 'source')}: {exc}")
-        eligible = []
-        for candidate in found:
-            license_name = normalize_license(candidate.license)
-            if license_name is None:
-                continue
-            if candidate.size_meters and not proportions_match(
-                np.array(candidate.size_meters), request.size
-            ):
-                continue
-            eligible.append(candidate)
-        ranked = sorted(
-            eligible,
-            key=lambda candidate: (-self.score_fn(request.need, candidate), candidate.source_id),
-        )
-        chosen: ResolvedPrefab | None = None
-        reviewed: list[dict] = []
-        for candidate in ranked[: self.fetch_limit]:
-            try:
-                imported = self._import_candidate(request, candidate, digest)
-            except Exception as exc:
-                self.warnings.append(
-                    f"{request.consumer_id}: skipped {candidate.source}:{candidate.source_id} ({exc})"
-                )
-                continue
-            reviewed.append(
-                {
-                    "prefabId": imported["resolved"].prefab_id,
-                    "title": imported["resolved"].title,
-                    "source": imported["resolved"].source,
-                    "license": imported["resolved"].license,
-                    "author": imported["resolved"].author,
-                    "pageUrl": imported["resolved"].page_url,
-                    "score": self.score_fn(request.need, candidate) if request.need else 0,
-                    "thumb": "thumb.png" if self.write_thumbs else None,
-                    "resolved": imported["resolved"],
-                }
+    def _fetch_named(
+        self,
+        request: AssetRequest,
+        source_name: str,
+        source_id: str,
+        digest: str,
+    ) -> ResolvedPrefab | None:
+        source = next((item for item in self.sources if getattr(item, "name", None) == source_name), None)
+        if source is None or not hasattr(source, "lookup"):
+            self.warnings.append(f"{request.consumer_id}: unknown asset source {source_name}")
+            return None
+        try:
+            candidate = source.lookup(source_id)
+        except Exception as exc:
+            self.warnings.append(f"{request.consumer_id}: {source_name}:{source_id} ({exc})")
+            return None
+        if candidate is None:
+            self.warnings.append(f"{request.consumer_id}: {source_name}:{source_id} was not found")
+            return None
+        if normalize_license(candidate.license) is None:
+            self.warnings.append(
+                f"{request.consumer_id}: {source_name}:{source_id} license {candidate.license} is not CC0 or CC-BY"
             )
-            if chosen is None:
-                chosen = imported["resolved"]
-                if not self.review and self.clip_fn is None:
-                    break
-        if self.clip_fn and reviewed:
-            def clip_key(item: dict) -> float:
-                thumb = item["resolved"].glb.parent / "thumb.png"
-                if not thumb.is_file() or request.need is None:
-                    return float(item["score"])
-                return float(self.clip_fn(request.need.query, thumb))
+            return None
+        try:
+            return self._import_candidate(request, candidate, digest)
+        except Exception as exc:
+            self.warnings.append(f"{request.consumer_id}: skipped {source_name}:{source_id} ({exc})")
+            return None
 
-            best = max(reviewed, key=clip_key)
-            chosen = best["resolved"]
-            digest_entry = self.lock["needs"].get(digest)
-            if digest_entry is not None:
-                digest_entry["prefabId"] = chosen.prefab_id
-                digest_entry["source"] = chosen.source
-                digest_entry["sourceId"] = chosen.source_id
-        for item in reviewed:
-            item.pop("resolved", None)
-        return chosen, reviewed
-
-    def _import_candidate(self, request: AssetRequest, candidate: Candidate, digest: str) -> dict:
+    def _import_candidate(self, request: AssetRequest, candidate: Candidate, digest: str) -> ResolvedPrefab:
         raw_dir = self.library_dir / "raw" / candidate.source / _slug(candidate.source_id)
         if candidate.local_path:
             fetched = Path(candidate.local_path)
@@ -242,13 +196,11 @@ class AssetResolver:
             source = next(item for item in self.sources if item.name == candidate.source)
             fetched = materialize_mesh(source.fetch(candidate, raw_dir))
         vertices, faces = read_schema_mesh(fetched)
-        extent = vertices.max(axis=0) - vertices.min(axis=0)
-        if not proportions_match(extent, request.size):
-            raise RuntimeError("proportions are far from the requested size")
         fitted = fit_to_size(vertices, request.size)
         category = KIND_CATEGORY.get(request.kind, "props")
-        prefab_id = f"{category}/{_slug(candidate.source_id)}"
-        directory = self.library_dir / "prefabs" / category / _slug(candidate.source_id)
+        leaf = f"{_slug(candidate.source_id)}-{_size_token(request.size)}"
+        prefab_id = f"{category}/{leaf}"
+        directory = self.library_dir / "prefabs" / category / leaf
         resolved = self._write_prefab(
             directory,
             prefab_id,
@@ -267,19 +219,7 @@ class AssetResolver:
         )
         self._remember_source(resolved, candidate.version)
         self.lock["needs"][digest] = _lock_entry(request, resolved, candidate.version, provisional=False)
-        return {
-            "resolved": resolved,
-            "review": {
-                "prefabId": resolved.prefab_id,
-                "title": resolved.title,
-                "source": resolved.source,
-                "license": resolved.license,
-                "author": resolved.author,
-                "pageUrl": resolved.page_url,
-                "score": self.score_fn(request.need, candidate) if request.need else 0,
-                "thumb": "thumb.png" if self.write_thumbs else None,
-            },
-        }
+        return resolved
 
     def _primitive(self, request: AssetRequest, digest: str | None, provisional: bool) -> ResolvedPrefab:
         prefab_id = fallback_prefab_id(request.kind, request.size)
@@ -334,6 +274,7 @@ class AssetResolver:
         version: str,
     ) -> ResolvedPrefab:
         directory.mkdir(parents=True, exist_ok=True)
+        vertices, faces = decimate(vertices, faces, TRIANGLE_BUDGET)
         write_schema_glb(directory / "model.glb", vertices, faces)
         if self.write_thumbs:
             from spatial_previs import render_mesh_thumbnail
@@ -341,7 +282,7 @@ class AssetResolver:
             render_mesh_thumbnail(schema_triangles(vertices, faces), directory / "thumb.png")
         record = {
             "id": prefab_id,
-            "needHash": digest,
+            "assetHash": digest,
             "sizeMeters": list(request.size),
             "origin": origin,
             "source": source,
@@ -377,12 +318,12 @@ class AssetResolver:
                 return self._read_prefab(path, record.get("origin") or origin)
         return None
 
-    def _find_need(self, root: Path, digest: str, origin: str) -> ResolvedPrefab | None:
+    def _find_asset(self, root: Path, digest: str, origin: str) -> ResolvedPrefab | None:
         if not root.is_dir():
             return None
         for path in sorted(root.rglob("prefab.json")):
             record = json.loads(path.read_text(encoding="utf-8"))
-            if record.get("needHash") == digest:
+            if record.get("assetHash") == digest:
                 return self._read_prefab(path, record.get("origin") or origin)
         return None
 
@@ -399,6 +340,7 @@ class AssetResolver:
         return found
 
     def _read_prefab(self, path: Path, origin: str) -> ResolvedPrefab | None:
+        self._cap_stored_mesh(path.parent)
         record = json.loads(path.read_text(encoding="utf-8"))
         glb = path.parent / "model.glb"
         if not glb.is_file():
@@ -417,6 +359,27 @@ class AssetResolver:
             size=(float(size[0]), float(size[1]), float(size[2])),
         )
 
+    def _cap_stored_mesh(self, directory: Path) -> None:
+        glb = directory / "model.glb"
+        meta = directory / "prefab.json"
+        if not glb.is_file():
+            return
+        record = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
+        recorded = record.get("triangleCount")
+        if isinstance(recorded, int) and recorded <= TRIANGLE_BUDGET:
+            return
+        vertices, faces = read_schema_mesh(glb)
+        if len(faces) <= TRIANGLE_BUDGET:
+            if meta.is_file() and recorded != len(faces):
+                record["triangleCount"] = int(len(faces))
+                meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
+            return
+        reduced_vertices, reduced_faces = decimate(vertices, faces, TRIANGLE_BUDGET)
+        write_schema_glb(glb, reduced_vertices, reduced_faces)
+        if meta.is_file():
+            record["triangleCount"] = int(len(reduced_faces))
+            meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
+
     def _remember_source(self, resolved: ResolvedPrefab, version: str) -> None:
         assets = self.sources_catalog["assets"]
         assets[:] = [item for item in assets if item.get("prefabId") != resolved.prefab_id]
@@ -434,31 +397,6 @@ class AssetResolver:
                 "retrieved": date.today().isoformat(),
             }
         )
-
-    def _write_review(
-        self,
-        request: AssetRequest,
-        digest: str,
-        chosen: ResolvedPrefab | None,
-        reviewed: list[dict],
-    ) -> None:
-        directory = self.output_dir / self.show_id / "asset-review" / digest
-        directory.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "needHash": digest,
-            "consumerId": request.consumer_id,
-            "need": None
-            if request.need is None
-            else {
-                "query": request.need.query,
-                "tags": list(request.need.tags),
-                "style": request.need.style,
-            },
-            "sizeMeters": list(request.size),
-            "chosen": None if chosen is None else chosen.prefab_id,
-            "candidates": reviewed,
-        }
-        (directory / "candidates.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _write_resolved_index(self, resolved: dict[str, ResolvedPrefab]) -> None:
         payload = {
@@ -550,7 +488,7 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                     size=_vec3(landmark.get("size"), (1.0, 1.0, 1.0)),
                     position=_vec3(landmark.get("position"), (0.0, 0.0, 0.0)),
                     location_id=location_id,
-                    need=_need(landmark.get("need"), _vec3(landmark.get("size"), (1.0, 1.0, 1.0))),
+                    asset_id=_asset_id(landmark.get("assetId")),
                     prefab_id=landmark.get("prefabId"),
                 )
             )
@@ -564,18 +502,17 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 size=size,
                 position=None,
                 location_id=None,
-                need=_need(prop.get("need"), size),
+                asset_id=_asset_id(prop.get("assetId")),
                 prefab_id=prop.get("prefabId"),
             )
         )
     return requests
 
 
-def need_hash(need: Need, size: tuple[float, float, float]) -> str:
+def asset_hash(source: str, source_id: str, size: tuple[float, float, float]) -> str:
     payload = {
-        "query": need.query.strip().lower(),
-        "tags": sorted(tag.lower() for tag in need.tags),
-        "style": need.style.strip().lower(),
+        "source": source.strip().lower(),
+        "sourceId": source_id.strip(),
         "sizeMeters": [round(float(value), 4) for value in size],
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -600,7 +537,7 @@ def apply_lock_override(lock_path: Path, digest: str, prefab_id: str) -> None:
     lock = _read_json(lock_path, {"version": 1, "needs": {}})
     entry = lock.setdefault("needs", {}).get(digest)
     if entry is None:
-        raise SystemExit(f"No locked need {digest}")
+        raise SystemExit(f"No locked asset {digest}")
     entry["prefabId"] = prefab_id
     entry["origin"] = "override"
     entry["provisional"] = False
@@ -633,16 +570,26 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
     destination.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _need(raw, size: tuple[float, float, float]) -> Need | None:
-    if not isinstance(raw, dict) or not str(raw.get("query") or "").strip():
+def _asset_id(raw) -> str | None:
+    if not isinstance(raw, str) or ":" not in raw:
         return None
-    tags = tuple(str(tag) for tag in raw.get("tags") or [])
-    return Need(
-        query=str(raw["query"]).strip(),
-        tags=tags,
-        style=str(raw.get("style") or ""),
-        size_meters=size,
-    )
+    source, _, source_id = raw.strip().partition(":")
+    if not source or not source_id:
+        return None
+    return f"{source.strip().lower()}:{source_id.strip()}"
+
+
+def _parse_asset_id(value: str | None) -> tuple[str, str] | None:
+    if not value:
+        return None
+    source, _, source_id = value.partition(":")
+    if not source or not source_id:
+        return None
+    return source, source_id
+
+
+def _size_token(size: tuple[float, float, float]) -> str:
+    return "-".join(str(int(round(float(value) * 1000))) for value in size)
 
 
 def _vec3(raw, default: tuple[float, float, float]) -> tuple[float, float, float]:
@@ -659,11 +606,8 @@ def _slug(value: str) -> str:
 
 
 def _lock_entry(request: AssetRequest, resolved: ResolvedPrefab, version: str, provisional: bool) -> dict:
-    need = request.need
     return {
-        "need": None
-        if need is None
-        else {"query": need.query, "tags": list(need.tags), "style": need.style},
+        "assetId": request.asset_id,
         "sizeMeters": list(request.size),
         "prefabId": resolved.prefab_id,
         "source": resolved.source,

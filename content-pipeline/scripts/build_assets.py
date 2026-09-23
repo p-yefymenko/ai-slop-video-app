@@ -1,4 +1,4 @@
-"""Resolve show needs into prefabs and write one set per location.
+"""Resolve show asset ids into prefabs and write one set per location.
 
 ``--episode``, ``--scene``, and ``--seed`` are accepted so ``content:render``
 can forward the same arguments. They do not change which prefabs are built.
@@ -22,36 +22,6 @@ from pipeline_paths import (  # noqa: E402
 )
 
 
-def load_clip_score():
-    """Score a clay thumbnail against the need text. Downloads CLIP weights once."""
-    try:
-        import open_clip
-        import torch
-        from PIL import Image
-    except ImportError as exc:
-        raise SystemExit(
-            "CLIP ranking needs the optional open_clip package in the content Python. "
-            "Keyword ranking is the default."
-        ) from exc
-    model, _, preprocess = open_clip.create_model_and_transforms(
-        "ViT-B-32", pretrained="laion2b_s34b_b79k"
-    )
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
-    model.eval()
-
-    def score(query: str, image_path: Path) -> float:
-        image = preprocess(Image.open(image_path).convert("RGB")).unsqueeze(0)
-        text = tokenizer([query])
-        with torch.no_grad():
-            image_features = model.encode_image(image)
-            text_features = model.encode_text(text)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            return float((image_features @ text_features.T)[0, 0])
-
-    return score
-
-
 def main() -> None:
     load_content_env()
     parser = argparse.ArgumentParser(description="Build prefabs and sets for a show.")
@@ -61,10 +31,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, help="Accepted and ignored")
     parser.add_argument("--force", action="store_true", help="Rebuild prefabs and ignore locks")
     parser.add_argument("--refresh", action="store_true", help="Same as --force")
-    parser.add_argument("--offline", action="store_true", help="Use locks and primitives, never search")
-    parser.add_argument("--review", action="store_true", help="Keep the top candidates for review")
-    parser.add_argument("--rank", choices=("keyword", "clip"), default="keyword")
-    parser.add_argument("--pick", nargs=2, metavar=("NEED_HASH", "PREFAB_ID"))
+    parser.add_argument("--offline", action="store_true", help="Use locks and primitives, do not download")
+    parser.add_argument("--pick", nargs=2, metavar=("ASSET_HASH", "PREFAB_ID"))
     parser.add_argument("--credits", action="store_true", help="Rewrite docs/CREDITS.md from library/sources.json")
     args = parser.parse_args()
     if args.credits:
@@ -80,7 +48,6 @@ def main() -> None:
     if not scripts:
         target = f" for show {args.show!r}" if args.show else ""
         raise SystemExit(f"No show JSON files found{target}")
-    clip_fn = load_clip_score() if args.rank == "clip" else None
     for script in scripts:
         show = json.loads(script.read_text(encoding="utf-8"))
         show_id = show_id_for_script(script)
@@ -88,8 +55,6 @@ def main() -> None:
             show_id,
             offline=args.offline,
             refresh=args.force or args.refresh,
-            review=args.review,
-            clip_fn=clip_fn,
         )
         resolved = resolver.resolve_show(show)
         for warning in resolver.warnings:

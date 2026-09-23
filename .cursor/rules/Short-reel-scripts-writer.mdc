@@ -9,13 +9,6 @@ alwaysApply: false
  * Comments are how to author any vertical microdrama, not a particular plot.
  */
 
-export type AssetNeed = {
-  /** Catalog noun, e.g. "wooden armchair". Not the plot. */
-  query: string;
-  tags?: string[];
-  style?: string;
-};
-
 export type ShowCharacter = {
   /**
    * One adult's stable face: age, build, skin, eyes, hair, one distinctive mark.
@@ -35,13 +28,16 @@ export type ShowCharacter = {
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /** Primitive fallback and search category. The object ID is the landmarks key. */
+  /** Primitive fallback. The object ID is the landmarks key. */
   kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
-  /** Open-source search. Omit to keep the primitive. */
-  need?: AssetNeed;
-  /** Pins a prefab and skips search. */
+  /**
+   * Exact catalog model, `source:id`. Example: `polyhaven:coast_rocks_05`.
+   * Omit to keep the primitive. Do not describe the object and hope search matches it.
+   */
+  assetId?: string;
+  /** Pins a prefab and skips the catalog fetch. */
   prefabId?: string;
 };
 
@@ -183,8 +179,8 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** What to fetch when this prop is not pinned to a prefab. */
-  need?: AssetNeed;
+  /** Exact catalog model, `source:id`. Omit, with no prefabId, to keep a box. */
+  assetId?: string;
   prefabId?: string;
   sizeMeters?: Vec3;
 };
@@ -197,8 +193,8 @@ export type ShowScript = {
   characters: Record<string, ShowCharacter>;
   locations: Record<string, ShowLocation>;
   /**
-   * Every propTracks id. A prop with neither need nor prefabId cannot be built.
-   * Omit the object when the show has no props.
+   * Every propTracks id. Omit the object when the show has no props.
+   * A prop with neither assetId nor prefabId is a box primitive.
    */
   props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];
