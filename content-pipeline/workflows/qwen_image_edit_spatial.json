@@ -21,9 +21,18 @@
       },
       "class_type": "VAELoader"
     },
-    "5": {
+    "4": {
       "inputs": {
         "model": ["1", 0],
+        "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "strength_model": 1.0
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": { "title": "Lightning 4-step LoRA" }
+    },
+    "5": {
+      "inputs": {
+        "model": ["4", 0],
         "shift": 3.1
       },
       "class_type": "ModelSamplingAuraFlow"
@@ -48,7 +57,7 @@
     "8": {
       "inputs": {
         "clip": ["2", 0],
-        "prompt": "wireframe, mannequin, diagram, grid overlay, stick figure, extra limbs, duplicate person, text, labels, watermark"
+        "prompt": "wireframe, blueprint, schematic, bounding box, construction lines, grid, mannequin, underexposed, crushed blacks"
       },
       "class_type": "TextEncodeQwenImageEditPlus",
       "_meta": { "title": "Negative instruction" }
@@ -82,23 +91,13 @@
       "class_type": "LoadImage",
       "_meta": { "title": "Pose control" }
     },
-    "43": {
-      "inputs": {
-        "clip": ["2", 0],
-        "prompt": "STRUCTURE_PROMPT_PLACEHOLDER",
-        "vae": ["3", 0],
-        "image1": ["6", 0]
-      },
-      "class_type": "TextEncodeQwenImageEditPlus",
-      "_meta": { "title": "Structure instruction" }
-    },
     "44": {
       "inputs": {
-        "positive": ["43", 0],
+        "positive": ["7", 0],
         "negative": ["8", 0],
         "control_net": ["40", 0],
         "image": ["41", 0],
-        "strength": 0.95,
+        "strength": 0.8,
         "start_percent": 0.0,
         "end_percent": 1.0,
         "vae": ["3", 0]
@@ -123,8 +122,8 @@
     "10": {
       "inputs": {
         "seed": 0,
-        "steps": 20,
-        "cfg": 4.0,
+        "steps": 4,
+        "cfg": 1.0,
         "sampler_name": "euler",
         "scheduler": "simple",
         "denoise": 1.0,
@@ -134,55 +133,11 @@
         "latent_image": ["9", 0]
       },
       "class_type": "KSampler",
-      "_meta": { "title": "Structure pass" }
-    },
-    "48": {
-      "inputs": {
-        "positive": ["7", 0],
-        "negative": ["8", 0],
-        "control_net": ["40", 0],
-        "image": ["41", 0],
-        "strength": 0.65,
-        "start_percent": 0.0,
-        "end_percent": 1.0,
-        "vae": ["3", 0]
-      },
-      "class_type": "ControlNetApplyAdvanced",
-      "_meta": { "title": "Refine depth lock" }
-    },
-    "49": {
-      "inputs": {
-        "positive": ["48", 0],
-        "negative": ["48", 1],
-        "control_net": ["40", 0],
-        "image": ["42", 0],
-        "strength": 0.75,
-        "start_percent": 0.0,
-        "end_percent": 1.0,
-        "vae": ["3", 0]
-      },
-      "class_type": "ControlNetApplyAdvanced",
-      "_meta": { "title": "Refine pose lock" }
-    },
-    "50": {
-      "inputs": {
-        "seed": 0,
-        "steps": 8,
-        "cfg": 3.0,
-        "sampler_name": "euler",
-        "scheduler": "simple",
-        "denoise": 0.4,
-        "model": ["5", 0],
-        "positive": ["49", 0],
-        "negative": ["49", 1],
-        "latent_image": ["10", 0]
-      },
-      "class_type": "KSampler",
-      "_meta": { "title": "Photoreal refine" }
+      "_meta": { "title": "Lightning still" }
     },
     "11": {
       "inputs": {
-        "samples": ["50", 0],
+        "samples": ["10", 0],
         "vae": ["3", 0]
       },
       "class_type": "VAEDecode"

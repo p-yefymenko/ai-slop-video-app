@@ -650,7 +650,9 @@ def _depth_image(zbuf: np.ndarray) -> Image.Image:
         far = float(np.percentile(zbuf[valid], 99))
         span = max(far - near, 1e-3)
         normalized = np.clip((far - zbuf) / span, 0.0, 1.0)
-        gray[valid] = np.rint(normalized[valid] * 255.0).astype(np.uint8)
+        # Far surfaces stay gray, not black, so the control image is a depth
+        # drawing rather than an underexposed frame.
+        gray[valid] = np.rint(48.0 + normalized[valid] * 207.0).astype(np.uint8)
     return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
 
 

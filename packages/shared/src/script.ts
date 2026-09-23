@@ -92,7 +92,7 @@ export type ScriptScene = {
   /**
    * Visible people. Empty for environments and prop inserts.
    * The first two are Qwen identity Pictures. Depth and pose controls lock
-   * placement; the proxy sketch is only loose context.
+   * placement. The previs wireframe is not sent to Qwen.
    */
   characterIds: string[];
   /**

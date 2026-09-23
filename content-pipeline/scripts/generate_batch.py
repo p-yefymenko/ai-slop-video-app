@@ -33,7 +33,6 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
-    "spatialStructure",
     "spatialStill",
     "sceneVideo",
 )
@@ -523,8 +522,9 @@ def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
     return render_prompt(show["prompts"][key], values)
 
 
-def write_black_png(path: Path, width: int = 768, height: int = 1360) -> None:
-    raw = b"".join(b"\x00" + (b"\x00\x00\x00" * width) for _ in range(height))
+def write_solid_png(path: Path, color: tuple[int, int, int], width: int = 768, height: int = 1360) -> None:
+    pixel = bytes(color)
+    raw = b"".join(b"\x00" + (pixel * width) for _ in range(height))
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
@@ -535,11 +535,24 @@ def write_black_png(path: Path, width: int = 768, height: int = 1360) -> None:
     )
 
 
+def write_black_png(path: Path, width: int = 768, height: int = 1360) -> None:
+    write_solid_png(path, (0, 0, 0), width, height)
+
+
 def ensure_blank_png() -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / "blank-768x1360.png"
     if not dest.is_file():
         write_black_png(dest)
+    return dest.name
+
+
+def ensure_neutral_canvas() -> str:
+    """Light canvas for shots with no identity. A black or wireframe image stays in the edit."""
+    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    dest = COMFY_INPUT_DIR / "neutral-canvas-768x1360.png"
+    if not dest.is_file():
+        write_solid_png(dest, (210, 210, 210))
     return dest.name
 
 
@@ -853,8 +866,8 @@ def inject_qwen_character_canvas(graph: dict) -> None:
 def inject_qwen_spatial_refs(
     graph: dict,
     characters: list[dict],
-    proxy_path: Path,
 ) -> None:
+    """Attach identity portraits only. Qwen-Image-Edit copies every attached picture."""
     refs = [
         (
             stage_start_still(character["image_path"]),
@@ -862,9 +875,8 @@ def inject_qwen_spatial_refs(
         )
         for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
     ]
-    refs.append((stage_named_image(proxy_path, "proxy"), "3D spatial projection"))
-    if len(refs) > 3:
-        raise RuntimeError("Qwen supports at most three spatial references")
+    if not refs:
+        refs.append((ensure_neutral_canvas(), "Blank canvas"))
     inject_qwen_image_slots(graph, refs)
 
 
@@ -924,7 +936,6 @@ def pose_image_is_blank(path: Path) -> bool:
 def set_pose_control_strength(graph: dict, enabled: bool) -> None:
     strengths = {
         "Pose lock": 1.0 if enabled else 0.0,
-        "Refine pose lock": 0.75 if enabled else 0.0,
     }
     found: set[str] = set()
     for node in graph.values():
@@ -1113,20 +1124,17 @@ def render_spatial_still(
     scene: dict,
     location: dict,
     dest: Path,
-    proxy_path: Path,
     depth_path: Path,
     pose_path: Path,
     seed: int,
     mode: str,
 ) -> None:
-    """Paint one still from identities, with depth and pose locked by ControlNet.
+    """Paint one still from identity portraits, locked by depth and pose ControlNet.
 
-    Stage 1 samples structure at full denoise. Stage 2 refines that latent at
-    low denoise. The proxy sketch is a loose picture reference on the refine
-    only. The other still is never the edit source, because Qwen-Image-Edit
-    would keep that still's camera.
+    The previs wireframe is not attached. Qwen-Image-Edit keeps every picture
+    it is given, including guide lines and a dark background.
     """
-    for guide in (proxy_path, depth_path, pose_path):
+    for guide in (depth_path, pose_path):
         if not present(guide):
             raise SystemExit(
                 f"Missing spatial guide {guide}. Run `pnpm run content:previs` before frames."
@@ -1134,37 +1142,30 @@ def render_spatial_still(
     characters = resolve_scene_characters(show, scene)
     character_ids = scene["characterIds"]
     identity_ids = character_ids[:MAX_QWEN_REFS]
-    reference_map = "; ".join(
-        [
-            *(
-                f"Picture {index} = identity of {character_id}"
-                for index, character_id in enumerate(identity_ids, start=1)
-            ),
-            f"Picture {len(identity_ids) + 1} = a loose blocking sketch",
-        ]
-    )
-    prompt_values = {
-        "characterCount": str(len(character_ids)),
-        "characterIds": ", ".join(character_ids) or "none",
-        "locationPromptBlock": location["promptBlock"],
-    }
-    structure_prompt = show_prompt(show, "spatialStructure", prompt_values)
+    if identity_ids:
+        reference_map = "; ".join(
+            f"Picture {index} = the face of {character_id} only, not this shot's background or camera"
+            for index, character_id in enumerate(identity_ids, start=1)
+        )
+    else:
+        reference_map = "Picture 1 = an empty light canvas. Replace it completely"
     prompt = show_prompt(
         show,
         "spatialStill",
         {
-            **prompt_values,
             "referenceMap": reference_map,
+            "characterCount": str(len(character_ids)),
+            "characterIds": ", ".join(character_ids) or "none",
+            "locationPromptBlock": location["promptBlock"],
             "imagePrompt": scene["imagePrompt"],
         },
     )
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
 
-    def inject(graph: dict, chars: list[dict] = characters, proxy: Path = proxy_path) -> None:
-        inject_qwen_spatial_refs(graph, chars, proxy)
+    def inject(graph: dict, chars: list[dict] = characters) -> None:
+        inject_qwen_spatial_refs(graph, chars)
         graph["41"]["inputs"]["image"] = stage_named_image(depth_path, "depth")
         graph["42"]["inputs"]["image"] = stage_named_image(pose_path, "pose")
-        inject_qwen_prompt(graph, structure_prompt, "Structure instruction")
         set_pose_control_strength(graph, not pose_image_is_blank(pose_path))
 
     run_qwen_image(workflow, dest, prompt, mode, inject, seed)
@@ -1296,9 +1297,6 @@ def generate_show(
                         location,
                         still_path,
                         proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_condition"
-                        ),
-                        proxy_frame_path(
                             show_id, episode_number, scene_number, "start_depth"
                         ),
                         proxy_frame_path(
@@ -1313,9 +1311,6 @@ def generate_show(
                         scene,
                         location,
                         end_path,
-                        proxy_frame_path(
-                            show_id, episode_number, scene_number, "end_condition"
-                        ),
                         proxy_frame_path(
                             show_id, episode_number, scene_number, "end_depth"
                         ),
