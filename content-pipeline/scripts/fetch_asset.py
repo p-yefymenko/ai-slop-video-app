@@ -35,7 +35,6 @@ def main() -> None:
     load_content_env()
     parser = argparse.ArgumentParser(description="Fetch one allowed catalog model.")
     parser.add_argument("url")
-    parser.add_argument("--kind", default="box", choices=("box", "column", "pedestal", "window", "door", "seat"))
     parser.add_argument("--size", help="width,depth,height in meters. Default: the mesh's own extent")
     args = parser.parse_args()
     candidate, fetch = candidate_for_url(args.url.strip())
@@ -65,7 +64,6 @@ def main() -> None:
     request = AssetRequest(
         consumer_id=f"fetch:{candidate.source_id}",
         label=candidate.source_id,
-        kind=args.kind,
         size=size,
         position=None,
         location_id=None,
@@ -88,8 +86,6 @@ def main() -> None:
     resolver._write_json(LIBRARY_DIR / "sources.json", resolver.sources_catalog)
     for warning in resolver.warnings:
         print(warning)
-    if resolved.origin == "fallback":
-        raise SystemExit(f"Kept a primitive instead of {args.url}")
     print(f"{resolved.prefab_id}  {asset_hash(candidate.source, candidate.source_id, size)}")
 
 

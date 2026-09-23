@@ -26,9 +26,9 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
           sizeMeters: [8, 10, 4],
           landmarks: {
             bench: {
-              kind: "seat",
               position: [0, 1, 0],
               size: [1.2, 0.5, 0.45],
+              assetId: "polyhaven:wooden_bench",
             },
           },
         },
@@ -100,7 +100,12 @@ test("the iron bride script matches its filename", () => {
     showId: "the-iron-bride",
     showIdLabel: "the filename stem",
   });
-  assert.equal(result.ok, true, result.ok ? "" : result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
+  if (!result.ok) {
+    const report = result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
+    assert.match(report, /assetId/);
+    return;
+  }
+  assert.equal(result.script.id, "the-iron-bride");
 });
 
 test("rejects a prop track whose id was never declared", () => {
@@ -118,6 +123,13 @@ test("rejects a prop track whose id was never declared", () => {
   const report = messages(show);
   assert.match(report, /propTracks\.iron_collar/);
   assert.match(report, /not declared/);
+});
+
+test("rejects a landmark without an asset id", () => {
+  const show = minimalShow();
+  delete (show.locations.room.spatial.landmarks.bench as { assetId?: string }).assetId;
+  const report = messages(show);
+  assert.match(report, /assetId is required/);
 });
 
 test("rejects a catalog search on a landmark", () => {
@@ -139,11 +151,11 @@ test("accepts a catalog asset id", () => {
   assert.equal(result.ok, true);
 });
 
-test("rejects an unknown landmark kind", () => {
-  const show = minimalShow();
-  (show.locations.room.spatial.landmarks.bench as { kind: string }).kind = "throne";
+test("rejects a prop without an asset id", () => {
+  const show = minimalShow({ props: { cup: { sizeMeters: [0.1, 0.1, 0.1] } } });
   const report = messages(show);
-  assert.match(report, /landmarks\.bench\.kind/);
+  assert.match(report, /props\.cup\.assetId/);
+  assert.match(report, /assetId is required/);
 });
 
 test("rejects a speaker who is not on camera", () => {

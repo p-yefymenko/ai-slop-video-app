@@ -31,19 +31,13 @@ export type ShowCharacter = {
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /**
-   * Primitive used when no prefab is resolved.
-   * The object ID is the landmarks key, not this field.
-   */
-  kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
   /**
    * Exact catalog model, `source:id`. Example: `polyhaven:coast_rocks_05`.
    * Sources: polyhaven, sketchfab, smithsonian, kenney, quaternius.
-   * Omit to keep the primitive.
    */
-  assetId?: string;
+  assetId: string;
   /** Library or show prefab to instance. Skips the catalog fetch. */
   prefabId?: string;
 };
@@ -53,8 +47,8 @@ export type StageLandmark = {
  * they are not set dressing.
  */
 export type ShowProp = {
-  /** Exact catalog model, `source:id`. Example: `polyhaven:metal_collar`. Omit to keep a box. */
-  assetId?: string;
+  /** Exact catalog model, `source:id`. Example: `polyhaven:metal_collar`. */
+  assetId: string;
   /** Library or show prefab to instance. Skips the catalog fetch. */
   prefabId?: string;
   /** Target size `[width X, depth Y, height Z]` in meters. */

@@ -10,7 +10,7 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 
 | Stage | Command | Writes |
 | --- | --- | --- |
-| 1. Prefabs and sets | `content:assets` | `output/<show>/sets/`, `assets/fallback/`, `library/lock.json` |
+| 1. Prefabs and sets | `content:assets` | `output/<show>/sets/`, `library/lock.json` |
 | 2. Clay previs | `content:previs` | `output/<show>/<episode>/01_previs/` — `blockout.mp4`, `start.png`, `shot.json`, guides |
 | 3. Qwen stills | `content:frames` | `output/<show>/characters/` and `02_postvis/stills/` |
 | 4. LTX clips | `content:generate` | `03_postvis/clips/` and `04_edit/episode.mp4` |
@@ -51,7 +51,7 @@ Useful flags (all stages accept them; assets ignores `--episode` / `--scene` / `
 | `--episode N` | One episode |
 | `--scene N` | One scene (needs `--episode`) |
 | `--force` | Rebuild that selected scene (needs `--scene`) |
-| `--offline` | Assets only: locks and primitives, no catalog download |
+| `--offline` | Assets only: library meshes already on disk. A missing model fails the build |
 
 Existing files are skipped unless `--force` is set on a selected scene. After a structural script rewrite, archive first:
 
@@ -86,7 +86,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-A landmark or prop that should be a real model sets `assetId` to `source:id`, for example `polyhaven:coast_rocks_05`. Omit it to keep the primitive. Meshes used for previs are capped at 25,000 triangles.
+Every landmark and prop sets `assetId` to `source:id`, for example `polyhaven:coast_rocks_05`. Meshes used for previs are capped at 25,000 triangles.
 
 God camera (OrbitControls):
 

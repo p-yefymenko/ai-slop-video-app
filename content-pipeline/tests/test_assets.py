@@ -267,12 +267,12 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(left, right)
         self.assertEqual(source.calls, 1)
 
-    def test_bad_license_falls_back_and_a_named_mesh_is_scaled(self) -> None:
+    def test_bad_license_fails_and_a_named_mesh_is_scaled(self) -> None:
         forbidden = CountingSource([self._candidate("collar", "iron collar", license_name="CC-BY-NC")])
         forbidden_resolver = self._resolver(forbidden)
-        forbidden_resolved = forbidden_resolver.resolve_show(self._show(asset_id="fake:collar"))
-        self.assertEqual(forbidden_resolved["landmark:room/bench"].origin, "fallback")
-        self.assertTrue(any("primitive" in warning for warning in forbidden_resolver.warnings))
+        with self.assertRaises(RuntimeError):
+            forbidden_resolver.resolve_show(self._show(asset_id="fake:collar"))
+        self.assertTrue(any("license" in warning for warning in forbidden_resolver.warnings))
 
         long_request = self._show(asset_id="fake:spear", size=(8.0, 0.2, 0.2))
         spear = CountingSource([self._candidate("spear", "spear")])
@@ -283,28 +283,28 @@ class AssetTests(unittest.TestCase):
         vertices, _faces = read_schema_mesh(item.glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [8.0, 0.2, 0.2], atol=1e-3)
 
-    def test_offline_never_looks_up_and_online_retries_a_provisional_lock(self) -> None:
+    def test_offline_never_looks_up_and_a_missing_model_fails(self) -> None:
         offline_source = CountingSource([self._candidate("chair", "wooden chair")])
-        offline = self._resolver(offline_source, offline=True)
         show = self._show(asset_id="fake:chair")
-        offline.resolve_show(show)
-        self._resolver(offline_source, offline=True).resolve_show(show)
+        with self.assertRaises(RuntimeError):
+            self._resolver(offline_source, offline=True).resolve_show(show)
         self.assertEqual(offline_source.calls, 0)
-        lock = json.loads((self.library / "lock.json").read_text(encoding="utf-8"))
-        digest = next(iter(lock["needs"]))
-        self.assertTrue(lock["needs"][digest]["provisional"])
-        self.assertEqual(lock["needs"][digest]["assetId"], "fake:chair")
 
         empty = CountingSource([])
-        self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
-        self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
+        with self.assertRaises(RuntimeError):
+            self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
+        with self.assertRaises(RuntimeError):
+            self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
         self.assertEqual(empty.calls, 2)
 
     def test_set_is_gltf_y_up_and_has_no_characters(self) -> None:
         show = self._show(asset_id="fake:bench")
         show["characters"] = {"ada": {"name": "Ada"}}
         show["props"] = {"cup": {"assetId": "fake:cup", "sizeMeters": [0.1, 0.1, 0.12]}}
-        self._resolver(CountingSource([]), offline=True).resolve_show(show)
+        source = CountingSource(
+            [self._candidate("bench", "bench"), self._candidate("cup", "cup")]
+        )
+        self._resolver(source).resolve_show(show)
         document = json.loads((self.output / "demo" / "sets" / "room" / "set.json").read_text(encoding="utf-8"))
         self.assertEqual(document["space"], "gltf-y-up")
         self.assertEqual([item["id"] for item in document["instances"]], ["bench"])
@@ -369,7 +369,6 @@ class AssetTests(unittest.TestCase):
         prefab_id: str | None = None,
     ) -> dict:
         landmark = {
-            "kind": "box",
             "position": [1.0, 2.0, 0.0],
             "size": list(size),
         }

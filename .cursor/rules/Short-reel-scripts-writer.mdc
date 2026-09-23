@@ -28,15 +28,40 @@ export type ShowCharacter = {
 export type Vec3 = [number, number, number];
 
 export type StageLandmark = {
-  /** Primitive fallback. The object ID is the landmarks key. */
-  kind: "box" | "column" | "pedestal" | "window" | "door" | "seat";
   position: Vec3;
   size: Vec3;
   /**
-   * Exact catalog model, `source:id`. Example: `polyhaven:coast_rocks_05`.
-   * Omit to keep the primitive. Do not describe the object and hope search matches it.
+   * Exact catalog model, `source:id`. Required. There is no primitive stand-in
+   * and no search query. Example: `polyhaven:stone_fire_pit`.
+   *
+   * Write `polyhaven:<slug>` unless `SKETCHFAB_TOKEN`, `SMITHSONIAN_API_KEY`,
+   * or meshes under `library/raw/kenney` or `library/raw/quaternius` exist.
+   * Do not invent an id the pipeline cannot fetch.
+   *
+   * Poly Haven has no keyword API. `GET https://api.polyhaven.com/assets?t=models`
+   * with User-Agent `reelshort-content-pipeline/1.0`. The id is the page slug
+   * (`https://polyhaven.com/a/<id>`). List dimensions are millimeters.
+   * Shortlist by name and tags, then open
+   * `https://cdn.polyhaven.com/asset_img/thumbs/<id>.png?height=256` and keep
+   * the id only when the picture is that object. Tags are a shortlist, not a match.
+   *
+   * Prefer one mesh. A name starting with `modular_` is a kit of loose pieces,
+   * and `size` scales the whole file into one box. Use a kit when the landmark
+   * is that kit.
+   *
+   * Confirmed absent from the model list: anvil, water well, stone column,
+   * chain, throne, plinth, iron collar.
+   * Verified single meshes: stone ring `stone_fire_pit`, iron bench mass
+   * `bench_vice_01`, low solid block `concrete_road_barrier`, one tall post
+   * `street_lamp_01`, ring `lifebuoy`, castle door `large_castle_door`,
+   * iron gate pair `large_iron_gate`.
+   * Kits: fort `modular_fort_01`, poles `modular_electricity_poles`.
+   * Rejected after the thumbnail: `coast_rocks_05` as a well, coffee tables
+   * as columns, `cannon_01` and `cross_pein_hammer` as an anvil,
+   * `gothic_statue` as a column, `rusted_wheel_rim_01` as a collar,
+   * `lateral_sea_marker` as a post.
    */
-  assetId?: string;
+  assetId: string;
   /** Pins a prefab and skips the catalog fetch. */
   prefabId?: string;
 };
@@ -179,8 +204,8 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** Exact catalog model, `source:id`. Omit, with no prefabId, to keep a box. */
-  assetId?: string;
+  /** Exact catalog model, `source:id`. Required. Same lookup as `StageLandmark.assetId`. */
+  assetId: string;
   prefabId?: string;
   sizeMeters?: Vec3;
 };
@@ -194,7 +219,7 @@ export type ShowScript = {
   locations: Record<string, ShowLocation>;
   /**
    * Every propTracks id. Omit the object when the show has no props.
-   * A prop with neither assetId nor prefabId is a box primitive.
+   * Each prop needs an assetId.
    */
   props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];

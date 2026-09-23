@@ -28,28 +28,16 @@ from mesh_io import (
     TRIANGLE_BUDGET,
     decimate,
     fit_to_size,
-    primitive_mesh,
     read_schema_mesh,
     schema_triangles,
     write_schema_glb,
 )
 from pipeline_paths import LIBRARY_DIR, OUTPUT_DIR, SHOWS_DIR
 
-KIND_CATEGORY = {
-    "box": "blocks",
-    "column": "columns",
-    "pedestal": "pedestals",
-    "window": "windows",
-    "door": "doors",
-    "seat": "seats",
-}
-
-
 @dataclass
 class AssetRequest:
     consumer_id: str
     label: str
-    kind: str
     size: tuple[float, float, float]
     position: tuple[float, float, float] | None
     location_id: str | None
@@ -122,18 +110,20 @@ class AssetResolver:
             )
         parsed = _parse_asset_id(request.asset_id)
         if parsed is None:
-            return self._primitive(request, digest=None, provisional=False)
+            raise RuntimeError(f"{request.consumer_id}: assetId is required")
         source_name, source_id = parsed
         digest = asset_hash(source_name, source_id, request.size)
         cached = self._cached(digest)
         if cached is not None and not self.refresh:
             return cached
         if self.offline:
-            return self._primitive(request, digest, provisional=True)
+            raise RuntimeError(
+                f"{request.consumer_id}: {request.asset_id} is not in the library; offline mode does not download"
+            )
         imported = self._fetch_named(request, source_name, source_id, digest)
-        if imported is not None:
-            return imported
-        return self._primitive(request, digest, provisional=True)
+        if imported is None:
+            raise RuntimeError(f"{request.consumer_id}: could not fetch {request.asset_id}")
+        return imported
 
     def _cached(self, digest: str) -> ResolvedPrefab | None:
         for root, origin in (
@@ -144,7 +134,7 @@ class AssetResolver:
             if found is not None:
                 return found
         entry = self.lock["needs"].get(digest)
-        if not entry or self.refresh or (entry.get("provisional") and not self.offline):
+        if not entry or self.refresh or entry.get("provisional"):
             return None
         return self._find_prefab(str(entry.get("prefabId") or ""))
 
@@ -197,10 +187,9 @@ class AssetResolver:
             fetched = materialize_mesh(source.fetch(candidate, raw_dir))
         vertices, faces = read_schema_mesh(fetched)
         fitted = fit_to_size(vertices, request.size)
-        category = KIND_CATEGORY.get(request.kind, "props")
         leaf = f"{_slug(candidate.source_id)}-{_size_token(request.size)}"
-        prefab_id = f"{category}/{leaf}"
-        directory = self.library_dir / "prefabs" / category / leaf
+        prefab_id = f"models/{leaf}"
+        directory = self.library_dir / "prefabs" / "models" / leaf
         resolved = self._write_prefab(
             directory,
             prefab_id,
@@ -219,40 +208,6 @@ class AssetResolver:
         )
         self._remember_source(resolved, candidate.version)
         self.lock["needs"][digest] = _lock_entry(request, resolved, candidate.version, provisional=False)
-        return resolved
-
-    def _primitive(self, request: AssetRequest, digest: str | None, provisional: bool) -> ResolvedPrefab:
-        prefab_id = fallback_prefab_id(request.kind, request.size)
-        directory = (
-            self.output_dir / self.show_id / "assets" / "fallback" / prefab_id.split("/", 1)[1]
-        )
-        existing = directory / "model.glb"
-        if not existing.is_file() or self.refresh:
-            vertices, faces = primitive_mesh(request.kind, request.size)
-            resolved = self._write_prefab(
-                directory,
-                prefab_id,
-                vertices,
-                faces,
-                request,
-                origin="fallback",
-                source="primitive",
-                source_id=request.kind,
-                title=request.kind,
-                author="",
-                license_name="",
-                page_url="",
-                digest=digest,
-                version="1",
-            )
-        else:
-            found = self._read_prefab(directory / "prefab.json", "fallback")
-            if found is None:
-                raise RuntimeError(f"Fallback prefab {directory} is incomplete")
-            resolved = found
-        if digest and provisional:
-            self.lock["needs"][digest] = _lock_entry(request, resolved, "1", provisional=True)
-        self.warnings.append(f"{request.consumer_id}: used a {request.kind} primitive")
         return resolved
 
     def _write_prefab(
@@ -484,7 +439,6 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 AssetRequest(
                     consumer_id=f"landmark:{location_id}/{landmark_id}",
                     label=landmark_id,
-                    kind=str(landmark.get("kind") or "box"),
                     size=_vec3(landmark.get("size"), (1.0, 1.0, 1.0)),
                     position=_vec3(landmark.get("position"), (0.0, 0.0, 0.0)),
                     location_id=location_id,
@@ -498,7 +452,6 @@ def collect_requests(show: dict) -> list[AssetRequest]:
             AssetRequest(
                 consumer_id=f"prop:{prop_id}",
                 label=prop_id,
-                kind="box",
                 size=size,
                 position=None,
                 location_id=None,
@@ -526,11 +479,6 @@ def keyword_score(need: Need, candidate: Candidate) -> float:
     haystack = set(tokens(" ".join((candidate.title, candidate.source_id, *candidate.tags))))
     unique = list(dict.fromkeys(wanted))
     return sum(1 for token in unique if token in haystack) / len(unique)
-
-
-def fallback_prefab_id(kind: str, size: tuple[float, float, float]) -> str:
-    parts = "-".join(str(int(round(float(value) * 1000))) for value in size)
-    return f"fallback/{kind}-{parts}"
 
 
 def apply_lock_override(lock_path: Path, digest: str, prefab_id: str) -> None:

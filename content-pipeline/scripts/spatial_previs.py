@@ -589,35 +589,6 @@ def _quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
     return [(a, b, c), (a, c, d)]
 
 
-def _box_triangles(position: Vec3, size: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
-    half_x, half_y = size[0] / 2.0, size[1] / 2.0
-    x0, x1 = position[0] - half_x, position[0] + half_x
-    y0, y1 = position[1] - half_y, position[1] + half_y
-    z0, z1 = position[2], position[2] + size[2]
-    corners = (
-        (x0, y0, z0),
-        (x1, y0, z0),
-        (x1, y1, z0),
-        (x0, y1, z0),
-        (x0, y0, z1),
-        (x1, y0, z1),
-        (x1, y1, z1),
-        (x0, y1, z1),
-    )
-    faces = (
-        (0, 1, 2, 3),
-        (4, 7, 6, 5),
-        (0, 4, 5, 1),
-        (1, 5, 6, 2),
-        (2, 6, 7, 3),
-        (3, 7, 4, 0),
-    )
-    triangles: list[tuple[Vec3, Vec3, Vec3]] = []
-    for a, b, c, d in faces:
-        triangles.extend(_quad(corners[a], corners[b], corners[c], corners[d]))
-    return triangles
-
-
 def _capsule_triangles(start: Vec3, finish: Vec3, radius: float, sides: int = 8) -> list[tuple[Vec3, Vec3, Vec3]]:
     delta = sub(finish, start)
     if length(delta) < 1e-4:
@@ -850,7 +821,7 @@ def _cached_schema_triangles(path: Path) -> list[tuple[Vec3, Vec3, Vec3]]:
 
 
 def _location_set_triangles(show_id: str | None, location_id: str) -> list[tuple[Vec3, Vec3, Vec3]] | None:
-    """Schema-space triangles for a built set. Missing files keep the landmark boxes."""
+    """Schema-space triangles for a built set. A missing file draws no set."""
     if not show_id:
         return None
     from pipeline_paths import set_dir
@@ -939,13 +910,7 @@ def _scene_surfaces(
     if _camera_inside_stage(camera, spatial):
         surfaces.extend((triangle, 156) for triangle in _floor_triangles(spatial))
     set_triangles = _location_set_triangles(show.get("id"), scene["locationId"])
-    if set_triangles is None:
-        for landmark in spatial.get("landmarks", {}).values():
-            surfaces.extend(
-                (triangle, 176)
-                for triangle in _box_triangles(vec(landmark["position"]), vec(landmark["size"]))
-            )
-    else:
+    if set_triangles is not None:
         surfaces.extend((triangle, 176) for triangle in set_triangles)
     surfaces.extend(_prop_surfaces(show, episode, scene, time_seconds))
     people: list[tuple[str, dict[str, Vec3]]] = []

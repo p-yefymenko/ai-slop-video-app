@@ -27,11 +27,11 @@ class PrevisSetTests(unittest.TestCase):
         spatial_previs._MESH_CACHE.clear()
         shutil.rmtree(OUTPUT_DIR / "unit-shot", ignore_errors=True)
 
-    def test_missing_set_keeps_landmark_boxes(self) -> None:
+    def test_missing_set_draws_no_landmark_mesh(self) -> None:
         show, episode, scene = _bare_scene()
         _camera, surfaces, people = _scene_surfaces(show, episode, scene, 0.0)
         landmarks = [item for item in surfaces if item[1] == 176]
-        self.assertEqual(len(landmarks), 12)
+        self.assertEqual(landmarks, [])
         self.assertEqual(people, [])
 
     def test_set_mesh_replaces_landmark_boxes(self) -> None:
@@ -42,7 +42,7 @@ class PrevisSetTests(unittest.TestCase):
         write_schema_glb(directory / "set.glb", vertices + np.array([0.0, 2.0, 0.0]), faces)
         _camera, surfaces, _people = _scene_surfaces(show, episode, scene, 0.0)
         landmarks = [item for item in surfaces if item[1] == 176]
-        self.assertGreater(len(landmarks), 12)
+        self.assertGreater(len(landmarks), 0)
 
     def test_shot_description_stores_gltf_positions(self) -> None:
         show, episode, scene = _bare_scene()
@@ -87,9 +87,9 @@ def _bare_scene() -> tuple[dict, dict, dict]:
                     "sizeMeters": [10, 10, 4],
                     "landmarks": {
                         "block": {
-                            "kind": "box",
                             "position": [0, 2, 0],
                             "size": [1, 1, 1],
+                            "assetId": "polyhaven:block",
                         }
                     },
                 }

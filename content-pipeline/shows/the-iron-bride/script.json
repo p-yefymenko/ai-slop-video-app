@@ -34,14 +34,14 @@
         "sizeMeters": [200, 240, 140],
         "landmarks": {
           "citadel_core": {
-            "kind": "box",
             "position": [0, 24, 36],
-            "size": [48, 56, 52]
+            "size": [48, 56, 52],
+            "assetId": "polyhaven:modular_fort_01"
           },
           "chain_pylon": {
-            "kind": "column",
             "position": [36, -48, 0],
-            "size": [5, 5, 90]
+            "size": [5, 5, 90],
+            "assetId": "polyhaven:modular_electricity_poles"
           }
         }
       }
@@ -52,29 +52,29 @@
         "sizeMeters": [22, 30, 18],
         "landmarks": {
           "sun_well": {
-            "kind": "pedestal",
             "position": [0, 4.5, 0],
-            "size": [2.2, 2.2, 1.2]
+            "size": [2.2, 2.2, 1.2],
+            "assetId": "polyhaven:stone_fire_pit"
           },
           "anvil_altar": {
-            "kind": "box",
             "position": [-6.2, 4.5, 0],
-            "size": [1.8, 1.2, 0.9]
+            "size": [1.8, 1.2, 0.9],
+            "assetId": "polyhaven:bench_vice_01"
           },
           "throne_dais": {
-            "kind": "box",
             "position": [0, 12.2, 0],
-            "size": [5.0, 3.0, 0.4]
+            "size": [5.0, 3.0, 0.4],
+            "assetId": "polyhaven:concrete_road_barrier"
           },
           "gate_column_l": {
-            "kind": "column",
             "position": [-4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2]
+            "size": [0.8, 0.8, 4.2],
+            "assetId": "polyhaven:street_lamp_01"
           },
           "gate_column_r": {
-            "kind": "column",
             "position": [4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2]
+            "size": [0.8, 0.8, 4.2],
+            "assetId": "polyhaven:street_lamp_01"
           }
         }
       }
@@ -82,7 +82,8 @@
   },
   "props": {
     "iron_collar": {
-      "sizeMeters": [0.28, 0.22, 0.08]
+      "sizeMeters": [0.28, 0.22, 0.08],
+      "assetId": "polyhaven:lifebuoy"
     }
   },
   "episodes": [

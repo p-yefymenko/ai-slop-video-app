@@ -14,4 +14,4 @@ Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipe
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
 
-Landmarks and props name a catalog model as `source:id` (`assetId`). There is no search query. Prefab meshes are capped at 25,000 triangles.
+Landmarks and props require a catalog model as `source:id` (`assetId`). There is no search query and no primitive stand-in. Prefab meshes are capped at 25,000 triangles.

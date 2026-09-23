@@ -1,19 +1,18 @@
 # Stage assets
 
-Landmarks and props name an exact catalog model with `assetId`, written as `source:id`. Example: `polyhaven:coast_rocks_05`. A search query is not a field. The same source, id, and size share one prefab. A pinned `prefabId` skips the download. If the id is omitted or the model cannot be fetched, the pipeline builds a primitive and keeps going.
+Landmarks and props name an exact catalog model with `assetId`, written as `source:id`. Example: `polyhaven:coast_rocks_05`. The field is required. A search query is not a field, and there is no primitive stand-in. The same source, id, and size share one prefab. A pinned `prefabId` skips the download. If the model cannot be fetched, `content:assets` stops.
 
 Sources: `polyhaven`, `sketchfab`, `smithsonian`, `kenney`, `quaternius`.
 
 Resolution order:
 
-1. Pinned `prefabId` in `shows/<id>/assets/`, then `library/prefabs/`, then `output/<id>/assets/fallback/`.
+1. Pinned `prefabId` in `shows/<id>/assets/`, then `library/prefabs/`.
 2. A show asset whose `assetHash` matches.
 3. A library prefab whose `assetHash` matches.
 4. `library/lock.json`, when the entry is not provisional and `--refresh` / `--force` was not passed.
 5. A lookup of that exact id. No keyword ranking.
-6. A primitive in `output/<id>/assets/fallback/`.
 
-`--offline` does not download. A provisional lock is reused offline and retried when the machine is online. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
+`--offline` does not download. A model that is not already in the library fails the build. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
 
 Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are recentered on the base, scaled to `sizeMeters`, and stored as a texture-free GLB. Anything over 25,000 triangles is reduced to that budget before it is written, including a prefab already in the library the next time it is read. The original download stays in `library/raw/` (gitignored).
 

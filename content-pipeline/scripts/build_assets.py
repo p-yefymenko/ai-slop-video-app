@@ -31,7 +31,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, help="Accepted and ignored")
     parser.add_argument("--force", action="store_true", help="Rebuild prefabs and ignore locks")
     parser.add_argument("--refresh", action="store_true", help="Same as --force")
-    parser.add_argument("--offline", action="store_true", help="Use locks and primitives, do not download")
+    parser.add_argument("--offline", action="store_true", help="Use the library only; a missing model fails the build")
     parser.add_argument("--pick", nargs=2, metavar=("ASSET_HASH", "PREFAB_ID"))
     parser.add_argument("--credits", action="store_true", help="Rewrite docs/CREDITS.md from library/sources.json")
     args = parser.parse_args()

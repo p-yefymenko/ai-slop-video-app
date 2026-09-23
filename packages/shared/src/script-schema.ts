@@ -33,7 +33,6 @@ const SNAKE_ID = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PREFAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/;
 
-const KINDS = ["box", "column", "pedestal", "window", "door", "seat"] as const;
 const STANCES = ["standing", "sitting", "kneeling", "walking"] as const;
 const BUILDS = ["slim", "average", "broad"] as const;
 
@@ -70,7 +69,10 @@ function vec3(label: string, positive = false) {
 }
 
 const assetIdSchema = z
-  .string({ invalid_type_error: "assetId must be a string" })
+  .string({
+    required_error: "assetId is required",
+    invalid_type_error: "assetId must be a string",
+  })
   .regex(
     /^(polyhaven|sketchfab|smithsonian|kenney|quaternius):[A-Za-z0-9][A-Za-z0-9._:/-]*$/,
     "assetId must be source:id, for example polyhaven:coast_rocks_05",
@@ -82,13 +84,9 @@ const prefabIdSchema = z
 
 const stageLandmarkSchema = z
   .object({
-    kind: z.enum(KINDS, {
-      required_error: "kind is required",
-      invalid_type_error: `kind must be ${KINDS.join(", ")}`,
-    }),
     position: vec3("position"),
     size: vec3("size", true),
-    assetId: assetIdSchema.optional(),
+    assetId: assetIdSchema,
     prefabId: prefabIdSchema.optional(),
   })
   .strict();
@@ -125,7 +123,7 @@ const showCharacterSchema = z
 
 const showPropSchema = z
   .object({
-    assetId: assetIdSchema.optional(),
+    assetId: assetIdSchema,
     prefabId: prefabIdSchema.optional(),
     sizeMeters: vec3("sizeMeters", true).optional(),
   })
