@@ -322,12 +322,35 @@ def _character_color(character_id: str) -> tuple[int, int, int]:
     return tuple(90 + byte % 150 for byte in digest)  # type: ignore[return-value]
 
 
-def _stance_heights(stance: str) -> tuple[float, float, float]:
+def _stance_heights(stance: str, scale: float = 1.0) -> tuple[float, float, float]:
     if stance == "sitting":
-        return 0.75, 1.12, 1.35
-    if stance == "kneeling":
-        return 0.55, 0.92, 1.18
-    return 0.95, 1.42, 1.72
+        base = (0.75, 1.12, 1.35)
+    elif stance == "kneeling":
+        base = (0.55, 0.92, 1.18)
+    else:
+        base = (0.95, 1.42, 1.72)
+    return tuple(value * scale for value in base)  # type: ignore[return-value]
+
+
+def _height_scale(show: dict, character_id: str | None) -> float:
+    """Standing head height is 1.72m when a character has no proxy."""
+    if not character_id:
+        return 1.0
+    proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy") or {}
+    try:
+        height = float(proxy.get("heightMeters"))
+    except (TypeError, ValueError):
+        return 1.0
+    if height <= 0:
+        return 1.0
+    return height / 1.72
+
+
+def _build_factor(show: dict, character_id: str | None) -> float:
+    if not character_id:
+        return 1.0
+    proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy") or {}
+    return {"slim": 0.85, "average": 1.0, "broad": 1.15}.get(str(proxy.get("build") or "average"), 1.0)
 
 
 OPENPOSE_NAMES = (
@@ -436,7 +459,7 @@ def _anchor_point(
     tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
     if target_id in tracks:
         state = episode_character_state(episode, target_id, time_seconds)
-        _, _, head_height = _stance_heights(state["stance"])
+        _, _, head_height = _stance_heights(state["stance"], _height_scale(show, target_id))
         return add(vec(state["position"]), (0.0, 0.0, head_height))
     prop_frames = ((episode.get("spatialTimeline") or {}).get("propTracks") or {}).get(target_id)
     if prop_frames:
@@ -446,7 +469,7 @@ def _anchor_point(
         holder_id = state.get("heldByCharacterId")
         if holder_id:
             holder = episode_character_state(episode, holder_id, time_seconds)
-            return add(vec(holder["position"]), (0.0, 0.0, 1.1))
+            return add(vec(holder["position"]), (0.0, 0.0, 1.1 * _height_scale(show, holder_id)))
     landmark = (
         show["locations"][scene["locationId"]].get("spatial", {}).get("landmarks", {}).get(target_id)
     )
@@ -461,11 +484,13 @@ def character_pose_joints(
     scene: dict,
     state: dict,
     time_seconds: float,
+    character_id: str | None = None,
 ) -> dict[str, Vec3]:
     """OpenPose-18 joints for one blocking state. Right/left are the character's."""
+    scale = _height_scale(show, character_id)
     feet = vec(state["position"])
     forward, right = _yaw_axes(state["bodyYawDegrees"])
-    hip_z, shoulder_z, head_z = _stance_heights(state["stance"])
+    hip_z, shoulder_z, head_z = _stance_heights(state["stance"], scale)
     neck = add(feet, (0.0, 0.0, shoulder_z + (head_z - shoulder_z) * 0.45))
     hip = add(feet, (0.0, 0.0, hip_z))
     shoulder = add(feet, (0.0, 0.0, shoulder_z))
@@ -476,11 +501,11 @@ def character_pose_joints(
         flat = (aim[0], aim[1], 0.0)
         if length(flat) > 1e-4:
             gaze = normalize(flat)
-    nose = add(add(feet, (0.0, 0.0, head_z - 0.04)), mul(gaze, 0.06))
-    right_shoulder = add(shoulder, mul(right, 0.20))
-    left_shoulder = add(shoulder, mul(right, -0.20))
-    right_hip = add(hip, mul(right, 0.11))
-    left_hip = add(hip, mul(right, -0.11))
+    nose = add(add(feet, (0.0, 0.0, head_z - 0.04 * scale)), mul(gaze, 0.06 * scale))
+    right_shoulder = add(shoulder, mul(right, 0.20 * scale))
+    left_shoulder = add(shoulder, mul(right, -0.20 * scale))
+    right_hip = add(hip, mul(right, 0.11 * scale))
+    left_hip = add(hip, mul(right, -0.11 * scale))
 
     def arm(shoulder_point: Vec3, side_sign: float, target_id: str | None) -> tuple[Vec3, Vec3]:
         target = _anchor_point(show, episode, scene, target_id, time_seconds)
@@ -488,25 +513,25 @@ def character_pose_joints(
             wrist = target
         else:
             wrist = add(shoulder_point, (0.0, 0.0, -(shoulder_z - hip_z) * 0.92))
-            wrist = add(wrist, mul(forward, 0.06))
-            wrist = add(wrist, mul(right, side_sign * 0.04))
-        elbow = add(lerp(shoulder_point, wrist, 0.48), mul(right, side_sign * 0.05))
+            wrist = add(wrist, mul(forward, 0.06 * scale))
+            wrist = add(wrist, mul(right, side_sign * 0.04 * scale))
+        elbow = add(lerp(shoulder_point, wrist, 0.48), mul(right, side_sign * 0.05 * scale))
         return elbow, wrist
 
     right_elbow, right_wrist = arm(right_shoulder, 1.0, state.get("rightHandTargetId"))
     left_elbow, left_wrist = arm(left_shoulder, -1.0, state.get("leftHandTargetId"))
 
     def leg(hip_point: Vec3, side_sign: float) -> tuple[Vec3, Vec3]:
-        ankle = add(add(feet, mul(right, side_sign * 0.09)), (0.0, 0.0, 0.06))
-        knee_forward = 0.02
+        ankle = add(add(feet, mul(right, side_sign * 0.09 * scale)), (0.0, 0.0, 0.06 * scale))
+        knee_forward = 0.02 * scale
         stance = state["stance"]
         if stance == "sitting":
-            knee_forward = 0.30
+            knee_forward = 0.30 * scale
         elif stance == "kneeling":
-            knee_forward = 0.12
-            ankle = add(ankle, mul(forward, -0.18))
+            knee_forward = 0.12 * scale
+            ankle = add(ankle, mul(forward, -0.18 * scale))
         elif stance == "walking":
-            ankle = add(ankle, mul(forward, 0.22 if side_sign < 0 else -0.16))
+            ankle = add(ankle, mul(forward, (0.22 if side_sign < 0 else -0.16) * scale))
         knee = add(lerp(hip_point, ankle, 0.52), mul(forward, knee_forward))
         return knee, ankle
 
@@ -527,10 +552,10 @@ def character_pose_joints(
         "left_hip": left_hip,
         "left_knee": left_knee,
         "left_ankle": left_ankle,
-        "right_eye": add(add(nose, mul(right, 0.032)), (0.0, 0.0, 0.04)),
-        "left_eye": add(add(nose, mul(right, -0.032)), (0.0, 0.0, 0.04)),
-        "right_ear": add(add(nose, mul(right, 0.08)), add(mul(gaze, -0.04), (0.0, 0.0, -0.02))),
-        "left_ear": add(add(nose, mul(right, -0.08)), add(mul(gaze, -0.04), (0.0, 0.0, -0.02))),
+        "right_eye": add(add(nose, mul(right, 0.032 * scale)), (0.0, 0.0, 0.04 * scale)),
+        "left_eye": add(add(nose, mul(right, -0.032 * scale)), (0.0, 0.0, 0.04 * scale)),
+        "right_ear": add(add(nose, mul(right, 0.08 * scale)), add(mul(gaze, -0.04 * scale), (0.0, 0.0, -0.02 * scale))),
+        "left_ear": add(add(nose, mul(right, -0.08 * scale)), add(mul(gaze, -0.04 * scale), (0.0, 0.0, -0.02 * scale))),
     }
 
 
@@ -618,11 +643,15 @@ def _capsule_triangles(start: Vec3, finish: Vec3, radius: float, sides: int = 8)
     return triangles
 
 
-def _character_triangles(joints: dict[str, Vec3]) -> list[tuple[Vec3, Vec3, Vec3]]:
-    top = add(joints["nose"], (0.0, 0.0, 0.10))
-    triangles = _capsule_triangles(joints["neck"], top, 0.11, sides=10)
+def _character_triangles(
+    joints: dict[str, Vec3], thickness: float = 1.0
+) -> list[tuple[Vec3, Vec3, Vec3]]:
+    top = add(joints["nose"], (0.0, 0.0, 0.10 * thickness))
+    triangles = _capsule_triangles(joints["neck"], top, 0.11 * thickness, sides=10)
     for start_name, end_name, radius in _VOLUME_LIMBS:
-        triangles.extend(_capsule_triangles(joints[start_name], joints[end_name], radius))
+        triangles.extend(
+            _capsule_triangles(joints[start_name], joints[end_name], radius * thickness)
+        )
     return triangles
 
 
@@ -804,6 +833,95 @@ def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[st
             )
 
 
+_MESH_CACHE: dict[str, tuple[int, list[tuple[Vec3, Vec3, Vec3]]]] = {}
+
+
+def _cached_schema_triangles(path: Path) -> list[tuple[Vec3, Vec3, Vec3]]:
+    from mesh_io import read_schema_mesh, schema_triangles
+
+    stamp = path.stat().st_mtime_ns
+    cached = _MESH_CACHE.get(str(path))
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    vertices, faces = read_schema_mesh(path)
+    triangles = schema_triangles(vertices, faces)
+    _MESH_CACHE[str(path)] = (stamp, triangles)
+    return triangles
+
+
+def _location_set_triangles(show_id: str | None, location_id: str) -> list[tuple[Vec3, Vec3, Vec3]] | None:
+    """Schema-space triangles for a built set. Missing files keep the landmark boxes."""
+    if not show_id:
+        return None
+    from pipeline_paths import set_dir
+
+    path = set_dir(show_id, location_id) / "set.glb"
+    if not path.is_file():
+        return None
+    return _cached_schema_triangles(path)
+
+
+def _resolved_prefabs(show_id: str | None) -> dict:
+    if not show_id:
+        return {}
+    from pipeline_paths import OUTPUT_DIR
+
+    path = OUTPUT_DIR / show_id / "assets" / "resolved.json"
+    if not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    prefabs = payload.get("prefabs") or {}
+    return prefabs if isinstance(prefabs, dict) else {}
+
+
+def _prop_frame(track: list[dict], time_seconds: float) -> dict:
+    frames = sorted(track, key=lambda item: float(item["timeSeconds"]))
+    if all(frame.get("position") is not None for frame in frames):
+        return timeline_state(frames, time_seconds)
+    chosen = frames[0]
+    for frame in frames:
+        if float(frame["timeSeconds"]) <= time_seconds:
+            chosen = frame
+    return dict(chosen)
+
+
+def _prop_surfaces(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> list[tuple[tuple[Vec3, Vec3, Vec3], int]]:
+    resolved = _resolved_prefabs(show.get("id"))
+    tracks = ((episode.get("spatialTimeline") or {}).get("propTracks")) or {}
+    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]] = []
+    for prop_id, track in tracks.items():
+        record = resolved.get(f"prop:{prop_id}") or {}
+        glb = Path(str(record.get("glb") or ""))
+        if not glb.is_file() or not track:
+            continue
+        state = _prop_frame(track, time_seconds)
+        if state.get("locationId") and state["locationId"] != scene["locationId"]:
+            continue
+        position = state.get("position")
+        holder_id = state.get("heldByCharacterId")
+        if position is None and holder_id:
+            holder = episode_character_state(episode, holder_id, time_seconds)
+            if holder.get("locationId") and holder["locationId"] != scene["locationId"]:
+                continue
+            joints = character_pose_joints(
+                show, episode, scene, holder, time_seconds, holder_id
+            )
+            hand = "left_wrist" if state.get("heldInHand") == "left" else "right_wrist"
+            position = joints[hand]
+        if position is None:
+            continue
+        offset = vec(position)
+        for triangle in _cached_schema_triangles(glb):
+            placed = tuple(add(corner, offset) for corner in triangle)
+            surfaces.append((placed, 190))  # type: ignore[arg-type]
+    return surfaces
+
+
 def _scene_surfaces(
     show: dict,
     episode: dict,
@@ -820,17 +938,25 @@ def _scene_surfaces(
     surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]] = []
     if _camera_inside_stage(camera, spatial):
         surfaces.extend((triangle, 156) for triangle in _floor_triangles(spatial))
-    for landmark in spatial.get("landmarks", {}).values():
-        surfaces.extend(
-            (triangle, 176)
-            for triangle in _box_triangles(vec(landmark["position"]), vec(landmark["size"]))
-        )
+    set_triangles = _location_set_triangles(show.get("id"), scene["locationId"])
+    if set_triangles is None:
+        for landmark in spatial.get("landmarks", {}).values():
+            surfaces.extend(
+                (triangle, 176)
+                for triangle in _box_triangles(vec(landmark["position"]), vec(landmark["size"]))
+            )
+    else:
+        surfaces.extend((triangle, 176) for triangle in set_triangles)
+    surfaces.extend(_prop_surfaces(show, episode, scene, time_seconds))
     people: list[tuple[str, dict[str, Vec3]]] = []
     for character_id in scene["characterIds"]:
         state = episode_character_state(episode, character_id, time_seconds)
-        joints = character_pose_joints(show, episode, scene, state, time_seconds)
+        joints = character_pose_joints(
+            show, episode, scene, state, time_seconds, character_id
+        )
         people.append((character_id, joints))
-        surfaces.extend((triangle, 214) for triangle in _character_triangles(joints))
+        thickness = _height_scale(show, character_id) * _build_factor(show, character_id)
+        surfaces.extend((triangle, 214) for triangle in _character_triangles(joints, thickness))
     return camera, surfaces, people
 
 
@@ -948,7 +1074,9 @@ def render_scene_proxy(
         depth_from_camera = length(sub(vec(state["position"]), vec(camera["position"])))
         states.append((depth_from_camera, character_id, state))
     for _, character_id, state in sorted(states, reverse=True):
-        joints = character_pose_joints(show, episode, scene, state, time_seconds)
+        joints = character_pose_joints(
+            show, episode, scene, state, time_seconds, character_id
+        )
         _draw_character(draw, camera, character_id, joints, debug)
 
     title = (
@@ -1100,6 +1228,7 @@ def character_facing_direction(
     episode: dict,
     scene: dict,
     character_id: str,
+    show: dict | None = None,
 ) -> str | None:
     """Return the frame edge the character faces from authoritative blocking."""
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
@@ -1107,7 +1236,7 @@ def character_facing_direction(
     start = float(scene["timeRangeSeconds"][0])
     camera = camera_at(scene, start)
     state = episode_character_state(episode, character_id, start)
-    _, _, head_height = _stance_heights(state["stance"])
+    _, _, head_height = _stance_heights(state["stance"], _height_scale(show or {}, character_id))
     head = add(vec(state["position"]), (0.0, 0.0, head_height))
     projected = project(head, camera)
     if projected is None:
@@ -1116,7 +1245,9 @@ def character_facing_direction(
     tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
     if target_id in tracks:
         target = episode_character_state(episode, target_id, start)
-        _, _, target_head_height = _stance_heights(target["stance"])
+        _, _, target_head_height = _stance_heights(
+            target["stance"], _height_scale(show or {}, target_id)
+        )
         target_projected = project(
             add(vec(target["position"]), (0.0, 0.0, target_head_height)),
             camera,
@@ -1148,7 +1279,7 @@ def spatial_target_screen_position(
             holder = episode_character_state(
                 episode, state["heldByCharacterId"], start
             )
-            position = add(vec(holder["position"]), (0.0, 0.0, 1.1))
+            position = add(vec(holder["position"]), (0.0, 0.0, 1.1 * _height_scale(show, state["heldByCharacterId"])))
     else:
         landmark = (
             show["locations"][scene["locationId"]]
@@ -1179,6 +1310,115 @@ def blockout_sample_times(start: float, finish: float, fps: int = BLOCKOUT_FPS) 
     return [start + span * index / (count - 1) for index in range(count)]
 
 
+def write_shot_description(show: dict, episode: dict, scene: dict) -> Path:
+    """Y-up shot description. Positions are glTF, with the schema point kept beside them."""
+    from coords import schema_to_gltf
+    from pipeline_paths import set_dir, shot_description_path
+
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+
+    def gltf_point(point: Vec3) -> list[float]:
+        return list(schema_to_gltf((float(point[0]), float(point[1]), float(point[2]))))
+
+    camera_frames = []
+    for frame in camera_keyframes(scene):
+        pose = _camera_pose(frame)
+        camera_frames.append(
+            {
+                "timeSeconds": float(frame["timeSeconds"]),
+                "position": gltf_point(pose["position"]),
+                "schemaPosition": pose["position"],
+                "lookAt": gltf_point(pose["lookAt"]),
+                "schemaLookAt": pose["lookAt"],
+                "verticalFovDegrees": pose["verticalFovDegrees"],
+                "rollDegrees": pose["rollDegrees"],
+            }
+        )
+    characters = []
+    tracks = ((episode.get("spatialTimeline") or {}).get("characterTracks")) or {}
+    for character_id in scene.get("characterIds") or []:
+        keyframes = []
+        for frame in tracks.get(character_id) or []:
+            time_seconds = float(frame["timeSeconds"])
+            if time_seconds < start - 1e-6 or time_seconds > finish + 1e-6:
+                continue
+            position = [float(value) for value in frame["position"]]
+            keyframes.append(
+                {
+                    "timeSeconds": time_seconds,
+                    "position": gltf_point(position),  # type: ignore[arg-type]
+                    "schemaPosition": position,
+                    "bodyYawDegrees": float(frame.get("bodyYawDegrees") or 0.0),
+                    "stance": frame.get("stance") or "standing",
+                }
+            )
+        if not keyframes and character_id in tracks:
+            state = episode_character_state(episode, character_id, start)
+            position = [float(value) for value in state["position"]]
+            keyframes.append(
+                {
+                    "timeSeconds": start,
+                    "position": gltf_point(position),  # type: ignore[arg-type]
+                    "schemaPosition": position,
+                    "bodyYawDegrees": float(state.get("bodyYawDegrees") or 0.0),
+                    "stance": state.get("stance") or "standing",
+                }
+            )
+        proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy")
+        characters.append({"id": character_id, "proxy": proxy, "keyframes": keyframes})
+    props = []
+    resolved = _resolved_prefabs(show.get("id"))
+    prop_tracks = ((episode.get("spatialTimeline") or {}).get("propTracks")) or {}
+    for prop_id, track in prop_tracks.items():
+        keyframes = []
+        for frame in track:
+            time_seconds = float(frame["timeSeconds"])
+            if time_seconds < start - 1e-6 or time_seconds > finish + 1e-6:
+                continue
+            if frame.get("locationId") and frame["locationId"] != scene["locationId"]:
+                continue
+            entry: dict = {
+                "timeSeconds": time_seconds,
+                "heldByCharacterId": frame.get("heldByCharacterId"),
+            }
+            if frame.get("position") is not None:
+                position = [float(value) for value in frame["position"]]
+                entry["position"] = gltf_point(position)  # type: ignore[arg-type]
+                entry["schemaPosition"] = position
+            keyframes.append(entry)
+        if not keyframes:
+            continue
+        record = resolved.get(f"prop:{prop_id}") or {}
+        props.append(
+            {
+                "id": prop_id,
+                "prefabId": record.get("prefabId"),
+                "keyframes": keyframes,
+            }
+        )
+    set_json = set_dir(str(show.get("id") or ""), scene["locationId"]) / "set.json"
+    payload = {
+        "space": "gltf-y-up",
+        "showId": show.get("id"),
+        "episodeNumber": episode.get("episodeNumber"),
+        "sceneNumber": scene.get("sceneNumber"),
+        "locationId": scene["locationId"],
+        "timeRangeSeconds": [start, finish],
+        "set": None
+        if not set_json.is_file()
+        else {"locationId": scene["locationId"], "path": f"sets/{scene['locationId']}/set.json"},
+        "camera": {"keyframes": camera_frames},
+        "characters": characters,
+        "props": props,
+    }
+    destination = shot_description_path(
+        str(show["id"]), int(episode["episodeNumber"]), int(scene["sceneNumber"])
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return destination
+
+
 def render_blocked_scene(
     show: dict,
     episode: dict,
@@ -1196,7 +1436,7 @@ def render_blocked_scene(
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     times = blockout_sample_times(start, finish)
     frames: list[Image.Image] = []
-    written: list[Path] = []
+    written: list[Path] = [write_shot_description(show, episode, scene)]
     identity_ids = list(scene["characterIds"][:IDENTITY_FACE_LIMIT])
     guides = {times[0]: "start", times[-1]: "end"}
     for time_seconds in times:

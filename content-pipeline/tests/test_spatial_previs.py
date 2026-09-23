@@ -186,8 +186,8 @@ class SpatialPrevisTests(unittest.TestCase):
             if item["characterIds"][:2] == ["sela", "tomas"]
             or set(item["characterIds"][:2]) == {"sela", "vardan"}
         )
-        left = character_facing_direction(self.episode, scene, scene["characterIds"][0])
-        right = character_facing_direction(self.episode, scene, scene["characterIds"][1])
+        left = character_facing_direction(self.episode, scene, scene["characterIds"][0], self.show)
+        right = character_facing_direction(self.episode, scene, scene["characterIds"][1], self.show)
         self.assertIn(left, {"left", "right"})
         self.assertIn(right, {"left", "right"})
 
@@ -221,7 +221,9 @@ class SpatialPrevisTests(unittest.TestCase):
         character_id = scene["characterIds"][0]
         state = episode_character_state(self.episode, character_id, time_seconds)
         nose = project(
-            character_pose_joints(self.show, self.episode, scene, state, time_seconds)["nose"],
+            character_pose_joints(
+                self.show, self.episode, scene, state, time_seconds, character_id
+            )["nose"],
             camera_at(scene, time_seconds),
         )
         self.assertIsNotNone(nose)

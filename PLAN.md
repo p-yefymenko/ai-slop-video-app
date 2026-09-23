@@ -224,7 +224,7 @@ reelshort-clone/
 
 `pnpm run content:assets` resolves each landmark and prop need into a prefab and writes one set per location under `output/<show>/sets`. An unchanged need reuses `library/lock.json`. A missing or unacceptable model becomes a primitive in `output/<show>/assets/fallback` so the pipeline still runs. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY model from Poly Haven, Sketchfab, or Smithsonian Open Access.
 
-`content:render` runs `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all three stages.
+`content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages.
 
 The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clips. Both are near 9:16; the LTX size is divisible by 32 and uses fewer pixels than the old 512x768 2:3 profile, which is necessary on the 16GB card.
 

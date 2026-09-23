@@ -3,6 +3,10 @@ const { spawnSync } = require("node:child_process");
 const extraArgs = process.argv.slice(2);
 const stages = [
   {
+    name: "content:assets",
+    args: ["scripts/run-python.cjs", "content-pipeline/scripts/build_assets.py"],
+  },
+  {
     name: "content:previs",
     args: ["scripts/run-python.cjs", "content-pipeline/scripts/spatial_previs.py"],
   },
