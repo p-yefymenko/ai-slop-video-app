@@ -93,7 +93,7 @@ Workflows copied to ComfyUI user/default/workflows/ (ltx_gemma_api.json, qwen_im
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)
-  2. pnpm run content:models       # downloads LTX video weights, the Qwen-Image-Edit still stack, and the InstantX Union ControlNet
+  2. pnpm run content:models       # downloads LTX video weights and the Qwen-Image-Edit still stack
   3. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
   4. In the ComfyUI UI: Load → qwen_image_edit.json, qwen_image_edit_spatial.json, then ltx_gemma_api.json, and confirm no missing-node errors
   5. pnpm run content:frames, then pnpm run content:generate

@@ -94,6 +94,51 @@ def concat_videos(scene_files: list[Path], dest: Path) -> None:
         list_file.unlink(missing_ok=True)
 
 
+def encode_rgb_frames(raw_rgb: bytes, width: int, height: int, fps: int, dest: Path) -> None:
+    """Pack raw RGB24 frames into one H.264 MP4. Used for the model-free blockout."""
+    if width % 2 or height % 2:
+        raise RuntimeError(f"Blockout size {width}x{height} must be even for yuv420p")
+    frame_bytes = width * height * 3
+    if frame_bytes == 0 or len(raw_rgb) % frame_bytes:
+        raise RuntimeError("Blockout frame buffer is not a whole number of frames")
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError(
+            "ffmpeg is missing. Re-run `pnpm run content:setup-comfy` so imageio-ffmpeg is installed."
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "pipe:0",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(dest),
+        ],
+        input=raw_rgb,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0 or not dest.exists() or dest.stat().st_size < 1024:
+        detail = (result.stderr or b"").decode("utf-8", errors="replace").strip()[-2000:]
+        raise RuntimeError(f"Failed to encode blockout {dest}\n{detail}")
+
+
 def extract_thumbnail(mp4: Path, dest: Path) -> bool:
     ffmpeg = find_ffmpeg()
     if not ffmpeg:

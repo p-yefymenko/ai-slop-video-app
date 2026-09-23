@@ -38,9 +38,6 @@ QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
 QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
-QWEN_CONTROL_REPO = "Comfy-Org/Qwen-Image-InstantX-ControlNets"
-QWEN_CONTROL_FILE = "split_files/controlnet/Qwen-Image-InstantX-ControlNet-Union.safetensors"
-QWEN_CONTROL_NAME = "Qwen-Image-InstantX-ControlNet-Union.safetensors"
 YUNET_REPO = "opencv/face_detection_yunet"
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 
@@ -144,12 +141,6 @@ def main() -> None:
     download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
-    download(
-        QWEN_CONTROL_REPO,
-        QWEN_CONTROL_FILE,
-        models / "controlnet" / QWEN_CONTROL_NAME,
-        3_000_000_000,
-    )
     download(
         YUNET_REPO,
         YUNET_FILE,

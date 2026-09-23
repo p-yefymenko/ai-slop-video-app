@@ -39,10 +39,10 @@
     },
     "6": {
       "inputs": {
-        "image": "CHARACTER_REF.png"
+        "image": "BLOCKOUT.png"
       },
       "class_type": "LoadImage",
-      "_meta": { "title": "Character reference" }
+      "_meta": { "title": "Clay blockout" }
     },
     "7": {
       "inputs": {
@@ -52,72 +52,22 @@
         "image1": ["6", 0]
       },
       "class_type": "TextEncodeQwenImageEditPlus",
-      "_meta": { "title": "Positive instruction" }
+      "_meta": { "title": "Blockout instruction" }
     },
     "8": {
       "inputs": {
         "clip": ["2", 0],
-        "prompt": "wireframe, blueprint, schematic, bounding box, construction lines, grid, mannequin, underexposed, crushed blacks"
+        "prompt": "gray clay render, untextured viewport, mannequin, wireframe, blueprint, bounding box, extra people, duplicate person, collage, inset portrait, changed camera, readable text"
       },
       "class_type": "TextEncodeQwenImageEditPlus",
       "_meta": { "title": "Negative instruction" }
     },
     "9": {
       "inputs": {
-        "width": 768,
-        "height": 1360,
-        "batch_size": 1
-      },
-      "class_type": "EmptySD3LatentImage"
-    },
-    "40": {
-      "inputs": {
-        "control_net_name": "Qwen-Image-InstantX-ControlNet-Union.safetensors"
-      },
-      "class_type": "ControlNetLoader",
-      "_meta": { "title": "Qwen InstantX Union ControlNet" }
-    },
-    "41": {
-      "inputs": {
-        "image": "DEPTH_CONTROL.png"
-      },
-      "class_type": "LoadImage",
-      "_meta": { "title": "Depth control" }
-    },
-    "42": {
-      "inputs": {
-        "image": "POSE_CONTROL.png"
-      },
-      "class_type": "LoadImage",
-      "_meta": { "title": "Pose control" }
-    },
-    "44": {
-      "inputs": {
-        "positive": ["7", 0],
-        "negative": ["8", 0],
-        "control_net": ["40", 0],
-        "image": ["41", 0],
-        "strength": 0.8,
-        "start_percent": 0.0,
-        "end_percent": 1.0,
+        "pixels": ["6", 0],
         "vae": ["3", 0]
       },
-      "class_type": "ControlNetApplyAdvanced",
-      "_meta": { "title": "Depth lock" }
-    },
-    "45": {
-      "inputs": {
-        "positive": ["44", 0],
-        "negative": ["44", 1],
-        "control_net": ["40", 0],
-        "image": ["42", 0],
-        "strength": 1.0,
-        "start_percent": 0.0,
-        "end_percent": 1.0,
-        "vae": ["3", 0]
-      },
-      "class_type": "ControlNetApplyAdvanced",
-      "_meta": { "title": "Pose lock" }
+      "class_type": "VAEEncode"
     },
     "10": {
       "inputs": {
@@ -126,14 +76,14 @@
         "cfg": 1.0,
         "sampler_name": "euler",
         "scheduler": "simple",
-        "denoise": 1.0,
+        "denoise": 0.65,
         "model": ["5", 0],
-        "positive": ["45", 0],
-        "negative": ["45", 1],
+        "positive": ["7", 0],
+        "negative": ["8", 0],
         "latent_image": ["9", 0]
       },
       "class_type": "KSampler",
-      "_meta": { "title": "Lightning still" }
+      "_meta": { "title": "Restyle clay blockout" }
     },
     "11": {
       "inputs": {
@@ -142,10 +92,87 @@
       },
       "class_type": "VAEDecode"
     },
+    "20": {
+      "inputs": {
+        "image": "FACE_MASK.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Face mask" }
+    },
+    "21": {
+      "inputs": {
+        "image": ["20", 0],
+        "channel": "red"
+      },
+      "class_type": "ImageToMask"
+    },
+    "22": {
+      "inputs": {
+        "pixels": ["11", 0],
+        "vae": ["3", 0]
+      },
+      "class_type": "VAEEncode"
+    },
+    "23": {
+      "inputs": {
+        "samples": ["22", 0],
+        "mask": ["21", 0]
+      },
+      "class_type": "SetLatentNoiseMask"
+    },
+    "24": {
+      "inputs": {
+        "image": "CHARACTER_REF.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Character reference" }
+    },
+    "25": {
+      "inputs": {
+        "image": "CHARACTER_REF_2.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Character reference 2" }
+    },
+    "70": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "PROMPT_PLACEHOLDER",
+        "vae": ["3", 0],
+        "image1": ["11", 0],
+        "image2": ["24", 0],
+        "image3": ["25", 0]
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Face instruction" }
+    },
+    "30": {
+      "inputs": {
+        "seed": 0,
+        "steps": 4,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["5", 0],
+        "positive": ["70", 0],
+        "negative": ["8", 0],
+        "latent_image": ["23", 0]
+      },
+      "class_type": "KSampler",
+      "_meta": { "title": "Identity faces" }
+    },
+    "31": {
+      "inputs": {
+        "samples": ["30", 0],
+        "vae": ["3", 0]
+      },
+      "class_type": "VAEDecode"
+    },
     "12": {
       "inputs": {
         "filename_prefix": "reelshort_start",
-        "images": ["11", 0]
+        "images": ["31", 0]
       },
       "class_type": "SaveImage",
       "_meta": { "title": "Start still" }

@@ -76,13 +76,13 @@ class SpatialPipelineTests(unittest.TestCase):
         pipeline.write_black_png(path, 8, 8)
         return path
 
-    def test_two_shot_uses_two_identities_and_not_the_previs(self) -> None:
+    def test_two_shot_restyles_the_blockout_and_not_a_wireframe(self) -> None:
         scene = next(
             item
             for item in self.episode["scenes"]
             if len(item["characterIds"]) == 2
         )
-        graph = pipeline.clone_workflow(self.qwen)
+        graph = pipeline.clone_workflow(self.qwen_spatial)
         with tempfile.TemporaryDirectory() as temp:
             temp_dir = Path(temp)
             characters = [
@@ -92,12 +92,21 @@ class SpatialPipelineTests(unittest.TestCase):
                 }
                 for character_id in scene["characterIds"]
             ]
-            pipeline.inject_qwen_spatial_refs(graph, characters)
+            pipeline.inject_qwen_spatial_refs(
+                graph, characters, "scene_blockout.png", "scene_faces.png"
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
-        self.assertEqual(len(loaders), 2)
+        self.assertEqual(len(loaders), 4)
         self.assertFalse(any("proxy" in node["inputs"]["image"] for node in loaders))
+        self.assertEqual(graph["6"]["inputs"]["image"], "scene_blockout.png")
+        blockout = pipeline._qwen_encoder(graph, "Blockout instruction")
+        assert blockout is not None
+        self.assertEqual(
+            set(blockout["inputs"]) & {"image1", "image2", "image3"},
+            {"image1"},
+        )
 
     def test_loader_allows_group_dialogue_and_more_than_two_people(self) -> None:
         groups = [
@@ -108,7 +117,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertTrue(groups)
 
     def test_crowd_still_attaches_two_identities_only(self) -> None:
-        graph = pipeline.clone_workflow(self.qwen)
+        graph = pipeline.clone_workflow(self.qwen_spatial)
         with tempfile.TemporaryDirectory() as temp:
             temp_dir = Path(temp)
             characters = [
@@ -118,11 +127,16 @@ class SpatialPipelineTests(unittest.TestCase):
                 }
                 for index in range(4)
             ]
-            pipeline.inject_qwen_spatial_refs(graph, characters)
+            pipeline.inject_qwen_spatial_refs(
+                graph, characters, "scene_blockout.png", "scene_faces.png"
+            )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
-        self.assertEqual(len(loaders), 2)
+        self.assertEqual(len(loaders), 4)
+        face = pipeline._qwen_encoder(graph, "Face instruction")
+        assert face is not None
+        self.assertEqual(set(face["inputs"]) & {"image2", "image3"}, {"image2", "image3"})
 
     def test_single_uses_identity_only(self) -> None:
         scene = next(
@@ -130,7 +144,7 @@ class SpatialPipelineTests(unittest.TestCase):
             for item in self.episode["scenes"]
             if len(item["characterIds"]) == 1
         )
-        graph = pipeline.clone_workflow(self.qwen)
+        graph = pipeline.clone_workflow(self.qwen_spatial)
         with tempfile.TemporaryDirectory() as temp:
             temp_dir = Path(temp)
             pipeline.inject_qwen_spatial_refs(
@@ -141,28 +155,35 @@ class SpatialPipelineTests(unittest.TestCase):
                         "image_path": self._inject_png(temp_dir, "identity.png"),
                     }
                 ],
+                "scene_blockout.png",
+                "scene_faces.png",
             )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
-        self.assertEqual(len(loaders), 1)
+        self.assertEqual(len(loaders), 3)
+        face = pipeline._qwen_encoder(graph, "Face instruction")
+        assert face is not None
+        self.assertNotIn("image3", face["inputs"])
         self.assertNotIn("spatialEnvironmentStill", self.show["prompts"])
         self.assertNotIn("spatialGroupEndStill", self.show["prompts"])
         self.assertNotIn("characterProfile", self.show["prompts"])
 
-    def test_environment_shot_uses_a_light_canvas(self) -> None:
-        graph = pipeline.clone_workflow(self.qwen)
-        pipeline.inject_qwen_spatial_refs(graph, [])
+    def test_environment_shot_restyles_the_blockout_only(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline.inject_qwen_spatial_refs(graph, [], "scene_blockout.png", None)
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(
             [node["inputs"]["image"] for node in loaders],
-            ["neutral-canvas-768x1360.png"],
+            ["scene_blockout.png"],
         )
-        self.assertIn("spatialStill", self.show["prompts"])
-        self.assertNotIn("spatialStructure", self.show["prompts"])
-        self.assertNotIn("spatialEnvironmentStill", self.show["prompts"])
+        self.assertEqual(graph["12"]["inputs"]["images"], ["11", 0])
+        self.assertNotIn("30", graph)
+        self.assertIn("spatialBlockout", self.show["prompts"])
+        self.assertIn("spatialFaces", self.show["prompts"])
+        self.assertNotIn("spatialStill", self.show["prompts"])
 
     def test_end_guides_follow_spatial_change(self) -> None:
         moving = next(
@@ -212,17 +233,17 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("spatialEndStill", pipeline.PROMPT_KEYS)
         self.assertNotIn("spatialEndStill", self.show["prompts"])
         self.assertFalse(hasattr(pipeline, "inject_qwen_end_refs"))
-        graph = pipeline.clone_workflow(self.qwen)
-        pipeline.inject_qwen_spatial_refs(graph, [])
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline.inject_qwen_spatial_refs(graph, [], "scene_blockout.png", None)
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(
             [node["inputs"]["image"] for node in loaders],
-            ["neutral-canvas-768x1360.png"],
+            ["scene_blockout.png"],
         )
 
-    def test_spatial_still_uses_lightning_and_controlnet(self) -> None:
+    def test_spatial_still_restyles_the_clay_latent(self) -> None:
         graph = pipeline.clone_workflow(self.qwen_spatial)
         scene = next(item for item in self.episode["scenes"] if len(item["characterIds"]) >= 2)
         with tempfile.TemporaryDirectory() as temp:
@@ -234,29 +255,26 @@ class SpatialPipelineTests(unittest.TestCase):
                 }
                 for character_id in scene["characterIds"][:2]
             ]
-            pipeline.inject_qwen_spatial_refs(graph, characters)
+            pipeline.inject_qwen_spatial_refs(
+                graph, characters, "scene_blockout.png", "scene_faces.png"
+            )
             pipeline.inject_seed(graph, 17)
-        positive = pipeline._qwen_encoder(graph, "Positive instruction")
-        assert positive is not None
-        self.assertEqual(set(positive["inputs"]) & {"image1", "image2", "image3"}, {"image1", "image2"})
-        self.assertIsNone(pipeline._qwen_encoder(graph, "Structure instruction"))
         self.assertEqual(graph["4"]["inputs"]["lora_name"], "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors")
-        self.assertEqual(graph["5"]["inputs"]["model"], ["4", 0])
         self.assertEqual(graph["5"]["inputs"]["shift"], 3.1)
+        self.assertEqual(graph["9"]["class_type"], "VAEEncode")
+        self.assertEqual(graph["9"]["inputs"]["pixels"], ["6", 0])
         self.assertEqual(graph["10"]["inputs"]["steps"], 4)
         self.assertEqual(graph["10"]["inputs"]["cfg"], 1.0)
-        self.assertEqual(graph["10"]["inputs"]["positive"], ["45", 0])
+        self.assertEqual(graph["10"]["inputs"]["denoise"], 0.65)
+        self.assertEqual(graph["10"]["inputs"]["latent_image"], ["9", 0])
+        self.assertEqual(graph["10"]["inputs"]["positive"], ["7", 0])
         self.assertEqual(graph["10"]["inputs"]["seed"], 17)
-        self.assertEqual(graph["11"]["inputs"]["samples"], ["10", 0])
-        self.assertNotIn("50", graph)
-        self.assertEqual(
-            graph["40"]["inputs"]["control_net_name"],
-            "Qwen-Image-InstantX-ControlNet-Union.safetensors",
-        )
-        self.assertEqual(graph["44"]["inputs"]["strength"], 0.8)
-        self.assertEqual(graph["45"]["inputs"]["strength"], 1.0)
-        pipeline.set_pose_control_strength(graph, False)
-        self.assertEqual(graph["45"]["inputs"]["strength"], 0.0)
+        self.assertEqual(graph["30"]["inputs"]["denoise"], 1.0)
+        self.assertEqual(graph["30"]["inputs"]["seed"], 17)
+        self.assertEqual(graph["23"]["class_type"], "SetLatentNoiseMask")
+        self.assertEqual(graph["12"]["inputs"]["images"], ["31", 0])
+        self.assertNotIn("40", graph)
+        self.assertFalse(hasattr(pipeline, "set_pose_control_strength"))
 
     def test_end_guide_is_added_before_av_sampling_and_cropped(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")

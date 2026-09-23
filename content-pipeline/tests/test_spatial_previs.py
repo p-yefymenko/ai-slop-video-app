@@ -12,12 +12,15 @@ sys.path.insert(0, str(SCRIPTS))
 from spatial_previs import (  # noqa: E402
     PROXY_HEIGHT,
     PROXY_WIDTH,
+    VIEWPORT_GRAY,
+    blockout_sample_times,
     camera_at,
     character_facing_direction,
     character_pose_joints,
     compile_spatial_video_prompt,
     episode_character_state,
     project,
+    render_blocked_frame,
     render_scene_proxy,
     render_structure_maps,
     scene_has_spatial_change,
@@ -244,6 +247,30 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertGreater(sum(depth.getpixel((x, y))), 0)
                 extrema = depth.getextrema()
                 self.assertGreater(extrema[0][1], extrema[0][0])
+
+    def test_interior_blockout_keeps_the_floor(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        image, _zbuf, _people = render_blocked_frame(
+            self.show,
+            self.episode,
+            scene,
+            float(scene["timeRangeSeconds"][0]),
+        )
+        self.assertEqual(image.size, (PROXY_WIDTH, PROXY_HEIGHT))
+        bottom = image.crop((0, int(PROXY_HEIGHT * 0.82), PROXY_WIDTH, PROXY_HEIGHT))
+        band = list(bottom.get_flattened_data())
+        ground = sum(
+            1
+            for index in range(0, len(band), 3)
+            if (band[index], band[index + 1], band[index + 2]) != VIEWPORT_GRAY
+        )
+        self.assertGreater(ground, (len(band) // 3) // 2)
+
+    def test_blockout_samples_cover_the_shot(self) -> None:
+        times = blockout_sample_times(2.0, 4.0)
+        self.assertEqual(times[0], 2.0)
+        self.assertEqual(times[-1], 4.0)
+        self.assertGreaterEqual(len(times), 3)
 
 
 if __name__ == "__main__":

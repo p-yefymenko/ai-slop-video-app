@@ -21,6 +21,8 @@ from pathlib import Path
 from ffmpeg_tools import concat_videos
 from PIL import Image
 from spatial_previs import (
+    PROXY_HEIGHT,
+    PROXY_WIDTH,
     compile_spatial_video_prompt,
     generate_episode_previs,
     proxy_frame_path,
@@ -33,7 +35,8 @@ SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROMPT_KEYS = (
     "characterImage",
-    "spatialStill",
+    "spatialBlockout",
+    "spatialFaces",
     "sceneVideo",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
@@ -863,21 +866,58 @@ def inject_qwen_character_canvas(graph: dict) -> None:
     inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
 
 
+_FACE_PASS_NODES = ("20", "21", "22", "23", "24", "25", "30", "31", "70")
+
+
+def _disable_face_pass(graph: dict) -> None:
+    save = graph.get("12")
+    if isinstance(save, dict):
+        save.setdefault("inputs", {})["images"] = ["11", 0]
+    for node_id in _FACE_PASS_NODES:
+        graph.pop(node_id, None)
+
+
 def inject_qwen_spatial_refs(
     graph: dict,
     characters: list[dict],
+    blockout_name: str,
+    mask_name: str | None,
 ) -> None:
-    """Attach identity portraits only. Qwen-Image-Edit copies every attached picture."""
-    refs = [
-        (
-            stage_start_still(character["image_path"]),
-            f"Character reference {index} ({character['id']})",
-        )
-        for index, character in enumerate(characters[:MAX_QWEN_REFS], start=1)
-    ]
-    if not refs:
-        refs.append((ensure_neutral_canvas(), "Blank canvas"))
-    inject_qwen_image_slots(graph, refs)
+    """Picture 1 is the clay blockout. Identity portraits are a masked second pass."""
+    blockout = graph.get("6")
+    if not isinstance(blockout, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the clay blockout loader")
+    blockout.setdefault("inputs", {})["image"] = blockout_name
+    blockout["_meta"] = {"title": "Clay blockout"}
+    blockout_encoder = _qwen_encoder(graph, "Blockout instruction")
+    if blockout_encoder is None:
+        raise RuntimeError("Spatial Qwen workflow is missing the blockout instruction")
+    blockout_inputs = blockout_encoder.setdefault("inputs", {})
+    blockout_inputs["image1"] = ["6", 0]
+    blockout_inputs.pop("image2", None)
+    blockout_inputs.pop("image3", None)
+    if not characters or mask_name is None:
+        _disable_face_pass(graph)
+        return
+    if "20" not in graph or "70" not in graph:
+        raise RuntimeError("Spatial Qwen workflow is missing the face pass")
+    graph["20"].setdefault("inputs", {})["image"] = mask_name
+    face = _qwen_encoder(graph, "Face instruction")
+    if face is None:
+        raise RuntimeError("Spatial Qwen workflow is missing the face instruction")
+    face_inputs = face.setdefault("inputs", {})
+    face_inputs["image1"] = ["11", 0]
+    slots = (("24", "image2"), ("25", "image3"))
+    for node_id, image_key in slots:
+        face_inputs.pop(image_key, None)
+        graph.pop(node_id, None)
+    for (node_id, image_key), character in zip(slots, characters[:MAX_QWEN_REFS]):
+        graph[node_id] = {
+            "inputs": {"image": stage_start_still(character["image_path"])},
+            "class_type": "LoadImage",
+            "_meta": {"title": f"Character reference ({character['id']})"},
+        }
+        face_inputs[image_key] = [node_id, 0]
 
 
 def _qwen_encoder(graph: dict, title: str) -> dict | None:
@@ -933,24 +973,6 @@ def pose_image_is_blank(path: Path) -> bool:
     return all(channel[1] == 0 for channel in extrema)
 
 
-def set_pose_control_strength(graph: dict, enabled: bool) -> None:
-    strengths = {
-        "Pose lock": 1.0 if enabled else 0.0,
-    }
-    found: set[str] = set()
-    for node in graph.values():
-        if not isinstance(node, dict):
-            continue
-        title = str((node.get("_meta") or {}).get("title", ""))
-        if title not in strengths:
-            continue
-        node.setdefault("inputs", {})["strength"] = strengths[title]
-        found.add(title)
-    missing = set(strengths) - found
-    if missing:
-        raise RuntimeError(f"Spatial Qwen workflow is missing {', '.join(sorted(missing))}")
-
-
 def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
     if not refs:
         raise RuntimeError("Qwen-Image-Edit needs at least one reference image")
@@ -989,7 +1011,10 @@ def latent_size(graph: dict) -> tuple[int, int, int]:
             return int(inputs["width"]), int(inputs["height"]), int(inputs["length"])
         if class_type == "EmptySD3LatentImage":
             return int(inputs["width"]), int(inputs["height"]), 1
-    raise RuntimeError("Could not find EmptyLTXVLatentVideo or EmptySD3LatentImage in the ComfyUI workflow")
+    for node in graph.values():
+        if isinstance(node, dict) and node.get("class_type") == "VAEEncode":
+            return PROXY_WIDTH, PROXY_HEIGHT, 1
+    raise RuntimeError("Could not find a latent size in the ComfyUI workflow")
 
 
 def workflow_frame_rate(graph: dict) -> float:
@@ -1124,51 +1149,48 @@ def render_spatial_still(
     scene: dict,
     location: dict,
     dest: Path,
-    depth_path: Path,
-    pose_path: Path,
+    blockout_path: Path,
+    mask_path: Path,
     seed: int,
     mode: str,
 ) -> None:
-    """Paint one still from identity portraits, locked by depth and pose ControlNet.
-
-    The previs wireframe is not attached. Qwen-Image-Edit keeps every picture
-    it is given, including guide lines and a dark background.
-    """
-    for guide in (depth_path, pose_path):
-        if not present(guide):
-            raise SystemExit(
-                f"Missing spatial guide {guide}. Run `pnpm run content:previs` before frames."
-            )
+    """Restyle one clay blockout into a photoreal still. The blockout is picture 1."""
+    if not present(blockout_path):
+        raise SystemExit(
+            f"Missing blocked scene frame {blockout_path}. Run `pnpm run content:previs` first."
+        )
     characters = resolve_scene_characters(show, scene)
     character_ids = scene["characterIds"]
-    identity_ids = character_ids[:MAX_QWEN_REFS]
-    if identity_ids:
-        reference_map = "; ".join(
-            f"Picture {index} = the face of {character_id} only, not this shot's background or camera"
-            for index, character_id in enumerate(identity_ids, start=1)
-        )
-    else:
-        reference_map = "Picture 1 = an empty light canvas. Replace it completely"
-    prompt = show_prompt(
-        show,
-        "spatialStill",
-        {
-            "referenceMap": reference_map,
-            "characterCount": str(len(character_ids)),
-            "characterIds": ", ".join(character_ids) or "none",
-            "locationPromptBlock": location["promptBlock"],
-            "imagePrompt": scene["imagePrompt"],
-        },
-    )
+    values = {
+        "characterCount": str(len(character_ids)),
+        "characterIds": ", ".join(character_ids) or "none",
+        "locationPromptBlock": location["promptBlock"],
+        "imagePrompt": scene["imagePrompt"],
+    }
+    blockout_prompt = show_prompt(show, "spatialBlockout", values)
+    mask_name = None
+    face_prompt = None
+    if characters and present(mask_path) and not pose_image_is_blank(mask_path):
+        identity_ids = character_ids[:MAX_QWEN_REFS]
+        values = {
+            **values,
+            "referenceMap": "; ".join(
+                f"Picture {index} = the face of {character_id} only"
+                for index, character_id in enumerate(identity_ids, start=2)
+            ),
+        }
+        face_prompt = show_prompt(show, "spatialFaces", values)
+        mask_name = stage_named_image(mask_path, "faces")
+    blockout_name = stage_named_image(blockout_path, "blockout")
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
-
-    def inject(graph: dict, chars: list[dict] = characters) -> None:
-        inject_qwen_spatial_refs(graph, chars)
-        graph["41"]["inputs"]["image"] = stage_named_image(depth_path, "depth")
-        graph["42"]["inputs"]["image"] = stage_named_image(pose_path, "pose")
-        set_pose_control_strength(graph, not pose_image_is_blank(pose_path))
-
-    run_qwen_image(workflow, dest, prompt, mode, inject, seed)
+    graph = clone_workflow(workflow)
+    inject_seed(graph, seed)
+    inject_qwen_prompt(graph, blockout_prompt, "Blockout instruction")
+    inject_qwen_spatial_refs(graph, characters, blockout_name, mask_name)
+    if face_prompt is not None and "70" in graph:
+        inject_qwen_prompt(graph, face_prompt, "Face instruction")
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
 def run_qwen_image(
@@ -1297,10 +1319,10 @@ def generate_show(
                         location,
                         still_path,
                         proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_depth"
+                            show_id, episode_number, scene_number, "start_blockout"
                         ),
                         proxy_frame_path(
-                            show_id, episode_number, scene_number, "start_pose"
+                            show_id, episode_number, scene_number, "start_faces"
                         ),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
@@ -1312,10 +1334,10 @@ def generate_show(
                         location,
                         end_path,
                         proxy_frame_path(
-                            show_id, episode_number, scene_number, "end_depth"
+                            show_id, episode_number, scene_number, "end_blockout"
                         ),
                         proxy_frame_path(
-                            show_id, episode_number, scene_number, "end_pose"
+                            show_id, episode_number, scene_number, "end_faces"
                         ),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",

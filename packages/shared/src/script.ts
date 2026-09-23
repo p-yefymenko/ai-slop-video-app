@@ -91,8 +91,8 @@ export type ScriptScene = {
   storyBeat: string;
   /**
    * Visible people. Empty for environments and prop inserts.
-   * The first two are Qwen identity Pictures. Depth and pose controls lock
-   * placement. The previs wireframe is not sent to Qwen.
+   * The clay blockout is the picture Qwen restyles, so the camera stays.
+   * The first two identities are painted onto those faces afterward.
    */
   characterIds: string[];
   /**
@@ -108,7 +108,7 @@ export type ScriptScene = {
   camera: SpatialCamera;
   /**
    * Optional wardrobe, expression, and atmosphere. Omit when the location
-   * block and the depth/pose guides are enough. Never restate position,
+   * block and the clay blockout are enough. Never restate position,
    * facing, eyeline, framing, or set geometry.
    */
   imagePrompt?: string;

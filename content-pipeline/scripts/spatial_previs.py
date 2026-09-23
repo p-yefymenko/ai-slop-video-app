@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project deterministic stage blocking into vertical proxy frames."""
+"""Render a blocked scene from the stage timeline, with no image or video model."""
 
 from __future__ import annotations
 
@@ -11,13 +11,18 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
 PROXY_WIDTH = 768
 PROXY_HEIGHT = 1360
+NEAR_CLIP = 0.05
+# Empty viewport, matching a clay playblast: gray where no surface exists.
+VIEWPORT_GRAY = (148, 149, 152)
+IDENTITY_FACE_LIMIT = 2
+BLOCKOUT_FPS = 8
 
 Vec3 = tuple[float, float, float]
 
@@ -196,17 +201,61 @@ def _camera_basis(camera: dict) -> tuple[Vec3, Vec3, Vec3, Vec3, float]:
     return position, right, up, forward, focal
 
 
-def project(point: Vec3, camera: dict) -> tuple[float, float, float] | None:
-    position, right, up, forward, focal = _camera_basis(camera)
+def _view_point(point: Vec3, basis: tuple[Vec3, Vec3, Vec3, Vec3, float]) -> Vec3:
+    position, right, up, forward, _focal = basis
     relative = sub(point, position)
-    depth = dot(relative, forward)
-    if depth <= 0.05:
-        return None
+    return (dot(relative, right), dot(relative, up), dot(relative, forward))
+
+
+def _screen_point(x: float, y: float, depth: float, focal: float) -> tuple[float, float, float]:
     return (
-        PROXY_WIDTH / 2.0 + focal * dot(relative, right) / depth,
-        PROXY_HEIGHT / 2.0 - focal * dot(relative, up) / depth,
+        PROXY_WIDTH / 2.0 + focal * x / depth,
+        PROXY_HEIGHT / 2.0 - focal * y / depth,
         depth,
     )
+
+
+def project(point: Vec3, camera: dict) -> tuple[float, float, float] | None:
+    basis = _camera_basis(camera)
+    x, y, depth = _view_point(point, basis)
+    if depth <= NEAR_CLIP:
+        return None
+    return _screen_point(x, y, depth, basis[4])
+
+
+def _clip_near(points: list[Vec3], near: float) -> list[Vec3]:
+    """Keep the part of a polygon in front of the near plane."""
+    clipped: list[Vec3] = []
+    for index, current in enumerate(points):
+        previous = points[index - 1]
+        previous_in = previous[2] >= near
+        current_in = current[2] >= near
+        if current_in != previous_in:
+            span = current[2] - previous[2]
+            amount = 0.0 if abs(span) < 1e-8 else (near - previous[2]) / span
+            clipped.append(
+                (
+                    previous[0] + (current[0] - previous[0]) * amount,
+                    previous[1] + (current[1] - previous[1]) * amount,
+                    near,
+                )
+            )
+        if current_in:
+            clipped.append(current)
+    return clipped
+
+
+def _projected_triangles(
+    triangle: tuple[Vec3, Vec3, Vec3],
+    basis: tuple[Vec3, Vec3, Vec3, Vec3, float],
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]]:
+    view = [_view_point(point, basis) for point in triangle]
+    polygon = _clip_near(view, NEAR_CLIP)
+    if len(polygon) < 3:
+        return []
+    focal = basis[4]
+    screen = [_screen_point(x, y, depth, focal) for x, y, depth in polygon]
+    return [(screen[0], screen[index], screen[index + 1]) for index in range(1, len(screen) - 1)]
 
 
 def _line3d(
@@ -511,25 +560,6 @@ def _quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
     return [(a, b, c), (a, c, d)]
 
 
-def _room_triangles(spatial: dict) -> list[tuple[Vec3, Vec3, Vec3]]:
-    width, depth, height = vec(spatial["sizeMeters"])
-    x0, x1 = -width / 2.0, width / 2.0
-    y0, y1 = -depth / 2.0, depth / 2.0
-    z0, z1 = 0.0, height
-    floor_near = ((x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0))
-    ceiling = ((x0, y0, z1), (x0, y1, z1), (x1, y1, z1), (x1, y0, z1))
-    triangles = _quad(*floor_near) + _quad(*ceiling)
-    walls = (
-        ((x0, y0, z0), (x0, y0, z1), (x1, y0, z1), (x1, y0, z0)),
-        ((x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)),
-        ((x1, y1, z0), (x1, y1, z1), (x0, y1, z1), (x0, y1, z0)),
-        ((x0, y1, z0), (x0, y1, z1), (x0, y0, z1), (x0, y0, z0)),
-    )
-    for wall in walls:
-        triangles.extend(_quad(*wall))
-    return triangles
-
-
 def _box_triangles(position: Vec3, size: Vec3) -> list[tuple[Vec3, Vec3, Vec3]]:
     half_x, half_y = size[0] / 2.0, size[1] / 2.0
     x0, x1 = position[0] - half_x, position[0] + half_x
@@ -592,7 +622,43 @@ def _character_triangles(joints: dict[str, Vec3]) -> list[tuple[Vec3, Vec3, Vec3
     return triangles
 
 
-def _paint_triangle(zbuf: np.ndarray, projected: list[tuple[float, float, float]]) -> None:
+def _triangle_normal(triangle: tuple[Vec3, Vec3, Vec3]) -> Vec3:
+    return cross(sub(triangle[1], triangle[0]), sub(triangle[2], triangle[0]))
+
+
+def _shade_gray(normal: Vec3, base: int) -> tuple[int, int, int]:
+    try:
+        normal = normalize(normal)
+    except ValueError:
+        value = base
+    else:
+        key = normalize((0.28, 0.42, 0.86))
+        facing = abs(dot(normal, key))
+        sky = max(0.0, normal[2])
+        value = int(round(base * (0.62 + 0.38 * facing) + 18.0 * sky))
+    value = max(88, min(232, value))
+    return (value, value, value)
+
+
+def _floor_triangles(spatial: dict) -> list[tuple[Vec3, Vec3, Vec3]]:
+    width, depth, _height = vec(spatial["sizeMeters"])
+    x0, x1 = -width / 2.0, width / 2.0
+    y0, y1 = -depth / 2.0, depth / 2.0
+    return _quad((x0, y0, 0.0), (x1, y0, 0.0), (x1, y1, 0.0), (x0, y1, 0.0))
+
+
+def _camera_inside_stage(camera: dict, spatial: dict) -> bool:
+    width, depth, height = vec(spatial["sizeMeters"])
+    x, y, z = vec(camera["position"])
+    return abs(x) <= width / 2.0 + 0.05 and abs(y) <= depth / 2.0 + 0.05 and -0.05 <= z <= height + 0.05
+
+
+def _paint_triangle(
+    zbuf: np.ndarray,
+    projected: list[tuple[float, float, float]],
+    color: np.ndarray | None = None,
+    shade: tuple[int, int, int] | None = None,
+) -> None:
     height, width = zbuf.shape
     xs = [point[0] for point in projected]
     ys = [point[1] for point in projected]
@@ -625,21 +691,32 @@ def _paint_triangle(zbuf: np.ndarray, projected: list[tuple[float, float, float]
     region = zbuf[miny : maxy + 1, minx : maxx + 1]
     closer = mask & (depth < region)
     region[closer] = depth[closer]
+    if color is not None and shade is not None:
+        color[miny : maxy + 1, minx : maxx + 1][closer] = shade
 
 
 def _raster_depth(triangles: list[tuple[Vec3, Vec3, Vec3]], camera: dict) -> np.ndarray:
+    basis = _camera_basis(camera)
     zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
     for triangle in triangles:
-        projected: list[tuple[float, float, float]] = []
-        for point in triangle:
-            screen = project(point, camera)
-            if screen is None:
-                projected = []
-                break
-            projected.append(screen)
-        if len(projected) == 3:
-            _paint_triangle(zbuf, projected)
+        for projected in _projected_triangles(triangle, basis):
+            _paint_triangle(zbuf, list(projected))
     return zbuf
+
+
+def _raster_clay(
+    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]],
+    camera: dict,
+) -> tuple[Image.Image, np.ndarray]:
+    basis = _camera_basis(camera)
+    zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
+    color = np.empty((PROXY_HEIGHT, PROXY_WIDTH, 3), dtype=np.uint8)
+    color[:] = VIEWPORT_GRAY
+    for triangle, base in surfaces:
+        shade = _shade_gray(_triangle_normal(triangle), base)
+        for projected in _projected_triangles(triangle, basis):
+            _paint_triangle(zbuf, list(projected), color, shade)
+    return Image.fromarray(color, "RGB"), zbuf
 
 
 def _depth_image(zbuf: np.ndarray) -> Image.Image:
@@ -698,6 +775,82 @@ def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[st
             )
 
 
+def _scene_surfaces(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> tuple[dict, list[tuple[tuple[Vec3, Vec3, Vec3], int]], list[tuple[str, dict[str, Vec3]]]]:
+    """Clay surfaces for one instant. The stage box is bounds, not a room mesh.
+
+    A floor is drawn only while the camera stands inside the stage, because that
+    is the ground the blocking stands on. Open sky stays the flat viewport gray.
+    """
+    camera = camera_at(scene, time_seconds)
+    spatial = show["locations"][scene["locationId"]]["spatial"]
+    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]] = []
+    if _camera_inside_stage(camera, spatial):
+        surfaces.extend((triangle, 156) for triangle in _floor_triangles(spatial))
+    for landmark in spatial.get("landmarks", {}).values():
+        surfaces.extend(
+            (triangle, 176)
+            for triangle in _box_triangles(vec(landmark["position"]), vec(landmark["size"]))
+        )
+    people: list[tuple[str, dict[str, Vec3]]] = []
+    for character_id in scene["characterIds"]:
+        state = episode_character_state(episode, character_id, time_seconds)
+        joints = character_pose_joints(show, episode, scene, state, time_seconds)
+        people.append((character_id, joints))
+        surfaces.extend((triangle, 214) for triangle in _character_triangles(joints))
+    return camera, surfaces, people
+
+
+def _face_mask(
+    camera: dict,
+    people: list[tuple[str, dict[str, Vec3]]],
+    identity_ids: list[str],
+    zbuf: np.ndarray,
+) -> Image.Image:
+    mask = Image.new("L", (PROXY_WIDTH, PROXY_HEIGHT), 0)
+    draw = ImageDraw.Draw(mask)
+    allowed = set(identity_ids)
+    for character_id, joints in people:
+        if character_id not in allowed:
+            continue
+        nose = project(joints["nose"], camera)
+        neck = project(joints["neck"], camera)
+        if nose is None:
+            continue
+        x = int(round(nose[0]))
+        y = int(round(nose[1]))
+        if not (0 <= x < PROXY_WIDTH and 0 <= y < PROXY_HEIGHT):
+            continue
+        if np.isfinite(zbuf[y, x]) and zbuf[y, x] + 0.2 < nose[2]:
+            continue
+        if neck is None:
+            radius = 18
+        else:
+            radius = max(14, int(math.hypot(nose[0] - neck[0], nose[1] - neck[1]) * 0.85))
+        draw.ellipse(
+            (x - radius, y - int(radius * 1.25), x + radius, y + int(radius * 0.85)),
+            fill=255,
+        )
+    blurred = mask.filter(ImageFilter.GaussianBlur(radius=8))
+    return Image.merge("RGB", (blurred, blurred, blurred))
+
+
+def render_blocked_frame(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> tuple[Image.Image, np.ndarray, list[tuple[str, dict[str, Vec3]]]]:
+    """One clay viewport frame. No diffusion model is involved."""
+    camera, surfaces, people = _scene_surfaces(show, episode, scene, time_seconds)
+    image, zbuf = _raster_clay(surfaces, camera)
+    return image, zbuf, people
+
+
 def render_structure_maps(
     show: dict,
     episode: dict,
@@ -706,22 +859,12 @@ def render_structure_maps(
     depth_destination: Path,
     pose_destination: Path,
 ) -> None:
-    """Write the depth buffer and OpenPose skeleton that ControlNet has to obey."""
-    camera = camera_at(scene, time_seconds)
-    spatial = show["locations"][scene["locationId"]]["spatial"]
-    triangles = _room_triangles(spatial)
-    for landmark in spatial.get("landmarks", {}).values():
-        triangles.extend(_box_triangles(vec(landmark["position"]), vec(landmark["size"])))
-    people: list[dict[str, Vec3]] = []
-    for character_id in scene["characterIds"]:
-        state = episode_character_state(episode, character_id, time_seconds)
-        joints = character_pose_joints(show, episode, scene, state, time_seconds)
-        people.append(joints)
-        triangles.extend(_character_triangles(joints))
+    """Depth and pose previews of the same clay surfaces. Not sent to a model."""
+    camera, surfaces, people = _scene_surfaces(show, episode, scene, time_seconds)
     depth_destination.parent.mkdir(parents=True, exist_ok=True)
-    _depth_image(_raster_depth(triangles, camera)).save(depth_destination)
+    _depth_image(_raster_depth([triangle for triangle, _base in surfaces], camera)).save(depth_destination)
     pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
-    _draw_openpose(ImageDraw.Draw(pose), camera, people)
+    _draw_openpose(ImageDraw.Draw(pose), camera, [joints for _character_id, joints in people])
     pose.save(pose_destination)
 
 
@@ -1010,6 +1153,59 @@ def spatial_target_screen_position(
     return projected[0], projected[1]
 
 
+def blockout_sample_times(start: float, finish: float, fps: int = BLOCKOUT_FPS) -> list[float]:
+    """Sample the shot so the clay playblast covers the whole camera move."""
+    span = max(0.0, finish - start)
+    count = max(2, int(round(span * fps)) + 1)
+    return [start + span * index / (count - 1) for index in range(count)]
+
+
+def render_blocked_scene(
+    show: dict,
+    episode: dict,
+    scene: dict,
+) -> list[Path]:
+    """Write the clay playblast and the start/end frames the realism pass edits."""
+    from ffmpeg_tools import encode_rgb_frames
+
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    times = blockout_sample_times(start, finish)
+    frames: list[Image.Image] = []
+    written: list[Path] = []
+    identity_ids = list(scene["characterIds"][:IDENTITY_FACE_LIMIT])
+    guides = {times[0]: "start", times[-1]: "end"}
+    for time_seconds in times:
+        image, zbuf, people = render_blocked_frame(show, episode, scene, time_seconds)
+        frames.append(image)
+        label = guides.get(time_seconds)
+        if label is None:
+            continue
+        blockout_path = proxy_frame_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            f"{label}_blockout",
+        )
+        mask_path = proxy_frame_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            f"{label}_faces",
+        )
+        blockout_path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(blockout_path)
+        camera = camera_at(scene, time_seconds)
+        _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
+        written.extend((blockout_path, mask_path))
+    video_path = previs_dir(show["id"], episode["episodeNumber"]) / (
+        f"scene_{scene['sceneNumber']:02d}_blockout.mp4"
+    )
+    raw = b"".join(frame.convert("RGB").tobytes() for frame in frames)
+    encode_rgb_frames(raw, PROXY_WIDTH, PROXY_HEIGHT, BLOCKOUT_FPS, video_path)
+    written.append(video_path)
+    return written
+
+
 def generate_episode_previs(show: dict, episode: dict, scene_number: int | None = None) -> list[Path]:
     errors = validate_spatial_episode(show, episode)
     if errors:
@@ -1020,55 +1216,16 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
             continue
         if not scene.get("camera") or not scene.get("timeRangeSeconds"):
             continue
-        start, finish = (float(value) for value in scene["timeRangeSeconds"])
-        samples = [("start", start), ("end", finish)]
-        for label, time_seconds in samples:
-            destination = proxy_frame_path(
-                show["id"], episode["episodeNumber"], scene["sceneNumber"], label
-            )
-            render_scene_proxy(show, episode, scene, time_seconds, destination)
-            generated.append(destination)
-            condition_destination = proxy_frame_path(
-                show["id"],
-                episode["episodeNumber"],
-                scene["sceneNumber"],
-                f"{label}_condition",
-            )
-            render_scene_proxy(
-                show,
-                episode,
-                scene,
-                time_seconds,
-                condition_destination,
-                debug=False,
-            )
-            generated.append(condition_destination)
-            depth_destination = proxy_frame_path(
-                show["id"],
-                episode["episodeNumber"],
-                scene["sceneNumber"],
-                f"{label}_depth",
-            )
-            pose_destination = proxy_frame_path(
-                show["id"],
-                episode["episodeNumber"],
-                scene["sceneNumber"],
-                f"{label}_pose",
-            )
-            render_structure_maps(
-                show,
-                episode,
-                scene,
-                time_seconds,
-                depth_destination,
-                pose_destination,
-            )
-            generated.extend((depth_destination, pose_destination))
+        print(
+            f"Blocking scene {scene['sceneNumber']:02d} from the stage (no model)...",
+            flush=True,
+        )
+        generated.extend(render_blocked_scene(show, episode, scene))
     return generated
 
 
 def write_contact_sheet(paths: list[Path], destination: Path) -> None:
-    starts = [path for path in paths if path.name.endswith("_start.png")]
+    starts = [path for path in paths if path.name.endswith("_start_blockout.png")]
     if not starts:
         return
     thumb_width = 240
@@ -1117,7 +1274,7 @@ def main() -> None:
             contact_sheet = previs_dir(show["id"], episode["episodeNumber"]) / "contact_sheet.png"
             write_contact_sheet(paths, contact_sheet)
             print(
-                f"Wrote {len(paths)} proxy frames for {show['id']}/{episode['episodeNumber']} "
+                f"Wrote {len(paths)} blocked-scene files for {show['id']}/{episode['episodeNumber']} "
                 f"to {contact_sheet.parent}",
                 flush=True,
             )
