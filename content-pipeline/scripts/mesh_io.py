@@ -11,7 +11,6 @@ import numpy as np
 from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
-TRIANGLE_BUDGET = 8000
 
 
 def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
@@ -101,15 +100,6 @@ def proportions_match(
     return bool(np.all((ratio >= low) & (ratio <= high)))
 
 
-def decimate(
-    vertices: np.ndarray, faces: np.ndarray, budget: int = TRIANGLE_BUDGET
-) -> tuple[np.ndarray, np.ndarray]:
-    if len(faces) <= budget:
-        return vertices, faces
-    step = int(np.ceil(len(faces) / budget))
-    return vertices, np.ascontiguousarray(faces[::step])
-
-
 def write_schema_glb(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
     """Write schema-space triangles as a Y-up GLB."""
     gltf_vertices = schema_points_to_gltf(vertices)
@@ -140,7 +130,10 @@ def read_gltf_mesh(path: Path) -> tuple[np.ndarray, np.ndarray]:
         raise RuntimeError(
             "Reading this model needs trimesh. Run `pnpm run content:asset-deps`."
         ) from exc
-    loaded = trimesh.load(path, force="mesh", process=False)
+    try:
+        loaded = trimesh.load(path, force="mesh", process=False, skip_materials=True)
+    except TypeError:
+        loaded = trimesh.load(path, force="mesh", process=False)
     vertices = np.asarray(loaded.vertices, dtype=np.float64)
     faces = np.asarray(loaded.faces, dtype=np.int64)
     if len(faces) == 0:

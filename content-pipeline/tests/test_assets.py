@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -26,6 +27,7 @@ from asset_sources import (  # noqa: E402
     LocalPackSource,
     Need,
     ObjaverseSource,
+    PolyHavenSource,
     TextTo3DSource,
     materialize_mesh,
     normalize_license,
@@ -36,7 +38,6 @@ from coords import schema_to_gltf  # noqa: E402
 from fetch_asset import candidate_for_url  # noqa: E402
 from mesh_io import (  # noqa: E402
     box_mesh,
-    decimate,
     primitive_mesh,
     proportions_match,
     read_schema_mesh,
@@ -118,9 +119,52 @@ class AssetTests(unittest.TestCase):
             self.assertAlmostEqual(float(mesh[:, 2].min()), 0.0, places=5)
         self.assertFalse(proportions_match(np.array([1.0, 1.0, 1.0]), (8.0, 0.2, 0.2)))
         self.assertTrue(proportions_match(np.array([2.0, 2.0, 2.0]), (1.0, 1.0, 1.0)))
-        dense = np.zeros((9000, 3), dtype=np.int64)
-        _kept, reduced = decimate(np.zeros((4, 3)), dense, budget=8000)
-        self.assertLessEqual(len(reduced), 8000)
+
+    def test_polyhaven_fetch_creates_texture_directories(self) -> None:
+        payload = {
+            "gltf": {
+                "1k": {
+                    "gltf": {
+                        "url": "https://example.test/gothic_coffee_table_1k.gltf",
+                        "include": {
+                            "textures/gothic_coffee_table_nor_gl_1k.jpg": {
+                                "url": "https://example.test/nor.jpg"
+                            },
+                            "gothic_coffee_table.bin": {"url": "https://example.test/model.bin"},
+                        },
+                    }
+                }
+            }
+        }
+
+        class Body:
+            def __init__(self, data: bytes) -> None:
+                self.data = data
+
+            def read(self) -> bytes:
+                return self.data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args) -> bool:
+                return False
+
+        def urlopen(request, timeout=30):
+            url = getattr(request, "full_url", str(request))
+            if url.endswith("/files/gothic_coffee_table"):
+                return Body(json.dumps(payload).encode("utf-8"))
+            return Body(b"file")
+
+        directory = self.library / "raw" / "polyhaven" / "gothic-coffee-table"
+        with patch("asset_sources.urllib.request.urlopen", urlopen):
+            fetched = PolyHavenSource().fetch(
+                self._candidate("gothic_coffee_table", "Gothic Coffee Table"),
+                directory,
+            )
+        self.assertEqual(fetched.name, "gothic_coffee_table_1k.gltf")
+        self.assertTrue((directory / "textures" / "gothic_coffee_table_nor_gl_1k.jpg").is_file())
+        self.assertTrue((directory / "gothic_coffee_table.bin").is_file())
 
     def test_zip_extracts_the_first_mesh(self) -> None:
         archive_path = self.library / "pack.zip"

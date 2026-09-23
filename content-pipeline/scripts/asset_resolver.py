@@ -25,7 +25,6 @@ from asset_sources import (
 )
 from asset_sources import _tokens as tokens
 from mesh_io import (
-    decimate,
     fit_to_size,
     primitive_mesh,
     proportions_match,
@@ -247,7 +246,6 @@ class AssetResolver:
         if not proportions_match(extent, request.size):
             raise RuntimeError("proportions are far from the requested size")
         fitted = fit_to_size(vertices, request.size)
-        fitted, faces = decimate(fitted, faces)
         category = KIND_CATEGORY.get(request.kind, "props")
         prefab_id = f"{category}/{_slug(candidate.source_id)}"
         directory = self.library_dir / "prefabs" / category / _slug(candidate.source_id)

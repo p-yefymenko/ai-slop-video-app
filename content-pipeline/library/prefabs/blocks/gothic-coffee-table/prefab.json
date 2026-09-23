@@ -1,0 +1,19 @@
+{
+  "id": "blocks/gothic-coffee-table",
+  "needHash": "11a6e359603b26f109bfc717dc01612fc79215a080791e02452b3b3dcf09d16d",
+  "sizeMeters": [
+    48.0,
+    56.0,
+    52.0
+  ],
+  "origin": "downloaded",
+  "source": "polyhaven",
+  "sourceId": "gothic_coffee_table",
+  "title": "Gothic Coffee Table",
+  "author": "Ulan Cabanilla",
+  "license": "CC0",
+  "pageUrl": "https://polyhaven.com/a/gothic_coffee_table",
+  "version": "05912f196d3d1f8cf861b8ffe1ad8dacd42d927e",
+  "retrieved": "2026-09-23",
+  "triangleCount": 23836
+}

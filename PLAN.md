@@ -215,11 +215,10 @@ reelshort-clone/
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
-`content:frames` writes:
+`content:previs` writes the blocked scenes — `output/<show>/<episode>/01_previs/scene_XX/blockout.mp4` plus `start.png` / `end.png` (no model; review this before spending GPU time). `content:frames` then writes:
 
-1. Blocked scenes — `output/<show>/<episode>/01_previs/scene_XX/blockout.mp4` plus `start.png` / `end.png` (no model; review this before spending GPU time)
-2. Character stills — `output/<show>/characters/<id>.png` (human review, then the masked face pass)
-3. Scene stills — `02_postvis/stills/scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
+1. Character stills — `output/<show>/characters/<id>.png` (human review, then the masked face pass)
+2. Scene stills — `02_postvis/stills/scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
 
 `content:generate` writes `03_postvis/clips/scene_XX.mp4` and concatenates `04_edit/episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 

@@ -1,3 +1,54 @@
 {
-  "assets": []
+  "assets": [
+    {
+      "prefabId": "blocks/gothic-coffee-table",
+      "source": "polyhaven",
+      "sourceId": "gothic_coffee_table",
+      "url": "https://polyhaven.com/a/gothic_coffee_table",
+      "author": "Ulan Cabanilla",
+      "license": "CC0",
+      "version": "05912f196d3d1f8cf861b8ffe1ad8dacd42d927e",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "pedestals/coast-rocks-05",
+      "source": "polyhaven",
+      "sourceId": "coast_rocks_05",
+      "url": "https://polyhaven.com/a/coast_rocks_05",
+      "author": "Rob Tuytel",
+      "license": "CC0",
+      "version": "5685f8953d4ee948c31128c4f857661a299dbf2c",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "blocks/modular-fort-01",
+      "source": "polyhaven",
+      "sourceId": "modular_fort_01",
+      "url": "https://polyhaven.com/a/modular_fort_01",
+      "author": "Rico Cilliers",
+      "license": "CC0",
+      "version": "5ccbf62aeee96ea99cf0c2e29e4c8ed843ee7c44",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "columns/modern-coffee-table-01",
+      "source": "polyhaven",
+      "sourceId": "modern_coffee_table_01",
+      "url": "https://polyhaven.com/a/modern_coffee_table_01",
+      "author": "Amin",
+      "license": "CC0",
+      "version": "31772c0aab6f930a18de82606146c0a97f08b7d0",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "blocks/cannon-01",
+      "source": "polyhaven",
+      "sourceId": "cannon_01",
+      "url": "https://polyhaven.com/a/cannon_01",
+      "author": "Yann Kervran, James Ray Cock",
+      "license": "CC0",
+      "version": "b5953e044c4cd782c0352204a8d9731b3e0ad0bd",
+      "retrieved": "2026-09-23"
+    }
+  ]
 }

@@ -1,4 +1,153 @@
 {
   "version": 1,
-  "needs": {}
+  "needs": {
+    "11a6e359603b26f109bfc717dc01612fc79215a080791e02452b3b3dcf09d16d": {
+      "need": {
+        "query": "medieval castle",
+        "tags": [
+          "castle",
+          "fortress",
+          "building"
+        ],
+        "style": "black iron citadel"
+      },
+      "sizeMeters": [
+        48.0,
+        56.0,
+        52.0
+      ],
+      "prefabId": "blocks/gothic-coffee-table",
+      "source": "polyhaven",
+      "sourceId": "gothic_coffee_table",
+      "version": "05912f196d3d1f8cf861b8ffe1ad8dacd42d927e",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "ba332a66e472669a588459e6a66adf6d28bdafbc8dbc2f70e4d1a31c5a6f9486": {
+      "need": {
+        "query": "stone pillar",
+        "tags": [
+          "pillar",
+          "column"
+        ],
+        "style": "black iron"
+      },
+      "sizeMeters": [
+        5.0,
+        5.0,
+        90.0
+      ],
+      "prefabId": "fallback/column-5000-5000-90000",
+      "source": "primitive",
+      "sourceId": "column",
+      "version": "1",
+      "origin": "fallback",
+      "provisional": true
+    },
+    "2dd36a7544e6077e09a79a2add012c587d430114705007de174aac296d6ad8a1": {
+      "need": {
+        "query": "stone well",
+        "tags": [
+          "well",
+          "fountain"
+        ],
+        "style": "white-gold fire"
+      },
+      "sizeMeters": [
+        2.2,
+        2.2,
+        1.2
+      ],
+      "prefabId": "pedestals/coast-rocks-05",
+      "source": "polyhaven",
+      "sourceId": "coast_rocks_05",
+      "version": "5685f8953d4ee948c31128c4f857661a299dbf2c",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "f4f9c4bf290c8482f89142b3d3a7a8eca2901461dd379a1f3e40499cc1bee802": {
+      "need": {
+        "query": "blacksmith anvil",
+        "tags": [
+          "anvil",
+          "forge"
+        ],
+        "style": "iron altar"
+      },
+      "sizeMeters": [
+        1.8,
+        1.2,
+        0.9
+      ],
+      "prefabId": "fallback/box-1800-1200-900",
+      "source": "primitive",
+      "sourceId": "box",
+      "version": "1",
+      "origin": "fallback",
+      "provisional": true
+    },
+    "a2ee6e227e89e2226b04975db1d9e1d8512ffa7d97f152714b83f95a30439164": {
+      "need": {
+        "query": "stone platform",
+        "tags": [
+          "platform",
+          "plinth"
+        ],
+        "style": "basalt dais"
+      },
+      "sizeMeters": [
+        5.0,
+        3.0,
+        0.4
+      ],
+      "prefabId": "blocks/modular-fort-01",
+      "source": "polyhaven",
+      "sourceId": "modular_fort_01",
+      "version": "5ccbf62aeee96ea99cf0c2e29e4c8ed843ee7c44",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "23cb07bbfb90fa9b1c227b26190ccbe4e1d2be514483b695c470af6a95dbd083": {
+      "need": {
+        "query": "stone column",
+        "tags": [
+          "column",
+          "pillar"
+        ],
+        "style": "basalt gate"
+      },
+      "sizeMeters": [
+        0.8,
+        0.8,
+        4.2
+      ],
+      "prefabId": "columns/modern-coffee-table-01",
+      "source": "polyhaven",
+      "sourceId": "modern_coffee_table_01",
+      "version": "31772c0aab6f930a18de82606146c0a97f08b7d0",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "302801e0bb1af7141a1c578242769a91cc88e94f6f016d1bd29999996479aef0": {
+      "need": {
+        "query": "iron collar",
+        "tags": [
+          "collar",
+          "metal"
+        ],
+        "style": "forged iron"
+      },
+      "sizeMeters": [
+        0.28,
+        0.22,
+        0.08
+      ],
+      "prefabId": "blocks/cannon-01",
+      "source": "polyhaven",
+      "sourceId": "cannon_01",
+      "version": "b5953e044c4cd782c0352204a8d9731b3e0ad0bd",
+      "origin": "downloaded",
+      "provisional": false
+    }
+  }
 }

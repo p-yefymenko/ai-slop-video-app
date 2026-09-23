@@ -427,6 +427,8 @@ def _get_json(url: str, headers: dict | None = None) -> dict:
 
 
 def _download(url: str, destination: Path) -> None:
+    # Poly Haven include names are relative paths such as textures/foo.jpg.
+    destination.parent.mkdir(parents=True, exist_ok=True)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:

@@ -13,7 +13,7 @@ Resolution order:
 
 `--offline` never searches. A provisional lock is reused offline and retried when the machine is online. `--review` keeps the top candidates under `output/<id>/asset-review/<hash>/candidates.json`. `pnpm run view` can lock one of them. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
 
-Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are recentered on the base, scaled to `sizeMeters`, decimated above 8000 triangles, and stored as a texture-free GLB. The original download stays in `library/raw/` (gitignored).
+Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are recentered on the base, scaled to `sizeMeters`, and stored as a texture-free GLB. The original download stays in `library/raw/` (gitignored).
 
 Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `content-pipeline/scripts/coords.py` is the only converter. The viewer reads Y-up files and does not convert them.
 

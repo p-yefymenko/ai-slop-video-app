@@ -6,7 +6,16 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 
 ## Render an episode
 
-`content:render` still does the full pass. It runs assets → previs → frames → video, and forwards the same flags to every stage. It does **not** pause for review between stills and clips.
+`content:render` still does the full pass. It runs four stages in order and forwards the same flags to each. It does **not** pause for review between stills and clips.
+
+| Stage | Command | Writes |
+| --- | --- | --- |
+| 1. Prefabs and sets | `content:assets` | `output/<show>/sets/`, `assets/fallback/`, `library/lock.json` |
+| 2. Clay previs | `content:previs` | `output/<show>/<episode>/01_previs/` — `blockout.mp4`, `start.png`, `shot.json`, guides |
+| 3. Qwen stills | `content:frames` | `output/<show>/characters/` and `02_postvis/stills/` |
+| 4. LTX clips | `content:generate` | `03_postvis/clips/` and `04_edit/episode.mp4` |
+
+Clay previs is **only** `content:previs` (or that second stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:assets` and `content:previs` do not need ComfyUI.
 
 Leave ComfyUI running in another terminal before the GPU stages:
 

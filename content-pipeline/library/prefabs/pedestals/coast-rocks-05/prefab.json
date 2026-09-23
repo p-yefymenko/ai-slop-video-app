@@ -1,0 +1,19 @@
+{
+  "id": "pedestals/coast-rocks-05",
+  "needHash": "2dd36a7544e6077e09a79a2add012c587d430114705007de174aac296d6ad8a1",
+  "sizeMeters": [
+    2.2,
+    2.2,
+    1.2
+  ],
+  "origin": "downloaded",
+  "source": "polyhaven",
+  "sourceId": "coast_rocks_05",
+  "title": "Coast Rocks 05",
+  "author": "Rob Tuytel",
+  "license": "CC0",
+  "pageUrl": "https://polyhaven.com/a/coast_rocks_05",
+  "version": "5685f8953d4ee948c31128c4f857661a299dbf2c",
+  "retrieved": "2026-09-23",
+  "triangleCount": 771724
+}
