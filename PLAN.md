@@ -62,6 +62,9 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:models": "node scripts/download-ltx-models.cjs",
     "content:comfy": "node scripts/start-comfyui.cjs",
     "content:validate": "pnpm --filter @reelshort/shared run validate",
+    "content:assets": "node scripts/run-python.cjs content-pipeline/scripts/build_assets.py",
+    "content:fetch-asset": "node scripts/run-python.cjs content-pipeline/scripts/fetch_asset.py",
+    "content:asset-deps": "node scripts/install-asset-deps.cjs",
     "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
     "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_*.py",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
@@ -218,6 +221,8 @@ reelshort-clone/
 3. Scene stills — `02_postvis/stills/scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
 
 `content:generate` writes `03_postvis/clips/scene_XX.mp4` and concatenates `04_edit/episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
+
+`pnpm run content:assets` resolves each landmark and prop need into a prefab and writes one set per location under `output/<show>/sets`. An unchanged need reuses `library/lock.json`. A missing or unacceptable model becomes a primitive in `output/<show>/assets/fallback` so the pipeline still runs. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY model from Poly Haven, Sketchfab, or Smithsonian Open Access.
 
 `content:render` runs `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all three stages.
 

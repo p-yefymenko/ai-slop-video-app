@@ -723,6 +723,31 @@ def _raster_clay(
     return Image.fromarray(color, "RGB"), zbuf
 
 
+def render_mesh_thumbnail(triangles: list, destination: Path, width: int = 256) -> None:
+    """Clay thumbnail of one mesh, using the previs rasterizer."""
+    if not triangles:
+        raise ValueError("No triangles to thumbnail")
+    points = [corner for triangle in triangles for corner in triangle]
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    zs = [point[2] for point in points]
+    center = (
+        (min(xs) + max(xs)) / 2.0,
+        (min(ys) + max(ys)) / 2.0,
+        (min(zs) + max(zs)) / 2.0,
+    )
+    span = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs), 0.1)
+    camera = {
+        "position": [center[0] + span, center[1] - span * 2.2, center[2] + span * 0.85],
+        "lookAt": [center[0], center[1], center[2]],
+        "verticalFovDegrees": 35.0,
+        "rollDegrees": 0.0,
+    }
+    image, _zbuf = _raster_clay([(triangle, 176) for triangle in triangles], camera)
+    thumb_height = max(1, round(width * PROXY_HEIGHT / PROXY_WIDTH))
+    image.resize((width, thumb_height), Image.Resampling.LANCZOS).save(destination)
+
+
 def _depth_image(zbuf: np.ndarray) -> Image.Image:
     valid = np.isfinite(zbuf)
     gray = np.zeros(zbuf.shape, dtype=np.uint8)
