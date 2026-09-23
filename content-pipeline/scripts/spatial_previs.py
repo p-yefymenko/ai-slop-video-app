@@ -1425,13 +1425,12 @@ def render_blocked_scene(
     scene: dict,
 ) -> list[Path]:
     """Write the clay playblast and the start/end frames the realism pass edits."""
+    from ffmpeg_tools import encode_rgb_frames
     from pipeline_paths import (
-    blockout_video_path,
-    clay_frame_path,
-    contact_sheet_path,
-    discover_show_scripts,
-    guide_path,
-)
+        blockout_video_path,
+        clay_frame_path,
+        guide_path,
+    )
 
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     times = blockout_sample_times(start, finish)

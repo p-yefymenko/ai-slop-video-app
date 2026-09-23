@@ -75,6 +75,7 @@ Running `pnpm run` with no arguments lists every available script — that's the
     "content:archive": "node scripts/archive-content-output.cjs",
     "content:migrate-output": "node scripts/run-python.cjs content-pipeline/scripts/migrate_output.py",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
+    "view": "pnpm --filter @reelshort/viewer run dev",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
   }
@@ -224,7 +225,7 @@ reelshort-clone/
 
 `pnpm run content:assets` resolves each landmark and prop need into a prefab and writes one set per location under `output/<show>/sets`. An unchanged need reuses `library/lock.json`. A missing or unacceptable model becomes a primitive in `output/<show>/assets/fallback` so the pipeline still runs. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY model from Poly Haven, Sketchfab, or Smithsonian Open Access.
 
-`content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages.
+`content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages. `pnpm view` opens the stage viewer at `http://127.0.0.1:5174`. It reads prefabs, sets, and shots as glTF Y-up and can lock a reviewed candidate. Open VSX has file-level GLB previews (`slevesque.vscode-3dviewer`, and the OHZI GLTF/GLB Viewer); the stage viewer does not depend on them.
 
 The vertical render profile is 768x1360 for Qwen stills and 448x800 for LTX clips. Both are near 9:16; the LTX size is divisible by 32 and uses fewer pixels than the old 512x768 2:3 profile, which is necessary on the 16GB card.
 

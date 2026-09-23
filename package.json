@@ -32,6 +32,7 @@
     "content:archive": "node scripts/archive-content-output.cjs",
     "content:migrate-output": "node scripts/run-python.cjs content-pipeline/scripts/migrate_output.py",
     "content:upload": "node scripts/run-python.cjs content-pipeline/scripts/upload_to_r2.py",
+    "view": "pnpm --filter @reelshort/viewer run dev",
     "deploy": "bash scripts/deploy.sh",
     "build:android": "pnpm --filter mobile exec eas build --platform android --profile production"
   },
