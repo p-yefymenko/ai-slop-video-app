@@ -15,5 +15,7 @@
   "pageUrl": "https://sketchfab.com/3d-models/fire-pit-8ca31b1d1635406ba2db30e48ecddbdd",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 452
+  "triangleCount": 452,
+  "triangleBudget": 100000,
+  "decimator": "quadric-welded"
 }

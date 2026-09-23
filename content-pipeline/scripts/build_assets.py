@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_resolver import AssetResolver, apply_lock_override, export_credits  # noqa: E402
+from asset_resolver import AssetResolver, apply_lock_override, export_credits, prune_unused_library  # noqa: E402
 from pipeline_paths import (  # noqa: E402
     LIBRARY_DIR,
     discover_show_scripts,
@@ -60,6 +60,10 @@ def main() -> None:
         for warning in resolver.warnings:
             print(warning)
         print(f"{show_id}: {len(resolved)} prefabs")
+    shows = [json.loads(path.read_text(encoding="utf-8")) for path in discover_show_scripts(None)]
+    removed = prune_unused_library(LIBRARY_DIR, shows)
+    if removed:
+        print(f"Removed {len(removed)} library prefabs that no show uses")
 
 
 if __name__ == "__main__":

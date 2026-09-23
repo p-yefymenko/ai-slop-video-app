@@ -10,9 +10,9 @@ Resolution order:
 4. `library/lock.json`, when the entry is not provisional and `--refresh` / `--force` was not passed.
 5. A lookup of that exact id. No keyword ranking.
 
-`--offline` does not download. A model that is not already in the library fails the build. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
+`--offline` does not download. A model that is not already in the library fails the build. After a successful build, library prefabs that no show script pins or names are deleted, along with their lock entries and raw downloads. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
 
-Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are recentered on the base, scaled to `sizeMeters`, and stored as a texture-free GLB. Anything over 25,000 triangles is reduced to that budget before it is written, including a prefab already in the library the next time it is read. The original download stays in `library/raw/` (gitignored).
+Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are recentered on the base, scaled to `sizeMeters`, and stored as a texture-free GLB. Anything over 100,000 triangles is welded, then reduced to that budget with quadric edge collapse, before it is fitted to `sizeMeters`. A library mesh simplified to an older budget is rebuilt from the raw download the next time `content:assets` runs. The original download stays in `library/raw/` (gitignored).
 
 Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `content-pipeline/scripts/coords.py` is the only converter. The viewer reads Y-up files and does not convert them.
 

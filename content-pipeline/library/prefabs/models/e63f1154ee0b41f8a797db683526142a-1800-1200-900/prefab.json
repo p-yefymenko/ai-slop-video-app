@@ -15,5 +15,7 @@
   "pageUrl": "https://sketchfab.com/3d-models/blacksmith-anvil-game-ready-asset-e63f1154ee0b41f8a797db683526142a",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 4520
+  "triangleCount": 4520,
+  "triangleBudget": 100000,
+  "decimator": "quadric-welded"
 }

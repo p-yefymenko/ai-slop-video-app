@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -25,6 +26,7 @@ from asset_sources import (
 )
 from asset_sources import _tokens as tokens
 from mesh_io import (
+    DECIMATOR,
     TRIANGLE_BUDGET,
     decimate,
     fit_to_size,
@@ -187,6 +189,9 @@ class AssetResolver:
             source = next(item for item in self.sources if item.name == candidate.source)
             fetched = materialize_mesh(source.fetch(candidate, raw_dir))
         vertices, faces = read_schema_mesh(fetched)
+        # Simplify at the mesh's own scale. Fitting first stretches a ring into
+        # the landmark box and the quadric metric then follows that distortion.
+        vertices, faces = decimate(vertices, faces, TRIANGLE_BUDGET)
         fitted = fit_to_size(vertices, request.size)
         leaf = f"{_slug(candidate.source_id)}-{_size_token(request.size)}"
         prefab_id = f"models/{leaf}"
@@ -250,6 +255,8 @@ class AssetResolver:
             "version": version,
             "retrieved": date.today().isoformat(),
             "triangleCount": int(len(faces)),
+            "triangleBudget": TRIANGLE_BUDGET,
+            "decimator": DECIMATOR,
         }
         (directory / "prefab.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
         return ResolvedPrefab(
@@ -271,6 +278,8 @@ class AssetResolver:
         for path, origin in self._prefab_files():
             record = json.loads(path.read_text(encoding="utf-8"))
             if record.get("id") == prefab_id:
+                if self._needs_resimplify(path, record):
+                    return None
                 return self._read_prefab(path, record.get("origin") or origin)
         return None
 
@@ -280,6 +289,8 @@ class AssetResolver:
         for path in sorted(root.rglob("prefab.json")):
             record = json.loads(path.read_text(encoding="utf-8"))
             if record.get("assetHash") == digest:
+                if self._needs_resimplify(path, record):
+                    return None
                 return self._read_prefab(path, record.get("origin") or origin)
         return None
 
@@ -314,6 +325,16 @@ class AssetResolver:
             page_url=str(record.get("pageUrl") or ""),
             size=(float(size[0]), float(size[1]), float(size[2])),
         )
+
+    def _needs_resimplify(self, path: Path, record: dict) -> bool:
+        """A library mesh simplified under an older budget is rebuilt from the raw download."""
+        try:
+            path.resolve().relative_to((self.library_dir / "prefabs").resolve())
+        except ValueError:
+            return False
+        if record.get("decimator") != DECIMATOR:
+            return True
+        return record.get("triangleBudget") != TRIANGLE_BUDGET
 
     def _cap_stored_mesh(self, directory: Path) -> None:
         glb = directory / "model.glb"
@@ -480,6 +501,82 @@ def keyword_score(need: Need, candidate: Candidate) -> float:
     haystack = set(tokens(" ".join((candidate.title, candidate.source_id, *candidate.tags))))
     unique = list(dict.fromkeys(wanted))
     return sum(1 for token in unique if token in haystack) / len(unique)
+
+
+def prune_unused_library(library_dir: Path, shows: list[dict]) -> list[str]:
+    """Delete library prefabs that no show script pins or names by asset id and size."""
+    prefab_root = library_dir / "prefabs"
+    records: list[tuple[Path, dict]] = []
+    if prefab_root.is_dir():
+        for path in sorted(prefab_root.rglob("prefab.json")):
+            records.append((path, json.loads(path.read_text(encoding="utf-8"))))
+    by_hash = {
+        str(record["assetHash"]): str(record.get("id") or "")
+        for _path, record in records
+        if record.get("assetHash") and record.get("id")
+    }
+    lock_path = library_dir / "lock.json"
+    lock = _read_json(lock_path, {"version": 1, "needs": {}})
+    needs = lock.get("needs") if isinstance(lock.get("needs"), dict) else {}
+    kept: set[str] = set()
+    for show in shows:
+        for request in collect_requests(show):
+            if request.prefab_id:
+                kept.add(str(request.prefab_id))
+            parsed = _parse_asset_id(request.asset_id)
+            if parsed is None:
+                continue
+            digest = asset_hash(parsed[0], parsed[1], request.size)
+            matched = by_hash.get(digest)
+            if matched:
+                kept.add(matched)
+            pinned = str((needs.get(digest) or {}).get("prefabId") or "")
+            if pinned:
+                kept.add(pinned)
+    removed: list[str] = []
+    kept_raw: set[tuple[str, str]] = set()
+    for path, record in records:
+        prefab_id = str(record.get("id") or "")
+        if prefab_id in kept:
+            source = str(record.get("source") or "")
+            source_id = str(record.get("sourceId") or "")
+            if source and source_id:
+                kept_raw.add((source, _slug(source_id)))
+            continue
+        shutil.rmtree(path.parent)
+        if prefab_id:
+            removed.append(prefab_id)
+    if prefab_root.is_dir():
+        for directory in sorted(prefab_root.rglob("*"), reverse=True):
+            if directory.is_dir() and not any(directory.iterdir()):
+                directory.rmdir()
+    lock["needs"] = {
+        digest: entry
+        for digest, entry in needs.items()
+        if str((entry or {}).get("prefabId") or "") in kept
+    }
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(json.dumps(lock, indent=2), encoding="utf-8")
+    catalog_path = library_dir / "sources.json"
+    catalog = _read_json(catalog_path, {"assets": []})
+    assets = catalog.get("assets") if isinstance(catalog.get("assets"), list) else []
+    catalog["assets"] = [item for item in assets if str(item.get("prefabId") or "") in kept]
+    catalog_path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+    raw_root = library_dir / "raw"
+    if raw_root.is_dir():
+        for source_dir in list(raw_root.iterdir()):
+            if not source_dir.is_dir():
+                continue
+            for item in list(source_dir.iterdir()):
+                if (source_dir.name, item.name) in kept_raw:
+                    continue
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            if not any(source_dir.iterdir()):
+                source_dir.rmdir()
+    return removed
 
 
 def apply_lock_override(lock_path: Path, digest: str, prefab_id: str) -> None:

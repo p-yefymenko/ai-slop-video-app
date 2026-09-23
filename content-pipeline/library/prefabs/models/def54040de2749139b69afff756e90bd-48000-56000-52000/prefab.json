@@ -15,5 +15,7 @@
   "pageUrl": "https://sketchfab.com/3d-models/mystic-xx-citadel--ii-def54040de2749139b69afff756e90bd",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 24282
+  "triangleCount": 100000,
+  "triangleBudget": 100000,
+  "decimator": "quadric-welded"
 }

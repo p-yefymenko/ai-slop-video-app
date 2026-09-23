@@ -11,7 +11,7 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 | Stage | Command | Writes |
 | --- | --- | --- |
 | 1. Prefabs and sets | `content:assets` | `output/<show>/sets/`, `library/lock.json` |
-| 2. Clay previs | `content:previs` | `output/<show>/<episode>/01_previs/` — `blockout.mp4`, `start.png`, `shot.json`, guides |
+| 2. Clay previs | `content:previs` | `output/<show>/<episode>/01_previs/` — per-scene `blockout.mp4`, plus one episode `blockout.mp4` |
 | 3. Qwen stills | `content:frames` | `output/<show>/characters/` and `02_postvis/stills/` |
 | 4. LTX clips | `content:generate` | `03_postvis/clips/` and `04_edit/episode.mp4` |
 
@@ -72,6 +72,7 @@ Per episode, generated stages sort as:
 
 ```text
 output/<show>/<episode>/
+  01_previs/blockout.mp4
   01_previs/scene_XX/{blockout.mp4, start.png, shot.json, guides/}
   02_postvis/stills/scene_XX_start.png
   03_postvis/clips/scene_XX.mp4
@@ -86,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-Every landmark and prop sets `assetId` to `sketchfab:<uid>`. Meshes used for previs are capped at 25,000 triangles.
+Every landmark and prop sets `assetId` to `sketchfab:<uid>`. Meshes used for previs are capped at 100,000 triangles.
 
 God camera (OrbitControls):
 

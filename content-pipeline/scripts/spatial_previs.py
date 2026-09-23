@@ -17,6 +17,7 @@ from pipeline_paths import (
     clay_frame_path,
     contact_sheet_path,
     discover_show_scripts,
+    episode_blockout_path,
     guide_path,
 )
 
@@ -1454,6 +1455,33 @@ def render_blocked_scene(
     return written
 
 
+def scene_blockouts(show: dict, episode: dict) -> tuple[list[Path], list[int]]:
+    """Scene playblasts in script order, plus scene numbers that are not on disk yet."""
+    ready: list[Path] = []
+    missing: list[int] = []
+    for scene in episode["scenes"]:
+        if not scene.get("camera") or not scene.get("timeRangeSeconds"):
+            continue
+        path = blockout_video_path(show["id"], episode["episodeNumber"], scene["sceneNumber"])
+        if path.is_file() and path.stat().st_size >= 1024:
+            ready.append(path)
+        else:
+            missing.append(int(scene["sceneNumber"]))
+    return ready, missing
+
+
+def write_episode_blockout(show: dict, episode: dict) -> Path | None:
+    """Join scene blockouts into one episode playblast. Skip when a scene is missing."""
+    ready, missing = scene_blockouts(show, episode)
+    if missing or not ready:
+        return None
+    from ffmpeg_tools import concat_videos
+
+    destination = episode_blockout_path(show["id"], episode["episodeNumber"])
+    concat_videos(ready, destination)
+    return destination
+
+
 def generate_episode_previs(show: dict, episode: dict, scene_number: int | None = None) -> list[Path]:
     errors = validate_spatial_episode(show, episode)
     if errors:
@@ -1524,6 +1552,20 @@ def main() -> None:
                 f"to {contact_sheet.parent}",
                 flush=True,
             )
+            episode_blockout = write_episode_blockout(show, episode)
+            if episode_blockout is not None:
+                print(
+                    f"Wrote {episode_blockout} ({episode_blockout.stat().st_size} bytes)",
+                    flush=True,
+                )
+            else:
+                _ready, missing = scene_blockouts(show, episode)
+                if missing:
+                    waiting = ", ".join(f"{number:02d}" for number in missing)
+                    print(
+                        f"Episode blockout waiting on scenes {waiting}",
+                        flush=True,
+                    )
 
 
 if __name__ == "__main__":

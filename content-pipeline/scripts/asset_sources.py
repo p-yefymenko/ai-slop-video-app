@@ -168,9 +168,10 @@ class SketchfabSource:
         suffix = ".glb" if kind == "glb" else ".zip"
         destination = directory / f"{candidate.source_id}{suffix}"
         legacy = directory / f"{candidate.source_id}.zip"
+        if destination.is_file() and destination.stat().st_size > 0:
+            return materialize_mesh(destination)
         if (
             suffix == ".glb"
-            and not destination.is_file()
             and legacy.is_file()
             and _starts_with(legacy, b"glTF")
         ):

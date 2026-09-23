@@ -12,7 +12,8 @@ from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
 # Clay previs walks every triangle in Python. Downloaded scans stay under this.
-TRIANGLE_BUDGET = 25_000
+TRIANGLE_BUDGET = 100_000
+DECIMATOR = "quadric-welded"
 
 
 def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
@@ -107,60 +108,62 @@ def decimate(
     faces: np.ndarray,
     budget: int = TRIANGLE_BUDGET,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Reduce a mesh until it has at most ``budget`` triangles.
+    """Reduce a mesh to at most ``budget`` triangles with quadric edge collapse.
 
-    Vertex clustering keeps the silhouette. A stride of the original faces is
-    the fallback when clustering cannot get under the budget.
+    ``fast-simplification`` removes the edges that change the shape the least.
+    Scanned models often store each triangle with its own vertices. Those copies
+    are welded first, or the collapse has no edges to follow and leaves a cloud of shards.
     """
     vertices = np.asarray(vertices, dtype=np.float64)
     faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     if len(faces) <= budget:
         return vertices, faces
-    best: tuple[np.ndarray, np.ndarray] | None = None
-    low = 2
-    high = 128
-    while low <= high:
-        divisions = (low + high) // 2
-        clustered_vertices, clustered_faces = _cluster_vertices(vertices, faces, divisions)
-        if 0 < len(clustered_faces) <= budget:
-            best = (clustered_vertices, clustered_faces)
-            low = divisions + 1
-        else:
-            high = divisions - 1
-    if best is not None:
-        return _compact(best[0], best[1])
-    step = int(np.ceil(len(faces) / budget))
-    return _compact(vertices, np.ascontiguousarray(faces[::step]))
-
-
-def _cluster_vertices(
-    vertices: np.ndarray, faces: np.ndarray, divisions: int
-) -> tuple[np.ndarray, np.ndarray]:
-    minimum = vertices.min(axis=0)
-    extent = np.maximum(vertices.max(axis=0) - minimum, 1e-9)
-    quantized = np.floor((vertices - minimum) / extent * divisions).astype(np.int64)
-    quantized = np.clip(quantized, 0, divisions - 1)
-    keys = (
-        quantized[:, 0]
-        + quantized[:, 1] * divisions
-        + quantized[:, 2] * divisions * divisions
-    )
-    _unique, inverse = np.unique(keys, return_inverse=True)
-    count = int(inverse.max()) + 1 if len(inverse) else 0
-    if count == 0:
-        return vertices[:0], faces[:0]
-    clustered = np.zeros((count, 3), dtype=np.float64)
-    weights = np.zeros(count, dtype=np.float64)
-    np.add.at(clustered, inverse, vertices)
-    np.add.at(weights, inverse, 1.0)
-    clustered /= weights[:, None]
-    remapped = inverse[faces]
+    vertices, faces = _weld(vertices, faces)
     keep = (
-        (remapped[:, 0] != remapped[:, 1])
-        & (remapped[:, 1] != remapped[:, 2])
-        & (remapped[:, 0] != remapped[:, 2])
+        (faces[:, 0] != faces[:, 1])
+        & (faces[:, 1] != faces[:, 2])
+        & (faces[:, 0] != faces[:, 2])
     )
-    return clustered, remapped[keep]
+    faces = faces[keep]
+    if len(faces) <= budget:
+        return _compact(vertices, faces)
+    try:
+        import fast_simplification
+    except ImportError as exc:
+        raise RuntimeError(
+            "Mesh simplification needs fast-simplification. Run `pnpm run content:asset-deps`."
+        ) from exc
+    reduced_points = np.ascontiguousarray(vertices, dtype=np.float64)
+    reduced_faces = np.ascontiguousarray(faces)
+    # One call often stops partway on a large mesh. Each later pass continues
+    # from that result until the budget is met.
+    for _pass in range(8):
+        if len(reduced_faces) <= budget:
+            break
+        before = len(reduced_faces)
+        reduced_points, reduced_faces = fast_simplification.simplify(
+            reduced_points,
+            reduced_faces,
+            target_count=budget,
+            agg=7.0,
+        )
+        reduced_faces = np.asarray(reduced_faces, dtype=np.int64).reshape(-1, 3)
+        if len(reduced_faces) >= before:
+            break
+    if len(reduced_faces) > budget:
+        raise RuntimeError(
+            f"Quadric simplification left {len(reduced_faces)} triangles, above the {budget} budget"
+        )
+    return _compact(np.asarray(reduced_points, dtype=np.float64), reduced_faces)
+
+
+def _weld(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Merge vertices that occupy the same position and rewrite face indices."""
+    packed = np.ascontiguousarray(vertices, dtype=np.float64)
+    keys = packed.view(np.dtype((np.void, packed.dtype.itemsize * packed.shape[1]))).reshape(-1)
+    _unique_keys, inverse = np.unique(keys, return_inverse=True)
+    order = np.unique(inverse, return_index=True)[1]
+    return packed[order], inverse[faces]
 
 
 def _compact(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

@@ -122,6 +122,11 @@ def blockout_video_path(show_id: str, episode_number: int, scene_number: int) ->
     return shot_dir(show_id, episode_number, scene_number) / "blockout.mp4"
 
 
+def episode_blockout_path(show_id: str, episode_number: int) -> Path:
+    """Every scene blockout, in script order, as one playable episode."""
+    return previs_dir(show_id, episode_number) / "blockout.mp4"
+
+
 def shot_description_path(show_id: str, episode_number: int, scene_number: int) -> Path:
     return shot_dir(show_id, episode_number, scene_number) / "shot.json"
 

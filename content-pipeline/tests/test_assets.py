@@ -19,6 +19,7 @@ from asset_resolver import (  # noqa: E402
     asset_hash,
     export_credits,
     keyword_score,
+    prune_unused_library,
 )
 from asset_sources import (  # noqa: E402
     Candidate,
@@ -111,8 +112,8 @@ class AssetTests(unittest.TestCase):
         self.assertTrue(proportions_match(np.array([2.0, 2.0, 2.0]), (1.0, 1.0, 1.0)))
 
     def test_decimate_stays_under_the_previs_budget(self) -> None:
-        xs = np.linspace(0.0, 1.0, 160)
-        ys = np.linspace(0.0, 1.0, 160)
+        xs = np.linspace(0.0, 1.0, 360)
+        ys = np.linspace(0.0, 1.0, 360)
         grid_x, grid_y = np.meshgrid(xs, ys)
         vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
         faces = []
@@ -127,6 +128,26 @@ class AssetTests(unittest.TestCase):
         reduced_vertices, reduced_faces = decimate(vertices, dense)
         self.assertLessEqual(len(reduced_faces), TRIANGLE_BUDGET)
         self.assertGreater(len(reduced_faces), 0)
+        self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
+        self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
+
+    def test_decimate_welds_a_triangle_soup(self) -> None:
+        xs = np.linspace(0.0, 1.0, 40)
+        ys = np.linspace(0.0, 1.0, 40)
+        grid_x, grid_y = np.meshgrid(xs, ys)
+        vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
+        faces = []
+        width = len(xs)
+        for y in range(len(ys) - 1):
+            for x in range(width - 1):
+                index = y * width + x
+                faces.append((index, index + 1, index + width))
+                faces.append((index + 1, index + width + 1, index + width))
+        indexed = np.array(faces, dtype=np.int64)
+        soup_vertices = vertices[indexed].reshape(-1, 3)
+        soup_faces = np.arange(len(soup_vertices), dtype=np.int64).reshape(-1, 3)
+        reduced_vertices, reduced_faces = decimate(soup_vertices, soup_faces, budget=200)
+        self.assertLessEqual(len(reduced_faces), 200)
         self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
         self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
 
@@ -282,6 +303,24 @@ class AssetTests(unittest.TestCase):
         self.assertNotIn("ada", json.dumps(document["instances"]))
         self.assertTrue((self.output / "demo" / "sets" / "room" / "set.glb").is_file())
         self.assertIn("prop:cup", json.loads((self.output / "demo" / "assets" / "resolved.json").read_text())["prefabs"])
+
+    def test_unused_library_prefabs_are_removed(self) -> None:
+        source = CountingSource([self._candidate("stone-chair", "stone chair")])
+        show = self._show(asset_id="fake:stone-chair")
+        resolved = self._resolver(source).resolve_show(show)
+        used = resolved["landmark:room/bench"].prefab_id
+        self._plant(self.library / "prefabs", "blocks/unused-table", "unused", "Unused", "library")
+        self._plant(self.library / "prefabs", "blocks/other-show", None, "Other", "library")
+        other = self._show(prefab_id="blocks/other-show")
+        raw = self.library / "raw" / "library" / "unused-table"
+        raw.mkdir(parents=True)
+        (raw / "model.glb").write_bytes(self.cube.read_bytes())
+        removed = prune_unused_library(self.library, [show, other])
+        self.assertIn("blocks/unused-table", removed)
+        self.assertFalse((self.library / "prefabs" / "blocks" / "unused-table").exists())
+        self.assertFalse(raw.exists())
+        self.assertTrue((self.library / "prefabs" / "blocks" / "other-show" / "prefab.json").is_file())
+        self.assertTrue((self.library / "prefabs" / Path(*used.split("/")) / "prefab.json").is_file())
 
     def test_lock_override_pins_a_known_asset(self) -> None:
         source = CountingSource([self._candidate("stone-chair", "stone chair")])

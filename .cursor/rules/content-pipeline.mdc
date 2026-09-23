@@ -8,10 +8,10 @@ alwaysApply: false
 
 `shows/<id>/script.json` and `shows/<id>/assets/` are authored. Do not write generated meshes, sets, previs, or postvis there.
 
-Pictures and meshes built from the script go in `output/<id>/`. `library/` is the shared prefab cache. `library/raw/` is gitignored and is not a place for show output.
+Pictures and meshes built from the script go in `output/<id>/`. `01_previs/blockout.mp4` is every scene blockout joined in script order. `library/` is the shared prefab cache. `content:assets` deletes library prefabs that no show script still references. `library/raw/` is gitignored and is not a place for show output.
 
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The stage viewer reads Y-up and does not convert.
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
 
-Landmarks and props require a Sketchfab model as `sketchfab:<uid>` (`assetId`). There is no other catalog, no search query, and no primitive stand-in. Prefab meshes are capped at 25,000 triangles.
+Landmarks and props require a Sketchfab model as `sketchfab:<uid>` (`assetId`). There is no other catalog, no search query, and no primitive stand-in. Prefab meshes over 100,000 triangles are reduced with quadric edge collapse.

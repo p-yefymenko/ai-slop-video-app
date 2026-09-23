@@ -215,14 +215,14 @@ reelshort-clone/
 - `upload_to_r2.py`: uploads generated MP4s + auto-generated thumbnails to the R2 bucket, then calls the backend Worker's admin route to create the corresponding `Episode` record
 - Simple admin script or Worker admin route to create/publish a `Series` and attach uploaded episodes to it in order
 
-`content:previs` writes the blocked scenes — `output/<show>/<episode>/01_previs/scene_XX/blockout.mp4` plus `start.png` / `end.png` (no model; review this before spending GPU time). `content:frames` then writes:
+`content:previs` writes the blocked scenes — `output/<show>/<episode>/01_previs/scene_XX/blockout.mp4` plus `start.png` / `end.png` — and joins every scene into `01_previs/blockout.mp4` so the clay cut plays as one episode (no model; review this before spending GPU time). A scene that is still missing leaves the episode file untouched. `content:frames` then writes:
 
 1. Character stills — `output/<show>/characters/<id>.png` (human review, then the masked face pass)
 2. Scene stills — `02_postvis/stills/scene_XX_start.png`, plus `scene_XX_end.png` when a generative shot's blocking actually changes
 
 `content:generate` writes `03_postvis/clips/scene_XX.mp4` and concatenates `04_edit/episode.mp4`. LTX only sees the reviewed scene still, never the character portrait.
 
-`pnpm run content:assets` resolves each landmark and prop `assetId` (`sketchfab:<uid>`) into a prefab and writes one set per location under `output/<show>/sets`. `assetId` is required. It does not search by a text query and it does not build a primitive stand-in. An unchanged id and size reuses `library/lock.json`. A missing or unacceptable model stops the build. Downloaded meshes are capped at 25,000 triangles. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY Sketchfab model. Sketchfab is the only catalog.
+`pnpm run content:assets` resolves each landmark and prop `assetId` (`sketchfab:<uid>`) into a prefab and writes one set per location under `output/<show>/sets`. `assetId` is required. It does not search by a text query and it does not build a primitive stand-in. An unchanged id and size reuses `library/lock.json`. After a successful build it deletes library prefabs that no show script still references. A missing or unacceptable model stops the build. Downloaded meshes are capped at 100,000 triangles. `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python, which downloaded glTF and OBJ files need. `pnpm run content:fetch-asset -- <url>` downloads one CC0 or CC-BY Sketchfab model. Sketchfab is the only catalog.
 
 `content:render` runs `content:assets`, `content:previs`, `content:frames`, and `content:generate` in that order and forwards the same selection arguments to all four stages. `pnpm run view` opens the stage viewer at `http://127.0.0.1:5174`. It reads prefabs, sets, and shots as glTF Y-up and can lock a reviewed candidate. Open VSX has file-level GLB previews (`slevesque.vscode-3dviewer`, and the OHZI GLTF/GLB Viewer); the stage viewer does not depend on them.
 

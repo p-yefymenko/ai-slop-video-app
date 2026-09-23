@@ -23,9 +23,11 @@ from spatial_previs import (  # noqa: E402
     render_blocked_frame,
     render_scene_proxy,
     render_structure_maps,
+    scene_blockouts,
     scene_has_spatial_change,
     timeline_state,
     validate_spatial_episode,
+    write_episode_blockout,
 )
 
 SHOW_JSON = (
@@ -273,6 +275,44 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertEqual(times[0], 2.0)
         self.assertEqual(times[-1], 4.0)
         self.assertGreaterEqual(len(times), 3)
+
+    def test_episode_blockout_joins_scenes_in_script_order(self) -> None:
+        import pipeline_paths
+        from unittest.mock import patch
+
+        show = {"id": "demo"}
+        episode = {
+            "episodeNumber": 1,
+            "scenes": [
+                {"sceneNumber": 2, "camera": {"position": [0, 0, 0]}, "timeRangeSeconds": [1, 2]},
+                {"sceneNumber": 1, "camera": {"position": [0, 0, 0]}, "timeRangeSeconds": [0, 1]},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(pipeline_paths, "OUTPUT_DIR", Path(temp)):
+                ready, missing = scene_blockouts(show, episode)
+                self.assertEqual(ready, [])
+                self.assertEqual(missing, [2, 1])
+                self.assertIsNone(write_episode_blockout(show, episode))
+                for scene_number in (1, 2):
+                    path = pipeline_paths.blockout_video_path("demo", 1, scene_number)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"x" * 1024)
+                joined: list[list[Path]] = []
+
+                def capture(files: list[Path], dest: Path) -> None:
+                    joined.append(list(files))
+                    dest.write_bytes(b"joined")
+
+                with patch("ffmpeg_tools.concat_videos", capture):
+                    destination = write_episode_blockout(show, episode)
+                self.assertEqual(
+                    [path.parent.name for path in joined[0]],
+                    ["scene_02", "scene_01"],
+                )
+                assert destination is not None
+                self.assertEqual(destination.name, "blockout.mp4")
+                self.assertEqual(destination.parent.name, "01_previs")
 
 
 if __name__ == "__main__":

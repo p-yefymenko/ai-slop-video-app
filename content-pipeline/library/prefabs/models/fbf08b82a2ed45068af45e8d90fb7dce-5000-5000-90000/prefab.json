@@ -15,5 +15,7 @@
   "pageUrl": "https://sketchfab.com/3d-models/500kvlatticehorizontaltransmissiontowerfl-fbf08b82a2ed45068af45e8d90fb7dce",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 7721
+  "triangleCount": 7721,
+  "triangleBudget": 100000,
+  "decimator": "quadric-welded"
 }

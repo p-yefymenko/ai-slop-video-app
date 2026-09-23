@@ -15,5 +15,7 @@
   "pageUrl": "https://sketchfab.com/3d-models/twisted-marble-column-7614c26d2b4e41e9810360aca6ecc38e",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 24634
+  "triangleCount": 30078,
+  "triangleBudget": 100000,
+  "decimator": "quadric-welded"
 }
