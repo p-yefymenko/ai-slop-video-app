@@ -1,0 +1,19 @@
+{
+  "id": "models/lifebuoy-280-220-80",
+  "assetHash": "ff198c3a92cd49b16b72b6824d341f9cb5c22ba1e3a572206bde5f4eb8d147c5",
+  "sizeMeters": [
+    0.28,
+    0.22,
+    0.08
+  ],
+  "origin": "downloaded",
+  "source": "polyhaven",
+  "sourceId": "lifebuoy",
+  "title": "Lifebuoy",
+  "author": "Hank Kaamura",
+  "license": "CC0",
+  "pageUrl": "https://polyhaven.com/a/lifebuoy",
+  "version": "623799ae1de57723ec238ea1aac86b5b061fa92b",
+  "retrieved": "2026-09-23",
+  "triangleCount": 10728
+}

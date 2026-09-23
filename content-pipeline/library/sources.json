@@ -49,6 +49,146 @@
       "license": "CC0",
       "version": "b5953e044c4cd782c0352204a8d9731b3e0ad0bd",
       "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/modular-fort-01-48000-56000-52000",
+      "source": "polyhaven",
+      "sourceId": "modular_fort_01",
+      "url": "https://polyhaven.com/a/modular_fort_01",
+      "author": "Rico Cilliers",
+      "license": "CC0",
+      "version": "5ccbf62aeee96ea99cf0c2e29e4c8ed843ee7c44",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/modular-electricity-poles-5000-5000-90000",
+      "source": "polyhaven",
+      "sourceId": "modular_electricity_poles",
+      "url": "https://polyhaven.com/a/modular_electricity_poles",
+      "author": "James Ray Cock",
+      "license": "CC0",
+      "version": "e40d56f04b77c4357252d49fa63051edce4f92f7",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/stone-fire-pit-2200-2200-1200",
+      "source": "polyhaven",
+      "sourceId": "stone_fire_pit",
+      "url": "https://polyhaven.com/a/stone_fire_pit",
+      "author": "Sebastian Platen",
+      "license": "CC0",
+      "version": "db8f04edd02bcfd3bae277fe17f585be17f7c7d9",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/bench-vice-01-1800-1200-900",
+      "source": "polyhaven",
+      "sourceId": "bench_vice_01",
+      "url": "https://polyhaven.com/a/bench_vice_01",
+      "author": "Yann Kervran, Antanas Kep",
+      "license": "CC0",
+      "version": "e1b894759ca8b4ed6359bd7503a34c974494a620",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/concrete-road-barrier-5000-3000-400",
+      "source": "polyhaven",
+      "sourceId": "concrete_road_barrier",
+      "url": "https://polyhaven.com/a/concrete_road_barrier",
+      "author": "Amal Kumar",
+      "license": "CC0",
+      "version": "bc3dfafc1abfc83dfa19710745d6f0beba9d2368",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/street-lamp-01-800-800-4200",
+      "source": "polyhaven",
+      "sourceId": "street_lamp_01",
+      "url": "https://polyhaven.com/a/street_lamp_01",
+      "author": "Josh Dean",
+      "license": "CC0",
+      "version": "002d697fa195d73f627e82804612208853212519",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/lifebuoy-280-220-80",
+      "source": "polyhaven",
+      "sourceId": "lifebuoy",
+      "url": "https://polyhaven.com/a/lifebuoy",
+      "author": "Hank Kaamura",
+      "license": "CC0",
+      "version": "623799ae1de57723ec238ea1aac86b5b061fa92b",
+      "retrieved": "2026-09-23"
+    },
+    {
+      "prefabId": "models/def54040de2749139b69afff756e90bd-48000-56000-52000",
+      "source": "sketchfab",
+      "sourceId": "def54040de2749139b69afff756e90bd",
+      "url": "https://sketchfab.com/3d-models/mystic-xx-citadel--ii-def54040de2749139b69afff756e90bd",
+      "author": "XX-XX",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/fbf08b82a2ed45068af45e8d90fb7dce-5000-5000-90000",
+      "source": "sketchfab",
+      "sourceId": "fbf08b82a2ed45068af45e8d90fb7dce",
+      "url": "https://sketchfab.com/3d-models/500kvlatticehorizontaltransmissiontowerfl-fbf08b82a2ed45068af45e8d90fb7dce",
+      "author": "281357085qq.com",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/8ca31b1d1635406ba2db30e48ecddbdd-2200-2200-1200",
+      "source": "sketchfab",
+      "sourceId": "8ca31b1d1635406ba2db30e48ecddbdd",
+      "url": "https://sketchfab.com/3d-models/fire-pit-8ca31b1d1635406ba2db30e48ecddbdd",
+      "author": "jeffbas",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/e63f1154ee0b41f8a797db683526142a-1800-1200-900",
+      "source": "sketchfab",
+      "sourceId": "e63f1154ee0b41f8a797db683526142a",
+      "url": "https://sketchfab.com/3d-models/blacksmith-anvil-game-ready-asset-e63f1154ee0b41f8a797db683526142a",
+      "author": "apariciosilva3D",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/ccaa80d7a16444049f420edd4f4378a4-5000-3000-400",
+      "source": "sketchfab",
+      "sourceId": "ccaa80d7a16444049f420edd4f4378a4",
+      "url": "https://sketchfab.com/3d-models/low-poly-hand-painted-dungeon-plinth-ccaa80d7a16444049f420edd4f4378a4",
+      "author": "bitgem",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/7614c26d2b4e41e9810360aca6ecc38e-800-800-4200",
+      "source": "sketchfab",
+      "sourceId": "7614c26d2b4e41e9810360aca6ecc38e",
+      "url": "https://sketchfab.com/3d-models/twisted-marble-column-7614c26d2b4e41e9810360aca6ecc38e",
+      "author": "dark_alice",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
+    },
+    {
+      "prefabId": "models/7b60eff248a844eb80d0a5ed462aa551-280-220-80",
+      "source": "sketchfab",
+      "sourceId": "7b60eff248a844eb80d0a5ed462aa551",
+      "url": "https://sketchfab.com/3d-models/torc-neck-ring-7b60eff248a844eb80d0a5ed462aa551",
+      "author": "TheHuntMuseum",
+      "license": "CC-BY",
+      "version": "",
+      "retrieved": "2026-09-24"
     }
   ]
 }

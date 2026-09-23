@@ -122,7 +122,8 @@ class AssetResolver:
             )
         imported = self._fetch_named(request, source_name, source_id, digest)
         if imported is None:
-            raise RuntimeError(f"{request.consumer_id}: could not fetch {request.asset_id}")
+            detail = self.warnings[-1] if self.warnings else f"could not fetch {request.asset_id}"
+            raise RuntimeError(detail)
         return imported
 
     def _cached(self, digest: str) -> ResolvedPrefab | None:
@@ -499,7 +500,7 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
         "",
         "Models fetched into `content-pipeline/library` keep the license they were published under.",
         "CC-BY assets need attribution when a video that uses them is published.",
-        "Poly Haven's live API also asks for a visible Powered by Poly Haven credit.",
+        "Sketchfab CC-BY models need the author and the model page named in the credits.",
         "",
     ]
     assets = catalog.get("assets") or []

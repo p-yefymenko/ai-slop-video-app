@@ -1,0 +1,19 @@
+{
+  "id": "models/e63f1154ee0b41f8a797db683526142a-1800-1200-900",
+  "assetHash": "07e8750b4b0e8f30d7436781c917ceff1e5503d0a4a696baa848ac7efb96ad22",
+  "sizeMeters": [
+    1.8,
+    1.2,
+    0.9
+  ],
+  "origin": "downloaded",
+  "source": "sketchfab",
+  "sourceId": "e63f1154ee0b41f8a797db683526142a",
+  "title": "Blacksmith Anvil (game ready asset)",
+  "author": "apariciosilva3D",
+  "license": "CC-BY",
+  "pageUrl": "https://sketchfab.com/3d-models/blacksmith-anvil-game-ready-asset-e63f1154ee0b41f8a797db683526142a",
+  "version": "",
+  "retrieved": "2026-09-24",
+  "triangleCount": 4520
+}

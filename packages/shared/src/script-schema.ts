@@ -74,8 +74,8 @@ const assetIdSchema = z
     invalid_type_error: "assetId must be a string",
   })
   .regex(
-    /^(polyhaven|sketchfab|smithsonian|kenney|quaternius):[A-Za-z0-9][A-Za-z0-9._:/-]*$/,
-    "assetId must be source:id, for example polyhaven:coast_rocks_05",
+    /^sketchfab:[A-Za-z0-9][A-Za-z0-9._:/-]*$/,
+    "assetId must be sketchfab:<uid>, for example sketchfab:e63f1154ee0b41f8a797db683526142a",
   );
 
 const prefabIdSchema = z

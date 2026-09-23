@@ -28,7 +28,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             bench: {
               position: [0, 1, 0],
               size: [1.2, 0.5, 0.45],
-              assetId: "polyhaven:wooden_bench",
+              assetId: "sketchfab:e63f1154ee0b41f8a797db683526142a",
             },
           },
         },
@@ -141,14 +141,21 @@ test("rejects a catalog search on a landmark", () => {
   assert.match(report, /need/);
 });
 
-test("accepts a catalog asset id", () => {
+test("accepts a sketchfab asset id", () => {
   const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.assetId = "polyhaven:coast_rocks_05";
+  show.locations.room.spatial.landmarks.bench.assetId = "sketchfab:8ca31b1d1635406ba2db30e48ecddbdd";
   const result = parseShowScript(show, {
     showId: "demo-show",
     showIdLabel: "the filename stem",
   });
   assert.equal(result.ok, true);
+});
+
+test("rejects a polyhaven asset id", () => {
+  const show = minimalShow();
+  show.locations.room.spatial.landmarks.bench.assetId = "polyhaven:coast_rocks_05";
+  const report = messages(show);
+  assert.match(report, /sketchfab/);
 });
 
 test("rejects a prop without an asset id", () => {

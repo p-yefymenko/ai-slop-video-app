@@ -148,6 +148,202 @@
       "version": "b5953e044c4cd782c0352204a8d9731b3e0ad0bd",
       "origin": "downloaded",
       "provisional": false
+    },
+    "19fa70cb1ef151d5c0973e45a3903e3c901e2512ba871d5260dfd652d0cb6f3f": {
+      "assetId": "polyhaven:modular_fort_01",
+      "sizeMeters": [
+        48.0,
+        56.0,
+        52.0
+      ],
+      "prefabId": "models/modular-fort-01-48000-56000-52000",
+      "source": "polyhaven",
+      "sourceId": "modular_fort_01",
+      "version": "5ccbf62aeee96ea99cf0c2e29e4c8ed843ee7c44",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "8653b23d06d727e8cc772c8380c2b46f761bfe7e8c45a348ba231e585a84dfa6": {
+      "assetId": "polyhaven:modular_electricity_poles",
+      "sizeMeters": [
+        5.0,
+        5.0,
+        90.0
+      ],
+      "prefabId": "models/modular-electricity-poles-5000-5000-90000",
+      "source": "polyhaven",
+      "sourceId": "modular_electricity_poles",
+      "version": "e40d56f04b77c4357252d49fa63051edce4f92f7",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "26fb7a46dee31e1568fd4fd7e09f469e83e75f9ce62ab338b0e1025f72d83912": {
+      "assetId": "polyhaven:stone_fire_pit",
+      "sizeMeters": [
+        2.2,
+        2.2,
+        1.2
+      ],
+      "prefabId": "models/stone-fire-pit-2200-2200-1200",
+      "source": "polyhaven",
+      "sourceId": "stone_fire_pit",
+      "version": "db8f04edd02bcfd3bae277fe17f585be17f7c7d9",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "55f57134768287ddbcda70323daaddfac4b52a0f16a37d700c893ffdb50d1a8e": {
+      "assetId": "polyhaven:bench_vice_01",
+      "sizeMeters": [
+        1.8,
+        1.2,
+        0.9
+      ],
+      "prefabId": "models/bench-vice-01-1800-1200-900",
+      "source": "polyhaven",
+      "sourceId": "bench_vice_01",
+      "version": "e1b894759ca8b4ed6359bd7503a34c974494a620",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "19dbee13b92d7df8274f30875bd6b406fb60a1f05c0e465e644f62f16ebba7e5": {
+      "assetId": "polyhaven:concrete_road_barrier",
+      "sizeMeters": [
+        5.0,
+        3.0,
+        0.4
+      ],
+      "prefabId": "models/concrete-road-barrier-5000-3000-400",
+      "source": "polyhaven",
+      "sourceId": "concrete_road_barrier",
+      "version": "bc3dfafc1abfc83dfa19710745d6f0beba9d2368",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "4f4f8e25ca8656b8c1f8a1b4e2936e3fb424e1929669b6f1b6b329e6813cffc4": {
+      "assetId": "polyhaven:street_lamp_01",
+      "sizeMeters": [
+        0.8,
+        0.8,
+        4.2
+      ],
+      "prefabId": "models/street-lamp-01-800-800-4200",
+      "source": "polyhaven",
+      "sourceId": "street_lamp_01",
+      "version": "002d697fa195d73f627e82804612208853212519",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "ff198c3a92cd49b16b72b6824d341f9cb5c22ba1e3a572206bde5f4eb8d147c5": {
+      "assetId": "polyhaven:lifebuoy",
+      "sizeMeters": [
+        0.28,
+        0.22,
+        0.08
+      ],
+      "prefabId": "models/lifebuoy-280-220-80",
+      "source": "polyhaven",
+      "sourceId": "lifebuoy",
+      "version": "623799ae1de57723ec238ea1aac86b5b061fa92b",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "9289b3952c57cfc041682b6d9730daa14d901f33957a881a51bd00e1127d7ce6": {
+      "assetId": "sketchfab:def54040de2749139b69afff756e90bd",
+      "sizeMeters": [
+        48.0,
+        56.0,
+        52.0
+      ],
+      "prefabId": "models/def54040de2749139b69afff756e90bd-48000-56000-52000",
+      "source": "sketchfab",
+      "sourceId": "def54040de2749139b69afff756e90bd",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "fe0c805353ac0cac92545e4fe2aa270d12ab4909d1e95d601596d5f261607e0e": {
+      "assetId": "sketchfab:fbf08b82a2ed45068af45e8d90fb7dce",
+      "sizeMeters": [
+        5.0,
+        5.0,
+        90.0
+      ],
+      "prefabId": "models/fbf08b82a2ed45068af45e8d90fb7dce-5000-5000-90000",
+      "source": "sketchfab",
+      "sourceId": "fbf08b82a2ed45068af45e8d90fb7dce",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "fbf0c20b02f3198fb7160d2c55f9db5f5840bef872c90ee7c80a0c0521e359cf": {
+      "assetId": "sketchfab:8ca31b1d1635406ba2db30e48ecddbdd",
+      "sizeMeters": [
+        2.2,
+        2.2,
+        1.2
+      ],
+      "prefabId": "models/8ca31b1d1635406ba2db30e48ecddbdd-2200-2200-1200",
+      "source": "sketchfab",
+      "sourceId": "8ca31b1d1635406ba2db30e48ecddbdd",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "07e8750b4b0e8f30d7436781c917ceff1e5503d0a4a696baa848ac7efb96ad22": {
+      "assetId": "sketchfab:e63f1154ee0b41f8a797db683526142a",
+      "sizeMeters": [
+        1.8,
+        1.2,
+        0.9
+      ],
+      "prefabId": "models/e63f1154ee0b41f8a797db683526142a-1800-1200-900",
+      "source": "sketchfab",
+      "sourceId": "e63f1154ee0b41f8a797db683526142a",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "39e8efc8c6c4ae3fd0e5cf2538d50bcc3bed1bdbd9307dd9d4e0c9d1800526ad": {
+      "assetId": "sketchfab:ccaa80d7a16444049f420edd4f4378a4",
+      "sizeMeters": [
+        5.0,
+        3.0,
+        0.4
+      ],
+      "prefabId": "models/ccaa80d7a16444049f420edd4f4378a4-5000-3000-400",
+      "source": "sketchfab",
+      "sourceId": "ccaa80d7a16444049f420edd4f4378a4",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "902b20b5b33ebb453c68b83837936ce883ad27ab8882e6613b35fd4ebd23f582": {
+      "assetId": "sketchfab:7614c26d2b4e41e9810360aca6ecc38e",
+      "sizeMeters": [
+        0.8,
+        0.8,
+        4.2
+      ],
+      "prefabId": "models/7614c26d2b4e41e9810360aca6ecc38e-800-800-4200",
+      "source": "sketchfab",
+      "sourceId": "7614c26d2b4e41e9810360aca6ecc38e",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
+    },
+    "7ca96b7d5014b8342f19707e3ea3c7ea003ab4c017e3e2b6b267377ce707b03e": {
+      "assetId": "sketchfab:7b60eff248a844eb80d0a5ed462aa551",
+      "sizeMeters": [
+        0.28,
+        0.22,
+        0.08
+      ],
+      "prefabId": "models/7b60eff248a844eb80d0a5ed462aa551-280-220-80",
+      "source": "sketchfab",
+      "sourceId": "7b60eff248a844eb80d0a5ed462aa551",
+      "version": "",
+      "origin": "downloaded",
+      "provisional": false
     }
   }
 }

@@ -2,6 +2,6 @@
 
 Models fetched into `content-pipeline/library` keep the license they were published under.
 CC-BY assets need attribution when a video that uses them is published.
-Poly Haven's live API also asks for a visible Powered by Poly Haven credit.
+Sketchfab CC-BY models need the author and the model page named in the credits.
 
 No third-party models have been fetched.

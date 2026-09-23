@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -23,14 +22,11 @@ from asset_resolver import (  # noqa: E402
 )
 from asset_sources import (  # noqa: E402
     Candidate,
-    LocalPackSource,
     Need,
-    ObjaverseSource,
-    PolyHavenSource,
+    SketchfabSource,
     TextTo3DSource,
     materialize_mesh,
     normalize_license,
-    objaverse_license_allowed,
 )
 from coords import schema_to_gltf  # noqa: E402
 from fetch_asset import candidate_for_url  # noqa: E402
@@ -87,30 +83,12 @@ class AssetTests(unittest.TestCase):
         self.assertIsNone(normalize_license("CC-BY-SA"))
         self.assertIsNone(normalize_license("CC-BY-ND"))
         self.assertIsNone(normalize_license("CC-BY-NC-SA"))
-        self.assertTrue(objaverse_license_allowed("CC0"))
-        self.assertTrue(objaverse_license_allowed("CC-BY"))
-        self.assertFalse(objaverse_license_allowed("CC-BY-NC"))
+        self.assertEqual(normalize_license("CC Attribution"), "CC-BY")
+        self.assertEqual(normalize_license("by"), "CC-BY")
 
-    def test_text_to_3d_and_objaverse_stay_idle(self) -> None:
+    def test_text_to_3d_stays_unregistered(self) -> None:
         with self.assertRaises(RuntimeError):
             TextTo3DSource().search(Need("chair"))
-        os.environ.pop("OBJAVERSE_ENABLE", None)
-        self.assertEqual(ObjaverseSource().search(Need("chair")), [])
-
-    def test_local_pack_indexes_files_already_on_disk(self) -> None:
-        pack = self.library / "raw" / "kenney"
-        pack.mkdir(parents=True)
-        (pack / "wooden-chair.glb").write_bytes(self.cube.read_bytes())
-        source = LocalPackSource("kenney", pack, "Kenney")
-        found = source.search(Need("wooden chair"))
-        self.assertEqual(len(found), 1)
-        self.assertEqual(found[0].license, "CC0")
-        named = source.lookup("wooden-chair.glb")
-        self.assertIsNotNone(named)
-        assert named is not None
-        self.assertEqual(named.license, "CC0")
-        self.assertTrue(named.local_path)
-        self.assertIsNone(source.lookup("../secret.glb"))
 
     def test_keyword_score_prefers_the_matching_title(self) -> None:
         need = Need("stone column", ("castle",))
@@ -152,51 +130,42 @@ class AssetTests(unittest.TestCase):
         self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
         self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
 
-    def test_polyhaven_fetch_creates_texture_directories(self) -> None:
-        payload = {
-            "gltf": {
-                "1k": {
-                    "gltf": {
-                        "url": "https://example.test/gothic_coffee_table_1k.gltf",
-                        "include": {
-                            "textures/gothic_coffee_table_nor_gl_1k.jpg": {
-                                "url": "https://example.test/nor.jpg"
-                            },
-                            "gothic_coffee_table.bin": {"url": "https://example.test/model.bin"},
-                        },
-                    }
-                }
-            }
-        }
+    def test_sketchfab_fetch_extracts_the_archive(self) -> None:
+        def fake_get_json(url: str, headers: dict | None = None) -> dict:
+            del url, headers
+            return {"glb": {"url": "https://example.test/model.zip"}}
 
-        class Body:
-            def __init__(self, data: bytes) -> None:
-                self.data = data
+        def fake_download(url: str, destination: Path) -> None:
+            del url
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(destination, "w") as archive:
+                archive.write(self.cube, "model.glb")
 
-            def read(self) -> bytes:
-                return self.data
+        directory = self.library / "raw" / "sketchfab" / "anvil"
+        candidate = self._candidate("e63f1154ee0b41f8a797db683526142a", "Blacksmith Anvil")
+        candidate = Candidate(
+            source="sketchfab",
+            source_id=candidate.source_id,
+            title=candidate.title,
+            author=candidate.author,
+            license=candidate.license,
+            page_url=candidate.page_url,
+            download_url="https://api.sketchfab.com/v3/models/e63f1154ee0b41f8a797db683526142a/download",
+        )
+        with patch("asset_sources._get_json", fake_get_json), patch("asset_sources._download", fake_download):
+            fetched = SketchfabSource("token").fetch(candidate, directory)
+        self.assertEqual(fetched.suffix, ".glb")
+        _vertices, faces = read_schema_mesh(fetched)
+        self.assertGreater(len(faces), 0)
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args) -> bool:
-                return False
-
-        def urlopen(request, timeout=30):
-            url = getattr(request, "full_url", str(request))
-            if url.endswith("/files/gothic_coffee_table"):
-                return Body(json.dumps(payload).encode("utf-8"))
-            return Body(b"file")
-
-        directory = self.library / "raw" / "polyhaven" / "gothic-coffee-table"
-        with patch("asset_sources.urllib.request.urlopen", urlopen):
-            fetched = PolyHavenSource().fetch(
-                self._candidate("gothic_coffee_table", "Gothic Coffee Table"),
-                directory,
-            )
-        self.assertEqual(fetched.name, "gothic_coffee_table_1k.gltf")
-        self.assertTrue((directory / "textures" / "gothic_coffee_table_nor_gl_1k.jpg").is_file())
-        self.assertTrue((directory / "gothic_coffee_table.bin").is_file())
+    def test_glb_saved_as_zip_is_not_unzipped(self) -> None:
+        mislabeled = self.library / "model.zip"
+        mislabeled.parent.mkdir(parents=True, exist_ok=True)
+        mislabeled.write_bytes(self.cube.read_bytes())
+        mesh = materialize_mesh(mislabeled)
+        self.assertEqual(mesh.suffix, ".glb")
+        _vertices, faces = read_schema_mesh(mesh)
+        self.assertGreater(len(faces), 0)
 
     def test_zip_extracts_the_first_mesh(self) -> None:
         archive_path = self.library / "pack.zip"
@@ -253,7 +222,7 @@ class AssetTests(unittest.TestCase):
         export_credits(self.library / "sources.json", credits)
         text = credits.read_text(encoding="utf-8")
         self.assertIn("CC-BY", text)
-        self.assertIn("Powered by Poly Haven", text)
+        self.assertIn("Sketchfab CC-BY", text)
 
     def test_same_asset_id_shares_one_prefab(self) -> None:
         source = CountingSource([self._candidate("column", "stone column")])
@@ -330,9 +299,8 @@ class AssetTests(unittest.TestCase):
             candidate_for_url("https://www.mixamo.com/characters")
         with self.assertRaises(SystemExit):
             candidate_for_url("https://example.com/model.glb")
-        candidate, _fetch = candidate_for_url("https://polyhaven.com/a/wooden_crate")
-        self.assertEqual(candidate.source, "polyhaven")
-        self.assertEqual(candidate.license, "CC0")
+        with self.assertRaises(SystemExit):
+            candidate_for_url("https://polyhaven.com/a/wooden_crate")
 
     def _resolver(self, source: CountingSource, **kwargs) -> AssetResolver:
         return AssetResolver(

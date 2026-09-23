@@ -86,7 +86,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-Every landmark and prop sets `assetId` to `source:id`, for example `polyhaven:coast_rocks_05`. Meshes used for previs are capped at 25,000 triangles.
+Every landmark and prop sets `assetId` to `sketchfab:<uid>`. Meshes used for previs are capped at 25,000 triangles.
 
 God camera (OrbitControls):
 

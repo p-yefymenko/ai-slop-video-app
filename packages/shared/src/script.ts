@@ -34,8 +34,8 @@ export type StageLandmark = {
   position: Vec3;
   size: Vec3;
   /**
-   * Exact catalog model, `source:id`. Example: `polyhaven:coast_rocks_05`.
-   * Sources: polyhaven, sketchfab, smithsonian, kenney, quaternius.
+   * Exact Sketchfab model, `sketchfab:<uid>`.
+   * Example: `sketchfab:e63f1154ee0b41f8a797db683526142a`.
    */
   assetId: string;
   /** Library or show prefab to instance. Skips the catalog fetch. */
@@ -47,7 +47,7 @@ export type StageLandmark = {
  * they are not set dressing.
  */
 export type ShowProp = {
-  /** Exact catalog model, `source:id`. Example: `polyhaven:metal_collar`. */
+  /** Exact Sketchfab model, `sketchfab:<uid>`. */
   assetId: string;
   /** Library or show prefab to instance. Skips the catalog fetch. */
   prefabId?: string;

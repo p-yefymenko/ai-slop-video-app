@@ -1,0 +1,19 @@
+{
+  "id": "models/bench-vice-01-1800-1200-900",
+  "assetHash": "55f57134768287ddbcda70323daaddfac4b52a0f16a37d700c893ffdb50d1a8e",
+  "sizeMeters": [
+    1.8,
+    1.2,
+    0.9
+  ],
+  "origin": "downloaded",
+  "source": "polyhaven",
+  "sourceId": "bench_vice_01",
+  "title": "Bench Vice 01",
+  "author": "Yann Kervran, Antanas Kep",
+  "license": "CC0",
+  "pageUrl": "https://polyhaven.com/a/bench_vice_01",
+  "version": "e1b894759ca8b4ed6359bd7503a34c974494a620",
+  "retrieved": "2026-09-23",
+  "triangleCount": 2864
+}

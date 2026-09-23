@@ -1,0 +1,19 @@
+{
+  "id": "models/street-lamp-01-800-800-4200",
+  "assetHash": "4f4f8e25ca8656b8c1f8a1b4e2936e3fb424e1929669b6f1b6b329e6813cffc4",
+  "sizeMeters": [
+    0.8,
+    0.8,
+    4.2
+  ],
+  "origin": "downloaded",
+  "source": "polyhaven",
+  "sourceId": "street_lamp_01",
+  "title": "Street Lamp 01",
+  "author": "Josh Dean",
+  "license": "CC0",
+  "pageUrl": "https://polyhaven.com/a/street_lamp_01",
+  "version": "002d697fa195d73f627e82804612208853212519",
+  "retrieved": "2026-09-23",
+  "triangleCount": 15200
+}

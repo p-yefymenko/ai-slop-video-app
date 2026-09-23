@@ -1,8 +1,6 @@
 # Stage assets
 
-Landmarks and props name an exact catalog model with `assetId`, written as `source:id`. Example: `polyhaven:coast_rocks_05`. The field is required. A search query is not a field, and there is no primitive stand-in. The same source, id, and size share one prefab. A pinned `prefabId` skips the download. If the model cannot be fetched, `content:assets` stops.
-
-Sources: `polyhaven`, `sketchfab`, `smithsonian`, `kenney`, `quaternius`.
+Landmarks and props name an exact Sketchfab model with `assetId`, written as `sketchfab:<uid>`. Example: `sketchfab:e63f1154ee0b41f8a797db683526142a`. The uid is the 32-character id at the end of the model page URL. The field is required. A search query is not a field, and there is no primitive stand-in. The same id and size share one prefab. A pinned `prefabId` skips the download. If the model cannot be fetched, `content:assets` stops.
 
 Resolution order:
 
@@ -18,20 +16,14 @@ Only CC0 and CC-BY are kept. NC, ND, and SA are dropped. Downloaded meshes are r
 
 Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `content-pipeline/scripts/coords.py` is the only converter. The viewer reads Y-up files and does not convert them.
 
-## Catalogs
+## Catalog
 
-Poly Haven (`https://api.polyhaven.com`) serves CC0 models. An `assetId` of `polyhaven:coast_rocks_05` is the page slug from `https://polyhaven.com/a/coast_rocks_05`. The client loads the model list and takes that id. File metadata comes from `GET /files/{id}`, and the lowest glTF resolution is downloaded. Dimensions are millimeters when present. The live API asks for a unique User-Agent and a visible “Powered by Poly Haven” credit. The assets themselves do not require attribution. No API key.
+Sketchfab Data API v3 is the only catalog. Set `SKETCHFAB_TOKEN` in `content-pipeline/.env`. The id is `sketchfab:` plus the model uid. Lookup is `GET /v3/models/{uid}`. Download is `GET /v3/models/{uid}/download`, which returns a short-lived archive URL. The client prefers the glb entry, then glTF, then the source archive. Calls are spaced about 0.25s apart. CC-BY models are recorded in `docs/CREDITS.md`.
 
-Sketchfab Data API v3 loads one model by uid when `SKETCHFAB_TOKEN` is set in `content-pipeline/.env`. The id is `sketchfab:` plus that uid. The download endpoint currently expects an end-user OAuth login unless Sketchfab grants an exception. The pipeline tries the token, skips the model when the API refuses, and records attribution for CC-BY. Short-lived archive URLs are not cached. Calls are spaced about 0.25s apart.
-
-Smithsonian Open Access is CC0 and needs `SMITHSONIAN_API_KEY` from api.data.gov. The id is `smithsonian:` plus the Open Access record id. Do not use `DEMO_KEY`. With no key, the lookup returns nothing.
-
-Kenney and Quaternius packs are CC0 and have no per-item API. Drop files you already have into `library/raw/kenney` or `library/raw/quaternius`. The id is the source plus the file stem or relative path, for example `kenney:wooden-chair.glb`. The pipeline does not download packs. A file dropped in those folders is treated as CC0, so do not put another license there.
-
-Objaverse stays off unless `OBJAVERSE_ENABLE=1`. The dataset as a whole is ODC-By and includes NC and SA objects. Only an individual CC0 or CC-BY record would be eligible. The adapter does not download the annotation index.
+Sketchfab's label `CC Attribution` is CC-BY. A model that is not downloadable is refused.
 
 Mixamo is not a source. Its terms restrict automated download. Export a rigged humanoid by hand into `shows/<id>/assets/` if you want to replace the clay mannequin. Text-to-3D is not registered.
 
-`pnpm run content:fetch-asset -- <url>` accepts a Poly Haven asset page, a Sketchfab model page after the license check, or a direct Smithsonian `.glb` / `.gltf` URL. It refuses Mixamo and any other host.
+`pnpm run content:fetch-asset -- <url>` accepts a Sketchfab model page after the license check. It refuses Mixamo and any other host.
 
 `pnpm run content:asset-deps` installs trimesh into the ComfyUI Python. That is what downloaded glTF and OBJ files need. Do not install `content-pipeline/requirements.txt` into that virtualenv.

@@ -1,8 +1,6 @@
-"""Download one CC0 or CC-BY model into the shared prefab library.
+"""Download one CC0 or CC-BY Sketchfab model into the shared prefab library.
 
-Refuses Mixamo and any host that is not Poly Haven, Sketchfab, or Smithsonian
-Open Access. Sketchfab still needs SKETCHFAB_TOKEN, and the download is skipped
-when the API refuses an unattended token.
+Refuses every other host, including Mixamo. Needs SKETCHFAB_TOKEN.
 """
 
 from __future__ import annotations
@@ -18,9 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from asset_resolver import AssetRequest, AssetResolver, asset_hash  # noqa: E402
 from asset_sources import (  # noqa: E402
     Candidate,
-    PolyHavenSource,
     SketchfabSource,
-    _download,
     _get_json,
     materialize_mesh,
     normalize_license,
@@ -96,19 +92,6 @@ def candidate_for_url(url: str):
         raise SystemExit(
             "Mixamo does not allow automated download. Export the file by hand into shows/<id>/assets/."
         )
-    if host == "polyhaven.com" or host.endswith(".polyhaven.com"):
-        asset_id = [part for part in parsed.path.split("/") if part][-1]
-        if not asset_id:
-            raise SystemExit(f"Could not read a Poly Haven asset id from {url}")
-        candidate = Candidate(
-            source="polyhaven",
-            source_id=asset_id,
-            title=asset_id.replace("_", " "),
-            author="Poly Haven",
-            license="CC0",
-            page_url=f"https://polyhaven.com/a/{asset_id}",
-        )
-        return candidate, PolyHavenSource().fetch
     if host == "sketchfab.com" or host.endswith(".sketchfab.com"):
         uid = _sketchfab_uid(parsed.path)
         token = os.environ.get("SKETCHFAB_TOKEN", "")
@@ -136,32 +119,9 @@ def candidate_for_url(url: str):
             download_url=f"{SKETCHFAB_API}/v3/models/{uid}/download",
         )
         return candidate, SketchfabSource(token).fetch
-    if host == "si.edu" or host.endswith(".si.edu"):
-        if not parsed.path.lower().split("?")[0].endswith((".glb", ".gltf")):
-            raise SystemExit("Smithsonian fetch accepts a direct .glb or .gltf URL")
-        name = parsed.path.rstrip("/").split("/")[-1]
-        candidate = Candidate(
-            source="smithsonian",
-            source_id=name,
-            title=name,
-            author="Smithsonian Open Access",
-            license="CC0",
-            page_url=url,
-            download_url=url,
-        )
-        return candidate, _fetch_direct
     raise SystemExit(
-        f"Refusing {host or url}. content:fetch-asset accepts Poly Haven, Sketchfab, and Smithsonian Open Access URLs."
+        f"Refusing {host or url}. content:fetch-asset accepts a Sketchfab model page."
     )
-
-
-def _fetch_direct(candidate: Candidate, directory: Path) -> Path:
-    if not candidate.download_url:
-        raise RuntimeError("Missing download URL")
-    directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / candidate.source_id
-    _download(candidate.download_url, destination)
-    return destination
 
 
 def _sketchfab_uid(path: str) -> str:
