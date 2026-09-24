@@ -1,4 +1,4 @@
-"""Draw one object with Qwen, then turn that picture into a mesh with TRELLIS.2."""
+"""Draw one place with Qwen, then turn that picture into a mesh with TRELLIS.2."""
 
 from __future__ import annotations
 

@@ -1,0 +1,22 @@
+{
+  "id": "models/b5922608e14e1378-200000-240000-140000",
+  "assetHash": "f8830173e0c3b7e954a24f68847514e0348980ea361ae88b2869570f8251814d",
+  "sizeMeters": [
+    200.0,
+    240.0,
+    140.0
+  ],
+  "origin": "generated",
+  "source": "trellis2",
+  "sourceId": "b5922608e14e137830235a2f19525dbcd8de95db0cf21d58bb57e274e2a158d1",
+  "title": "One complete physical set of A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains. The entire place is visible at once, as a single architectural model, ground included. No people, animals, or readable text. The set contains citadel core: One black-iron fortress tower, square slag-stone walls, hanging chains, a single building with no ground and no other structures.; chain pylon: One tall narrow lattice transmission tower of black iron, standing alone, no wires and no landscape.. The model is about 200 meters wide, 240 meters deep, and 140 meters tall.",
+  "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+  "license": "MIT",
+  "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+  "version": "",
+  "retrieved": "2026-09-24",
+  "triangleCount": 9560508,
+  "triangleBudget": 10000000,
+  "decimator": "comfy-decimate-mesh",
+  "fit": "uniform"
+}

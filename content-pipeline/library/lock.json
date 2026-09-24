@@ -1,100 +1,30 @@
 {
   "version": 1,
   "needs": {
-    "0a48aae679fd4c24e9fb0bc3be7838db9fe86273279e6a5c424c9f86daa853d8": {
-      "appearance": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard.",
+    "f8830173e0c3b7e954a24f68847514e0348980ea361ae88b2869570f8251814d": {
+      "appearance": "One complete physical set of A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains. The entire place is visible at once, as a single architectural model, ground included. No people, animals, or readable text. The set contains citadel core: One black-iron fortress tower, square slag-stone walls, hanging chains, a single building with no ground and no other structures.; chain pylon: One tall narrow lattice transmission tower of black iron, standing alone, no wires and no landscape.. The model is about 200 meters wide, 240 meters deep, and 140 meters tall.",
       "sizeMeters": [
-        2.2,
-        2.2,
-        1.2
+        200.0,
+        240.0,
+        140.0
       ],
-      "prefabId": "models/02886df8fb9423e3-2200-2200-1200",
+      "prefabId": "models/b5922608e14e1378-200000-240000-140000",
       "source": "trellis2",
-      "sourceId": "02886df8fb9423e3b1e7d2efa949c1bce0c27ee7c25ce0035c137bfba1d0ce3a",
+      "sourceId": "b5922608e14e137830235a2f19525dbcd8de95db0cf21d58bb57e274e2a158d1",
       "version": "",
       "origin": "generated",
       "provisional": false
     },
-    "aebde1d1d3e1ce741948c0ab070e92226c0890ba77a9a715b0cac163d37640e0": {
-      "appearance": "One blacksmith anvil of dark forged iron, a single object, no tools and no workshop.",
+    "c86d85b9fe3da821005a27061a6405ace5882f853690ec0c25837d65934456b1": {
+      "appearance": "One complete physical set of An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls. The entire place is visible at once, as a single architectural model, ground included. No people, animals, or readable text. The set contains sun well: One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard.; anvil altar: One blacksmith anvil of dark forged iron, a single object, no tools and no workshop.; throne dais: One low rectangular stone dais with worn steps, a single platform, no throne and no room.; gate column l: One twisted marble column standing alone, no base building and no second column.; gate column r: One twisted marble column standing alone, no base building and no second column.. The model is about 22 meters wide, 30 meters deep, and 18 meters tall.",
       "sizeMeters": [
-        1.8,
-        1.2,
-        0.9
+        22.0,
+        30.0,
+        18.0
       ],
-      "prefabId": "models/b878b90bfbbdc084-1800-1200-900",
+      "prefabId": "models/37fa211175ba1b99-22000-30000-18000",
       "source": "trellis2",
-      "sourceId": "b878b90bfbbdc084fa8838d3256c5c1e2775cca9b57c55723daa176c9c272a51",
-      "version": "",
-      "origin": "generated",
-      "provisional": false
-    },
-    "8a12c68264dfd6a9499face41fc199e63c696bbdffdac747c025ffd5d6176fd3": {
-      "appearance": "One low rectangular stone dais with worn steps, a single platform, no throne and no room.",
-      "sizeMeters": [
-        5.0,
-        3.0,
-        0.4
-      ],
-      "prefabId": "models/196c4d4f7817160b-5000-3000-400",
-      "source": "trellis2",
-      "sourceId": "196c4d4f7817160bd1815802897bb9d4d3cdfd791808e0849ce571f51e5f60b0",
-      "version": "",
-      "origin": "generated",
-      "provisional": false
-    },
-    "cfaa2f31fd638b80b261e0fc0f8409a2e865cb8c715b388c850f18b7b777a411": {
-      "appearance": "One twisted marble column standing alone, no base building and no second column.",
-      "sizeMeters": [
-        0.8,
-        0.8,
-        4.2
-      ],
-      "prefabId": "models/c44a07aa2b77e1b0-800-800-4200",
-      "source": "trellis2",
-      "sourceId": "c44a07aa2b77e1b0413a2c68712ae435f6d6dfcaeeb7c1dd357d63fc3c0132ae",
-      "version": "",
-      "origin": "generated",
-      "provisional": false
-    },
-    "c8aa3574123e9a28014fb3c485bbfb5f75fec194eace9ed6162906bf5b9f1705": {
-      "appearance": "One thick open iron torc neck ring, a single piece of dark metal, no person and no chain.",
-      "sizeMeters": [
-        0.28,
-        0.22,
-        0.08
-      ],
-      "prefabId": "models/fa8920c736ac8ece-280-220-80",
-      "source": "trellis2",
-      "sourceId": "fa8920c736ac8ece36252b8201dce241cbdb6c7f4a2e2453742c82e9fb6e98ff",
-      "version": "",
-      "origin": "generated",
-      "provisional": false
-    },
-    "23f089886893d27858c33be04d045fdf025db17a2ce6d494d2b525ccbc0c4ead": {
-      "appearance": "One black-iron fortress tower, square slag-stone walls, hanging chains, a single building with no ground and no other structures.",
-      "sizeMeters": [
-        48.0,
-        56.0,
-        52.0
-      ],
-      "prefabId": "models/e51a27571b0dc788-48000-56000-52000",
-      "source": "trellis2",
-      "sourceId": "e51a27571b0dc78863331ff7769b296ecf96ba4536ca026b5ba6083bdb96bc09",
-      "version": "",
-      "origin": "generated",
-      "provisional": false
-    },
-    "89b9d4abfe3f665288086fdad102f099739675e2d112b769cd59e4744a05f565": {
-      "appearance": "One tall narrow lattice transmission tower of black iron, standing alone, no wires and no landscape.",
-      "sizeMeters": [
-        5.0,
-        5.0,
-        90.0
-      ],
-      "prefabId": "models/0d106b32fc9961ce-5000-5000-90000",
-      "source": "trellis2",
-      "sourceId": "0d106b32fc9961ce90ac3e8ed0e36a3735164785a9d2c3ebfac8163e599aad4c",
+      "sourceId": "37fa211175ba1b996d668097996ee232d20991fafd2ba9f970e44fd430801ac4",
       "version": "",
       "origin": "generated",
       "provisional": false

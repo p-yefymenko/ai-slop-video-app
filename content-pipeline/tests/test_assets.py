@@ -18,6 +18,7 @@ from asset_resolver import (  # noqa: E402
     GENERATED_SOURCE,
     AssetResolver,
     appearance_source_id,
+    collect_requests,
     apply_lock_override,
     asset_hash,
     export_credits,
@@ -120,14 +121,14 @@ class AssetTests(unittest.TestCase):
         self.assertIn("a stone bench", asset_plate_prompt("  a   stone bench "))
 
     def test_show_prefab_beats_the_library_and_skips_generation(self) -> None:
-        appearance = "a stone bench"
-        size = (1.0, 1.0, 1.0)
-        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), size)
+        show = self._show("a stone bench")
+        request = collect_requests(show)[0]
+        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(request.appearance or ""), request.size)
         self._plant(self.shows / "demo" / "assets", "blocks/show-chair", digest, "from show", "show")
         self._plant(self.library / "prefabs", "blocks/library-chair", digest, "from library", "library")
         generator = CountingGenerator(self.cube)
-        resolved = self._resolver(generator).resolve_show(self._show(appearance))
-        item = resolved["landmark:room/bench"]
+        resolved = self._resolver(generator).resolve_show(show)
+        item = resolved["location:room"]
         self.assertEqual(item.origin, "show")
         self.assertEqual(item.title, "from show")
         self.assertEqual(generator.calls, 0)
@@ -137,7 +138,7 @@ class AssetTests(unittest.TestCase):
         generator = CountingGenerator(self.cube)
         show = self._show("a stone bench", prefab_id="blocks/custom-chair")
         resolved = self._resolver(generator).resolve_show(show)
-        self.assertEqual(resolved["landmark:room/bench"].prefab_id, "blocks/custom-chair")
+        self.assertEqual(resolved["location:room"].prefab_id, "blocks/custom-chair")
         self.assertEqual(generator.calls, 0)
 
     def test_generation_is_fitted_and_a_second_resolve_does_not_generate(self) -> None:
@@ -145,18 +146,21 @@ class AssetTests(unittest.TestCase):
         first = self._resolver(generator)
         show = self._show("a stone bench")
         resolved = first.resolve_show(show)
-        item = resolved["landmark:room/bench"]
+        item = resolved["location:room"]
         self.assertEqual(item.origin, "generated")
         self.assertEqual(item.source, GENERATED_SOURCE)
         self.assertEqual(generator.calls, 1)
         vertices, faces = read_schema_mesh(item.glb)
-        np.testing.assert_allclose(vertices.min(axis=0), [-0.5, -0.5, 0.0], atol=1e-4)
-        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [1.0, 1.0, 1.0], atol=1e-4)
+        np.testing.assert_allclose(vertices.min(axis=0), [-2.0, -2.0, 0.0], atol=1e-4)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [4.0, 4.0, 4.0], atol=1e-4)
         self.assertLessEqual(len(faces), TRIANGLE_BUDGET)
-        raw_copy = self.library / "raw" / GENERATED_SOURCE / appearance_source_id("a stone bench")[:16] / "model.glb"
+        request = collect_requests(show)[0]
+        raw_copy = (
+            self.library / "raw" / GENERATED_SOURCE / appearance_source_id(request.appearance or "")[:16] / "model.glb"
+        )
         self.assertTrue(raw_copy.is_file())
         again = self._resolver(generator).resolve_show(show)
-        self.assertEqual(again["landmark:room/bench"].prefab_id, item.prefab_id)
+        self.assertEqual(again["location:room"].prefab_id, item.prefab_id)
         self.assertEqual(generator.calls, 1)
         credits = self.output / "CREDITS.md"
         export_credits(self.library / "sources.json", credits)
@@ -164,16 +168,15 @@ class AssetTests(unittest.TestCase):
         self.assertIn("MIT", text)
         self.assertIn("TRELLIS.2", text)
 
-    def test_same_appearance_shares_one_prefab(self) -> None:
+    def test_one_location_is_one_mesh(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show("one twisted marble column")
         show["locations"]["room"]["spatial"]["landmarks"]["column_r"] = dict(
             show["locations"]["room"]["spatial"]["landmarks"]["bench"]
         )
         resolved = self._resolver(generator).resolve_show(show)
-        left = resolved["landmark:room/bench"].prefab_id
-        right = resolved["landmark:room/column_r"].prefab_id
-        self.assertEqual(left, right)
+        self.assertEqual(list(resolved), ["location:room"])
+        self.assertIn("column r", resolved["location:room"].title)
         self.assertEqual(generator.calls, 1)
 
     def test_fit_keeps_proportions_inside_the_requested_box(self) -> None:
@@ -183,53 +186,52 @@ class AssetTests(unittest.TestCase):
         self.assertAlmostEqual(float(fitted[:, 2].min()), 0.0, places=5)
         self.assertAlmostEqual(float(fitted[:, 0].min()), -float(fitted[:, 0].max()), places=5)
 
-    def test_a_generated_mesh_keeps_its_shape_inside_the_landmark(self) -> None:
+    def test_a_generated_mesh_keeps_its_shape_inside_the_location(self) -> None:
         generator = CountingGenerator(self.cube)
-        resolved = self._resolver(generator).resolve_show(self._show("a long spear", size=(8.0, 0.2, 0.2)))
-        vertices, _faces = read_schema_mesh(resolved["landmark:room/bench"].glb)
+        resolved = self._resolver(generator).resolve_show(self._show("a long hall", location_size=(8.0, 0.2, 0.2)))
+        vertices, _faces = read_schema_mesh(resolved["location:room"].glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.2, 0.2, 0.2], atol=1e-3)
 
     def test_a_stretched_cache_is_refit_from_the_raw_mesh(self) -> None:
-        appearance = "a tall tower"
-        size = (8.0, 0.2, 0.2)
-        source_id = appearance_source_id(appearance)
-        digest = asset_hash(GENERATED_SOURCE, source_id, size)
+        show = self._show("a tall tower", location_size=(8.0, 0.2, 0.2))
+        request = collect_requests(show)[0]
+        source_id = appearance_source_id(request.appearance or "")
+        digest = asset_hash(GENERATED_SOURCE, source_id, request.size)
         raw_dir = self.library / "raw" / GENERATED_SOURCE / source_id[:16]
         raw_dir.mkdir(parents=True, exist_ok=True)
         write_schema_glb(raw_dir / "model.glb", *box_mesh((2.0, 1.0, 4.0)))
         directory = self.library / "prefabs" / "models" / "stretched"
         directory.mkdir(parents=True, exist_ok=True)
-        write_schema_glb(directory / "model.glb", *box_mesh(size))
+        write_schema_glb(directory / "model.glb", *box_mesh(request.size))
         record = {
             "id": "models/stretched",
             "assetHash": digest,
-            "sizeMeters": list(size),
+            "sizeMeters": list(request.size),
             "origin": "generated",
             "source": GENERATED_SOURCE,
             "sourceId": source_id,
-            "title": appearance,
+            "title": request.appearance,
             "author": "Qwen-Image-Edit-2511, TRELLIS.2",
             "license": "MIT",
             "pageUrl": "https://github.com/microsoft/TRELLIS.2",
             "decimator": DECIMATOR,
             "triangleBudget": TRIANGLE_BUDGET,
+            "fit": "stretched",
         }
         (directory / "prefab.json").write_text(json.dumps(record), encoding="utf-8")
         generator = CountingGenerator(self.cube)
-        resolved = self._resolver(generator).resolve_show(self._show(appearance, size=size))
+        resolved = self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, 0)
-        vertices, _faces = read_schema_mesh(resolved["landmark:room/bench"].glb)
+        vertices, _faces = read_schema_mesh(resolved["location:room"].glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.1, 0.05, 0.2], atol=1e-3)
         stored = json.loads((directory / "prefab.json").read_text(encoding="utf-8"))
         self.assertEqual(stored["fit"], "uniform")
 
-    def test_offline_never_generates_and_a_missing_appearance_fails(self) -> None:
+    def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)
         with self.assertRaises(RuntimeError):
             self._resolver(generator, offline=True).resolve_show(self._show("a wooden chair"))
         self.assertEqual(generator.calls, 0)
-        with self.assertRaises(RuntimeError):
-            self._resolver(generator).resolve_show(self._show(None))
 
     def test_set_is_gltf_y_up_and_has_no_characters(self) -> None:
         show = self._show("a stone bench")
@@ -238,21 +240,27 @@ class AssetTests(unittest.TestCase):
         self._resolver(CountingGenerator(self.cube)).resolve_show(show)
         document = json.loads((self.output / "demo" / "sets" / "room" / "set.json").read_text(encoding="utf-8"))
         self.assertEqual(document["space"], "gltf-y-up")
-        self.assertEqual([item["id"] for item in document["instances"]], ["bench"])
-        self.assertEqual(document["instances"][0]["position"], list(schema_to_gltf((1.0, 2.0, 0.0))))
-        self.assertEqual(document["instances"][0]["schemaPosition"], [1.0, 2.0, 0.0])
-        self.assertNotIn("ada", json.dumps(document["instances"]))
+        self.assertEqual([item["id"] for item in document["instances"]], ["room"])
+        self.assertEqual(document["instances"][0]["schemaPosition"], [0.0, 0.0, 0.0])
+        self.assertEqual(document["instances"][0]["position"], list(schema_to_gltf((0.0, 0.0, 0.0))))
+        self.assertNotIn("ada", [item["id"] for item in document["instances"]])
+        self.assertNotIn("cup", [item["id"] for item in document["instances"]])
         self.assertTrue((self.output / "demo" / "sets" / "room" / "set.glb").is_file())
-        self.assertIn("prop:cup", json.loads((self.output / "demo" / "assets" / "resolved.json").read_text())["prefabs"])
+        prefabs = json.loads((self.output / "demo" / "assets" / "resolved.json").read_text())["prefabs"]
+        self.assertEqual(list(prefabs), ["location:room"])
 
     def test_unused_library_prefabs_are_removed(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show("a stone bench")
         resolved = self._resolver(generator).resolve_show(show)
-        used = resolved["landmark:room/bench"].prefab_id
+        used = resolved["location:room"].prefab_id
         self._plant(self.library / "prefabs", "blocks/unused-table", "unused", "Unused", "library")
-        self._plant(self.library / "prefabs", "blocks/other-show", None, "Other", "library")
-        other = self._show(prefab_id="blocks/other-show")
+        other = self._show("a different room")
+        other_request = collect_requests(other)[0]
+        other_digest = asset_hash(
+            GENERATED_SOURCE, appearance_source_id(other_request.appearance or ""), other_request.size
+        )
+        self._plant(self.library / "prefabs", "blocks/other-show", other_digest, "Other", "library")
         raw = self.library / "raw" / "library" / "unused-table"
         raw.mkdir(parents=True)
         (raw / "model.glb").write_bytes(self.cube.read_bytes())
@@ -286,28 +294,25 @@ class AssetTests(unittest.TestCase):
     def _show(
         self,
         appearance: str | None = "a stone bench",
-        size: tuple[float, float, float] = (1.0, 1.0, 1.0),
+        location_size: tuple[float, float, float] = (8.0, 10.0, 4.0),
         prefab_id: str | None = None,
     ) -> dict:
         landmark: dict = {
             "position": [1.0, 2.0, 0.0],
-            "size": list(size),
+            "size": [1.0, 1.0, 1.0],
         }
         if appearance:
             landmark["appearance"] = appearance
-        if prefab_id:
-            landmark["prefabId"] = prefab_id
-        return {
-            "id": "demo",
-            "locations": {
-                "room": {
-                    "spatial": {
-                        "sizeMeters": [8, 10, 4],
-                        "landmarks": {"bench": landmark},
-                    }
-                }
+        location: dict = {
+            "promptBlock": "A stone room with one bench.",
+            "spatial": {
+                "sizeMeters": list(location_size),
+                "landmarks": {"bench": landmark},
             },
         }
+        if prefab_id:
+            location["prefabId"] = prefab_id
+        return {"id": "demo", "locations": {"room": location}}
 
     def _plant(self, root: Path, prefab_id: str, digest: str | None, title: str, origin: str) -> None:
         category, name = prefab_id.split("/", 1)

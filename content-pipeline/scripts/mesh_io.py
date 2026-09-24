@@ -12,7 +12,7 @@ from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
 # Clay previs walks every triangle in Python. DecimateMesh in the Trellis graph keeps meshes under this.
-TRIANGLE_BUDGET = 500_000
+TRIANGLE_BUDGET = 10_000_000
 DECIMATOR = "comfy-decimate-mesh"
 
 

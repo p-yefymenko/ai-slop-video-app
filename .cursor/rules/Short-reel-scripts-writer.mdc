@@ -31,10 +31,9 @@ export type StageLandmark = {
   position: Vec3;
   size: Vec3;
   /**
-   * What this one object looks like. Required. Qwen draws it on a plain
-   * background and TRELLIS.2 turns that picture into the mesh. Describe a
-   * single object: no people, no room, no camera, no second copy. The same
-   * text and the same size share one prefab. Do not put a catalog id here.
+   * What this piece of the place looks like. Required. `content:assets` folds
+   * every note in the location into one picture, then TRELLIS.2 makes one mesh
+   * for the whole place. No people. Do not put a catalog id here.
    */
   appearance: string;
   /** Pins a prefab and skips generation. */
@@ -179,7 +178,7 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** What this one object looks like. Required. Same contract as a landmark `appearance`. */
+  /** Held-prop note. Required. It is not meshed on its own. */
   appearance: string;
   prefabId?: string;
   sizeMeters?: Vec3;

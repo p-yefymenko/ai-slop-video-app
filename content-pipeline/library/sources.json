@@ -1,9 +1,9 @@
 {
   "assets": [
     {
-      "prefabId": "models/e51a27571b0dc788-48000-56000-52000",
+      "prefabId": "models/b5922608e14e1378-200000-240000-140000",
       "source": "trellis2",
-      "sourceId": "e51a27571b0dc78863331ff7769b296ecf96ba4536ca026b5ba6083bdb96bc09",
+      "sourceId": "b5922608e14e137830235a2f19525dbcd8de95db0cf21d58bb57e274e2a158d1",
       "url": "https://github.com/microsoft/TRELLIS.2",
       "author": "Qwen-Image-Edit-2511, TRELLIS.2",
       "license": "MIT",
@@ -11,59 +11,9 @@
       "retrieved": "2026-09-24"
     },
     {
-      "prefabId": "models/0d106b32fc9961ce-5000-5000-90000",
+      "prefabId": "models/37fa211175ba1b99-22000-30000-18000",
       "source": "trellis2",
-      "sourceId": "0d106b32fc9961ce90ac3e8ed0e36a3735164785a9d2c3ebfac8163e599aad4c",
-      "url": "https://github.com/microsoft/TRELLIS.2",
-      "author": "Qwen-Image-Edit-2511, TRELLIS.2",
-      "license": "MIT",
-      "version": "",
-      "retrieved": "2026-09-24"
-    },
-    {
-      "prefabId": "models/02886df8fb9423e3-2200-2200-1200",
-      "source": "trellis2",
-      "sourceId": "02886df8fb9423e3b1e7d2efa949c1bce0c27ee7c25ce0035c137bfba1d0ce3a",
-      "url": "https://github.com/microsoft/TRELLIS.2",
-      "author": "Qwen-Image-Edit-2511, TRELLIS.2",
-      "license": "MIT",
-      "version": "",
-      "retrieved": "2026-09-24"
-    },
-    {
-      "prefabId": "models/b878b90bfbbdc084-1800-1200-900",
-      "source": "trellis2",
-      "sourceId": "b878b90bfbbdc084fa8838d3256c5c1e2775cca9b57c55723daa176c9c272a51",
-      "url": "https://github.com/microsoft/TRELLIS.2",
-      "author": "Qwen-Image-Edit-2511, TRELLIS.2",
-      "license": "MIT",
-      "version": "",
-      "retrieved": "2026-09-24"
-    },
-    {
-      "prefabId": "models/196c4d4f7817160b-5000-3000-400",
-      "source": "trellis2",
-      "sourceId": "196c4d4f7817160bd1815802897bb9d4d3cdfd791808e0849ce571f51e5f60b0",
-      "url": "https://github.com/microsoft/TRELLIS.2",
-      "author": "Qwen-Image-Edit-2511, TRELLIS.2",
-      "license": "MIT",
-      "version": "",
-      "retrieved": "2026-09-24"
-    },
-    {
-      "prefabId": "models/c44a07aa2b77e1b0-800-800-4200",
-      "source": "trellis2",
-      "sourceId": "c44a07aa2b77e1b0413a2c68712ae435f6d6dfcaeeb7c1dd357d63fc3c0132ae",
-      "url": "https://github.com/microsoft/TRELLIS.2",
-      "author": "Qwen-Image-Edit-2511, TRELLIS.2",
-      "license": "MIT",
-      "version": "",
-      "retrieved": "2026-09-24"
-    },
-    {
-      "prefabId": "models/fa8920c736ac8ece-280-220-80",
-      "source": "trellis2",
-      "sourceId": "fa8920c736ac8ece36252b8201dce241cbdb6c7f4a2e2453742c82e9fb6e98ff",
+      "sourceId": "37fa211175ba1b996d668097996ee232d20991fafd2ba9f970e44fd430801ac4",
       "url": "https://github.com/microsoft/TRELLIS.2",
       "author": "Qwen-Image-Edit-2511, TRELLIS.2",
       "license": "MIT",

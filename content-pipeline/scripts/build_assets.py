@@ -1,4 +1,4 @@
-"""Resolve show asset ids into prefabs and write one set per location.
+"""Draw each location as one picture, mesh it, and write that set.
 
 ``--episode``, ``--scene``, and ``--seed`` are accepted so ``content:render``
 can forward the same arguments. They do not change which prefabs are built.

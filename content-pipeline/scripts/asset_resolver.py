@@ -1,8 +1,8 @@
-"""Turn each landmark and prop appearance into a prefab, then build one set per location.
+"""Turn each location into one prefab, then write that mesh as the location set.
 
-Qwen draws the object. TRELLIS.2 turns that picture into a mesh. Characters stay
-out of the set. Their clay mannequins are built from ``ShowCharacter.proxy`` at
-previs time.
+Qwen draws the whole place. TRELLIS.2 turns that picture into one mesh. Characters
+stay out of the set. Their clay mannequins are built from ``ShowCharacter.proxy``
+at previs time.
 """
 
 from __future__ import annotations
@@ -379,50 +379,33 @@ class AssetResolver:
         from coords import schema_to_gltf
 
         for location_id, location in (show.get("locations") or {}).items():
-            spatial = location.get("spatial") or {}
-            landmarks = spatial.get("landmarks") or {}
-            instances = []
-            placed_vertices: list[np.ndarray] = []
-            placed_faces: list[np.ndarray] = []
-            vertex_base = 0
-            for landmark_id, landmark in landmarks.items():
-                consumer_id = f"landmark:{location_id}/{landmark_id}"
-                item = resolved[consumer_id]
-                vertices, faces = read_schema_mesh(item.glb)
-                position = tuple(float(value) for value in landmark["position"])
-                placed_vertices.append(vertices + np.array(position))
-                placed_faces.append(faces + vertex_base)
-                vertex_base += len(vertices)
-                gltf_position = schema_to_gltf(position)  # type: ignore[arg-type]
-                instances.append(
-                    {
-                        "id": landmark_id,
-                        "prefabId": item.prefab_id,
-                        "position": list(gltf_position),
-                        "schemaPosition": list(position),
-                        "sizeMeters": list(item.size),
-                        "origin": item.origin,
-                        "source": item.source,
-                        "license": item.license,
-                        "title": item.title,
-                    }
-                )
+            item = resolved[f"location:{location_id}"]
+            vertices, faces = read_schema_mesh(item.glb)
             directory = self.output_dir / self.show_id / "sets" / location_id
             directory.mkdir(parents=True, exist_ok=True)
-            if placed_vertices:
-                write_schema_glb(
-                    directory / "set.glb",
-                    np.vstack(placed_vertices),
-                    np.vstack(placed_faces),
-                )
-            size = spatial.get("sizeMeters") or [1, 1, 1]
+            write_schema_glb(directory / "set.glb", vertices, faces)
+            spatial = location.get("spatial") or {}
+            size = spatial.get("sizeMeters") or list(item.size)
+            origin = schema_to_gltf((0.0, 0.0, 0.0))
             (directory / "set.json").write_text(
                 json.dumps(
                     {
                         "locationId": location_id,
                         "space": "gltf-y-up",
                         "sizeMeters": size,
-                        "instances": instances,
+                        "instances": [
+                            {
+                                "id": location_id,
+                                "prefabId": item.prefab_id,
+                                "position": list(origin),
+                                "schemaPosition": [0.0, 0.0, 0.0],
+                                "sizeMeters": list(item.size),
+                                "origin": item.origin,
+                                "source": item.source,
+                                "license": item.license,
+                                "title": item.title,
+                            }
+                        ],
                     },
                     indent=2,
                 ),
@@ -434,33 +417,46 @@ class AssetResolver:
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def location_scene_description(location_id: str, location: dict) -> str:
+    """One Trellis subject: the whole place as a single model, with no people."""
+    spatial = location.get("spatial") or {}
+    size = _vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0))
+    place = (_appearance(location.get("promptBlock")) or location_id.replace("_", " ")).rstrip(".")
+    pieces: list[str] = []
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if not isinstance(landmark, dict):
+            continue
+        note = _appearance(landmark.get("appearance"))
+        name = str(landmark_id).replace("_", " ")
+        pieces.append(f"{name}: {note}" if note else name)
+    parts = [
+        f"One complete physical set of {place}.",
+        "The entire place is visible at once, as a single architectural model, ground included.",
+        "No people, animals, or readable text.",
+    ]
+    if pieces:
+        parts.append("The set contains " + "; ".join(pieces) + ".")
+    parts.append(
+        f"The model is about {size[0]:g} meters wide, {size[1]:g} meters deep, and {size[2]:g} meters tall."
+    )
+    return " ".join(parts)
+
+
 def collect_requests(show: dict) -> list[AssetRequest]:
     requests: list[AssetRequest] = []
     for location_id, location in (show.get("locations") or {}).items():
-        landmarks = ((location.get("spatial") or {}).get("landmarks")) or {}
-        for landmark_id, landmark in landmarks.items():
-            requests.append(
-                AssetRequest(
-                    consumer_id=f"landmark:{location_id}/{landmark_id}",
-                    label=landmark_id,
-                    size=_vec3(landmark.get("size"), (1.0, 1.0, 1.0)),
-                    position=_vec3(landmark.get("position"), (0.0, 0.0, 0.0)),
-                    location_id=location_id,
-                    appearance=_appearance(landmark.get("appearance")),
-                    prefab_id=landmark.get("prefabId"),
-                )
-            )
-    for prop_id, prop in (show.get("props") or {}).items():
-        size = _vec3(prop.get("sizeMeters"), (0.3, 0.3, 0.3))
+        if not isinstance(location, dict):
+            continue
+        spatial = location.get("spatial") or {}
         requests.append(
             AssetRequest(
-                consumer_id=f"prop:{prop_id}",
-                label=prop_id,
-                size=size,
-                position=None,
-                location_id=None,
-                appearance=_appearance(prop.get("appearance")),
-                prefab_id=prop.get("prefabId"),
+                consumer_id=f"location:{location_id}",
+                label=location_id,
+                size=_vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0)),
+                position=(0.0, 0.0, 0.0),
+                location_id=location_id,
+                appearance=location_scene_description(location_id, location),
+                prefab_id=location.get("prefabId") if isinstance(location.get("prefabId"), str) else None,
             )
         )
     return requests
@@ -573,8 +569,8 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
     lines = [
         "# Credits",
         "",
-        "Stage meshes are generated locally. Qwen-Image-Edit-2511 draws the object",
-        "and TRELLIS.2 turns that picture into the mesh. Both models are used under",
+        "Stage meshes are generated locally. Qwen-Image-Edit-2511 draws the whole place",
+        "and TRELLIS.2 turns that picture into one mesh. Both models are used under",
         "their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
         "",
     ]

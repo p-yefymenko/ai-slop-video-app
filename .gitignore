@@ -14,6 +14,8 @@ build
 Thumbs.db
 content-pipeline/output
 content-pipeline/library/raw
+# Generated meshes can exceed GitHub's 100MB file limit. Prefab metadata stays tracked.
+content-pipeline/library/prefabs/**/model.glb
 content-pipeline/.comfyui
 content-pipeline/__pycache__
 *.pyc
