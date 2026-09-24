@@ -1,4 +1,4 @@
-"""Draw one place with Qwen, then turn that picture into a mesh with TRELLIS.2."""
+"""Draw one place with Qwen, or turn a reviewed picture into a mesh with TRELLIS.2."""
 
 from __future__ import annotations
 
@@ -181,8 +181,12 @@ def trellis_graph(image_name: str, seed: int) -> dict:
     }
 
 
-def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
-    """Write ``plate.png`` and ``model.glb`` under ``raw_dir``. ComfyUI must already be running."""
+def plate_is_ready(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 1024
+
+
+def generate_asset_plate(appearance: str, raw_dir: Path) -> Path:
+    """Write ``plate.png`` and stop. ComfyUI must already be running."""
     from generate_batch import (
         clone_workflow,
         execute_queued_graph,
@@ -201,14 +205,32 @@ def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
     plate_graph["7"]["inputs"]["prompt"] = asset_plate_prompt(appearance)
     plate_graph["10"]["inputs"]["seed"] = seed
     plate_path = raw_dir / "plate.png"
-    mesh_path = raw_dir / "model.glb"
-    plate_ready = plate_path.is_file() and plate_path.stat().st_size > 1024
     try:
-        if plate_ready:
-            print(f"  Reusing {plate_path}", flush=True)
-        else:
-            free_comfy_models()
-            execute_queued_graph(plate_graph, plate_path, prefer="image", mode="Qwen asset plate")
+        free_comfy_models()
+        execute_queued_graph(plate_graph, plate_path, prefer="image", mode="Qwen asset plate")
+    except urllib.error.URLError as exc:
+        raise RuntimeError(_comfy_unreachable()) from exc
+    return plate_path
+
+
+def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
+    """Turn an existing ``plate.png`` into ``model.glb``. ComfyUI must already be running."""
+    from generate_batch import (
+        execute_queued_graph,
+        free_comfy_models,
+        stable_seed,
+        stage_named_image,
+    )
+
+    plate_path = raw_dir / "plate.png"
+    if not plate_is_ready(plate_path):
+        raise RuntimeError(
+            f"No reviewed plate at {plate_path}. "
+            "Run `pnpm run content:plates` and check the image before meshing."
+        )
+    mesh_path = raw_dir / "model.glb"
+    seed = stable_seed("asset", " ".join(appearance.split()))
+    try:
         free_comfy_models()
         execute_queued_graph(
             trellis_graph(stage_named_image(plate_path, "asset_plate"), seed),
@@ -217,8 +239,12 @@ def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
             mode="TRELLIS.2 mesh",
         )
     except urllib.error.URLError as exc:
-        raise RuntimeError(
-            "ComfyUI is not reachable at http://127.0.0.1:8188. "
-            "Run `pnpm run content:models`, then leave `pnpm run content:comfy` running."
-        ) from exc
+        raise RuntimeError(_comfy_unreachable()) from exc
     return mesh_path
+
+
+def _comfy_unreachable() -> str:
+    return (
+        "ComfyUI is not reachable at http://127.0.0.1:8188. "
+        "Run `pnpm run content:models`, then leave `pnpm run content:comfy` running."
+    )

@@ -87,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-`content:assets` has Qwen draw each location as one place, then TRELLIS.2 builds one mesh. ComfyUI's DecimateMesh node caps that mesh at 300,000 triangles. It is scaled uniformly into the location size, so the generated shape stays intact.
+`content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. ComfyUI's DecimateMesh node caps that mesh at 300,000 triangles. It is scaled uniformly into the location size, so the generated shape stays intact.
 
 God camera (OrbitControls):
 
@@ -107,6 +107,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh into that same Python so glTF and OBJ files can be read. `content:assets` needs ComfyUI running, the Qwen still stack, and the TRELLIS.2 weights from `pnpm run content:models`.
+`pnpm run content:asset-deps` installs trimesh into that same Python so glTF and OBJ files can be read. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

@@ -14,4 +14,4 @@ Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipe
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
 
-`content:assets` has Qwen draw each location as one place, then TRELLIS.2 turns that picture into one mesh. Landmark `appearance` notes are part of that picture. There is no catalog id and no primitive stand-in. ComfyUI's DecimateMesh node caps each mesh at 300,000 triangles. The mesh is scaled uniformly into the location `sizeMeters`, so the generated shape is not stretched.
+`content:plates` has Qwen draw each location and stop. `content:assets` has TRELLIS.2 turn that reviewed picture into one mesh. Landmark `appearance` notes are small features on that open floor, not a packed diorama. There is no catalog id and no primitive stand-in. ComfyUI's DecimateMesh node caps each mesh at 300,000 triangles. The mesh is scaled uniformly into the location `sizeMeters`, so the generated shape is not stretched.

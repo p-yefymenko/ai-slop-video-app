@@ -1,6 +1,6 @@
 # Stage assets
 
-Each location becomes one mesh. Qwen-Image-Edit-2511 draws the whole place, including its ground, from the location text and the landmark notes. TRELLIS.2 turns that picture into a single mesh fitted inside the location's `sizeMeters`. People and held props stay out of that mesh. A pinned location `prefabId` skips generation. If generation fails, `content:assets` stops.
+Each location becomes one mesh. `pnpm run content:plates` has Qwen-Image-Edit-2511 draw the whole place as an open floor with a few small, spaced features, including its ground, from the location text and the landmark notes, then stop. `pnpm run content:assets` has TRELLIS.2 turn that reviewed picture into a single mesh fitted inside the location's `sizeMeters`. People and held props stay out of that mesh. A pinned location `prefabId` skips generation. If generation fails, the command stops.
 
 ComfyUI has to be running at `http://127.0.0.1:8188`. `pnpm run content:models` downloads the Qwen still stack, the TRELLIS.2 int8 weights, the DINOv3 vision encoder, the shape VAE, and BiRefNet. The asset pass unloads Qwen before the mesh pass so both are not resident on a 16GB card.
 
@@ -10,7 +10,7 @@ Resolution order:
 2. A show asset whose `assetHash` matches.
 3. A library prefab whose `assetHash` matches.
 4. `library/lock.json`, when the entry is not provisional and `--refresh` / `--force` was not passed.
-5. Generate the plate, then the mesh. The hash is the place description plus the location `sizeMeters`.
+5. Mesh the reviewed plate from `content:plates`. A missing plate stops the build. The hash is the place description plus the location `sizeMeters`. Redrawing a plate drops the mesh made from the previous picture.
 
 `--offline` does not generate. A mesh that is not already in the library fails the build. After a successful build, library prefabs that no show script pins or describes are deleted, along with their lock entries and raw plates. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
 

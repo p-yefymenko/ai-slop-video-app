@@ -1,7 +1,8 @@
-"""Draw each location as one picture, mesh it, and write that set.
+"""Draw location plates, or mesh plates that have already been reviewed.
 
 ``--episode``, ``--scene``, and ``--seed`` are accepted so ``content:render``
 can forward the same arguments. They do not change which prefabs are built.
+``content:render`` meshes only. It does not draw plates.
 """
 
 from __future__ import annotations
@@ -13,7 +14,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_resolver import AssetResolver, apply_lock_override, export_credits, prune_unused_library  # noqa: E402
+from asset_generate import generate_asset_plate  # noqa: E402
+from asset_resolver import (  # noqa: E402
+    AssetResolver,
+    apply_lock_override,
+    export_credits,
+    prune_unused_library,
+    write_location_plates,
+)
 from pipeline_paths import (  # noqa: E402
     LIBRARY_DIR,
     discover_show_scripts,
@@ -24,7 +32,13 @@ from pipeline_paths import (  # noqa: E402
 
 def main() -> None:
     load_content_env()
-    parser = argparse.ArgumentParser(description="Build prefabs and sets for a show.")
+    parser = argparse.ArgumentParser(description="Draw location plates, or mesh reviewed plates.")
+    parser.add_argument(
+        "--stage",
+        choices=("plates", "meshes"),
+        default="meshes",
+        help="plates draws images and stops. meshes builds GLBs from those images.",
+    )
     parser.add_argument("--show", help="Build only this show id")
     parser.add_argument("--episode", type=int, help="Accepted and ignored")
     parser.add_argument("--scene", type=int, help="Accepted and ignored")
@@ -48,6 +62,19 @@ def main() -> None:
     if not scripts:
         target = f" for show {args.show!r}" if args.show else ""
         raise SystemExit(f"No show JSON files found{target}")
+    if args.stage == "plates":
+        for script in scripts:
+            show = json.loads(script.read_text(encoding="utf-8"))
+            plates = write_location_plates(
+                show,
+                LIBRARY_DIR,
+                generate_asset_plate,
+                refresh=args.force or args.refresh,
+                offline=args.offline,
+            )
+            print(f"{show_id_for_script(script)}: {len(plates)} plates")
+        print("Review the plates, then run `pnpm run content:assets`.")
+        return
     for script in scripts:
         show = json.loads(script.read_text(encoding="utf-8"))
         show_id = show_id_for_script(script)

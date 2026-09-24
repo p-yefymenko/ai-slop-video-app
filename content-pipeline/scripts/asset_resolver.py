@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import date
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asset_generate import generate_asset_mesh
+from asset_generate import generate_asset_mesh, plate_is_ready
 from asset_sources import materialize_mesh
 from mesh_io import (
     DECIMATOR,
@@ -418,7 +419,11 @@ class AssetResolver:
 
 
 def location_scene_description(location_id: str, location: dict) -> str:
-    """One Trellis subject: the whole place as a single model, with no people."""
+    """One Trellis subject: an open place with room to stage a scene, and no people.
+
+    Landmark notes were written as isolated object shots. Those isolation lines
+    are dropped so the picture does not pack every feature into a dense diorama.
+    """
     spatial = location.get("spatial") or {}
     size = _vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0))
     place = (_appearance(location.get("promptBlock")) or location_id.replace("_", " ")).rstrip(".")
@@ -426,20 +431,91 @@ def location_scene_description(location_id: str, location: dict) -> str:
     for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
         if not isinstance(landmark, dict):
             continue
-        note = _appearance(landmark.get("appearance"))
         name = str(landmark_id).replace("_", " ")
-        pieces.append(f"{name}: {note}" if note else name)
+        note = _set_feature_note(landmark.get("appearance"))
+        span = _feature_span(landmark.get("size"))
+        label = f"{name}, about {span:g} meters across" if span else name
+        pieces.append(f"{label}: {note}" if note else label)
     parts = [
-        f"One complete physical set of {place}.",
-        "The entire place is visible at once, as a single architectural model, ground included.",
-        "No people, animals, or readable text.",
+        f"A wide open set of {place}.",
+        "Most of the ground is bare floor, with wide empty space between the features.",
+        "The features are few, small beside the place, and spaced far apart.",
+        "The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform.",
+        "No human figures, figurines, statues, animals, or readable text.",
     ]
     if pieces:
-        parts.append("The set contains " + "; ".join(pieces) + ".")
+        parts.append("Small features only: " + "; ".join(pieces) + ".")
     parts.append(
-        f"The model is about {size[0]:g} meters wide, {size[1]:g} meters deep, and {size[2]:g} meters tall."
+        f"The whole place is about {size[0]:g} meters wide, {size[1]:g} meters deep, and {size[2]:g} meters tall."
     )
     return " ".join(parts)
+
+
+def write_location_plates(
+    show: dict,
+    library_dir: Path,
+    writer,
+    *,
+    refresh: bool = False,
+    offline: bool = False,
+) -> list[Path]:
+    """Draw each location plate and leave the mesh for a later step.
+
+    A redrawn plate drops the mesh that was built from the previous picture.
+    The place description is unchanged, so the prefab cache would otherwise
+    keep that old mesh.
+    """
+    plates: list[Path] = []
+    for request in collect_requests(show):
+        if request.prefab_id:
+            print(f"  {request.label}: pinned prefab, no plate", flush=True)
+            continue
+        appearance = " ".join((request.appearance or "").split())
+        if not appearance:
+            raise RuntimeError(f"{request.consumer_id}: appearance is required")
+        source_id = appearance_source_id(appearance)
+        raw_dir = library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id)
+        plate = raw_dir / "plate.png"
+        if plate_is_ready(plate) and not refresh:
+            print(f"  {request.label}: {plate}", flush=True)
+            plates.append(plate)
+            continue
+        if offline:
+            raise RuntimeError(
+                f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one"
+            )
+        writer(appearance, raw_dir)
+        discard_generated_mesh(library_dir, source_id, request.size)
+        print(f"  {request.label}: {plate}", flush=True)
+        plates.append(plate)
+    return plates
+
+
+def discard_generated_mesh(
+    library_dir: Path,
+    source_id: str,
+    size: tuple[float, float, float],
+) -> None:
+    """Remove the mesh for one place. The plate stays so it can be reviewed again."""
+    raw_mesh = library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id) / "model.glb"
+    if raw_mesh.is_file():
+        raw_mesh.unlink()
+    prefab_dir = library_dir / "prefabs" / "models" / f"{source_id[:16]}-{_size_token(size)}"
+    if prefab_dir.is_dir():
+        shutil.rmtree(prefab_dir)
+    lock_path = library_dir / "lock.json"
+    if not lock_path.is_file():
+        return
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    needs = lock.get("needs")
+    if not isinstance(needs, dict):
+        return
+    digest = asset_hash(GENERATED_SOURCE, source_id, size)
+    if digest not in needs:
+        return
+    del needs[digest]
+    lock["needs"] = needs
+    lock_path.write_text(json.dumps(lock, indent=2), encoding="utf-8")
 
 
 def collect_requests(show: dict) -> list[AssetRequest]:
@@ -588,6 +664,35 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
     lines.append("")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _set_feature_note(raw) -> str | None:
+    """Drop product-shot instructions that tell the picture to isolate one object."""
+    text = _appearance(raw)
+    if not text:
+        return None
+    kept: list[str] = []
+    for clause in text.rstrip(".").split(","):
+        piece = re.sub(r"\bstanding alone\b", "", clause, flags=re.IGNORECASE)
+        piece = re.sub(
+            r"\ba single (?:object|building|platform|piece)\b",
+            "",
+            piece,
+            flags=re.IGNORECASE,
+        )
+        piece = " ".join(piece.split()).strip(" ,")
+        if not piece or piece.lower().startswith("no "):
+            continue
+        kept.append(piece)
+    return ", ".join(kept) or None
+
+
+def _feature_span(raw) -> float | None:
+    size = _vec3(raw, (0.0, 0.0, 0.0))
+    span = max(size)
+    if span <= 0.0:
+        return None
+    return span
 
 
 def _appearance(raw) -> str | None:

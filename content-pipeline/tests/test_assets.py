@@ -12,13 +12,15 @@ import numpy as np
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from asset_generate import asset_plate_prompt, trellis_graph  # noqa: E402
+from asset_generate import asset_plate_prompt, generate_asset_mesh, trellis_graph  # noqa: E402
 from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     GENERATED_SOURCE,
     AssetResolver,
     appearance_source_id,
     collect_requests,
+    location_scene_description,
+    write_location_plates,
     apply_lock_override,
     asset_hash,
     export_credits,
@@ -167,6 +169,73 @@ class AssetTests(unittest.TestCase):
         text = credits.read_text(encoding="utf-8")
         self.assertIn("MIT", text)
         self.assertIn("TRELLIS.2", text)
+
+    def test_plates_stop_before_the_mesh(self) -> None:
+        show = self._show("a stone bench")
+        drawn: list[Path] = []
+
+        def writer(appearance: str, raw_dir: Path) -> Path:
+            del appearance
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            plate = raw_dir / "plate.png"
+            plate.write_bytes(b"x" * 2048)
+            drawn.append(plate)
+            return plate
+
+        plates = write_location_plates(show, self.library, writer)
+        self.assertEqual(plates, drawn)
+        self.assertEqual(len(drawn), 1)
+        request = collect_requests(show)[0]
+        source_id = appearance_source_id(request.appearance or "")
+        raw_mesh = self.library / "raw" / GENERATED_SOURCE / source_id[:16] / "model.glb"
+        raw_mesh.write_bytes(b"mesh")
+        prefab = self.library / "prefabs" / "models" / f"{source_id[:16]}-8000-10000-4000"
+        prefab.mkdir(parents=True)
+        (prefab / "model.glb").write_bytes(b"prefab")
+        lock = {"version": 1, "needs": {asset_hash(GENERATED_SOURCE, source_id, request.size): {"prefabId": "x"}}}
+        (self.library / "lock.json").write_text(json.dumps(lock), encoding="utf-8")
+        again = write_location_plates(show, self.library, writer)
+        self.assertEqual(again, plates)
+        self.assertEqual(len(drawn), 1)
+        self.assertTrue(raw_mesh.is_file())
+        write_location_plates(show, self.library, writer, refresh=True)
+        self.assertEqual(len(drawn), 2)
+        self.assertFalse(raw_mesh.exists())
+        self.assertFalse(prefab.exists())
+        self.assertTrue(plates[0].is_file())
+        stored = json.loads((self.library / "lock.json").read_text(encoding="utf-8"))
+        self.assertEqual(stored["needs"], {})
+
+    def test_mesh_step_requires_a_reviewed_plate(self) -> None:
+        raw_dir = self.library / "raw" / "missing"
+        with self.assertRaises(RuntimeError) as caught:
+            generate_asset_mesh("a stone bench", raw_dir)
+        self.assertIn("content:plates", str(caught.exception))
+
+    def test_place_description_leaves_open_floor(self) -> None:
+        text = location_scene_description(
+            "court",
+            {
+                "promptBlock": "An open basalt court.",
+                "spatial": {
+                    "sizeMeters": [22, 30, 18],
+                    "landmarks": {
+                        "sun_well": {
+                            "size": [2.2, 2.2, 1.2],
+                            "appearance": "One low circular stone fire ring, a single object, no courtyard.",
+                        }
+                    },
+                },
+            },
+        )
+        lowered = text.lower()
+        self.assertIn("bare floor", lowered)
+        self.assertIn("sun well", lowered)
+        self.assertIn("2.2", text)
+        self.assertIn("no human figures", lowered)
+        self.assertNotIn("several people", lowered)
+        self.assertNotIn("no courtyard", lowered)
+        self.assertNotIn("a single object", lowered)
 
     def test_one_location_is_one_mesh(self) -> None:
         generator = CountingGenerator(self.cube)
