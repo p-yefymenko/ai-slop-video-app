@@ -6,31 +6,24 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
 
 import numpy as np
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from asset_generate import asset_plate_prompt, trellis_graph  # noqa: E402
 from asset_resolver import (  # noqa: E402
+    GENERATED_SOURCE,
     AssetResolver,
+    appearance_source_id,
     apply_lock_override,
     asset_hash,
     export_credits,
-    keyword_score,
     prune_unused_library,
 )
-from asset_sources import (  # noqa: E402
-    Candidate,
-    Need,
-    SketchfabSource,
-    TextTo3DSource,
-    materialize_mesh,
-    normalize_license,
-)
+from asset_sources import materialize_mesh  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
-from fetch_asset import candidate_for_url  # noqa: E402
 from mesh_io import (  # noqa: E402
     TRIANGLE_BUDGET,
     box_mesh,
@@ -42,25 +35,18 @@ from mesh_io import (  # noqa: E402
 )
 
 
-class CountingSource:
-    name = "fake"
-
-    def __init__(self, candidates: list[Candidate]) -> None:
-        self.candidates = candidates
+class CountingGenerator:
+    def __init__(self, cube: Path) -> None:
+        self.cube = cube
         self.calls = 0
 
-    def lookup(self, source_id: str) -> Candidate | None:
+    def __call__(self, appearance: str, raw_dir: Path) -> Path:
+        del appearance
         self.calls += 1
-        for candidate in self.candidates:
-            if candidate.source_id == source_id:
-                return candidate
-        return None
-
-    def search(self, need: Need, limit: int = 4) -> list[Candidate]:
-        raise AssertionError("catalog search is not used")
-
-    def fetch(self, candidate: Candidate, directory: Path) -> Path:
-        raise AssertionError("local_path should skip the network fetch")
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        dest = raw_dir / "model.glb"
+        dest.write_bytes(self.cube.read_bytes())
+        return dest
 
 
 class AssetTests(unittest.TestCase):
@@ -76,26 +62,6 @@ class AssetTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self._temp.cleanup()
-
-    def test_licenses_drop_nc_nd_and_sa(self) -> None:
-        self.assertEqual(normalize_license("CC0"), "CC0")
-        self.assertEqual(normalize_license("cc-by"), "CC-BY")
-        self.assertIsNone(normalize_license("CC-BY-NC"))
-        self.assertIsNone(normalize_license("CC-BY-SA"))
-        self.assertIsNone(normalize_license("CC-BY-ND"))
-        self.assertIsNone(normalize_license("CC-BY-NC-SA"))
-        self.assertEqual(normalize_license("CC Attribution"), "CC-BY")
-        self.assertEqual(normalize_license("by"), "CC-BY")
-
-    def test_text_to_3d_stays_unregistered(self) -> None:
-        with self.assertRaises(RuntimeError):
-            TextTo3DSource().search(Need("chair"))
-
-    def test_keyword_score_prefers_the_matching_title(self) -> None:
-        need = Need("stone column", ("castle",))
-        matching = self._candidate("stone-column", "stone column", tags=("castle",))
-        other = self._candidate("apple", "apple")
-        self.assertGreater(keyword_score(need, matching), keyword_score(need, other))
 
     def test_mesh_round_trip_and_primitive_bounds(self) -> None:
         vertices, faces = box_mesh((2.0, 3.0, 4.0))
@@ -151,34 +117,6 @@ class AssetTests(unittest.TestCase):
         self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
         self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
 
-    def test_sketchfab_fetch_extracts_the_archive(self) -> None:
-        def fake_get_json(url: str, headers: dict | None = None) -> dict:
-            del url, headers
-            return {"glb": {"url": "https://example.test/model.zip"}}
-
-        def fake_download(url: str, destination: Path) -> None:
-            del url
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(destination, "w") as archive:
-                archive.write(self.cube, "model.glb")
-
-        directory = self.library / "raw" / "sketchfab" / "anvil"
-        candidate = self._candidate("e63f1154ee0b41f8a797db683526142a", "Blacksmith Anvil")
-        candidate = Candidate(
-            source="sketchfab",
-            source_id=candidate.source_id,
-            title=candidate.title,
-            author=candidate.author,
-            license=candidate.license,
-            page_url=candidate.page_url,
-            download_url="https://api.sketchfab.com/v3/models/e63f1154ee0b41f8a797db683526142a/download",
-        )
-        with patch("asset_sources._get_json", fake_get_json), patch("asset_sources._download", fake_download):
-            fetched = SketchfabSource("token").fetch(candidate, directory)
-        self.assertEqual(fetched.suffix, ".glb")
-        _vertices, faces = read_schema_mesh(fetched)
-        self.assertGreater(len(faces), 0)
-
     def test_glb_saved_as_zip_is_not_unzipped(self) -> None:
         mislabeled = self.library / "model.zip"
         mislabeled.parent.mkdir(parents=True, exist_ok=True)
@@ -199,102 +137,94 @@ class AssetTests(unittest.TestCase):
         self.assertGreater(len(faces), 0)
         self.assertEqual(len(vertices), 8)
 
-    def test_show_prefab_beats_the_library_and_skips_lookup(self) -> None:
+    def test_trellis_graph_uses_the_int8_shape_pipeline(self) -> None:
+        graph = trellis_graph("plate.png", 7)
+        classes = [node["class_type"] for node in graph.values()]
+        self.assertIn("Trellis2Conditioning", classes)
+        self.assertIn("SaveGLB", classes)
+        self.assertNotIn("Pixal3DConditioning", classes)
+        unet = next(node for node in graph.values() if node["class_type"] == "UNETLoader")
+        self.assertEqual(unet["inputs"]["unet_name"], "trellis_2_int8_convrot.safetensors")
+        crop = next(node for node in graph.values() if node["class_type"] == "ImageCropToMask")
+        self.assertEqual(crop["inputs"]["pad_factor"], 1.0)
+        self.assertIn("a stone bench", asset_plate_prompt("  a   stone bench "))
+
+    def test_show_prefab_beats_the_library_and_skips_generation(self) -> None:
+        appearance = "a stone bench"
         size = (1.0, 1.0, 1.0)
-        digest = asset_hash("fake", "wooden-chair", size)
+        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), size)
         self._plant(self.shows / "demo" / "assets", "blocks/show-chair", digest, "from show", "show")
         self._plant(self.library / "prefabs", "blocks/library-chair", digest, "from library", "library")
-        source = CountingSource([self._candidate("wooden-chair", "wooden chair")])
-        resolver = self._resolver(source)
-        resolved = resolver.resolve_show(self._show(asset_id="fake:wooden-chair"))
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator).resolve_show(self._show(appearance))
         item = resolved["landmark:room/bench"]
         self.assertEqual(item.origin, "show")
         self.assertEqual(item.title, "from show")
-        self.assertEqual(source.calls, 0)
+        self.assertEqual(generator.calls, 0)
 
-    def test_pinned_prefab_skips_lookup(self) -> None:
+    def test_pinned_prefab_skips_generation(self) -> None:
         self._plant(self.shows / "demo" / "assets", "blocks/custom-chair", None, "pinned", "show")
-        source = CountingSource([self._candidate("wooden-chair", "wooden chair")])
-        resolver = self._resolver(source)
-        show = self._show(asset_id="fake:wooden-chair", prefab_id="blocks/custom-chair")
-        resolved = resolver.resolve_show(show)
+        generator = CountingGenerator(self.cube)
+        show = self._show("a stone bench", prefab_id="blocks/custom-chair")
+        resolved = self._resolver(generator).resolve_show(show)
         self.assertEqual(resolved["landmark:room/bench"].prefab_id, "blocks/custom-chair")
-        self.assertEqual(source.calls, 0)
+        self.assertEqual(generator.calls, 0)
 
-    def test_download_is_normalized_and_a_second_resolve_does_not_fetch(self) -> None:
-        source = CountingSource([self._candidate("stone-chair", "stone chair", license_name="CC-BY")])
-        first = self._resolver(source)
-        show = self._show(asset_id="fake:stone-chair")
+    def test_generation_is_fitted_and_a_second_resolve_does_not_generate(self) -> None:
+        generator = CountingGenerator(self.cube)
+        first = self._resolver(generator)
+        show = self._show("a stone bench")
         resolved = first.resolve_show(show)
         item = resolved["landmark:room/bench"]
-        self.assertEqual(item.origin, "downloaded")
-        self.assertEqual(source.calls, 1)
+        self.assertEqual(item.origin, "generated")
+        self.assertEqual(item.source, GENERATED_SOURCE)
+        self.assertEqual(generator.calls, 1)
         vertices, faces = read_schema_mesh(item.glb)
         np.testing.assert_allclose(vertices.min(axis=0), [-0.5, -0.5, 0.0], atol=1e-4)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [1.0, 1.0, 1.0], atol=1e-4)
         self.assertLessEqual(len(faces), TRIANGLE_BUDGET)
-        raw_copy = self.library / "raw" / "fake" / "stone-chair" / "cube.glb"
+        raw_copy = self.library / "raw" / GENERATED_SOURCE / appearance_source_id("a stone bench")[:16] / "model.glb"
         self.assertTrue(raw_copy.is_file())
-        second = self._resolver(source)
-        again = second.resolve_show(show)
+        again = self._resolver(generator).resolve_show(show)
         self.assertEqual(again["landmark:room/bench"].prefab_id, item.prefab_id)
-        self.assertEqual(source.calls, 1)
+        self.assertEqual(generator.calls, 1)
         credits = self.output / "CREDITS.md"
         export_credits(self.library / "sources.json", credits)
         text = credits.read_text(encoding="utf-8")
-        self.assertIn("CC-BY", text)
-        self.assertIn("Sketchfab CC-BY", text)
+        self.assertIn("MIT", text)
+        self.assertIn("TRELLIS.2", text)
 
-    def test_same_asset_id_shares_one_prefab(self) -> None:
-        source = CountingSource([self._candidate("column", "stone column")])
-        show = self._show(asset_id="fake:column")
+    def test_same_appearance_shares_one_prefab(self) -> None:
+        generator = CountingGenerator(self.cube)
+        show = self._show("one twisted marble column")
         show["locations"]["room"]["spatial"]["landmarks"]["column_r"] = dict(
             show["locations"]["room"]["spatial"]["landmarks"]["bench"]
         )
-        resolved = self._resolver(source).resolve_show(show)
+        resolved = self._resolver(generator).resolve_show(show)
         left = resolved["landmark:room/bench"].prefab_id
         right = resolved["landmark:room/column_r"].prefab_id
         self.assertEqual(left, right)
-        self.assertEqual(source.calls, 1)
+        self.assertEqual(generator.calls, 1)
 
-    def test_bad_license_fails_and_a_named_mesh_is_scaled(self) -> None:
-        forbidden = CountingSource([self._candidate("collar", "iron collar", license_name="CC-BY-NC")])
-        forbidden_resolver = self._resolver(forbidden)
-        with self.assertRaises(RuntimeError):
-            forbidden_resolver.resolve_show(self._show(asset_id="fake:collar"))
-        self.assertTrue(any("license" in warning for warning in forbidden_resolver.warnings))
-
-        long_request = self._show(asset_id="fake:spear", size=(8.0, 0.2, 0.2))
-        spear = CountingSource([self._candidate("spear", "spear")])
-        spear_resolver = self._resolver(spear)
-        spear_resolved = spear_resolver.resolve_show(long_request)
-        item = spear_resolved["landmark:room/bench"]
-        self.assertEqual(item.origin, "downloaded")
-        vertices, _faces = read_schema_mesh(item.glb)
+    def test_a_generated_mesh_is_scaled_to_the_landmark(self) -> None:
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator).resolve_show(self._show("a long spear", size=(8.0, 0.2, 0.2)))
+        vertices, _faces = read_schema_mesh(resolved["landmark:room/bench"].glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [8.0, 0.2, 0.2], atol=1e-3)
 
-    def test_offline_never_looks_up_and_a_missing_model_fails(self) -> None:
-        offline_source = CountingSource([self._candidate("chair", "wooden chair")])
-        show = self._show(asset_id="fake:chair")
+    def test_offline_never_generates_and_a_missing_appearance_fails(self) -> None:
+        generator = CountingGenerator(self.cube)
         with self.assertRaises(RuntimeError):
-            self._resolver(offline_source, offline=True).resolve_show(show)
-        self.assertEqual(offline_source.calls, 0)
-
-        empty = CountingSource([])
+            self._resolver(generator, offline=True).resolve_show(self._show("a wooden chair"))
+        self.assertEqual(generator.calls, 0)
         with self.assertRaises(RuntimeError):
-            self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
-        with self.assertRaises(RuntimeError):
-            self._resolver(empty).resolve_show(self._show(asset_id="fake:missing-prop"))
-        self.assertEqual(empty.calls, 2)
+            self._resolver(generator).resolve_show(self._show(None))
 
     def test_set_is_gltf_y_up_and_has_no_characters(self) -> None:
-        show = self._show(asset_id="fake:bench")
+        show = self._show("a stone bench")
         show["characters"] = {"ada": {"name": "Ada"}}
-        show["props"] = {"cup": {"assetId": "fake:cup", "sizeMeters": [0.1, 0.1, 0.12]}}
-        source = CountingSource(
-            [self._candidate("bench", "bench"), self._candidate("cup", "cup")]
-        )
-        self._resolver(source).resolve_show(show)
+        show["props"] = {"cup": {"appearance": "one small cup", "sizeMeters": [0.1, 0.1, 0.12]}}
+        self._resolver(CountingGenerator(self.cube)).resolve_show(show)
         document = json.loads((self.output / "demo" / "sets" / "room" / "set.json").read_text(encoding="utf-8"))
         self.assertEqual(document["space"], "gltf-y-up")
         self.assertEqual([item["id"] for item in document["instances"]], ["bench"])
@@ -305,9 +235,9 @@ class AssetTests(unittest.TestCase):
         self.assertIn("prop:cup", json.loads((self.output / "demo" / "assets" / "resolved.json").read_text())["prefabs"])
 
     def test_unused_library_prefabs_are_removed(self) -> None:
-        source = CountingSource([self._candidate("stone-chair", "stone chair")])
-        show = self._show(asset_id="fake:stone-chair")
-        resolved = self._resolver(source).resolve_show(show)
+        generator = CountingGenerator(self.cube)
+        show = self._show("a stone bench")
+        resolved = self._resolver(generator).resolve_show(show)
         used = resolved["landmark:room/bench"].prefab_id
         self._plant(self.library / "prefabs", "blocks/unused-table", "unused", "Unused", "library")
         self._plant(self.library / "prefabs", "blocks/other-show", None, "Other", "library")
@@ -323,8 +253,7 @@ class AssetTests(unittest.TestCase):
         self.assertTrue((self.library / "prefabs" / Path(*used.split("/")) / "prefab.json").is_file())
 
     def test_lock_override_pins_a_known_asset(self) -> None:
-        source = CountingSource([self._candidate("stone-chair", "stone chair")])
-        self._resolver(source).resolve_show(self._show(asset_id="fake:stone-chair"))
+        self._resolver(CountingGenerator(self.cube)).resolve_show(self._show("a stone bench"))
         lock_path = self.library / "lock.json"
         digest = next(iter(json.loads(lock_path.read_text(encoding="utf-8"))["needs"]))
         apply_lock_override(lock_path, digest, "blocks/picked")
@@ -333,54 +262,28 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(updated["origin"], "override")
         self.assertFalse(updated["provisional"])
 
-    def test_fetch_asset_refuses_unknown_hosts(self) -> None:
-        with self.assertRaises(SystemExit):
-            candidate_for_url("https://www.mixamo.com/characters")
-        with self.assertRaises(SystemExit):
-            candidate_for_url("https://example.com/model.glb")
-        with self.assertRaises(SystemExit):
-            candidate_for_url("https://polyhaven.com/a/wooden_crate")
-
-    def _resolver(self, source: CountingSource, **kwargs) -> AssetResolver:
+    def _resolver(self, generator: CountingGenerator, **kwargs) -> AssetResolver:
         return AssetResolver(
             "demo",
             library_dir=self.library,
             shows_dir=self.shows,
             output_dir=self.output,
-            sources=[source],
+            generator=generator,
             **kwargs,
-        )
-
-    def _candidate(
-        self,
-        source_id: str,
-        title: str,
-        license_name: str = "CC0",
-        tags: tuple[str, ...] = (),
-    ) -> Candidate:
-        return Candidate(
-            source="fake",
-            source_id=source_id,
-            title=title,
-            author="Tester",
-            license=license_name,
-            page_url=f"https://example.test/{source_id}",
-            tags=tags,
-            local_path=str(self.cube),
         )
 
     def _show(
         self,
-        asset_id: str | None = None,
+        appearance: str | None = "a stone bench",
         size: tuple[float, float, float] = (1.0, 1.0, 1.0),
         prefab_id: str | None = None,
     ) -> dict:
-        landmark = {
+        landmark: dict = {
             "position": [1.0, 2.0, 0.0],
             "size": list(size),
         }
-        if asset_id:
-            landmark["assetId"] = asset_id
+        if appearance:
+            landmark["appearance"] = appearance
         if prefab_id:
             landmark["prefabId"] = prefab_id
         return {

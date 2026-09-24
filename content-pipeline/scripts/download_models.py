@@ -41,6 +41,17 @@ QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
 YUNET_REPO = "opencv/face_detection_yunet"
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 
+TRELLIS_REPO = "Comfy-Org/TRELLIS.2"
+TRELLIS_UNET = "diffusion_models/trellis_2_int8_convrot.safetensors"
+TRELLIS_UNET_NAME = "trellis_2_int8_convrot.safetensors"
+TRELLIS_DINO = "clip_vision/dino_v3_vit_l.safetensors"
+TRELLIS_DINO_NAME = "dino_v3_vit_l.safetensors"
+TRELLIS_SHAPE_VAE = "vae/trellis_2_shape_vae_bf16.safetensors"
+TRELLIS_SHAPE_VAE_NAME = "trellis_2_shape_vae_bf16.safetensors"
+BIREFNET_REPO = "Comfy-Org/BiRefNet"
+BIREFNET_FILE = "background_removal/birefnet.safetensors"
+BIREFNET_NAME = "birefnet.safetensors"
+
 
 def cache_dir() -> Path:
     path = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "hf-hub"
@@ -141,6 +152,10 @@ def main() -> None:
     download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
+    download(TRELLIS_REPO, TRELLIS_UNET, models / "diffusion_models" / TRELLIS_UNET_NAME, 5_000_000_000)
+    download(TRELLIS_REPO, TRELLIS_DINO, models / "clip_vision" / TRELLIS_DINO_NAME, 1_000_000_000)
+    download(TRELLIS_REPO, TRELLIS_SHAPE_VAE, models / "vae" / TRELLIS_SHAPE_VAE_NAME, 1_000_000_000)
+    download(BIREFNET_REPO, BIREFNET_FILE, models / "background_removal" / BIREFNET_NAME, 400_000_000)
     download(
         YUNET_REPO,
         YUNET_FILE,

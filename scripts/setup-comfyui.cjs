@@ -83,17 +83,17 @@ const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshor
 const nodeDest = path.join(customNodes, "reelshort_ltx");
 fs.cpSync(nodeSrc, nodeDest, { recursive: true });
 
-for (const folder of ["diffusion_models", "checkpoints", "vae", "text_encoders", "loras", "controlnet"]) {
+for (const folder of ["diffusion_models", "checkpoints", "vae", "text_encoders", "loras", "controlnet", "clip_vision", "background_removal"]) {
   fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
 }
 
 console.log(`
 ComfyUI is cloned at content-pipeline/.comfyui
-Workflows copied to ComfyUI user/default/workflows/ (ltx_gemma_api.json, qwen_image_edit.json, qwen_image_edit_spatial.json)
+Workflows copied to ComfyUI user/default/workflows/ (ltx_gemma_api.json, qwen_image_edit.json, qwen_image_edit_spatial.json, qwen_asset_plate.json)
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)
-  2. pnpm run content:models       # downloads LTX video weights and the Qwen-Image-Edit still stack
+  2. pnpm run content:models       # LTX, Qwen-Image-Edit, and TRELLIS.2 weights
   3. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
   4. In the ComfyUI UI: Load → qwen_image_edit.json, qwen_image_edit_spatial.json, then ltx_gemma_api.json, and confirm no missing-node errors
   5. pnpm run content:frames, then pnpm run content:generate

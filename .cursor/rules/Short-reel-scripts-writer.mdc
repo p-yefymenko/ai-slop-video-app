@@ -31,34 +31,13 @@ export type StageLandmark = {
   position: Vec3;
   size: Vec3;
   /**
-   * Exact Sketchfab model, `sketchfab:<uid>`. Required. There is no other
-   * catalog and no primitive stand-in. The uid is the 32-character id at the
-   * end of the model URL. Example: `sketchfab:e63f1154ee0b41f8a797db683526142a`.
-   *
-   * Needs `SKETCHFAB_TOKEN` in `content-pipeline/.env`. Do not invent a uid.
-   * Shortlist with
-   * `GET https://api.sketchfab.com/v3/search?type=models&q=<object>&downloadable=true&licenses=cc0,by&count=8&sort_by=-relevance`
-   * and header `Authorization: Token <SKETCHFAB_TOKEN>`.
-   * User-Agent `reelshort-content-pipeline/1.0`.
-   * Keep CC0 and CC-BY. Search rows often omit the slug and say `CC Attribution`;
-   * that label is CC-BY. The model endpoint sends slug `by`.
-   * Open a thumbnail from the result and keep the uid only when the picture is
-   * that one object. A pack, kit, or scene scales every piece into the landmark
-   * box. Prefer one mesh and a lower `faceCount`.
-   *
-   * Verified single meshes, CC-BY and downloadable:
-   * citadel `def54040de2749139b69afff756e90bd`,
-   * fire ring `8ca31b1d1635406ba2db30e48ecddbdd`,
-   * anvil `e63f1154ee0b41f8a797db683526142a`,
-   * round plinth `ccaa80d7a16444049f420edd4f4378a4`,
-   * one column `7614c26d2b4e41e9810360aca6ecc38e`,
-   * lattice pylon `fbf08b82a2ed45068af45e8d90fb7dce`,
-   * neck torc `7b60eff248a844eb80d0a5ed462aa551`.
-   * Rejected after the thumbnail: modular castle kits, column packs,
-   * terrain dioramas, and a holy-well building used as a low fire ring.
+   * What this one object looks like. Required. Qwen draws it on a plain
+   * background and TRELLIS.2 turns that picture into the mesh. Describe a
+   * single object: no people, no room, no camera, no second copy. The same
+   * text and the same size share one prefab. Do not put a catalog id here.
    */
-  assetId: string;
-  /** Pins a prefab and skips the catalog fetch. */
+  appearance: string;
+  /** Pins a prefab and skips generation. */
   prefabId?: string;
 };
 
@@ -200,8 +179,8 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** Exact Sketchfab model, `sketchfab:<uid>`. Required. Same lookup as `StageLandmark.assetId`. */
-  assetId: string;
+  /** What this one object looks like. Required. Same contract as a landmark `appearance`. */
+  appearance: string;
   prefabId?: string;
   sizeMeters?: Vec3;
 };
@@ -215,7 +194,7 @@ export type ShowScript = {
   locations: Record<string, ShowLocation>;
   /**
    * Every propTracks id. Omit the object when the show has no props.
-   * Each prop needs an assetId.
+   * Each prop needs an appearance.
    */
   props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];

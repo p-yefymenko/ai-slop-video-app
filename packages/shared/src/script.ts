@@ -34,11 +34,12 @@ export type StageLandmark = {
   position: Vec3;
   size: Vec3;
   /**
-   * Exact Sketchfab model, `sketchfab:<uid>`.
-   * Example: `sketchfab:e63f1154ee0b41f8a797db683526142a`.
+   * What this one object looks like. Qwen draws it on a plain background.
+   * TRELLIS.2 turns that picture into the mesh. No people, camera, or location.
+   * The same text and size share one prefab.
    */
-  assetId: string;
-  /** Library or show prefab to instance. Skips the catalog fetch. */
+  appearance: string;
+  /** Library or show prefab to instance. Skips generation. */
   prefabId?: string;
 };
 
@@ -47,9 +48,9 @@ export type StageLandmark = {
  * they are not set dressing.
  */
 export type ShowProp = {
-  /** Exact Sketchfab model, `sketchfab:<uid>`. */
-  assetId: string;
-  /** Library or show prefab to instance. Skips the catalog fetch. */
+  /** What this one object looks like. Same contract as a landmark `appearance`. */
+  appearance: string;
+  /** Library or show prefab to instance. Skips generation. */
   prefabId?: string;
   /** Target size `[width X, depth Y, height Z]` in meters. */
   sizeMeters?: Vec3;

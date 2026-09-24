@@ -68,15 +68,7 @@ function vec3(label: string, positive = false) {
   });
 }
 
-const assetIdSchema = z
-  .string({
-    required_error: "assetId is required",
-    invalid_type_error: "assetId must be a string",
-  })
-  .regex(
-    /^sketchfab:[A-Za-z0-9][A-Za-z0-9._:/-]*$/,
-    "assetId must be sketchfab:<uid>, for example sketchfab:e63f1154ee0b41f8a797db683526142a",
-  );
+const appearanceSchema = text("appearance");
 
 const prefabIdSchema = z
   .string({ invalid_type_error: "prefabId must be a string" })
@@ -86,7 +78,7 @@ const stageLandmarkSchema = z
   .object({
     position: vec3("position"),
     size: vec3("size", true),
-    assetId: assetIdSchema,
+    appearance: appearanceSchema,
     prefabId: prefabIdSchema.optional(),
   })
   .strict();
@@ -123,7 +115,7 @@ const showCharacterSchema = z
 
 const showPropSchema = z
   .object({
-    assetId: assetIdSchema,
+    appearance: appearanceSchema,
     prefabId: prefabIdSchema.optional(),
     sizeMeters: vec3("sizeMeters", true).optional(),
   })

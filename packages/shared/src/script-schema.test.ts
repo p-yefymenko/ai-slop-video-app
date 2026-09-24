@@ -28,7 +28,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             bench: {
               position: [0, 1, 0],
               size: [1.2, 0.5, 0.45],
-              assetId: "sketchfab:e63f1154ee0b41f8a797db683526142a",
+              appearance: "One stone bench, a single object, no room.",
             },
           },
         },
@@ -102,7 +102,7 @@ test("the iron bride script matches its filename", () => {
   });
   if (!result.ok) {
     const report = result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
-    assert.match(report, /assetId/);
+    assert.fail(report);
     return;
   }
   assert.equal(result.script.id, "the-iron-bride");
@@ -125,11 +125,11 @@ test("rejects a prop track whose id was never declared", () => {
   assert.match(report, /not declared/);
 });
 
-test("rejects a landmark without an asset id", () => {
+test("rejects a landmark without an appearance", () => {
   const show = minimalShow();
-  delete (show.locations.room.spatial.landmarks.bench as { assetId?: string }).assetId;
+  delete (show.locations.room.spatial.landmarks.bench as { appearance?: string }).appearance;
   const report = messages(show);
-  assert.match(report, /assetId is required/);
+  assert.match(report, /appearance is required/);
 });
 
 test("rejects a catalog search on a landmark", () => {
@@ -141,9 +141,9 @@ test("rejects a catalog search on a landmark", () => {
   assert.match(report, /need/);
 });
 
-test("accepts a sketchfab asset id", () => {
+test("accepts an appearance", () => {
   const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.assetId = "sketchfab:8ca31b1d1635406ba2db30e48ecddbdd";
+  show.locations.room.spatial.landmarks.bench.appearance = "One low stone fire ring, a single object.";
   const result = parseShowScript(show, {
     showId: "demo-show",
     showIdLabel: "the filename stem",
@@ -151,18 +151,19 @@ test("accepts a sketchfab asset id", () => {
   assert.equal(result.ok, true);
 });
 
-test("rejects a polyhaven asset id", () => {
+test("rejects a catalog id on a landmark", () => {
   const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.assetId = "polyhaven:coast_rocks_05";
+  (show.locations.room.spatial.landmarks.bench as { assetId?: string }).assetId =
+    "sketchfab:8ca31b1d1635406ba2db30e48ecddbdd";
   const report = messages(show);
-  assert.match(report, /sketchfab/);
+  assert.match(report, /assetId/);
 });
 
-test("rejects a prop without an asset id", () => {
+test("rejects a prop without an appearance", () => {
   const show = minimalShow({ props: { cup: { sizeMeters: [0.1, 0.1, 0.1] } } });
   const report = messages(show);
-  assert.match(report, /props\.cup\.assetId/);
-  assert.match(report, /assetId is required/);
+  assert.match(report, /props\.cup\.appearance/);
+  assert.match(report, /appearance is required/);
 });
 
 test("rejects a speaker who is not on camera", () => {

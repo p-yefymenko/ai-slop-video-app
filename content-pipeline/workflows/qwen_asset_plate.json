@@ -1,0 +1,104 @@
+{
+  "prompt": {
+    "1": {
+      "inputs": {
+        "unet_name": "qwen-image-edit-2511-Q4_K_M.gguf"
+      },
+      "class_type": "UnetLoaderGGUF",
+      "_meta": { "title": "Qwen-Image-Edit-2511 GGUF" }
+    },
+    "2": {
+      "inputs": {
+        "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "type": "qwen_image"
+      },
+      "class_type": "CLIPLoader",
+      "_meta": { "title": "Qwen2.5-VL" }
+    },
+    "3": {
+      "inputs": {
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "class_type": "VAELoader"
+    },
+    "4": {
+      "inputs": {
+        "model": ["1", 0],
+        "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "strength_model": 1.0
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": { "title": "Lightning 4-step LoRA" }
+    },
+    "5": {
+      "inputs": {
+        "model": ["4", 0],
+        "shift": 3.1
+      },
+      "class_type": "ModelSamplingAuraFlow"
+    },
+    "6": {
+      "inputs": {
+        "image": "BLANK.png"
+      },
+      "class_type": "LoadImage",
+      "_meta": { "title": "Blank canvas" }
+    },
+    "7": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "PROMPT_PLACEHOLDER",
+        "vae": ["3", 0],
+        "image1": ["6", 0]
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Asset appearance" }
+    },
+    "8": {
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": " "
+      },
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "_meta": { "title": "Negative instruction" }
+    },
+    "9": {
+      "inputs": {
+        "width": 1024,
+        "height": 1024,
+        "batch_size": 1
+      },
+      "class_type": "EmptySD3LatentImage"
+    },
+    "10": {
+      "inputs": {
+        "seed": 0,
+        "steps": 4,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["5", 0],
+        "positive": ["7", 0],
+        "negative": ["8", 0],
+        "latent_image": ["9", 0]
+      },
+      "class_type": "KSampler"
+    },
+    "11": {
+      "inputs": {
+        "samples": ["10", 0],
+        "vae": ["3", 0]
+      },
+      "class_type": "VAEDecode"
+    },
+    "12": {
+      "inputs": {
+        "filename_prefix": "reelshort_asset_plate",
+        "images": ["11", 0]
+      },
+      "class_type": "SaveImage",
+      "_meta": { "title": "Asset plate" }
+    }
+  }
+}

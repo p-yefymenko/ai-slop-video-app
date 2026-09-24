@@ -89,7 +89,7 @@ def _bare_scene() -> tuple[dict, dict, dict]:
                         "block": {
                             "position": [0, 2, 0],
                             "size": [1, 1, 1],
-                            "assetId": "sketchfab:7614c26d2b4e41e9810360aca6ecc38e",
+                            "appearance": "One twisted marble column standing alone.",
                         }
                     },
                 }

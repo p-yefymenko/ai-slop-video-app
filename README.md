@@ -87,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-Every landmark and prop sets `assetId` to `sketchfab:<uid>`. Meshes used for previs are capped at 100,000 triangles.
+Every landmark and prop sets `appearance` to a description of that one object. `content:assets` has Qwen draw it, then TRELLIS.2 builds the mesh. Meshes used for previs are capped at 100,000 triangles.
 
 God camera (OrbitControls):
 
@@ -107,6 +107,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh into that same Python so downloaded glTF/OBJ files can be read. Optional catalog keys: `SKETCHFAB_TOKEN`, `SMITHSONIAN_API_KEY`.
+`pnpm run content:asset-deps` installs trimesh into that same Python so glTF and OBJ files can be read. `content:assets` needs ComfyUI running, the Qwen still stack, and the TRELLIS.2 weights from `pnpm run content:models`.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

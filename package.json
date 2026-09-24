@@ -20,7 +20,6 @@
     "content:comfy": "node scripts/start-comfyui.cjs",
     "content:validate": "pnpm --filter @reelshort/shared run validate",
     "content:assets": "node scripts/run-python.cjs content-pipeline/scripts/build_assets.py",
-    "content:fetch-asset": "node scripts/run-python.cjs content-pipeline/scripts/fetch_asset.py",
     "content:asset-deps": "node scripts/install-asset-deps.cjs",
     "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
     "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_*.py",

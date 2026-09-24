@@ -1,9 +1,8 @@
-"""Resolve landmark and prop asset ids into prefabs, then build one set per location.
+"""Turn each landmark and prop appearance into a prefab, then build one set per location.
 
-Characters stay out of the set. Their clay mannequins are built from
-``ShowCharacter.proxy`` at previs time. A rigged CC0 humanoid can later replace
-that mannequin by dropping it in ``shows/<id>/assets/``; this resolver does not
-fetch one. Text-to-3D is not registered.
+Qwen draws the object. TRELLIS.2 turns that picture into a mesh. Characters stay
+out of the set. Their clay mannequins are built from ``ShowCharacter.proxy`` at
+previs time.
 """
 
 from __future__ import annotations
@@ -17,14 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
-from asset_sources import (
-    Candidate,
-    Need,
-    default_sources,
-    materialize_mesh,
-    normalize_license,
-)
-from asset_sources import _tokens as tokens
+from asset_generate import generate_asset_mesh
+from asset_sources import materialize_mesh
 from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
@@ -36,6 +29,8 @@ from mesh_io import (
 )
 from pipeline_paths import LIBRARY_DIR, OUTPUT_DIR, SHOWS_DIR
 
+GENERATED_SOURCE = "trellis2"
+
 @dataclass
 class AssetRequest:
     consumer_id: str
@@ -43,7 +38,7 @@ class AssetRequest:
     size: tuple[float, float, float]
     position: tuple[float, float, float] | None
     location_id: str | None
-    asset_id: str | None
+    appearance: str | None
     prefab_id: str | None
 
 
@@ -69,7 +64,7 @@ class AssetResolver:
         library_dir: Path = LIBRARY_DIR,
         shows_dir: Path = SHOWS_DIR,
         output_dir: Path = OUTPUT_DIR,
-        sources=None,
+        generator=None,
         offline: bool = False,
         refresh: bool = False,
         write_thumbs: bool = False,
@@ -78,11 +73,7 @@ class AssetResolver:
         self.library_dir = library_dir
         self.shows_dir = shows_dir
         self.output_dir = output_dir
-        self.sources = (
-            sources
-            if sources is not None
-            else default_sources(library_dir / "raw")
-        )
+        self.generator = generator if generator is not None else generate_asset_mesh
         self.offline = offline
         self.refresh = refresh
         self.write_thumbs = write_thumbs
@@ -110,23 +101,19 @@ class AssetResolver:
             self.warnings.append(
                 f"{request.consumer_id}: pinned prefab {request.prefab_id} is missing"
             )
-        parsed = _parse_asset_id(request.asset_id)
-        if parsed is None:
-            raise RuntimeError(f"{request.consumer_id}: assetId is required")
-        source_name, source_id = parsed
-        digest = asset_hash(source_name, source_id, request.size)
+        appearance = " ".join((request.appearance or "").split())
+        if not appearance:
+            raise RuntimeError(f"{request.consumer_id}: appearance is required")
+        source_id = appearance_source_id(appearance)
+        digest = asset_hash(GENERATED_SOURCE, source_id, request.size)
         cached = self._cached(digest)
         if cached is not None and not self.refresh:
             return cached
         if self.offline:
             raise RuntimeError(
-                f"{request.consumer_id}: {request.asset_id} is not in the library; offline mode does not download"
+                f"{request.consumer_id}: {appearance} is not in the library; offline mode does not generate"
             )
-        imported = self._fetch_named(request, source_name, source_id, digest)
-        if imported is None:
-            detail = self.warnings[-1] if self.warnings else f"could not fetch {request.asset_id}"
-            raise RuntimeError(detail)
-        return imported
+        return self._import_generated(request, appearance, source_id, digest)
 
     def _cached(self, digest: str) -> ResolvedPrefab | None:
         for root, origin in (
@@ -144,56 +131,24 @@ class AssetResolver:
     def _show_assets(self) -> Path:
         return self.shows_dir / self.show_id / "assets"
 
-    def _fetch_named(
+    def _import_generated(
         self,
         request: AssetRequest,
-        source_name: str,
+        appearance: str,
         source_id: str,
         digest: str,
-    ) -> ResolvedPrefab | None:
-        source = next((item for item in self.sources if getattr(item, "name", None) == source_name), None)
-        if source is None or not hasattr(source, "lookup"):
-            self.warnings.append(f"{request.consumer_id}: unknown asset source {source_name}")
-            return None
+    ) -> ResolvedPrefab:
+        raw_dir = self.library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id)
         try:
-            candidate = source.lookup(source_id)
+            fetched = materialize_mesh(self.generator(appearance, raw_dir))
         except Exception as exc:
-            self.warnings.append(f"{request.consumer_id}: {source_name}:{source_id} ({exc})")
-            return None
-        if candidate is None:
-            self.warnings.append(f"{request.consumer_id}: {source_name}:{source_id} was not found")
-            return None
-        if normalize_license(candidate.license) is None:
-            self.warnings.append(
-                f"{request.consumer_id}: {source_name}:{source_id} license {candidate.license} is not CC0 or CC-BY"
-            )
-            return None
-        try:
-            return self._import_candidate(request, candidate, digest)
-        except Exception as exc:
-            self.warnings.append(f"{request.consumer_id}: skipped {source_name}:{source_id} ({exc})")
-            return None
-
-    def _import_candidate(self, request: AssetRequest, candidate: Candidate, digest: str) -> ResolvedPrefab:
-        raw_dir = self.library_dir / "raw" / candidate.source / _slug(candidate.source_id)
-        if candidate.local_path:
-            fetched = Path(candidate.local_path)
-            if self.library_dir not in fetched.parents:
-                raw_dir.mkdir(parents=True, exist_ok=True)
-                stored = raw_dir / fetched.name
-                if fetched.resolve() != stored.resolve():
-                    stored.write_bytes(fetched.read_bytes())
-                fetched = stored
-            fetched = materialize_mesh(fetched)
-        else:
-            source = next(item for item in self.sources if item.name == candidate.source)
-            fetched = materialize_mesh(source.fetch(candidate, raw_dir))
+            raise RuntimeError(f"{request.consumer_id}: {exc}") from exc
         vertices, faces = read_schema_mesh(fetched)
         # Simplify at the mesh's own scale. Fitting first stretches a ring into
         # the landmark box and the quadric metric then follows that distortion.
         vertices, faces = decimate(vertices, faces, TRIANGLE_BUDGET)
         fitted = fit_to_size(vertices, request.size)
-        leaf = f"{_slug(candidate.source_id)}-{_size_token(request.size)}"
+        leaf = f"{source_id[:16]}-{_size_token(request.size)}"
         prefab_id = f"models/{leaf}"
         directory = self.library_dir / "prefabs" / "models" / leaf
         resolved = self._write_prefab(
@@ -202,18 +157,18 @@ class AssetResolver:
             fitted,
             faces,
             request,
-            origin="downloaded",
-            source=candidate.source,
-            source_id=candidate.source_id,
-            title=candidate.title,
-            author=candidate.author,
-            license_name=normalize_license(candidate.license) or candidate.license,
-            page_url=candidate.page_url,
+            origin="generated",
+            source=GENERATED_SOURCE,
+            source_id=source_id,
+            title=appearance,
+            author="Qwen-Image-Edit-2511, TRELLIS.2",
+            license_name="MIT",
+            page_url="https://github.com/microsoft/TRELLIS.2",
             digest=digest,
-            version=candidate.version,
+            version="",
         )
-        self._remember_source(resolved, candidate.version)
-        self.lock["needs"][digest] = _lock_entry(request, resolved, candidate.version, provisional=False)
+        self._remember_source(resolved, "")
+        self.lock["needs"][digest] = _lock_entry(request, resolved, "", provisional=False)
         return resolved
 
     def _write_prefab(
@@ -464,7 +419,7 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                     size=_vec3(landmark.get("size"), (1.0, 1.0, 1.0)),
                     position=_vec3(landmark.get("position"), (0.0, 0.0, 0.0)),
                     location_id=location_id,
-                    asset_id=_asset_id(landmark.get("assetId")),
+                    appearance=_appearance(landmark.get("appearance")),
                     prefab_id=landmark.get("prefabId"),
                 )
             )
@@ -477,11 +432,16 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 size=size,
                 position=None,
                 location_id=None,
-                asset_id=_asset_id(prop.get("assetId")),
+                appearance=_appearance(prop.get("appearance")),
                 prefab_id=prop.get("prefabId"),
             )
         )
     return requests
+
+
+def appearance_source_id(appearance: str) -> str:
+    text = " ".join(appearance.split())
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def asset_hash(source: str, source_id: str, size: tuple[float, float, float]) -> str:
@@ -494,17 +454,8 @@ def asset_hash(source: str, source_id: str, size: tuple[float, float, float]) ->
     return hashlib.sha256(raw).hexdigest()
 
 
-def keyword_score(need: Need, candidate: Candidate) -> float:
-    wanted = tokens(need.query) + [token for tag in need.tags for token in tokens(tag)]
-    if not wanted:
-        return 0.0
-    haystack = set(tokens(" ".join((candidate.title, candidate.source_id, *candidate.tags))))
-    unique = list(dict.fromkeys(wanted))
-    return sum(1 for token in unique if token in haystack) / len(unique)
-
-
 def prune_unused_library(library_dir: Path, shows: list[dict]) -> list[str]:
-    """Delete library prefabs that no show script pins or names by asset id and size."""
+    """Delete library prefabs that no show script pins or still describes."""
     prefab_root = library_dir / "prefabs"
     records: list[tuple[Path, dict]] = []
     if prefab_root.is_dir():
@@ -523,10 +474,10 @@ def prune_unused_library(library_dir: Path, shows: list[dict]) -> list[str]:
         for request in collect_requests(show):
             if request.prefab_id:
                 kept.add(str(request.prefab_id))
-            parsed = _parse_asset_id(request.asset_id)
-            if parsed is None:
+            appearance = " ".join((request.appearance or "").split())
+            if not appearance:
                 continue
-            digest = asset_hash(parsed[0], parsed[1], request.size)
+            digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), request.size)
             matched = by_hash.get(digest)
             if matched:
                 kept.add(matched)
@@ -541,7 +492,7 @@ def prune_unused_library(library_dir: Path, shows: list[dict]) -> list[str]:
             source = str(record.get("source") or "")
             source_id = str(record.get("sourceId") or "")
             if source and source_id:
-                kept_raw.add((source, _slug(source_id)))
+                kept_raw.add((source, _raw_folder(source_id) if source == GENERATED_SOURCE else _slug(source_id)))
             continue
         shutil.rmtree(path.parent)
         if prefab_id:
@@ -595,14 +546,14 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
     lines = [
         "# Credits",
         "",
-        "Models fetched into `content-pipeline/library` keep the license they were published under.",
-        "CC-BY assets need attribution when a video that uses them is published.",
-        "Sketchfab CC-BY models need the author and the model page named in the credits.",
+        "Stage meshes are generated locally. Qwen-Image-Edit-2511 draws the object",
+        "and TRELLIS.2 turns that picture into the mesh. Both models are used under",
+        "their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
         "",
     ]
     assets = catalog.get("assets") or []
     if not assets:
-        lines.append("No third-party models have been fetched.")
+        lines.append("No generated meshes have been recorded.")
     else:
         for asset in assets:
             author = asset.get("author") or "Unknown"
@@ -616,22 +567,15 @@ def export_credits(catalog_path: Path, destination: Path) -> None:
     destination.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _asset_id(raw) -> str | None:
-    if not isinstance(raw, str) or ":" not in raw:
+def _appearance(raw) -> str | None:
+    if not isinstance(raw, str):
         return None
-    source, _, source_id = raw.strip().partition(":")
-    if not source or not source_id:
-        return None
-    return f"{source.strip().lower()}:{source_id.strip()}"
+    text = " ".join(raw.split())
+    return text or None
 
 
-def _parse_asset_id(value: str | None) -> tuple[str, str] | None:
-    if not value:
-        return None
-    source, _, source_id = value.partition(":")
-    if not source or not source_id:
-        return None
-    return source, source_id
+def _raw_folder(source_id: str) -> str:
+    return source_id[:16]
 
 
 def _size_token(size: tuple[float, float, float]) -> str:
@@ -653,7 +597,7 @@ def _slug(value: str) -> str:
 
 def _lock_entry(request: AssetRequest, resolved: ResolvedPrefab, version: str, provisional: bool) -> dict:
     return {
-        "assetId": request.asset_id,
+        "appearance": request.appearance,
         "sizeMeters": list(request.size),
         "prefabId": resolved.prefab_id,
         "source": resolved.source,

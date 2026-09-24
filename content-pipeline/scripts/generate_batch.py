@@ -461,10 +461,19 @@ def wait_for_output(
                     raise RuntimeError(str(payload))
             videos: list[dict] = []
             images: list[dict] = []
+            meshes: list[dict] = []
             for node_output in (item.get("outputs") or {}).values():
+                if not isinstance(node_output, dict):
+                    continue
                 videos.extend(node_output.get("gifs", []) + node_output.get("videos", []))
                 images.extend(node_output.get("images", []))
-            files = (images or videos) if prefer == "image" else (videos or images)
+                meshes.extend(node_output.get("3d", []))
+            if prefer == "mesh":
+                files = meshes
+            elif prefer == "image":
+                files = images or videos
+            else:
+                files = videos or images
             if files:
                 if prefer == "video":
                     with_audio = [
@@ -476,7 +485,7 @@ def wait_for_output(
                 return files, item
             if status.get("completed"):
                 raise RuntimeError(
-                    f"ComfyUI prompt {prompt_id} finished without a video or image output"
+                    f"ComfyUI prompt {prompt_id} finished without a {prefer} output"
                 )
         time.sleep(2)
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish in time")
