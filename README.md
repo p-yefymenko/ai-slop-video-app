@@ -87,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-`content:assets` has Qwen draw each location as one place, then TRELLIS.2 builds one mesh. ComfyUI's DecimateMesh node caps that mesh at 10,000,000 triangles. It is scaled uniformly into the location size, so the generated shape stays intact.
+`content:assets` has Qwen draw each location as one place, then TRELLIS.2 builds one mesh. ComfyUI's DecimateMesh node caps that mesh at 300,000 triangles. It is scaled uniformly into the location size, so the generated shape stays intact.
 
 God camera (OrbitControls):
 

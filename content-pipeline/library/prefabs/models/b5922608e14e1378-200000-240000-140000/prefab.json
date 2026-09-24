@@ -15,8 +15,8 @@
   "pageUrl": "https://github.com/microsoft/TRELLIS.2",
   "version": "",
   "retrieved": "2026-09-24",
-  "triangleCount": 9560508,
-  "triangleBudget": 10000000,
+  "triangleCount": 189247,
+  "triangleBudget": 300000,
   "decimator": "comfy-decimate-mesh",
   "fit": "uniform"
 }
