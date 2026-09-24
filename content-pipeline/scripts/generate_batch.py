@@ -1017,6 +1017,8 @@ def latent_size(graph: dict) -> tuple[int, int, int]:
             return int(inputs["width"]), int(inputs["height"]), int(inputs["length"])
         if class_type == "EmptySD3LatentImage":
             return int(inputs["width"]), int(inputs["height"]), 1
+        if class_type == "ImageCropToMask":
+            return int(inputs["width"]), int(inputs["height"]), 1
     for node in graph.values():
         if isinstance(node, dict) and node.get("class_type") == "VAEEncode":
             return PROXY_WIDTH, PROXY_HEIGHT, 1

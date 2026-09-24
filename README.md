@@ -87,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-Every landmark and prop sets `appearance` to a description of that one object. `content:assets` has Qwen draw it, then TRELLIS.2 builds the mesh. Meshes used for previs are capped at 100,000 triangles.
+Every landmark and prop sets `appearance` to a description of that one object. `content:assets` has Qwen draw it, then TRELLIS.2 builds the mesh. ComfyUI's DecimateMesh node caps previs meshes at 500,000 triangles. They are scaled uniformly into `sizeMeters`, so the generated shape stays intact.
 
 God camera (OrbitControls):
 

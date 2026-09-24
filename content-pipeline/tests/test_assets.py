@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from asset_generate import asset_plate_prompt, trellis_graph  # noqa: E402
+from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     GENERATED_SOURCE,
     AssetResolver,
@@ -25,9 +26,10 @@ from asset_resolver import (  # noqa: E402
 from asset_sources import materialize_mesh  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
 from mesh_io import (  # noqa: E402
+    DECIMATOR,
     TRIANGLE_BUDGET,
     box_mesh,
-    decimate,
+    fit_to_size,
     primitive_mesh,
     proportions_match,
     read_schema_mesh,
@@ -77,46 +79,6 @@ class AssetTests(unittest.TestCase):
         self.assertFalse(proportions_match(np.array([1.0, 1.0, 1.0]), (8.0, 0.2, 0.2)))
         self.assertTrue(proportions_match(np.array([2.0, 2.0, 2.0]), (1.0, 1.0, 1.0)))
 
-    def test_decimate_stays_under_the_previs_budget(self) -> None:
-        xs = np.linspace(0.0, 1.0, 360)
-        ys = np.linspace(0.0, 1.0, 360)
-        grid_x, grid_y = np.meshgrid(xs, ys)
-        vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
-        faces = []
-        width = len(xs)
-        for y in range(len(ys) - 1):
-            for x in range(width - 1):
-                index = y * width + x
-                faces.append((index, index + 1, index + width))
-                faces.append((index + 1, index + width + 1, index + width))
-        dense = np.array(faces, dtype=np.int64)
-        self.assertGreater(len(dense), TRIANGLE_BUDGET)
-        reduced_vertices, reduced_faces = decimate(vertices, dense)
-        self.assertLessEqual(len(reduced_faces), TRIANGLE_BUDGET)
-        self.assertGreater(len(reduced_faces), 0)
-        self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
-        self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
-
-    def test_decimate_welds_a_triangle_soup(self) -> None:
-        xs = np.linspace(0.0, 1.0, 40)
-        ys = np.linspace(0.0, 1.0, 40)
-        grid_x, grid_y = np.meshgrid(xs, ys)
-        vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
-        faces = []
-        width = len(xs)
-        for y in range(len(ys) - 1):
-            for x in range(width - 1):
-                index = y * width + x
-                faces.append((index, index + 1, index + width))
-                faces.append((index + 1, index + width + 1, index + width))
-        indexed = np.array(faces, dtype=np.int64)
-        soup_vertices = vertices[indexed].reshape(-1, 3)
-        soup_faces = np.arange(len(soup_vertices), dtype=np.int64).reshape(-1, 3)
-        reduced_vertices, reduced_faces = decimate(soup_vertices, soup_faces, budget=200)
-        self.assertLessEqual(len(reduced_faces), 200)
-        self.assertLess(float(reduced_vertices[:, 0].min()), 0.05)
-        self.assertGreater(float(reduced_vertices[:, 0].max()), 0.95)
-
     def test_glb_saved_as_zip_is_not_unzipped(self) -> None:
         mislabeled = self.library / "model.zip"
         mislabeled.parent.mkdir(parents=True, exist_ok=True)
@@ -142,11 +104,19 @@ class AssetTests(unittest.TestCase):
         classes = [node["class_type"] for node in graph.values()]
         self.assertIn("Trellis2Conditioning", classes)
         self.assertIn("SaveGLB", classes)
+        self.assertIn("DecimateMesh", classes)
         self.assertNotIn("Pixal3DConditioning", classes)
+        decimate_id = next(node_id for node_id, node in graph.items() if node["class_type"] == "DecimateMesh")
+        decimate_node = graph[decimate_id]
+        self.assertEqual(decimate_node["inputs"]["target_face_count"], TRIANGLE_BUDGET)
+        self.assertEqual(decimate_node["inputs"]["placement_mode"], "midpoint")
+        save = next(node for node in graph.values() if node["class_type"] == "SaveGLB")
+        self.assertEqual(save["inputs"]["mesh"], [decimate_id, 0])
         unet = next(node for node in graph.values() if node["class_type"] == "UNETLoader")
         self.assertEqual(unet["inputs"]["unet_name"], "trellis_2_int8_convrot.safetensors")
         crop = next(node for node in graph.values() if node["class_type"] == "ImageCropToMask")
         self.assertEqual(crop["inputs"]["pad_factor"], 1.0)
+        self.assertEqual(latent_size(graph), (1024, 1024, 1))
         self.assertIn("a stone bench", asset_plate_prompt("  a   stone bench "))
 
     def test_show_prefab_beats_the_library_and_skips_generation(self) -> None:
@@ -206,11 +176,52 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(left, right)
         self.assertEqual(generator.calls, 1)
 
-    def test_a_generated_mesh_is_scaled_to_the_landmark(self) -> None:
+    def test_fit_keeps_proportions_inside_the_requested_box(self) -> None:
+        fitted = fit_to_size(box_mesh((2.0, 1.0, 4.0))[0], (8.0, 0.2, 0.2))
+        extent = fitted.max(axis=0) - fitted.min(axis=0)
+        np.testing.assert_allclose(extent, [0.1, 0.05, 0.2], atol=1e-6)
+        self.assertAlmostEqual(float(fitted[:, 2].min()), 0.0, places=5)
+        self.assertAlmostEqual(float(fitted[:, 0].min()), -float(fitted[:, 0].max()), places=5)
+
+    def test_a_generated_mesh_keeps_its_shape_inside_the_landmark(self) -> None:
         generator = CountingGenerator(self.cube)
         resolved = self._resolver(generator).resolve_show(self._show("a long spear", size=(8.0, 0.2, 0.2)))
         vertices, _faces = read_schema_mesh(resolved["landmark:room/bench"].glb)
-        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [8.0, 0.2, 0.2], atol=1e-3)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.2, 0.2, 0.2], atol=1e-3)
+
+    def test_a_stretched_cache_is_refit_from_the_raw_mesh(self) -> None:
+        appearance = "a tall tower"
+        size = (8.0, 0.2, 0.2)
+        source_id = appearance_source_id(appearance)
+        digest = asset_hash(GENERATED_SOURCE, source_id, size)
+        raw_dir = self.library / "raw" / GENERATED_SOURCE / source_id[:16]
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        write_schema_glb(raw_dir / "model.glb", *box_mesh((2.0, 1.0, 4.0)))
+        directory = self.library / "prefabs" / "models" / "stretched"
+        directory.mkdir(parents=True, exist_ok=True)
+        write_schema_glb(directory / "model.glb", *box_mesh(size))
+        record = {
+            "id": "models/stretched",
+            "assetHash": digest,
+            "sizeMeters": list(size),
+            "origin": "generated",
+            "source": GENERATED_SOURCE,
+            "sourceId": source_id,
+            "title": appearance,
+            "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+            "license": "MIT",
+            "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+            "decimator": DECIMATOR,
+            "triangleBudget": TRIANGLE_BUDGET,
+        }
+        (directory / "prefab.json").write_text(json.dumps(record), encoding="utf-8")
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator).resolve_show(self._show(appearance, size=size))
+        self.assertEqual(generator.calls, 0)
+        vertices, _faces = read_schema_mesh(resolved["landmark:room/bench"].glb)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.1, 0.05, 0.2], atol=1e-3)
+        stored = json.loads((directory / "prefab.json").read_text(encoding="utf-8"))
+        self.assertEqual(stored["fit"], "uniform")
 
     def test_offline_never_generates_and_a_missing_appearance_fails(self) -> None:
         generator = CountingGenerator(self.cube)

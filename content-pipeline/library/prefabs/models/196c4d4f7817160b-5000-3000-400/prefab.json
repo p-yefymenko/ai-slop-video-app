@@ -1,0 +1,22 @@
+{
+  "id": "models/196c4d4f7817160b-5000-3000-400",
+  "assetHash": "8a12c68264dfd6a9499face41fc199e63c696bbdffdac747c025ffd5d6176fd3",
+  "sizeMeters": [
+    5.0,
+    3.0,
+    0.4
+  ],
+  "origin": "generated",
+  "source": "trellis2",
+  "sourceId": "196c4d4f7817160bd1815802897bb9d4d3cdfd791808e0849ce571f51e5f60b0",
+  "title": "One low rectangular stone dais with worn steps, a single platform, no throne and no room.",
+  "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+  "license": "MIT",
+  "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+  "version": "",
+  "retrieved": "2026-09-24",
+  "triangleCount": 487764,
+  "triangleBudget": 500000,
+  "decimator": "comfy-decimate-mesh",
+  "fit": "uniform"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "models/02886df8fb9423e3-2200-2200-1200",
+  "assetHash": "0a48aae679fd4c24e9fb0bc3be7838db9fe86273279e6a5c424c9f86daa853d8",
+  "sizeMeters": [
+    2.2,
+    2.2,
+    1.2
+  ],
+  "origin": "generated",
+  "source": "trellis2",
+  "sourceId": "02886df8fb9423e3b1e7d2efa949c1bce0c27ee7c25ce0035c137bfba1d0ce3a",
+  "title": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard.",
+  "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+  "license": "MIT",
+  "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+  "version": "",
+  "retrieved": "2026-09-24",
+  "triangleCount": 472135,
+  "triangleBudget": 500000,
+  "decimator": "comfy-decimate-mesh",
+  "fit": "uniform"
+}

@@ -1,102 +1,102 @@
 {
   "version": 1,
   "needs": {
-    "9289b3952c57cfc041682b6d9730daa14d901f33957a881a51bd00e1127d7ce6": {
-      "assetId": "sketchfab:def54040de2749139b69afff756e90bd",
-      "sizeMeters": [
-        48.0,
-        56.0,
-        52.0
-      ],
-      "prefabId": "models/def54040de2749139b69afff756e90bd-48000-56000-52000",
-      "source": "sketchfab",
-      "sourceId": "def54040de2749139b69afff756e90bd",
-      "version": "",
-      "origin": "downloaded",
-      "provisional": false
-    },
-    "fe0c805353ac0cac92545e4fe2aa270d12ab4909d1e95d601596d5f261607e0e": {
-      "assetId": "sketchfab:fbf08b82a2ed45068af45e8d90fb7dce",
-      "sizeMeters": [
-        5.0,
-        5.0,
-        90.0
-      ],
-      "prefabId": "models/fbf08b82a2ed45068af45e8d90fb7dce-5000-5000-90000",
-      "source": "sketchfab",
-      "sourceId": "fbf08b82a2ed45068af45e8d90fb7dce",
-      "version": "",
-      "origin": "downloaded",
-      "provisional": false
-    },
-    "fbf0c20b02f3198fb7160d2c55f9db5f5840bef872c90ee7c80a0c0521e359cf": {
-      "assetId": "sketchfab:8ca31b1d1635406ba2db30e48ecddbdd",
+    "0a48aae679fd4c24e9fb0bc3be7838db9fe86273279e6a5c424c9f86daa853d8": {
+      "appearance": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard.",
       "sizeMeters": [
         2.2,
         2.2,
         1.2
       ],
-      "prefabId": "models/8ca31b1d1635406ba2db30e48ecddbdd-2200-2200-1200",
-      "source": "sketchfab",
-      "sourceId": "8ca31b1d1635406ba2db30e48ecddbdd",
+      "prefabId": "models/02886df8fb9423e3-2200-2200-1200",
+      "source": "trellis2",
+      "sourceId": "02886df8fb9423e3b1e7d2efa949c1bce0c27ee7c25ce0035c137bfba1d0ce3a",
       "version": "",
-      "origin": "downloaded",
+      "origin": "generated",
       "provisional": false
     },
-    "07e8750b4b0e8f30d7436781c917ceff1e5503d0a4a696baa848ac7efb96ad22": {
-      "assetId": "sketchfab:e63f1154ee0b41f8a797db683526142a",
+    "aebde1d1d3e1ce741948c0ab070e92226c0890ba77a9a715b0cac163d37640e0": {
+      "appearance": "One blacksmith anvil of dark forged iron, a single object, no tools and no workshop.",
       "sizeMeters": [
         1.8,
         1.2,
         0.9
       ],
-      "prefabId": "models/e63f1154ee0b41f8a797db683526142a-1800-1200-900",
-      "source": "sketchfab",
-      "sourceId": "e63f1154ee0b41f8a797db683526142a",
+      "prefabId": "models/b878b90bfbbdc084-1800-1200-900",
+      "source": "trellis2",
+      "sourceId": "b878b90bfbbdc084fa8838d3256c5c1e2775cca9b57c55723daa176c9c272a51",
       "version": "",
-      "origin": "downloaded",
+      "origin": "generated",
       "provisional": false
     },
-    "39e8efc8c6c4ae3fd0e5cf2538d50bcc3bed1bdbd9307dd9d4e0c9d1800526ad": {
-      "assetId": "sketchfab:ccaa80d7a16444049f420edd4f4378a4",
+    "8a12c68264dfd6a9499face41fc199e63c696bbdffdac747c025ffd5d6176fd3": {
+      "appearance": "One low rectangular stone dais with worn steps, a single platform, no throne and no room.",
       "sizeMeters": [
         5.0,
         3.0,
         0.4
       ],
-      "prefabId": "models/ccaa80d7a16444049f420edd4f4378a4-5000-3000-400",
-      "source": "sketchfab",
-      "sourceId": "ccaa80d7a16444049f420edd4f4378a4",
+      "prefabId": "models/196c4d4f7817160b-5000-3000-400",
+      "source": "trellis2",
+      "sourceId": "196c4d4f7817160bd1815802897bb9d4d3cdfd791808e0849ce571f51e5f60b0",
       "version": "",
-      "origin": "downloaded",
+      "origin": "generated",
       "provisional": false
     },
-    "902b20b5b33ebb453c68b83837936ce883ad27ab8882e6613b35fd4ebd23f582": {
-      "assetId": "sketchfab:7614c26d2b4e41e9810360aca6ecc38e",
+    "cfaa2f31fd638b80b261e0fc0f8409a2e865cb8c715b388c850f18b7b777a411": {
+      "appearance": "One twisted marble column standing alone, no base building and no second column.",
       "sizeMeters": [
         0.8,
         0.8,
         4.2
       ],
-      "prefabId": "models/7614c26d2b4e41e9810360aca6ecc38e-800-800-4200",
-      "source": "sketchfab",
-      "sourceId": "7614c26d2b4e41e9810360aca6ecc38e",
+      "prefabId": "models/c44a07aa2b77e1b0-800-800-4200",
+      "source": "trellis2",
+      "sourceId": "c44a07aa2b77e1b0413a2c68712ae435f6d6dfcaeeb7c1dd357d63fc3c0132ae",
       "version": "",
-      "origin": "downloaded",
+      "origin": "generated",
       "provisional": false
     },
-    "7ca96b7d5014b8342f19707e3ea3c7ea003ab4c017e3e2b6b267377ce707b03e": {
-      "assetId": "sketchfab:7b60eff248a844eb80d0a5ed462aa551",
+    "c8aa3574123e9a28014fb3c485bbfb5f75fec194eace9ed6162906bf5b9f1705": {
+      "appearance": "One thick open iron torc neck ring, a single piece of dark metal, no person and no chain.",
       "sizeMeters": [
         0.28,
         0.22,
         0.08
       ],
-      "prefabId": "models/7b60eff248a844eb80d0a5ed462aa551-280-220-80",
-      "source": "sketchfab",
-      "sourceId": "7b60eff248a844eb80d0a5ed462aa551",
+      "prefabId": "models/fa8920c736ac8ece-280-220-80",
+      "source": "trellis2",
+      "sourceId": "fa8920c736ac8ece36252b8201dce241cbdb6c7f4a2e2453742c82e9fb6e98ff",
       "version": "",
-      "origin": "downloaded",
+      "origin": "generated",
+      "provisional": false
+    },
+    "23f089886893d27858c33be04d045fdf025db17a2ce6d494d2b525ccbc0c4ead": {
+      "appearance": "One black-iron fortress tower, square slag-stone walls, hanging chains, a single building with no ground and no other structures.",
+      "sizeMeters": [
+        48.0,
+        56.0,
+        52.0
+      ],
+      "prefabId": "models/e51a27571b0dc788-48000-56000-52000",
+      "source": "trellis2",
+      "sourceId": "e51a27571b0dc78863331ff7769b296ecf96ba4536ca026b5ba6083bdb96bc09",
+      "version": "",
+      "origin": "generated",
+      "provisional": false
+    },
+    "89b9d4abfe3f665288086fdad102f099739675e2d112b769cd59e4744a05f565": {
+      "appearance": "One tall narrow lattice transmission tower of black iron, standing alone, no wires and no landscape.",
+      "sizeMeters": [
+        5.0,
+        5.0,
+        90.0
+      ],
+      "prefabId": "models/0d106b32fc9961ce-5000-5000-90000",
+      "source": "trellis2",
+      "sourceId": "0d106b32fc9961ce90ac3e8ed0e36a3735164785a9d2c3ebfac8163e599aad4c",
+      "version": "",
+      "origin": "generated",
       "provisional": false
     }
   }

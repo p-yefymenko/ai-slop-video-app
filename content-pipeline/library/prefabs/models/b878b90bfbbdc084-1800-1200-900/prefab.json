@@ -1,0 +1,22 @@
+{
+  "id": "models/b878b90bfbbdc084-1800-1200-900",
+  "assetHash": "aebde1d1d3e1ce741948c0ab070e92226c0890ba77a9a715b0cac163d37640e0",
+  "sizeMeters": [
+    1.8,
+    1.2,
+    0.9
+  ],
+  "origin": "generated",
+  "source": "trellis2",
+  "sourceId": "b878b90bfbbdc084fa8838d3256c5c1e2775cca9b57c55723daa176c9c272a51",
+  "title": "One blacksmith anvil of dark forged iron, a single object, no tools and no workshop.",
+  "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+  "license": "MIT",
+  "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+  "version": "",
+  "retrieved": "2026-09-24",
+  "triangleCount": 481977,
+  "triangleBudget": 500000,
+  "decimator": "comfy-decimate-mesh",
+  "fit": "uniform"
+}

@@ -14,4 +14,4 @@ Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipe
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
 
-Landmarks and props require `appearance`: one isolated object. `content:assets` has Qwen draw that object, then TRELLIS.2 turns the picture into the mesh. There is no catalog id and no primitive stand-in. Prefab meshes over 100,000 triangles are welded, then reduced with quadric edge collapse.
+Landmarks and props require `appearance`: one isolated object. `content:assets` has Qwen draw that object, then TRELLIS.2 turns the picture into the mesh. There is no catalog id and no primitive stand-in. ComfyUI's DecimateMesh node caps each mesh at 500,000 triangles. The mesh is scaled uniformly into `sizeMeters`, so the generated shape is not stretched.

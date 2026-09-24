@@ -11,9 +11,9 @@ import numpy as np
 from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
-# Clay previs walks every triangle in Python. Downloaded scans stay under this.
-TRIANGLE_BUDGET = 100_000
-DECIMATOR = "quadric-welded"
+# Clay previs walks every triangle in Python. DecimateMesh in the Trellis graph keeps meshes under this.
+TRIANGLE_BUDGET = 500_000
+DECIMATOR = "comfy-decimate-mesh"
 
 
 def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
@@ -76,7 +76,11 @@ def primitive_mesh(kind: str, size: tuple[float, float, float]) -> tuple[np.ndar
 def fit_to_size(
     vertices: np.ndarray, size: tuple[float, float, float]
 ) -> np.ndarray:
-    """Put the base center on the origin and stretch the mesh onto ``size``."""
+    """Put the base center on the origin and scale the mesh uniformly into ``size``.
+
+    One scale is applied to every axis, so the generated proportions stay intact.
+    The mesh fits inside the requested box and touches it on the tightest axis.
+    """
     array = np.asarray(vertices, dtype=np.float64)
     minimum = array.min(axis=0)
     maximum = array.max(axis=0)
@@ -84,7 +88,7 @@ def fit_to_size(
     center[2] = minimum[2]
     shifted = array - center
     extent = np.maximum(maximum - minimum, 1e-6)
-    scale = np.array(size, dtype=np.float64) / extent
+    scale = float(np.min(np.asarray(size, dtype=np.float64) / extent))
     return shifted * scale
 
 
@@ -101,78 +105,6 @@ def proportions_match(
     target = target / target.max()
     ratio = actual / target
     return bool(np.all((ratio >= low) & (ratio <= high)))
-
-
-def decimate(
-    vertices: np.ndarray,
-    faces: np.ndarray,
-    budget: int = TRIANGLE_BUDGET,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Reduce a mesh to at most ``budget`` triangles with quadric edge collapse.
-
-    ``fast-simplification`` removes the edges that change the shape the least.
-    Scanned models often store each triangle with its own vertices. Those copies
-    are welded first, or the collapse has no edges to follow and leaves a cloud of shards.
-    """
-    vertices = np.asarray(vertices, dtype=np.float64)
-    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
-    if len(faces) <= budget:
-        return vertices, faces
-    vertices, faces = _weld(vertices, faces)
-    keep = (
-        (faces[:, 0] != faces[:, 1])
-        & (faces[:, 1] != faces[:, 2])
-        & (faces[:, 0] != faces[:, 2])
-    )
-    faces = faces[keep]
-    if len(faces) <= budget:
-        return _compact(vertices, faces)
-    try:
-        import fast_simplification
-    except ImportError as exc:
-        raise RuntimeError(
-            "Mesh simplification needs fast-simplification. Run `pnpm run content:asset-deps`."
-        ) from exc
-    reduced_points = np.ascontiguousarray(vertices, dtype=np.float64)
-    reduced_faces = np.ascontiguousarray(faces)
-    # One call often stops partway on a large mesh. Each later pass continues
-    # from that result until the budget is met.
-    for _pass in range(8):
-        if len(reduced_faces) <= budget:
-            break
-        before = len(reduced_faces)
-        reduced_points, reduced_faces = fast_simplification.simplify(
-            reduced_points,
-            reduced_faces,
-            target_count=budget,
-            agg=7.0,
-        )
-        reduced_faces = np.asarray(reduced_faces, dtype=np.int64).reshape(-1, 3)
-        if len(reduced_faces) >= before:
-            break
-    if len(reduced_faces) > budget:
-        raise RuntimeError(
-            f"Quadric simplification left {len(reduced_faces)} triangles, above the {budget} budget"
-        )
-    return _compact(np.asarray(reduced_points, dtype=np.float64), reduced_faces)
-
-
-def _weld(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Merge vertices that occupy the same position and rewrite face indices."""
-    packed = np.ascontiguousarray(vertices, dtype=np.float64)
-    keys = packed.view(np.dtype((np.void, packed.dtype.itemsize * packed.shape[1]))).reshape(-1)
-    _unique_keys, inverse = np.unique(keys, return_inverse=True)
-    order = np.unique(inverse, return_index=True)[1]
-    return packed[order], inverse[faces]
-
-
-def _compact(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    if len(faces) == 0:
-        return vertices[:0], faces
-    used = np.unique(faces.reshape(-1))
-    remap = np.full(len(vertices), -1, dtype=np.int64)
-    remap[used] = np.arange(len(used))
-    return np.ascontiguousarray(vertices[used]), np.ascontiguousarray(remap[faces])
 
 
 def write_schema_glb(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:

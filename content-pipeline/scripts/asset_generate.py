@@ -6,6 +6,8 @@ import json
 import urllib.error
 from pathlib import Path
 
+from mesh_io import TRIANGLE_BUDGET
+
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "prompts.json"
 PLATE_WORKFLOW = ROOT / "workflows" / "qwen_asset_plate.json"
@@ -165,8 +167,16 @@ def trellis_graph(image_name: str, seed: int) -> dict:
             "inputs": {"samples": ["20", 0], "vae": ["13", 0]},
         },
         "22": {
+            "class_type": "DecimateMesh",
+            "inputs": {
+                "mesh": ["21", 0],
+                "target_face_count": TRIANGLE_BUDGET,
+                "placement_mode": "midpoint",
+            },
+        },
+        "23": {
             "class_type": "SaveGLB",
-            "inputs": {"mesh": ["21", 0], "filename_prefix": "reelshort_asset"},
+            "inputs": {"mesh": ["22", 0], "filename_prefix": "reelshort_asset"},
         },
     }
 
@@ -191,10 +201,14 @@ def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
     plate_graph["7"]["inputs"]["prompt"] = asset_plate_prompt(appearance)
     plate_graph["10"]["inputs"]["seed"] = seed
     plate_path = raw_dir / "plate.png"
+    mesh_path = raw_dir / "model.glb"
+    plate_ready = plate_path.is_file() and plate_path.stat().st_size > 1024
     try:
-        free_comfy_models()
-        execute_queued_graph(plate_graph, plate_path, prefer="image", mode="Qwen asset plate")
-        mesh_path = raw_dir / "model.glb"
+        if plate_ready:
+            print(f"  Reusing {plate_path}", flush=True)
+        else:
+            free_comfy_models()
+            execute_queued_graph(plate_graph, plate_path, prefer="image", mode="Qwen asset plate")
         free_comfy_models()
         execute_queued_graph(
             trellis_graph(stage_named_image(plate_path, "asset_plate"), seed),

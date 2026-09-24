@@ -21,7 +21,6 @@ from asset_sources import materialize_mesh
 from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
-    decimate,
     fit_to_size,
     read_schema_mesh,
     schema_triangles,
@@ -108,7 +107,7 @@ class AssetResolver:
         digest = asset_hash(GENERATED_SOURCE, source_id, request.size)
         cached = self._cached(digest)
         if cached is not None and not self.refresh:
-            return cached
+            return self._ensure_uniform_fit(request, cached, appearance, source_id, digest)
         if self.offline:
             raise RuntimeError(
                 f"{request.consumer_id}: {appearance} is not in the library; offline mode does not generate"
@@ -144,9 +143,7 @@ class AssetResolver:
         except Exception as exc:
             raise RuntimeError(f"{request.consumer_id}: {exc}") from exc
         vertices, faces = read_schema_mesh(fetched)
-        # Simplify at the mesh's own scale. Fitting first stretches a ring into
-        # the landmark box and the quadric metric then follows that distortion.
-        vertices, faces = decimate(vertices, faces, TRIANGLE_BUDGET)
+        # DecimateMesh already capped the triangle count. Scale uniformly into the box.
         fitted = fit_to_size(vertices, request.size)
         leaf = f"{source_id[:16]}-{_size_token(request.size)}"
         prefab_id = f"models/{leaf}"
@@ -190,7 +187,6 @@ class AssetResolver:
         version: str,
     ) -> ResolvedPrefab:
         directory.mkdir(parents=True, exist_ok=True)
-        vertices, faces = decimate(vertices, faces, TRIANGLE_BUDGET)
         write_schema_glb(directory / "model.glb", vertices, faces)
         if self.write_thumbs:
             from spatial_previs import render_mesh_thumbnail
@@ -212,6 +208,7 @@ class AssetResolver:
             "triangleCount": int(len(faces)),
             "triangleBudget": TRIANGLE_BUDGET,
             "decimator": DECIMATOR,
+            "fit": "uniform",
         }
         (directory / "prefab.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
         return ResolvedPrefab(
@@ -281,6 +278,43 @@ class AssetResolver:
             size=(float(size[0]), float(size[1]), float(size[2])),
         )
 
+    def _ensure_uniform_fit(
+        self,
+        request: AssetRequest,
+        cached: ResolvedPrefab,
+        appearance: str,
+        source_id: str,
+        digest: str,
+    ) -> ResolvedPrefab:
+        """Rewrite a cached mesh that was stretched onto ``sizeMeters``."""
+        if cached.source != GENERATED_SOURCE:
+            return cached
+        meta_path = cached.glb.parent / "prefab.json"
+        record = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
+        if record.get("fit") == "uniform":
+            return cached
+        raw = self.library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id) / "model.glb"
+        if not raw.is_file():
+            return cached
+        vertices, faces = read_schema_mesh(raw)
+        fitted = fit_to_size(vertices, request.size)
+        return self._write_prefab(
+            cached.glb.parent,
+            cached.prefab_id,
+            fitted,
+            faces,
+            request,
+            origin=cached.origin,
+            source=cached.source,
+            source_id=source_id,
+            title=appearance,
+            author=cached.author or "Qwen-Image-Edit-2511, TRELLIS.2",
+            license_name=cached.license or "MIT",
+            page_url=cached.page_url or "https://github.com/microsoft/TRELLIS.2",
+            digest=digest,
+            version="",
+        )
+
     def _needs_resimplify(self, path: Path, record: dict) -> bool:
         """A library mesh simplified under an older budget is rebuilt from the raw download."""
         try:
@@ -300,16 +334,9 @@ class AssetResolver:
         recorded = record.get("triangleCount")
         if isinstance(recorded, int) and recorded <= TRIANGLE_BUDGET:
             return
-        vertices, faces = read_schema_mesh(glb)
-        if len(faces) <= TRIANGLE_BUDGET:
-            if meta.is_file() and recorded != len(faces):
-                record["triangleCount"] = int(len(faces))
-                meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
-            return
-        reduced_vertices, reduced_faces = decimate(vertices, faces, TRIANGLE_BUDGET)
-        write_schema_glb(glb, reduced_vertices, reduced_faces)
-        if meta.is_file():
-            record["triangleCount"] = int(len(reduced_faces))
+        _vertices, faces = read_schema_mesh(glb)
+        if len(faces) <= TRIANGLE_BUDGET and meta.is_file() and recorded != len(faces):
+            record["triangleCount"] = int(len(faces))
             meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
     def _remember_source(self, resolved: ResolvedPrefab, version: str) -> None:

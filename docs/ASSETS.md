@@ -14,7 +14,7 @@ Resolution order:
 
 `--offline` does not generate. A mesh that is not already in the library fails the build. After a successful build, library prefabs that no show script pins or describes are deleted, along with their lock entries and raw plates. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md`.
 
-The plate is a 1024 square. TRELLIS.2 uses the int8 checkpoint, removes the background, and runs the shape cascade at 1024. The stored prefab is untextured. Anything over 100,000 triangles is welded, then reduced to that budget with quadric edge collapse, before it is fitted to `sizeMeters`. A library mesh simplified with an older decimator is rebuilt from the raw GLB the next time `content:assets` runs. The plate and the raw GLB stay in `library/raw/trellis2/` (gitignored).
+The plate is a 1024 square. TRELLIS.2 uses the int8 checkpoint, removes the background, and runs the shape cascade at 1024. The stored prefab is untextured. ComfyUI's DecimateMesh node then caps the mesh at 500,000 triangles before it is saved. The mesh is scaled uniformly so it fits inside `sizeMeters` without changing its proportions. A library mesh that was stretched onto that box is refit from the raw GLB the next time `content:assets` runs. A library mesh simplified with an older decimator is rebuilt through the same graph. The plate and the raw GLB stay in `library/raw/trellis2/` (gitignored).
 
 Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `content-pipeline/scripts/coords.py` is the only converter. The viewer reads Y-up files and does not convert them.
 
