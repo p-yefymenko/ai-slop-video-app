@@ -32,7 +32,7 @@ def asset_plate_prompt(appearance: str) -> str:
     return template.replace("{appearance}", text)
 
 
-def trellis_graph(image_name: str, seed: int) -> dict:
+def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
     """Image to a shape mesh. Texture baking stays off; previs stores an untextured GLB."""
     return {
         "1": {
@@ -170,7 +170,7 @@ def trellis_graph(image_name: str, seed: int) -> dict:
             "class_type": "DecimateMesh",
             "inputs": {
                 "mesh": ["21", 0],
-                "target_face_count": TRIANGLE_BUDGET,
+                "target_face_count": triangle_budget,
                 "placement_mode": "midpoint",
             },
         },
@@ -213,7 +213,9 @@ def generate_asset_plate(appearance: str, raw_dir: Path) -> Path:
     return plate_path
 
 
-def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
+def generate_asset_mesh(
+    appearance: str, raw_dir: Path, triangle_budget: int = TRIANGLE_BUDGET
+) -> Path:
     """Turn an existing ``plate.png`` into ``model.glb``. ComfyUI must already be running."""
     from generate_batch import (
         execute_queued_graph,
@@ -233,7 +235,7 @@ def generate_asset_mesh(appearance: str, raw_dir: Path) -> Path:
     try:
         free_comfy_models()
         execute_queued_graph(
-            trellis_graph(stage_named_image(plate_path, "asset_plate"), seed),
+            trellis_graph(stage_named_image(plate_path, "asset_plate"), seed, triangle_budget),
             mesh_path,
             prefer="mesh",
             mode="TRELLIS.2 mesh",

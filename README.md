@@ -87,7 +87,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
 
-`content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. ComfyUI's DecimateMesh node caps that mesh at 300,000 triangles. It is scaled uniformly into the location size, so the generated shape stays intact.
+`content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location size, so the generated shape stays intact.
 
 God camera (OrbitControls):
 

@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from asset_generate import generate_asset_plate  # noqa: E402
+from mesh_io import TRIANGLE_BUDGET, require_triangle_budget  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     apply_lock_override,
@@ -48,6 +49,12 @@ def main() -> None:
     parser.add_argument("--offline", action="store_true", help="Use the library only; a missing model fails the build")
     parser.add_argument("--pick", nargs=2, metavar=("ASSET_HASH", "PREFAB_ID"))
     parser.add_argument("--credits", action="store_true", help="Rewrite docs/CREDITS.md from library/sources.json")
+    parser.add_argument(
+        "--triangles",
+        type=int,
+        default=TRIANGLE_BUDGET,
+        help=f"Polygon limit for the mesh. Default {TRIANGLE_BUDGET}.",
+    )
     args = parser.parse_args()
     if args.credits:
         destination = Path(__file__).resolve().parents[2] / "docs" / "CREDITS.md"
@@ -62,6 +69,10 @@ def main() -> None:
     if not scripts:
         target = f" for show {args.show!r}" if args.show else ""
         raise SystemExit(f"No show JSON files found{target}")
+    try:
+        triangle_budget = require_triangle_budget(args.triangles)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if args.stage == "plates":
         for script in scripts:
             show = json.loads(script.read_text(encoding="utf-8"))
@@ -82,11 +93,12 @@ def main() -> None:
             show_id,
             offline=args.offline,
             refresh=args.force or args.refresh,
+            triangle_budget=triangle_budget,
         )
         resolved = resolver.resolve_show(show)
         for warning in resolver.warnings:
             print(warning)
-        print(f"{show_id}: {len(resolved)} prefabs")
+        print(f"{show_id}: {len(resolved)} prefabs, polygon limit {triangle_budget}")
     shows = [json.loads(path.read_text(encoding="utf-8")) for path in discover_show_scripts(None)]
     removed = prune_unused_library(LIBRARY_DIR, shows)
     if removed:

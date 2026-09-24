@@ -11,9 +11,21 @@ import numpy as np
 from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
-# Clay previs walks every triangle in Python. DecimateMesh in the Trellis graph keeps meshes under this.
+# Default polygon limit. Override with `pnpm run content:assets -- --triangles <count>`.
 TRIANGLE_BUDGET = 300_000
+# ComfyUI DecimateMesh rejects a target above this.
+TRIANGLE_BUDGET_MAX = 50_000_000
 DECIMATOR = "comfy-decimate-mesh"
+
+
+def require_triangle_budget(value: int) -> int:
+    """The polygon limit passed to DecimateMesh."""
+    limit = int(value)
+    if limit < 1 or limit > TRIANGLE_BUDGET_MAX:
+        raise ValueError(
+            f"Polygon limit must be from 1 to {TRIANGLE_BUDGET_MAX:,}. Got {limit}."
+        )
+    return limit
 
 
 def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:

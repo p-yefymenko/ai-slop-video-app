@@ -45,9 +45,10 @@ class CountingGenerator:
         self.cube = cube
         self.calls = 0
 
-    def __call__(self, appearance: str, raw_dir: Path) -> Path:
+    def __call__(self, appearance: str, raw_dir: Path, triangle_budget: int = TRIANGLE_BUDGET) -> Path:
         del appearance
         self.calls += 1
+        self.triangle_budget = triangle_budget
         raw_dir.mkdir(parents=True, exist_ok=True)
         dest = raw_dir / "model.glb"
         dest.write_bytes(self.cube.read_bytes())
@@ -112,6 +113,9 @@ class AssetTests(unittest.TestCase):
         decimate_id = next(node_id for node_id, node in graph.items() if node["class_type"] == "DecimateMesh")
         decimate_node = graph[decimate_id]
         self.assertEqual(decimate_node["inputs"]["target_face_count"], TRIANGLE_BUDGET)
+        custom = trellis_graph("plate.png", 7, triangle_budget=12_000)
+        custom_decimate = next(node for node in custom.values() if node["class_type"] == "DecimateMesh")
+        self.assertEqual(custom_decimate["inputs"]["target_face_count"], 12_000)
         self.assertEqual(decimate_node["inputs"]["placement_mode"], "midpoint")
         save = next(node for node in graph.values() if node["class_type"] == "SaveGLB")
         self.assertEqual(save["inputs"]["mesh"], [decimate_id, 0])
@@ -121,6 +125,15 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(crop["inputs"]["pad_factor"], 1.0)
         self.assertEqual(latent_size(graph), (1024, 1024, 1))
         self.assertIn("a stone bench", asset_plate_prompt("  a   stone bench "))
+
+    def test_triangle_limit_is_recorded_on_the_prefab(self) -> None:
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator, triangle_budget=12_000).resolve_show(self._show("a stone bench"))
+        record = json.loads((resolved["location:room"].glb.parent / "prefab.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["triangleBudget"], 12_000)
+        self.assertEqual(generator.triangle_budget, 12_000)
+        with self.assertRaises(ValueError):
+            self._resolver(generator, triangle_budget=0)
 
     def test_show_prefab_beats_the_library_and_skips_generation(self) -> None:
         show = self._show("a stone bench")

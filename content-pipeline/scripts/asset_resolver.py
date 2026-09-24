@@ -24,6 +24,7 @@ from mesh_io import (
     TRIANGLE_BUDGET,
     fit_to_size,
     read_schema_mesh,
+    require_triangle_budget,
     schema_triangles,
     write_schema_glb,
 )
@@ -68,6 +69,7 @@ class AssetResolver:
         offline: bool = False,
         refresh: bool = False,
         write_thumbs: bool = False,
+        triangle_budget: int = TRIANGLE_BUDGET,
     ) -> None:
         self.show_id = show_id
         self.library_dir = library_dir
@@ -77,6 +79,7 @@ class AssetResolver:
         self.offline = offline
         self.refresh = refresh
         self.write_thumbs = write_thumbs
+        self.triangle_budget = require_triangle_budget(triangle_budget)
         self.warnings: list[str] = []
         self.lock = _read_json(library_dir / "lock.json", {"version": 1, "needs": {}})
         self.sources_catalog = _read_json(library_dir / "sources.json", {"assets": []})
@@ -140,7 +143,9 @@ class AssetResolver:
     ) -> ResolvedPrefab:
         raw_dir = self.library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id)
         try:
-            fetched = materialize_mesh(self.generator(appearance, raw_dir))
+            fetched = materialize_mesh(
+                self.generator(appearance, raw_dir, triangle_budget=self.triangle_budget)
+            )
         except Exception as exc:
             raise RuntimeError(f"{request.consumer_id}: {exc}") from exc
         vertices, faces = read_schema_mesh(fetched)
@@ -207,7 +212,7 @@ class AssetResolver:
             "version": version,
             "retrieved": date.today().isoformat(),
             "triangleCount": int(len(faces)),
-            "triangleBudget": TRIANGLE_BUDGET,
+            "triangleBudget": self.triangle_budget,
             "decimator": DECIMATOR,
             "fit": "uniform",
         }
@@ -324,7 +329,7 @@ class AssetResolver:
             return False
         if record.get("decimator") != DECIMATOR:
             return True
-        return record.get("triangleBudget") != TRIANGLE_BUDGET
+        return record.get("triangleBudget") != self.triangle_budget
 
     def _cap_stored_mesh(self, directory: Path) -> None:
         glb = directory / "model.glb"
@@ -333,10 +338,10 @@ class AssetResolver:
             return
         record = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
         recorded = record.get("triangleCount")
-        if isinstance(recorded, int) and recorded <= TRIANGLE_BUDGET:
+        if isinstance(recorded, int) and recorded <= self.triangle_budget:
             return
         _vertices, faces = read_schema_mesh(glb)
-        if len(faces) <= TRIANGLE_BUDGET and meta.is_file() and recorded != len(faces):
+        if len(faces) <= self.triangle_budget and meta.is_file() and recorded != len(faces):
             record["triangleCount"] = int(len(faces))
             meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
 

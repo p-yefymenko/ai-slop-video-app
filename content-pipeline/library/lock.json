@@ -1,30 +1,30 @@
 {
   "version": 1,
   "needs": {
-    "19fcb825d245fbdf6a2434a142ac2e956acf3b6e0e0b1b9e4a473e3bffaaf43f": {
-      "appearance": "A wide open set of A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains. Most of the ground is bare floor, with room for several people to stand and walk. The features are few, small beside the place, and spaced far apart. The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform. No people, animals, or readable text. Small features only: citadel core, about 56 meters across: One black-iron fortress tower, square slag-stone walls, hanging chains, with no ground and no other structures; chain pylon, about 90 meters across: One tall narrow lattice transmission tower of black iron. The whole place is about 200 meters wide, 240 meters deep, and 140 meters tall.",
+    "ca8f71bb5aae0005c064b65914f87f28b8686c8bc7c368fa88dce77fc32e5335": {
+      "appearance": "A wide open set of A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains. Most of the ground is bare floor, with wide empty space between the features. The features are few, small beside the place, and spaced far apart. The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform. No human figures, figurines, statues, animals, or readable text. Small features only: citadel core, about 56 meters across: One black-iron fortress tower, square slag-stone walls, hanging chains, with no ground and no other structures; chain pylon, about 90 meters across: One tall narrow lattice transmission tower of black iron. The whole place is about 200 meters wide, 240 meters deep, and 140 meters tall.",
       "sizeMeters": [
         200.0,
         240.0,
         140.0
       ],
-      "prefabId": "models/811d72366ff4f11e-200000-240000-140000",
+      "prefabId": "models/0c444653fc598340-200000-240000-140000",
       "source": "trellis2",
-      "sourceId": "811d72366ff4f11e56a59abf33b70c95b8868fe4eb1c74b3acfed9f3a4c2667b",
+      "sourceId": "0c444653fc598340bfa686057188f7fe195d0c251d74cd0fcc36460ca1ea2b44",
       "version": "",
       "origin": "generated",
       "provisional": false
     },
-    "73b2808ef69c8629bd8746955b0947a1b9c536b2665b6d6555d0d75b44febb08": {
-      "appearance": "A wide open set of An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls. Most of the ground is bare floor, with room for several people to stand and walk. The features are few, small beside the place, and spaced far apart. The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform. No people, animals, or readable text. Small features only: sun well, about 2.2 meters across: One low circular stone fire ring with a bowl of white-gold flame; anvil altar, about 1.8 meters across: One blacksmith anvil of dark forged iron; throne dais, about 5 meters across: One low rectangular stone dais with worn steps; gate column l, about 4.2 meters across: One twisted marble column; gate column r, about 4.2 meters across: One twisted marble column. The whole place is about 22 meters wide, 30 meters deep, and 18 meters tall.",
+    "bcf8e7549f4522925135edcc913d5e183a572b34e903abb3562d4f19366359f6": {
+      "appearance": "A wide open set of An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls. Most of the ground is bare floor, with wide empty space between the features. The features are few, small beside the place, and spaced far apart. The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform. No human figures, figurines, statues, animals, or readable text. Small features only: sun well, about 2.2 meters across: One low circular stone fire ring with a bowl of white-gold flame; anvil altar, about 1.8 meters across: One blacksmith anvil of dark forged iron; throne dais, about 5 meters across: One low rectangular stone dais with worn steps; gate column l, about 4.2 meters across: One twisted marble column; gate column r, about 4.2 meters across: One twisted marble column. The whole place is about 22 meters wide, 30 meters deep, and 18 meters tall.",
       "sizeMeters": [
         22.0,
         30.0,
         18.0
       ],
-      "prefabId": "models/249e2a8918490025-22000-30000-18000",
+      "prefabId": "models/d08ca4d3fff1e7ee-22000-30000-18000",
       "source": "trellis2",
-      "sourceId": "249e2a8918490025230ca951e29b16088c5a76c993c5915620166fe41cbcd5a3",
+      "sourceId": "d08ca4d3fff1e7ee98f071fe55fe7324f253d83fe20367a4f1eb9c76723782c4",
       "version": "",
       "origin": "generated",
       "provisional": false
