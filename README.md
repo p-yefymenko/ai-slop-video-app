@@ -107,6 +107,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh into that same Python so glTF and OBJ files can be read. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`.
+`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws the clay previs on the GPU. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

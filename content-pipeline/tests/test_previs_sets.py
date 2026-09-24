@@ -15,9 +15,17 @@ import spatial_previs  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
 from mesh_io import primitive_mesh, write_schema_glb  # noqa: E402
 from pipeline_paths import OUTPUT_DIR, set_dir  # noqa: E402
+from clay_gpu import ClayBatch  # noqa: E402
 from spatial_previs import (  # noqa: E402
+    PROXY_HEIGHT,
+    PROXY_WIDTH,
+    VIEWPORT_GRAY,
+    _raster_clay,
     _scene_surfaces,
+    _shade_gray,
+    _triangle_normal,
     character_pose_joints,
+    project,
     write_shot_description,
 )
 
@@ -30,7 +38,7 @@ class PrevisSetTests(unittest.TestCase):
     def test_missing_set_draws_no_landmark_mesh(self) -> None:
         show, episode, scene = _bare_scene()
         _camera, surfaces, people = _scene_surfaces(show, episode, scene, 0.0)
-        landmarks = [item for item in surfaces if item[1] == 176]
+        landmarks = [item for item in surfaces if item.base == 176]
         self.assertEqual(landmarks, [])
         self.assertEqual(people, [])
 
@@ -41,8 +49,9 @@ class PrevisSetTests(unittest.TestCase):
         vertices, faces = primitive_mesh("column", (1.0, 1.0, 4.0))
         write_schema_glb(directory / "set.glb", vertices + np.array([0.0, 2.0, 0.0]), faces)
         _camera, surfaces, _people = _scene_surfaces(show, episode, scene, 0.0)
-        landmarks = [item for item in surfaces if item[1] == 176]
-        self.assertGreater(len(landmarks), 0)
+        landmarks = [item for item in surfaces if item.base == 176]
+        self.assertEqual(len(landmarks), 1)
+        self.assertGreater(int(landmarks[0].faces.shape[0]), 0)
 
     def test_shot_description_stores_gltf_positions(self) -> None:
         show, episode, scene = _bare_scene()
@@ -75,6 +84,35 @@ class PrevisSetTests(unittest.TestCase):
         self.assertAlmostEqual(ada["nose"][2], 1.72 * scale - 0.04 * scale, places=5)
         self.assertAlmostEqual(bob["nose"][2], 1.72 - 0.04, places=5)
         self.assertGreater(ada["right_shoulder"][0], bob["right_shoulder"][0])
+
+    def test_gpu_clay_uses_the_face_normal(self) -> None:
+        triangle = ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0))
+        camera = {
+            "position": [0.0, -2.0, 5.0],
+            "lookAt": [0.7, 0.7, 0.0],
+            "verticalFovDegrees": 40.0,
+            "rollDegrees": 0.0,
+        }
+        batch = ClayBatch(
+            np.array(triangle, dtype=np.float32),
+            np.array([[0, 1, 2]], dtype=np.uint32),
+            176,
+        )
+        image, zbuf = _raster_clay([batch], camera)
+        centroid = tuple(sum(corner[index] for corner in triangle) / 3.0 for index in range(3))
+        screen = project(centroid, camera)
+        self.assertIsNotNone(screen)
+        assert screen is not None
+        x = int(screen[0])
+        y = int(screen[1])
+        self.assertGreaterEqual(x, 0)
+        self.assertLess(x, PROXY_WIDTH)
+        self.assertGreaterEqual(y, 0)
+        self.assertLess(y, PROXY_HEIGHT)
+        self.assertEqual(image.getpixel((x, y)), _shade_gray(_triangle_normal(triangle), 176))
+        self.assertAlmostEqual(float(zbuf[y, x]), screen[2], delta=0.15)
+        self.assertEqual(image.getpixel((2, 2)), VIEWPORT_GRAY)
+        self.assertFalse(np.isfinite(zbuf[2, 2]))
 
 
 def _bare_scene() -> tuple[dict, dict, dict]:

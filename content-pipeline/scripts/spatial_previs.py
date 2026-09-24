@@ -632,6 +632,7 @@ def _triangle_normal(triangle: tuple[Vec3, Vec3, Vec3]) -> Vec3:
 
 
 def _shade_gray(normal: Vec3, base: int) -> tuple[int, int, int]:
+    """Reference clay gray. The GPU shader in clay_gpu.py uses this same formula."""
     try:
         normal = normalize(normal)
     except ValueError:
@@ -658,93 +659,38 @@ def _camera_inside_stage(camera: dict, spatial: dict) -> bool:
     return abs(x) <= width / 2.0 + 0.05 and abs(y) <= depth / 2.0 + 0.05 and -0.05 <= z <= height + 0.05
 
 
-def _paint_triangle(
-    zbuf: np.ndarray,
-    projected: list[tuple[float, float, float]],
-    color: np.ndarray | None = None,
-    shade: tuple[int, int, int] | None = None,
-) -> None:
-    height, width = zbuf.shape
-    xs = [point[0] for point in projected]
-    ys = [point[1] for point in projected]
-    minx = max(0, int(math.floor(min(xs))))
-    maxx = min(width - 1, int(math.ceil(max(xs))))
-    miny = max(0, int(math.floor(min(ys))))
-    maxy = min(height - 1, int(math.ceil(max(ys))))
-    if minx > maxx or miny > maxy:
-        return
-    p0, p1, p2 = projected
-    grid_x, grid_y = np.meshgrid(
-        np.arange(minx, maxx + 1, dtype=np.float32),
-        np.arange(miny, maxy + 1, dtype=np.float32),
+def _raster_clay(batches: list, camera: dict) -> tuple[Image.Image, np.ndarray]:
+    """One GPU draw of the clay batches. The depth buffer is camera-forward meters."""
+    from clay_gpu import raster_clay
+
+    return raster_clay(
+        batches,
+        _camera_basis(camera),
+        width=PROXY_WIDTH,
+        height=PROXY_HEIGHT,
+        near=NEAR_CLIP,
+        background=VIEWPORT_GRAY,
     )
-    edge_u = (p1[0] - p0[0], p1[1] - p0[1])
-    edge_v = (p2[0] - p0[0], p2[1] - p0[1])
-    denominator = edge_u[0] * edge_v[1] - edge_v[0] * edge_u[1]
-    if abs(denominator) < 1e-6:
-        return
-    offset_x = grid_x - p0[0]
-    offset_y = grid_y - p0[1]
-    inverse = 1.0 / denominator
-    beta = (offset_x * edge_v[1] - edge_v[0] * offset_y) * inverse
-    gamma = (edge_u[0] * offset_y - offset_x * edge_u[1]) * inverse
-    alpha = 1.0 - beta - gamma
-    mask = (alpha >= 0.0) & (beta >= 0.0) & (gamma >= 0.0)
-    if not bool(mask.any()):
-        return
-    depth = alpha * p0[2] + beta * p1[2] + gamma * p2[2]
-    region = zbuf[miny : maxy + 1, minx : maxx + 1]
-    closer = mask & (depth < region)
-    region[closer] = depth[closer]
-    if color is not None and shade is not None:
-        color[miny : maxy + 1, minx : maxx + 1][closer] = shade
 
 
-def _raster_depth(triangles: list[tuple[Vec3, Vec3, Vec3]], camera: dict) -> np.ndarray:
-    basis = _camera_basis(camera)
-    zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
-    for triangle in triangles:
-        for projected in _projected_triangles(triangle, basis):
-            _paint_triangle(zbuf, list(projected))
-    return zbuf
-
-
-def _raster_clay(
-    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]],
-    camera: dict,
-) -> tuple[Image.Image, np.ndarray]:
-    basis = _camera_basis(camera)
-    zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
-    color = np.empty((PROXY_HEIGHT, PROXY_WIDTH, 3), dtype=np.uint8)
-    color[:] = VIEWPORT_GRAY
-    for triangle, base in surfaces:
-        shade = _shade_gray(_triangle_normal(triangle), base)
-        for projected in _projected_triangles(triangle, basis):
-            _paint_triangle(zbuf, list(projected), color, shade)
-    return Image.fromarray(color, "RGB"), zbuf
-
-
-def render_mesh_thumbnail(triangles: list, destination: Path, width: int = 256) -> None:
+def render_mesh_thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: Path, width: int = 256) -> None:
     """Clay thumbnail of one mesh, using the previs rasterizer."""
-    if not triangles:
+    from clay_gpu import ClayBatch
+
+    if len(faces) == 0:
         raise ValueError("No triangles to thumbnail")
-    points = [corner for triangle in triangles for corner in triangle]
-    xs = [point[0] for point in points]
-    ys = [point[1] for point in points]
-    zs = [point[2] for point in points]
-    center = (
-        (min(xs) + max(xs)) / 2.0,
-        (min(ys) + max(ys)) / 2.0,
-        (min(zs) + max(zs)) / 2.0,
-    )
-    span = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs), 0.1)
+    points = np.asarray(vertices, dtype=np.float64)
+    minimum = points.min(axis=0)
+    maximum = points.max(axis=0)
+    center = (minimum + maximum) / 2.0
+    span = max(float(np.max(maximum - minimum)), 0.1)
     camera = {
         "position": [center[0] + span, center[1] - span * 2.2, center[2] + span * 0.85],
-        "lookAt": [center[0], center[1], center[2]],
+        "lookAt": [float(center[0]), float(center[1]), float(center[2])],
         "verticalFovDegrees": 35.0,
         "rollDegrees": 0.0,
     }
-    image, _zbuf = _raster_clay([(triangle, 176) for triangle in triangles], camera)
+    image, _zbuf = _raster_clay([ClayBatch(points, faces, 176)], camera)
     thumb_height = max(1, round(width * PROXY_HEIGHT / PROXY_WIDTH))
     image.resize((width, thumb_height), Image.Resampling.LANCZOS).save(destination)
 
@@ -805,24 +751,27 @@ def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[st
             )
 
 
-_MESH_CACHE: dict[str, tuple[int, list[tuple[Vec3, Vec3, Vec3]]]] = {}
+_MESH_CACHE: dict[str, tuple[int, np.ndarray, np.ndarray]] = {}
 
 
-def _cached_schema_triangles(path: Path) -> list[tuple[Vec3, Vec3, Vec3]]:
-    from mesh_io import read_schema_mesh, schema_triangles
+def _cached_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, tuple]:
+    """Schema-space vertices and faces. The GPU buffer key is the path and mtime."""
+    from mesh_io import read_schema_mesh
 
     stamp = path.stat().st_mtime_ns
+    key = (str(path), stamp)
     cached = _MESH_CACHE.get(str(path))
     if cached is not None and cached[0] == stamp:
-        return cached[1]
+        return cached[1], cached[2], key
     vertices, faces = read_schema_mesh(path)
-    triangles = schema_triangles(vertices, faces)
-    _MESH_CACHE[str(path)] = (stamp, triangles)
-    return triangles
+    vertices = np.ascontiguousarray(vertices, dtype=np.float32)
+    faces = np.ascontiguousarray(faces, dtype=np.uint32)
+    _MESH_CACHE[str(path)] = (stamp, vertices, faces)
+    return vertices, faces, key
 
 
-def _location_set_triangles(show_id: str | None, location_id: str) -> list[tuple[Vec3, Vec3, Vec3]] | None:
-    """Schema-space triangles for a built set. A missing file draws no set."""
+def _location_set_mesh(show_id: str | None, location_id: str):
+    """Schema-space set mesh. A missing file draws no set."""
     if not show_id:
         return None
     from pipeline_paths import set_dir
@@ -830,7 +779,17 @@ def _location_set_triangles(show_id: str | None, location_id: str) -> list[tuple
     path = set_dir(show_id, location_id) / "set.glb"
     if not path.is_file():
         return None
-    return _cached_schema_triangles(path)
+    return _cached_mesh(path)
+
+
+def _batch_from_triangles(triangles: list[tuple[Vec3, Vec3, Vec3]], base: int):
+    from clay_gpu import ClayBatch
+
+    if not triangles:
+        return None
+    points = np.asarray(triangles, dtype=np.float32).reshape(-1, 3)
+    faces = np.arange(points.shape[0], dtype=np.uint32).reshape(-1, 3)
+    return ClayBatch(points, faces, base)
 
 
 def _resolved_prefabs(show_id: str | None) -> dict:
@@ -862,10 +821,12 @@ def _prop_surfaces(
     episode: dict,
     scene: dict,
     time_seconds: float,
-) -> list[tuple[tuple[Vec3, Vec3, Vec3], int]]:
+):
+    from clay_gpu import ClayBatch
+
     resolved = _resolved_prefabs(show.get("id"))
     tracks = ((episode.get("spatialTimeline") or {}).get("propTracks")) or {}
-    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]] = []
+    batches = []
     for prop_id, track in tracks.items():
         record = resolved.get(f"prop:{prop_id}") or {}
         glb = Path(str(record.get("glb") or ""))
@@ -887,11 +848,9 @@ def _prop_surfaces(
             position = joints[hand]
         if position is None:
             continue
-        offset = vec(position)
-        for triangle in _cached_schema_triangles(glb):
-            placed = tuple(add(corner, offset) for corner in triangle)
-            surfaces.append((placed, 190))  # type: ignore[arg-type]
-    return surfaces
+        vertices, faces, key = _cached_mesh(glb)
+        batches.append(ClayBatch(vertices, faces, 190, offset=vec(position), key=key))
+    return batches
 
 
 def _scene_surfaces(
@@ -899,22 +858,29 @@ def _scene_surfaces(
     episode: dict,
     scene: dict,
     time_seconds: float,
-) -> tuple[dict, list[tuple[tuple[Vec3, Vec3, Vec3], int]], list[tuple[str, dict[str, Vec3]]]]:
-    """Clay surfaces for one instant. The stage box is bounds, not a room mesh.
+):
+    """Clay batches for one instant. The stage box is bounds, not a room mesh.
 
     A floor is drawn only while the camera stands inside the stage, because that
     is the ground the blocking stands on. Open sky stays the flat viewport gray.
+    The location set stays an indexed mesh and is drawn on the GPU.
     """
+    from clay_gpu import ClayBatch
+
     camera = camera_at(scene, time_seconds)
     spatial = show["locations"][scene["locationId"]]["spatial"]
-    surfaces: list[tuple[tuple[Vec3, Vec3, Vec3], int]] = []
+    batches: list[ClayBatch] = []
     if _camera_inside_stage(camera, spatial):
-        surfaces.extend((triangle, 156) for triangle in _floor_triangles(spatial))
-    set_triangles = _location_set_triangles(show.get("id"), scene["locationId"])
-    if set_triangles is not None:
-        surfaces.extend((triangle, 176) for triangle in set_triangles)
-    surfaces.extend(_prop_surfaces(show, episode, scene, time_seconds))
+        floor = _batch_from_triangles(_floor_triangles(spatial), 156)
+        if floor is not None:
+            batches.append(floor)
+    set_mesh = _location_set_mesh(show.get("id"), scene["locationId"])
+    if set_mesh is not None:
+        vertices, faces, key = set_mesh
+        batches.append(ClayBatch(vertices, faces, 176, key=key))
+    batches.extend(_prop_surfaces(show, episode, scene, time_seconds))
     people: list[tuple[str, dict[str, Vec3]]] = []
+    character_triangles: list[tuple[Vec3, Vec3, Vec3]] = []
     for character_id in scene["characterIds"]:
         state = episode_character_state(episode, character_id, time_seconds)
         joints = character_pose_joints(
@@ -922,8 +888,11 @@ def _scene_surfaces(
         )
         people.append((character_id, joints))
         thickness = _height_scale(show, character_id) * _build_factor(show, character_id)
-        surfaces.extend((triangle, 214) for triangle in _character_triangles(joints, thickness))
-    return camera, surfaces, people
+        character_triangles.extend(_character_triangles(joints, thickness))
+    characters = _batch_from_triangles(character_triangles, 214)
+    if characters is not None:
+        batches.append(characters)
+    return camera, batches, people
 
 
 def _face_mask(
@@ -967,8 +936,8 @@ def render_blocked_frame(
     time_seconds: float,
 ) -> tuple[Image.Image, np.ndarray, list[tuple[str, dict[str, Vec3]]]]:
     """One clay viewport frame. No diffusion model is involved."""
-    camera, surfaces, people = _scene_surfaces(show, episode, scene, time_seconds)
-    image, zbuf = _raster_clay(surfaces, camera)
+    camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
+    image, zbuf = _raster_clay(batches, camera)
     return image, zbuf, people
 
 
@@ -979,11 +948,17 @@ def render_structure_maps(
     time_seconds: float,
     depth_destination: Path,
     pose_destination: Path,
+    zbuf: np.ndarray | None = None,
 ) -> None:
-    """Depth and pose previews of the same clay surfaces. Not sent to a model."""
-    camera, surfaces, people = _scene_surfaces(show, episode, scene, time_seconds)
+    """Depth and pose previews of the same clay surfaces. Not sent to a model.
+
+    Pass the clay frame's depth buffer so the set is not drawn a second time.
+    """
+    camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
     depth_destination.parent.mkdir(parents=True, exist_ok=True)
-    _depth_image(_raster_depth([triangle for triangle, _base in surfaces], camera)).save(depth_destination)
+    if zbuf is None:
+        _image, zbuf = _raster_clay(batches, camera)
+    _depth_image(zbuf).save(depth_destination)
     pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
     _draw_openpose(ImageDraw.Draw(pose), camera, [joints for _character_id, joints in people])
     pose.save(pose_destination)
@@ -1443,7 +1418,7 @@ def render_blocked_scene(
         camera = camera_at(scene, time_seconds)
         _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
         render_structure_maps(
-            show, episode, scene, time_seconds, depth_path, pose_path
+            show, episode, scene, time_seconds, depth_path, pose_path, zbuf
         )
         written.extend((blockout_path, mask_path, depth_path, pose_path))
     video_path = blockout_video_path(

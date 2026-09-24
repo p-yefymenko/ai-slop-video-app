@@ -25,7 +25,6 @@ from mesh_io import (
     fit_to_size,
     read_schema_mesh,
     require_triangle_budget,
-    schema_triangles,
     write_schema_glb,
 )
 from pipeline_paths import LIBRARY_DIR, OUTPUT_DIR, SHOWS_DIR
@@ -197,7 +196,7 @@ class AssetResolver:
         if self.write_thumbs:
             from spatial_previs import render_mesh_thumbnail
 
-            render_mesh_thumbnail(schema_triangles(vertices, faces), directory / "thumb.png")
+            render_mesh_thumbnail(vertices, faces, directory / "thumb.png")
         record = {
             "id": prefab_id,
             "assetHash": digest,

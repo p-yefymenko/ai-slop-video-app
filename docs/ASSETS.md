@@ -24,4 +24,4 @@ Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 is MIT. BiRefNet removes the plate
 
 Mixamo is not a source. Its terms restrict automated download. Export a rigged humanoid by hand into `shows/<id>/assets/` if you want to replace the clay mannequin.
 
-`pnpm run content:asset-deps` installs trimesh into the ComfyUI Python. That is what glTF and OBJ files need. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:asset-deps` installs trimesh and moderngl into the ComfyUI Python. trimesh is what glTF and OBJ files need. moderngl draws clay previs. Do not install `content-pipeline/requirements.txt` into that virtualenv.
