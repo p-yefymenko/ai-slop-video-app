@@ -312,7 +312,8 @@ class SpatialPrevisTests(unittest.TestCase):
                 )
                 assert destination is not None
                 self.assertEqual(destination.name, "blockout.mp4")
-                self.assertEqual(destination.parent.name, "01_previs")
+                self.assertEqual(destination.parent.name, "1")
+                self.assertEqual(destination.parents[2].name, "previs")
 
 
 if __name__ == "__main__":

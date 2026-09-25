@@ -27,17 +27,12 @@ export type ShowCharacter = {
 /** `[X left/right, Y depth, Z height]` in meters. */
 export type Vec3 = [number, number, number];
 
-export type StageLandmark = {
-  position: Vec3;
-  size: Vec3;
+export type LocationLandmark = {
   /**
-   * What this piece of the place looks like. Required. `content:assets` folds
-   * every note in the location into one picture, then TRELLIS.2 makes one mesh
-   * for the whole place. No people. Do not put a catalog id here.
+   * Meters in the generated location mesh: `[X right, Y forward, Z up]`.
+   * Omit until the mesh exists. The picture does not place this point.
    */
-  appearance: string;
-  /** Pins a prefab and skips generation. */
-  prefabId?: string;
+  position?: Vec3;
 };
 
 export type StageGeometry = {
@@ -47,7 +42,7 @@ export type StageGeometry = {
    * `[width X, depth Y, height Z]`.
    */
   sizeMeters: Vec3;
-  landmarks: Record<string, StageLandmark>;
+  landmarks: Record<string, LocationLandmark>;
 };
 
 export type ShowLocation = {
@@ -153,12 +148,12 @@ export type ScriptScene = {
   /**
    * Wardrobe, expression, and atmosphere for this world's rank and mood.
    * Nameplates and captions are not this field. Omit when location + proxy
-   * are enough. Never restate position, facing, eyeline, framing, or set geometry.
+   * are enough. Never restate position, facing, eyeline, framing, or location geometry.
    */
   imagePrompt?: string;
   /**
    * One short line and the non-spatial performance (shout, smile, strike).
-   * Camera and blocking come from the timeline. Omit on silent shots.
+   * Camera and blocking come from the timeline. Omit on silent scenes.
    */
   videoPrompt?: string;
 };
@@ -178,9 +173,8 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** Held-prop note. Required. It is not meshed on its own. */
+  /** Held-prop note. Required. It is not part of the location mesh. */
   appearance: string;
-  prefabId?: string;
   sizeMeters?: Vec3;
 };
 

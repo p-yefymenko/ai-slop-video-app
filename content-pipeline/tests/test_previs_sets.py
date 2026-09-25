@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 import spatial_previs  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
 from mesh_io import primitive_mesh, write_schema_glb  # noqa: E402
-from pipeline_paths import OUTPUT_DIR, set_dir  # noqa: E402
+from pipeline_paths import OUTPUT_DIR, location_dir  # noqa: E402
 from clay_gpu import ClayBatch  # noqa: E402
 from spatial_previs import (  # noqa: E402
     PROXY_HEIGHT,
@@ -26,14 +26,15 @@ from spatial_previs import (  # noqa: E402
     _triangle_normal,
     character_pose_joints,
     project,
-    write_shot_description,
+    write_scene_description,
 )
 
 
 class PrevisSetTests(unittest.TestCase):
     def tearDown(self) -> None:
         spatial_previs._MESH_CACHE.clear()
-        shutil.rmtree(OUTPUT_DIR / "unit-shot", ignore_errors=True)
+        for stage in ("plates", "assets", "previs", "frames", "generate"):
+            shutil.rmtree(OUTPUT_DIR / stage / "unit-shot", ignore_errors=True)
 
     def test_missing_set_draws_no_landmark_mesh(self) -> None:
         show, episode, scene = _bare_scene()
@@ -44,10 +45,10 @@ class PrevisSetTests(unittest.TestCase):
 
     def test_set_mesh_replaces_landmark_boxes(self) -> None:
         show, episode, scene = _bare_scene()
-        directory = set_dir("unit-shot", "room")
+        directory = location_dir("unit-shot", "room")
         directory.mkdir(parents=True)
         vertices, faces = primitive_mesh("column", (1.0, 1.0, 4.0))
-        write_schema_glb(directory / "set.glb", vertices + np.array([0.0, 2.0, 0.0]), faces)
+        write_schema_glb(directory / "model.glb", vertices + np.array([0.0, 2.0, 0.0]), faces)
         _camera, surfaces, _people = _scene_surfaces(show, episode, scene, 0.0)
         landmarks = [item for item in surfaces if item.base == 176]
         self.assertEqual(len(landmarks), 1)
@@ -55,10 +56,10 @@ class PrevisSetTests(unittest.TestCase):
 
     def test_shot_description_stores_gltf_positions(self) -> None:
         show, episode, scene = _bare_scene()
-        destination = write_shot_description(show, episode, scene)
+        destination = write_scene_description(show, episode, scene)
         payload = json.loads(destination.read_text(encoding="utf-8"))
         self.assertEqual(payload["space"], "gltf-y-up")
-        self.assertIsNone(payload["set"])
+        self.assertIsNone(payload["location"])
         camera = payload["camera"]["keyframes"][0]
         self.assertEqual(camera["schemaPosition"], [20.0, 0.0, 1.0])
         self.assertEqual(camera["position"], list(schema_to_gltf((20.0, 0.0, 1.0))))

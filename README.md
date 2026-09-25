@@ -10,12 +10,13 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 
 | Stage | Command | Writes |
 | --- | --- | --- |
-| 1. Prefabs and sets | `content:assets` | `output/<show>/sets/`, `library/lock.json` |
-| 2. Clay previs | `content:previs` | `output/<show>/<episode>/01_previs/` — per-scene `blockout.mp4`, plus one episode `blockout.mp4` |
-| 3. Qwen stills | `content:frames` | `output/<show>/characters/` and `02_postvis/stills/` |
-| 4. LTX clips | `content:generate` | `03_postvis/clips/` and `04_edit/episode.mp4` |
+| Location plates | `content:plates` | `output/plates/<show>/<location>/plate.png` |
+| Location meshes | `content:assets` | `output/assets/<show>/<location>/model.glb` |
+| Clay previs | `content:previs` | `output/previs/<show>/<episode>/` — per-scene `blockout.mp4`, plus one episode `blockout.mp4` |
+| Qwen stills | `content:frames` | `output/frames/<show>/characters/` and `output/frames/<show>/<episode>/` |
+| LTX clips | `content:generate` | `output/generate/<show>/<episode>/` |
 
-Clay previs is **only** `content:previs` (or that second stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:assets` and `content:previs` do not need ComfyUI.
+Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do.
 
 Leave ComfyUI running in another terminal before the GPU stages:
 
@@ -34,16 +35,17 @@ or the same four stages by hand, so you can inspect the clay blockout and stills
 
 ```bash
 pnpm run content:validate
+pnpm run content:plates -- --show the-iron-bride
 pnpm run content:assets -- --show the-iron-bride
 pnpm run content:previs -- --show the-iron-bride --episode 1
-pnpm run view
+pnpm run view -- --show the-iron-bride
 pnpm run content:frames -- --show the-iron-bride --episode 1
 pnpm run content:generate -- --show the-iron-bride --episode 1
 ```
 
-Use `pnpm run view`, not `pnpm view` (that is pnpm’s package lookup). The viewer is `http://127.0.0.1:5174`.
+Use `pnpm run view`, not `pnpm view` (that is pnpm’s package lookup). The viewer is `http://127.0.0.1:5174` and needs `--show`.
 
-Useful flags (all stages accept them; assets ignores `--episode` / `--scene` / `--seed` for which prefabs it builds):
+Useful flags (all stages accept them; plates and assets ignore `--episode` / `--scene` / `--seed`):
 
 | Flag | Meaning |
 | --- | --- |
@@ -51,7 +53,7 @@ Useful flags (all stages accept them; assets ignores `--episode` / `--scene` / `
 | `--episode N` | One episode |
 | `--scene N` | One scene (needs `--episode`) |
 | `--force` | Rebuild that selected scene (needs `--scene`) |
-| `--offline` | Assets only: library meshes already on disk. A missing model fails the build |
+| `--offline` | Plates and assets: do not generate. A missing file fails the build |
 
 Existing files are skipped unless `--force` is set on a selected scene. After a structural script rewrite, archive first:
 
@@ -64,28 +66,30 @@ pnpm run content:archive -- the-iron-bride
 | Path | What it is |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | Authored show. Folder name must match `id`. |
-| `content-pipeline/shows/<id>/assets/` | Hand-placed GLBs only |
-| `content-pipeline/library/` | Shared prefab cache (`raw/` is gitignored) |
-| `content-pipeline/output/<id>/` | Everything generated from the script |
+| `content-pipeline/output/plates/<id>/` | Location pictures |
+| `content-pipeline/output/assets/<id>/` | Location meshes |
+| `content-pipeline/output/previs/<id>/` | Clay scenes |
+| `content-pipeline/output/frames/<id>/` | Character portraits and scene stills |
+| `content-pipeline/output/generate/<id>/` | Scene clips and the episode cut |
 
 Per episode, generated stages sort as:
 
 ```text
-output/<show>/<episode>/
-  01_previs/blockout.mp4
-  01_previs/scene_XX/{blockout.mp4, start.png, shot.json, guides/}
-  02_postvis/stills/scene_XX_start.png
-  03_postvis/clips/scene_XX.mp4
-  04_edit/episode.mp4
+output/previs/<show>/<episode>/blockout.mp4
+output/previs/<show>/<episode>/scene_XX/{blockout.mp4, start.png, scene.json, guides/}
+output/frames/<show>/characters/<id>.png
+output/frames/<show>/<episode>/scene_XX_start.png
+output/generate/<show>/<episode>/scene_XX.mp4
+output/generate/<show>/<episode>/episode.mp4
 ```
 
-Character identity PNGs stay at `output/<show>/characters/`, not per episode. Sets live at `output/<show>/sets/<locationId>/`.
+Location plates live at `output/plates/<show>/<locationId>/plate.png`. Location meshes live at `output/assets/<show>/<locationId>/model.glb`.
 
 Write the script, then `pnpm run content:validate`. Field semantics are in `packages/shared/src/script.ts`. Screenwriting guidance is `.cursor/rules/Short-reel-scripts-writer.mdc`.
 
 ## Viewer
 
-`pnpm run view` lists prefabs, sets, and shots. Deep links: `/prefab/<id>`, `/set/<show>/<location>`, `/shot/<show>/<episode>/<scene>`.
+`pnpm run view -- --show <show-id>` lists that show’s locations and scenes. Deep links: `/location/<locationId>`, `/scene/<episode>/<scene>`.
 
 `content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location size, so the generated shape stays intact.
 
@@ -95,7 +99,7 @@ God camera (OrbitControls):
 - Right-drag, middle-drag, or Ctrl/Cmd + left-drag: pan
 - Scroll: zoom
 
-**Shot camera** is the authored lens; orbit/pan/zoom are off. Play / Pause and the timeline slider only change time.
+**Scene camera** is the authored lens; orbit/pan/zoom are off. Play / Pause and the timeline slider only change time.
 
 ## GPU setup (once)
 

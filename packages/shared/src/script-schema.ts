@@ -31,7 +31,6 @@ export type ParseResult =
 
 const SNAKE_ID = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PREFAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/;
 
 const STANCES = ["standing", "sitting", "kneeling", "walking"] as const;
 const BUILDS = ["slim", "average", "broad"] as const;
@@ -68,25 +67,16 @@ function vec3(label: string, positive = false) {
   });
 }
 
-const appearanceSchema = text("appearance");
-
-const prefabIdSchema = z
-  .string({ invalid_type_error: "prefabId must be a string" })
-  .regex(PREFAB_ID, "prefabId must be 'name' or 'category/name' in kebab-case");
-
-const stageLandmarkSchema = z
+const locationLandmarkSchema = z
   .object({
-    position: vec3("position"),
-    size: vec3("size", true),
-    appearance: appearanceSchema,
-    prefabId: prefabIdSchema.optional(),
+    position: vec3("position").optional(),
   })
   .strict();
 
 const stageGeometrySchema = z
   .object({
     sizeMeters: vec3("sizeMeters", true),
-    landmarks: z.record(z.string(), stageLandmarkSchema, {
+    landmarks: z.record(z.string(), locationLandmarkSchema, {
       required_error: "landmarks is required",
       invalid_type_error: "landmarks must be an object",
     }),
@@ -115,8 +105,7 @@ const showCharacterSchema = z
 
 const showPropSchema = z
   .object({
-    appearance: appearanceSchema,
-    prefabId: prefabIdSchema.optional(),
+    appearance: text("appearance"),
     sizeMeters: vec3("sizeMeters", true).optional(),
   })
   .strict();

@@ -127,7 +127,7 @@ def locate_thumbnail(episode_directory: Path, video: Path) -> Path:
 
 
 def main() -> None:
-    manifests = sorted(OUTPUT_DIR.glob("*/*/manifest.json"))
+    manifests = sorted(OUTPUT_DIR.glob("generate/*/*/manifest.json"))
     if not manifests:
         raise SystemExit(
             f"No generated episodes in {OUTPUT_DIR}. Run `pnpm run content:generate` first."

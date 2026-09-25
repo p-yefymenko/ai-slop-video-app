@@ -64,6 +64,12 @@ a, button {
 
 .empty, .inspector p { color: #b7b1a6; }
 
+.inspector img {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+
 dl { display: grid; grid-template-columns: 88px 1fr; gap: 6px 8px; margin: 0; }
 dt { color: #b7b1a6; }
 dd { margin: 0; }

@@ -1,8 +1,13 @@
 """Filesystem layout for one show.
 
-Authored files live under ``shows/<id>/``. Pictures and meshes built from
-``script.json`` live under ``output/<id>/``. ``library/`` is the shared prefab
-cache, not one show's render.
+Authored files live under ``shows/<id>/``. Everything the pipeline creates
+lives under ``output/<command>/<show>/``:
+
+- ``plates`` — the location picture
+- ``assets`` — the location mesh
+- ``previs`` — clay scenes
+- ``frames`` — character portraits and scene stills
+- ``generate`` — scene clips and the episode cut
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ def load_content_env() -> None:
 SHOWS_DIR = ROOT / "shows"
 LEGACY_SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
-LIBRARY_DIR = ROOT / "library"
+STAGES = ("plates", "assets", "previs", "frames", "generate")
 
 _LEGACY_BLOCKOUT = re.compile(r"^scene_(\d+)_blockout\.mp4$")
 _LEGACY_CLAY = re.compile(r"^scene_(\d+)_(start|end)_blockout\.png$")
@@ -52,9 +57,13 @@ def show_script_path(show_id: str) -> Path:
     return SHOWS_DIR / show_id / "script.json"
 
 
+def stage_dir(stage: str, show_id: str) -> Path:
+    return OUTPUT_DIR / stage / show_id
+
+
 def show_assets_dir(show_id: str) -> Path:
-    """Hand-placed prefabs. The pipeline does not write this folder."""
-    return SHOWS_DIR / show_id / "assets"
+    """Generated location meshes for one show."""
+    return stage_dir("assets", show_id)
 
 
 def discover_show_scripts(show_id: str | None = None) -> list[Path]:
@@ -84,28 +93,28 @@ def discover_show_scripts(show_id: str | None = None) -> list[Path]:
 
 
 def character_image_path(show_id: str, character_id: str) -> Path:
-    return OUTPUT_DIR / show_id / "characters" / f"{character_id}.png"
+    return stage_dir("frames", show_id) / "characters" / f"{character_id}.png"
 
 
-def episode_dir(show_id: str, episode_number: int) -> Path:
-    return OUTPUT_DIR / show_id / str(episode_number)
+def episode_dir(stage: str, show_id: str, episode_number: int) -> Path:
+    return stage_dir(stage, show_id) / str(episode_number)
 
 
 def manifest_path(show_id: str, episode_number: int) -> Path:
-    return episode_dir(show_id, episode_number) / "manifest.json"
+    return episode_dir("generate", show_id, episode_number) / "manifest.json"
 
 
 def previs_dir(show_id: str, episode_number: int) -> Path:
-    return episode_dir(show_id, episode_number) / "01_previs"
+    return episode_dir("previs", show_id, episode_number)
 
 
-def shot_dir(show_id: str, episode_number: int, scene_number: int) -> Path:
+def scene_dir(show_id: str, episode_number: int, scene_number: int) -> Path:
     return previs_dir(show_id, episode_number) / f"scene_{int(scene_number):02d}"
 
 
 def clay_frame_path(show_id: str, episode_number: int, scene_number: int, label: str) -> Path:
     """Clay still. ``label`` is ``start`` or ``end``."""
-    return shot_dir(show_id, episode_number, scene_number) / f"{label}.png"
+    return scene_dir(show_id, episode_number, scene_number) / f"{label}.png"
 
 
 def guide_path(
@@ -115,11 +124,11 @@ def guide_path(
     label: str,
     kind: str,
 ) -> Path:
-    return shot_dir(show_id, episode_number, scene_number) / "guides" / f"{label}_{kind}.png"
+    return scene_dir(show_id, episode_number, scene_number) / "guides" / f"{label}_{kind}.png"
 
 
 def blockout_video_path(show_id: str, episode_number: int, scene_number: int) -> Path:
-    return shot_dir(show_id, episode_number, scene_number) / "blockout.mp4"
+    return scene_dir(show_id, episode_number, scene_number) / "blockout.mp4"
 
 
 def episode_blockout_path(show_id: str, episode_number: int) -> Path:
@@ -127,133 +136,151 @@ def episode_blockout_path(show_id: str, episode_number: int) -> Path:
     return previs_dir(show_id, episode_number) / "blockout.mp4"
 
 
-def shot_description_path(show_id: str, episode_number: int, scene_number: int) -> Path:
-    return shot_dir(show_id, episode_number, scene_number) / "shot.json"
+def scene_description_path(show_id: str, episode_number: int, scene_number: int) -> Path:
+    return scene_dir(show_id, episode_number, scene_number) / "scene.json"
 
 
 def contact_sheet_path(show_id: str, episode_number: int) -> Path:
     return previs_dir(show_id, episode_number) / "contact_sheet.png"
 
 
-def stills_dir(show_id: str, episode_number: int) -> Path:
-    return episode_dir(show_id, episode_number) / "02_postvis" / "stills"
-
-
 def start_still_path(show_id: str, episode_number: int, scene_number: int) -> Path:
-    return stills_dir(show_id, episode_number) / f"scene_{int(scene_number):02d}_start.png"
+    return episode_dir("frames", show_id, episode_number) / f"scene_{int(scene_number):02d}_start.png"
 
 
 def end_still_path(show_id: str, episode_number: int, scene_number: int) -> Path:
-    return stills_dir(show_id, episode_number) / f"scene_{int(scene_number):02d}_end.png"
-
-
-def clips_dir(show_id: str, episode_number: int) -> Path:
-    return episode_dir(show_id, episode_number) / "03_postvis" / "clips"
+    return episode_dir("frames", show_id, episode_number) / f"scene_{int(scene_number):02d}_end.png"
 
 
 def clip_path(show_id: str, episode_number: int, scene_number: int) -> Path:
-    return clips_dir(show_id, episode_number) / f"scene_{int(scene_number):02d}.mp4"
-
-
-def edit_dir(show_id: str, episode_number: int) -> Path:
-    return episode_dir(show_id, episode_number) / "04_edit"
+    return episode_dir("generate", show_id, episode_number) / f"scene_{int(scene_number):02d}.mp4"
 
 
 def episode_video_path(show_id: str, episode_number: int) -> Path:
-    return edit_dir(show_id, episode_number) / "episode.mp4"
+    return episode_dir("generate", show_id, episode_number) / "episode.mp4"
 
 
 def thumbnail_path(show_id: str, episode_number: int) -> Path:
-    return edit_dir(show_id, episode_number) / "thumbnail.jpg"
+    return episode_dir("generate", show_id, episode_number) / "thumbnail.jpg"
 
 
-def sets_dir(show_id: str) -> Path:
-    return OUTPUT_DIR / show_id / "sets"
+def plate_path(show_id: str, location_id: str) -> Path:
+    return stage_dir("plates", show_id) / location_id / "plate.png"
 
 
-def set_dir(show_id: str, location_id: str) -> Path:
-    return sets_dir(show_id) / location_id
-
-
-def fallback_prefab_dir(show_id: str, prefab_id: str) -> Path:
-    return OUTPUT_DIR / show_id / "assets" / "fallback" / prefab_id
-
-
-def library_prefab_dir(category: str, prefab_id: str) -> Path:
-    return LIBRARY_DIR / "prefabs" / category / prefab_id
-
-
-def _scene_number(raw: str) -> str:
-    return f"scene_{int(raw):02d}"
+def location_dir(show_id: str, location_id: str) -> Path:
+    return stage_dir("assets", show_id) / location_id
 
 
 def legacy_output_moves(episode_directory: Path) -> list[tuple[Path, Path]]:
-    """Map one episode's old flat files onto the stage folders. Never lists a delete."""
+    """Map one episode's old files onto the command folders. Never lists a delete.
+
+    ``episode_directory`` is ``output/<show>/<episode>`` from the previous layout.
+    """
+    show_id = episode_directory.parent.name
+    episode_number = int(episode_directory.name)
     moves: list[tuple[Path, Path]] = []
     previs = episode_directory / "previs"
-    if previs.is_dir():
-        for path in sorted(previs.iterdir()):
+    staged_previs = episode_directory / "01_previs"
+    sources = [previs, staged_previs]
+    for source_root in sources:
+        if not source_root.is_dir():
+            continue
+        for path in sorted(source_root.rglob("*")):
             if not path.is_file():
+                continue
+            relative = path.relative_to(source_root)
+            if path.name == "contact_sheet.png" and len(relative.parts) == 1:
+                moves.append((path, previs_dir(show_id, episode_number) / "contact_sheet.png"))
+                continue
+            if path.name == "blockout.mp4" and len(relative.parts) == 1:
+                moves.append((path, episode_blockout_path(show_id, episode_number)))
                 continue
             name = path.name
             blockout = _LEGACY_BLOCKOUT.match(name)
             clay = _LEGACY_CLAY.match(name)
             guide = _LEGACY_GUIDE.match(name)
-            if blockout:
-                destination = (
-                    episode_directory
-                    / "01_previs"
-                    / _scene_number(blockout.group(1))
-                    / "blockout.mp4"
+            if blockout and len(relative.parts) == 1:
+                moves.append(
+                    (
+                        path,
+                        scene_dir(show_id, episode_number, int(blockout.group(1))) / "blockout.mp4",
+                    )
                 )
-            elif clay:
-                destination = (
-                    episode_directory
-                    / "01_previs"
-                    / _scene_number(clay.group(1))
-                    / f"{clay.group(2)}.png"
+            elif clay and len(relative.parts) == 1:
+                moves.append(
+                    (
+                        path,
+                        clay_frame_path(show_id, episode_number, int(clay.group(1)), clay.group(2)),
+                    )
                 )
-            elif guide:
-                destination = (
-                    episode_directory
-                    / "01_previs"
-                    / _scene_number(guide.group(1))
-                    / "guides"
-                    / f"{guide.group(2)}_{guide.group(3)}.png"
+            elif guide and len(relative.parts) == 1:
+                moves.append(
+                    (
+                        path,
+                        guide_path(
+                            show_id,
+                            episode_number,
+                            int(guide.group(1)),
+                            guide.group(2),
+                            guide.group(3),
+                        ),
+                    )
                 )
-            elif name == "contact_sheet.png":
-                destination = episode_directory / "01_previs" / "contact_sheet.png"
-            else:
-                continue
-            moves.append((path, destination))
+            elif relative.parts[0].startswith("scene_"):
+                destination = previs_dir(show_id, episode_number) / relative
+                if path.name == "shot.json":
+                    destination = destination.with_name("scene.json")
+                if destination != path:
+                    moves.append((path, destination))
     for path in sorted(episode_directory.glob("scene_*.png")):
         still = _STILL.match(path.name)
         if still:
-            moves.append(
-                (
-                    path,
-                    episode_directory
-                    / "02_postvis"
-                    / "stills"
-                    / f"{_scene_number(still.group(1))}_{still.group(2)}.png",
-                )
+            label = still.group(2)
+            scene_number = int(still.group(1))
+            destination = (
+                start_still_path(show_id, episode_number, scene_number)
+                if label == "start"
+                else end_still_path(show_id, episode_number, scene_number)
             )
+            moves.append((path, destination))
+    stills = episode_directory / "02_postvis" / "stills"
+    if stills.is_dir():
+        for path in sorted(stills.glob("scene_*.png")):
+            still = _STILL.match(path.name)
+            if not still:
+                continue
+            label = still.group(2)
+            scene_number = int(still.group(1))
+            destination = (
+                start_still_path(show_id, episode_number, scene_number)
+                if label == "start"
+                else end_still_path(show_id, episode_number, scene_number)
+            )
+            moves.append((path, destination))
     for path in sorted(episode_directory.glob("scene_*.mp4")):
         clip = _CLIP.match(path.name)
         if clip:
-            moves.append(
-                (
-                    path,
-                    episode_directory
-                    / "03_postvis"
-                    / "clips"
-                    / f"{_scene_number(clip.group(1))}.mp4",
-                )
-            )
+            moves.append((path, clip_path(show_id, episode_number, int(clip.group(1)))))
+    clips = episode_directory / "03_postvis" / "clips"
+    if clips.is_dir():
+        for path in sorted(clips.glob("scene_*.mp4")):
+            clip = _CLIP.match(path.name)
+            if clip:
+                moves.append((path, clip_path(show_id, episode_number, int(clip.group(1)))))
     episode_mp4 = episode_directory / "episode.mp4"
     if episode_mp4.is_file():
-        moves.append((episode_mp4, episode_directory / "04_edit" / "episode.mp4"))
+        moves.append((episode_mp4, episode_video_path(show_id, episode_number)))
+    staged_episode = episode_directory / "04_edit" / "episode.mp4"
+    if staged_episode.is_file():
+        moves.append((staged_episode, episode_video_path(show_id, episode_number)))
     thumbnail = episode_directory / "thumbnail.jpg"
     if thumbnail.is_file():
-        moves.append((thumbnail, episode_directory / "04_edit" / "thumbnail.jpg"))
+        moves.append((thumbnail, thumbnail_path(show_id, episode_number)))
+    staged_thumb = episode_directory / "04_edit" / "thumbnail.jpg"
+    if staged_thumb.is_file():
+        moves.append((staged_thumb, thumbnail_path(show_id, episode_number)))
+    manifest = episode_directory / "manifest.json"
+    if manifest.is_file():
+        moves.append((manifest, manifest_path(show_id, episode_number)))
     return moves

@@ -30,35 +30,30 @@ export type ShowCharacter = {
 
 export type Vec3 = [number, number, number];
 
-export type StageLandmark = {
-  position: Vec3;
-  size: Vec3;
+export type LocationLandmark = {
   /**
-   * A note about this piece of the place. `content:assets` folds every note in a
-   * location into one picture, then TRELLIS.2 makes one mesh for the whole place.
+   * Meters in the generated location mesh: `[X right, Y forward, Z up]`.
+   * Omit until the mesh exists. The picture does not place this point;
+   * the model arranges the place, and the coordinate is filled in afterward.
    */
-  appearance: string;
-  /** Library or show prefab to instance. Skips generation. */
-  prefabId?: string;
+  position?: Vec3;
 };
 
 /**
- * A prop named by `propTracks`. Held and moving props stay on the shot;
- * they are not set dressing.
+ * A prop named by `propTracks`. Held and moving props stay on the scene;
+ * they are not part of the location mesh.
  */
 export type ShowProp = {
-  /** Held-prop note. It is not meshed on its own; the location mesh is the set. */
   appearance: string;
-  /** Library or show prefab to instance. Skips generation. */
-  prefabId?: string;
   /** Target size `[width X, depth Y, height Z]` in meters. */
   sizeMeters?: Vec3;
 };
 
 export type StageGeometry = {
-  /** Interior dimensions `[width X, depth Y, height Z]` in meters. */
+  /** Location size `[width X, depth Y, height Z]` in meters. */
   sizeMeters: Vec3;
-  landmarks: Record<string, StageLandmark>;
+  /** Named points in this location. A point may be empty until it is placed. */
+  landmarks: Record<string, LocationLandmark>;
 };
 
 export type ShowLocation = {
@@ -108,7 +103,7 @@ export type SpatialCameraKeyframe = {
 };
 
 export type SpatialCamera = {
-  /** Timed poses on the episode clock. One keyframe is a locked-off shot. */
+  /** Timed poses on the episode clock. One keyframe holds the camera still. */
   keyframes: SpatialCameraKeyframe[];
 };
 
@@ -116,7 +111,7 @@ export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
   /**
-   * Why this shot exists in the story, as cause and effect. Not visuals, blocking,
+   * Why this scene exists in the story, as cause and effect. Not visuals, blocking,
    * or camera; those come from the timeline.
    */
   storyBeat: string;
@@ -127,11 +122,11 @@ export type ScriptScene = {
    */
   characterIds: string[];
   /**
-   * Who speaks. Omit on silent shots. Must be in `characterIds`.
+   * Who speaks. Omit on silent scenes. Must be in `characterIds`.
    */
   speakerId?: string;
   /**
-   * Interval on `spatialTimeline`. Shot duration is this interval; do not also
+   * Interval on `spatialTimeline`. Scene duration is this interval; do not also
    * store `durationSeconds`.
    */
   timeRangeSeconds: [number, number];
@@ -139,13 +134,13 @@ export type ScriptScene = {
   camera: SpatialCamera;
   /**
    * Optional wardrobe, expression, and atmosphere. Omit when the location
-   * block and the clay blockout are enough. Never restate position,
-   * facing, eyeline, framing, or set geometry.
+   * text and the clay frame are enough. Never restate position,
+   * facing, eyeline, framing, or location geometry.
    */
   imagePrompt?: string;
   /**
-   * Spoken line and non-spatial performance for generative shots. Camera and
-   * blocking come from the timeline and start/end frames. Omit on silent shots.
+   * Spoken line and non-spatial performance for generative scenes. Camera and
+   * blocking come from the timeline and start/end frames. Omit on silent scenes.
    */
   videoPrompt?: string;
 };

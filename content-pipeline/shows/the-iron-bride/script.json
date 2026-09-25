@@ -33,16 +33,8 @@
       "spatial": {
         "sizeMeters": [200, 240, 140],
         "landmarks": {
-          "citadel_core": {
-            "position": [0, 24, 36],
-            "size": [48, 56, 52],
-            "appearance": "One black-iron fortress tower, square slag-stone walls, hanging chains, a single building with no ground and no other structures."
-          },
-          "chain_pylon": {
-            "position": [36, -48, 0],
-            "size": [5, 5, 90],
-            "appearance": "One tall narrow lattice transmission tower of black iron, standing alone, no wires and no landscape."
-          }
+          "citadel_core": {},
+          "chain_pylon": {}
         }
       }
     },
@@ -51,31 +43,11 @@
       "spatial": {
         "sizeMeters": [22, 30, 18],
         "landmarks": {
-          "sun_well": {
-            "position": [0, 4.5, 0],
-            "size": [2.2, 2.2, 1.2],
-            "appearance": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard."
-          },
-          "anvil_altar": {
-            "position": [-6.2, 4.5, 0],
-            "size": [1.8, 1.2, 0.9],
-            "appearance": "One blacksmith anvil of dark forged iron, a single object, no tools and no workshop."
-          },
-          "throne_dais": {
-            "position": [0, 12.2, 0],
-            "size": [5.0, 3.0, 0.4],
-            "appearance": "One low rectangular stone dais with worn steps, a single platform, no throne and no room."
-          },
-          "gate_column_l": {
-            "position": [-4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2],
-            "appearance": "One twisted marble column standing alone, no base building and no second column."
-          },
-          "gate_column_r": {
-            "position": [4.2, -12.4, 0],
-            "size": [0.8, 0.8, 4.2],
-            "appearance": "One twisted marble column standing alone, no base building and no second column."
-          }
+          "sun_well": {},
+          "anvil_altar": {},
+          "throne_dais": {},
+          "gate_column_l": {},
+          "gate_column_r": {}
         }
       }
     }

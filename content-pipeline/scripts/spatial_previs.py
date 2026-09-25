@@ -474,8 +474,8 @@ def _anchor_point(
     landmark = (
         show["locations"][scene["locationId"]].get("spatial", {}).get("landmarks", {}).get(target_id)
     )
-    if landmark:
-        return add(vec(landmark["position"]), (0.0, 0.0, float(landmark["size"][2])))
+    if isinstance(landmark, dict) and landmark.get("position") is not None:
+        return vec(landmark["position"])
     return None
 
 
@@ -771,12 +771,12 @@ def _cached_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, tuple]:
 
 
 def _location_set_mesh(show_id: str | None, location_id: str):
-    """Schema-space set mesh. A missing file draws no set."""
+    """Schema-space location mesh. A missing file draws no location."""
     if not show_id:
         return None
-    from pipeline_paths import set_dir
+    from pipeline_paths import location_dir
 
-    path = set_dir(show_id, location_id) / "set.glb"
+    path = location_dir(show_id, location_id) / "model.glb"
     if not path.is_file():
         return None
     return _cached_mesh(path)
@@ -790,19 +790,6 @@ def _batch_from_triangles(triangles: list[tuple[Vec3, Vec3, Vec3]], base: int):
     points = np.asarray(triangles, dtype=np.float32).reshape(-1, 3)
     faces = np.arange(points.shape[0], dtype=np.uint32).reshape(-1, 3)
     return ClayBatch(points, faces, base)
-
-
-def _resolved_prefabs(show_id: str | None) -> dict:
-    if not show_id:
-        return {}
-    from pipeline_paths import OUTPUT_DIR
-
-    path = OUTPUT_DIR / show_id / "assets" / "resolved.json"
-    if not path.is_file():
-        return {}
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    prefabs = payload.get("prefabs") or {}
-    return prefabs if isinstance(prefabs, dict) else {}
 
 
 def _prop_frame(track: list[dict], time_seconds: float) -> dict:
@@ -823,13 +810,12 @@ def _prop_surfaces(
     time_seconds: float,
 ):
     from clay_gpu import ClayBatch
+    from pipeline_paths import stage_dir
 
-    resolved = _resolved_prefabs(show.get("id"))
     tracks = ((episode.get("spatialTimeline") or {}).get("propTracks")) or {}
     batches = []
     for prop_id, track in tracks.items():
-        record = resolved.get(f"prop:{prop_id}") or {}
-        glb = Path(str(record.get("glb") or ""))
+        glb = stage_dir("assets", str(show.get("id") or "")) / "props" / str(prop_id) / "model.glb"
         if not glb.is_file() or not track:
             continue
         state = _prop_frame(track, time_seconds)
@@ -986,17 +972,11 @@ def render_scene_proxy(
             _line3d(draw, camera, (-width / 2, float(y), 0.0), (width / 2, float(y), 0.0), (39, 51, 66))
 
     for landmark_id, landmark in spatial.get("landmarks", {}).items():
-        for edge_start, edge_finish in _box_edges(
-            vec(landmark["position"]), vec(landmark["size"])
-        ):
-            _line3d(draw, camera, edge_start, edge_finish, (70, 115, 145), 3)
-        label_point = project(
-            add(
-                vec(landmark["position"]),
-                (0.0, 0.0, float(landmark["size"][2])),
-            ),
-            camera,
-        )
+        if not isinstance(landmark, dict) or landmark.get("position") is None:
+            continue
+        point = vec(landmark["position"])
+        _line3d(draw, camera, point, add(point, (0.0, 0.0, 0.6)), (70, 115, 145), 3)
+        label_point = project(add(point, (0.0, 0.0, 0.6)), camera)
         if debug and label_point:
             draw.text(
                 (label_point[0] + 4, label_point[1]),
@@ -1228,9 +1208,13 @@ def spatial_target_screen_position(
             .get("landmarks", {})
             .get(target_id)
         )
-        position = landmark.get("position") if landmark else None
+        position = landmark.get("position") if isinstance(landmark, dict) else None
+        if isinstance(landmark, dict) and position is None:
+            raise ValueError(
+                f"Landmark {target_id!r} in scene {scene['sceneNumber']} has no position"
+            )
         if position is not None:
-            position = add(vec(position), (0.0, 0.0, float(landmark["size"][2])))
+            position = vec(position)
     if position is None:
         raise ValueError(
             f"Unknown spatial focus target {target_id!r} in scene {scene['sceneNumber']}"
@@ -1251,10 +1235,10 @@ def blockout_sample_times(start: float, finish: float, fps: int = BLOCKOUT_FPS) 
     return [start + span * index / (count - 1) for index in range(count)]
 
 
-def write_shot_description(show: dict, episode: dict, scene: dict) -> Path:
-    """Y-up shot description. Positions are glTF, with the schema point kept beside them."""
+def write_scene_description(show: dict, episode: dict, scene: dict) -> Path:
+    """Y-up scene description. Positions are glTF, with the schema point kept beside them."""
     from coords import schema_to_gltf
-    from pipeline_paths import set_dir, shot_description_path
+    from pipeline_paths import location_dir, scene_description_path
 
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
 
@@ -1308,7 +1292,6 @@ def write_shot_description(show: dict, episode: dict, scene: dict) -> Path:
         proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy")
         characters.append({"id": character_id, "proxy": proxy, "keyframes": keyframes})
     props = []
-    resolved = _resolved_prefabs(show.get("id"))
     prop_tracks = ((episode.get("spatialTimeline") or {}).get("propTracks")) or {}
     for prop_id, track in prop_tracks.items():
         keyframes = []
@@ -1329,15 +1312,21 @@ def write_shot_description(show: dict, episode: dict, scene: dict) -> Path:
             keyframes.append(entry)
         if not keyframes:
             continue
-        record = resolved.get(f"prop:{prop_id}") or {}
-        props.append(
+        props.append({"id": prop_id, "keyframes": keyframes})
+    model = location_dir(str(show.get("id") or ""), scene["locationId"]) / "model.glb"
+    spatial = show["locations"][scene["locationId"]].get("spatial") or {}
+    landmarks = []
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if not isinstance(landmark, dict) or landmark.get("position") is None:
+            continue
+        position = [float(value) for value in landmark["position"]]
+        landmarks.append(
             {
-                "id": prop_id,
-                "prefabId": record.get("prefabId"),
-                "keyframes": keyframes,
+                "id": landmark_id,
+                "position": gltf_point(position),  # type: ignore[arg-type]
+                "schemaPosition": position,
             }
         )
-    set_json = set_dir(str(show.get("id") or ""), scene["locationId"]) / "set.json"
     payload = {
         "space": "gltf-y-up",
         "showId": show.get("id"),
@@ -1345,14 +1334,18 @@ def write_shot_description(show: dict, episode: dict, scene: dict) -> Path:
         "sceneNumber": scene.get("sceneNumber"),
         "locationId": scene["locationId"],
         "timeRangeSeconds": [start, finish],
-        "set": None
-        if not set_json.is_file()
-        else {"locationId": scene["locationId"], "path": f"sets/{scene['locationId']}/set.json"},
+        "location": None
+        if not model.is_file()
+        else {
+            "locationId": scene["locationId"],
+            "model": f"assets/{show.get('id')}/{scene['locationId']}/model.glb",
+        },
+        "landmarks": landmarks,
         "camera": {"keyframes": camera_frames},
         "characters": characters,
         "props": props,
     }
-    destination = shot_description_path(
+    destination = scene_description_path(
         str(show["id"]), int(episode["episodeNumber"]), int(scene["sceneNumber"])
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1376,7 +1369,7 @@ def render_blocked_scene(
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     times = blockout_sample_times(start, finish)
     frames: list[Image.Image] = []
-    written: list[Path] = [write_shot_description(show, episode, scene)]
+    written: list[Path] = [write_scene_description(show, episode, scene)]
     identity_ids = list(scene["characterIds"][:IDENTITY_FACE_LIMIT])
     guides = {times[0]: "start", times[-1]: "end"}
     for time_seconds in times:

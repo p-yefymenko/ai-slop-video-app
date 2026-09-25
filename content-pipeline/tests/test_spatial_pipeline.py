@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import tempfile
@@ -215,15 +216,27 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["29"]["inputs"]["modality_scale"], 3.0)
         self.assertEqual(graph["30"]["inputs"]["modality"], "AUDIO")
 
-    def test_prop_insert_projects_sun_well(self) -> None:
+    def test_landmark_without_a_position_is_not_a_screen_point(self) -> None:
         coverage = next(
             scene
             for scene in self.episode["_allScenes"]
             if scene["locationId"] == "sun_well_court" and not scene["characterIds"]
         )
-        x, y = spatial_target_screen_position(
-            self.show, self.episode, coverage, "sun_well"
+        with self.assertRaises(ValueError) as caught:
+            spatial_target_screen_position(self.show, self.episode, coverage, "sun_well")
+        self.assertIn("no position", str(caught.exception))
+
+    def test_a_landmark_position_projects_inside_the_frame(self) -> None:
+        coverage = next(
+            scene
+            for scene in self.episode["_allScenes"]
+            if scene["locationId"] == "sun_well_court" and not scene["characterIds"]
         )
+        show = copy.deepcopy(self.show)
+        show["locations"]["sun_well_court"]["spatial"]["landmarks"]["sun_well"] = {
+            "position": [0, 0, 1]
+        }
+        x, y = spatial_target_screen_position(show, self.episode, coverage, "sun_well")
         self.assertGreater(x, 0)
         self.assertLess(x, 768)
         self.assertGreater(y, 0)

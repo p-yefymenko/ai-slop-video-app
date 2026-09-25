@@ -27,8 +27,6 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
           landmarks: {
             bench: {
               position: [0, 1, 0],
-              size: [1.2, 0.5, 0.45],
-              appearance: "One stone bench, a single object, no room.",
             },
           },
         },
@@ -125,11 +123,14 @@ test("rejects a prop track whose id was never declared", () => {
   assert.match(report, /not declared/);
 });
 
-test("rejects a landmark without an appearance", () => {
+test("accepts a landmark with no coordinate yet", () => {
   const show = minimalShow();
-  delete (show.locations.room.spatial.landmarks.bench as { appearance?: string }).appearance;
-  const report = messages(show);
-  assert.match(report, /appearance is required/);
+  show.locations.room.spatial.landmarks.bench = {};
+  const result = parseShowScript(show, {
+    showId: "demo-show",
+    showIdLabel: "the filename stem",
+  });
+  assert.equal(result.ok, true);
 });
 
 test("rejects a catalog search on a landmark", () => {
@@ -141,14 +142,12 @@ test("rejects a catalog search on a landmark", () => {
   assert.match(report, /need/);
 });
 
-test("accepts an appearance", () => {
+test("rejects a landmark appearance note", () => {
   const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.appearance = "One low stone fire ring, a single object.";
-  const result = parseShowScript(show, {
-    showId: "demo-show",
-    showIdLabel: "the filename stem",
-  });
-  assert.equal(result.ok, true);
+  (show.locations.room.spatial.landmarks.bench as { appearance?: string }).appearance =
+    "One low stone fire ring, a single object.";
+  const report = messages(show);
+  assert.match(report, /appearance/);
 });
 
 test("rejects a catalog id on a landmark", () => {
@@ -175,9 +174,9 @@ test("rejects a speaker who is not on camera", () => {
   assert.match(report, /not in characterIds/);
 });
 
-test("rejects a prefab id that is not kebab-case", () => {
+test("rejects a prefab id on a landmark", () => {
   const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.prefabId = "Wooden Chair";
+  (show.locations.room.spatial.landmarks.bench as { prefabId?: string }).prefabId = "blocks/chair";
   const report = messages(show);
   assert.match(report, /prefabId/);
 });

@@ -1,21 +1,18 @@
-"""Turn each location into one prefab, then write that mesh as the location set.
+"""Turn each location description into one plate, then one mesh.
 
-Qwen draws the whole place. TRELLIS.2 turns that picture into one mesh. Characters
-stay out of the set. Their clay mannequins are built from ``ShowCharacter.proxy``
-at previs time.
+Qwen draws the whole place. TRELLIS.2 turns that reviewed picture into one mesh.
+The files stay under ``output/plates/<show>`` and ``output/assets/<show>``.
+Characters stay out of the mesh. Their clay mannequins are built at previs time.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 import shutil
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-
-import numpy as np
 
 from asset_generate import generate_asset_mesh, plate_is_ready
 from asset_sources import materialize_mesh
@@ -27,32 +24,27 @@ from mesh_io import (
     require_triangle_budget,
     write_schema_glb,
 )
-from pipeline_paths import LIBRARY_DIR, OUTPUT_DIR, SHOWS_DIR
+from pipeline_paths import OUTPUT_DIR
 
 GENERATED_SOURCE = "trellis2"
+
 
 @dataclass
 class AssetRequest:
     consumer_id: str
     label: str
     size: tuple[float, float, float]
-    position: tuple[float, float, float] | None
-    location_id: str | None
-    appearance: str | None
-    prefab_id: str | None
+    location_id: str
+    appearance: str
 
 
 @dataclass
-class ResolvedPrefab:
-    prefab_id: str
+class ResolvedLocation:
+    location_id: str
     glb: Path
-    origin: str
     source: str
     source_id: str
     title: str
-    author: str
-    license: str
-    page_url: str
     size: tuple[float, float, float]
 
 
@@ -61,8 +53,6 @@ class AssetResolver:
         self,
         show_id: str,
         *,
-        library_dir: Path = LIBRARY_DIR,
-        shows_dir: Path = SHOWS_DIR,
         output_dir: Path = OUTPUT_DIR,
         generator=None,
         offline: bool = False,
@@ -71,8 +61,6 @@ class AssetResolver:
         triangle_budget: int = TRIANGLE_BUDGET,
     ) -> None:
         self.show_id = show_id
-        self.library_dir = library_dir
-        self.shows_dir = shows_dir
         self.output_dir = output_dir
         self.generator = generator if generator is not None else generate_asset_mesh
         self.offline = offline
@@ -80,407 +68,161 @@ class AssetResolver:
         self.write_thumbs = write_thumbs
         self.triangle_budget = require_triangle_budget(triangle_budget)
         self.warnings: list[str] = []
-        self.lock = _read_json(library_dir / "lock.json", {"version": 1, "needs": {}})
-        self.sources_catalog = _read_json(library_dir / "sources.json", {"assets": []})
-        self.lock.setdefault("needs", {})
-        self.sources_catalog.setdefault("assets", [])
 
-    def resolve_show(self, show: dict) -> dict[str, ResolvedPrefab]:
-        resolved: dict[str, ResolvedPrefab] = {}
+    def resolve_show(self, show: dict) -> dict[str, ResolvedLocation]:
+        resolved: dict[str, ResolvedLocation] = {}
         for request in collect_requests(show):
             resolved[request.consumer_id] = self.resolve_one(request)
-        self._write_json(self.library_dir / "lock.json", self.lock)
-        self._write_json(self.library_dir / "sources.json", self.sources_catalog)
-        self._write_resolved_index(resolved)
-        self._build_sets(show, resolved)
         return resolved
 
-    def resolve_one(self, request: AssetRequest) -> ResolvedPrefab:
-        if request.prefab_id:
-            pinned = self._find_prefab(request.prefab_id)
-            if pinned is not None:
-                return pinned
-            self.warnings.append(
-                f"{request.consumer_id}: pinned prefab {request.prefab_id} is missing"
+    def resolve_one(self, request: AssetRequest) -> ResolvedLocation:
+        plate = self._plate_path(request.location_id)
+        if not plate_is_ready(plate):
+            raise RuntimeError(
+                f"{request.consumer_id}: no reviewed plate at {plate}. "
+                "Run `pnpm run content:plates`."
             )
-        appearance = " ".join((request.appearance or "").split())
-        if not appearance:
-            raise RuntimeError(f"{request.consumer_id}: appearance is required")
-        source_id = appearance_source_id(appearance)
-        digest = asset_hash(GENERATED_SOURCE, source_id, request.size)
-        cached = self._cached(digest)
+        plate_record = _read_json(plate.with_name("plate.json"), {})
+        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(request.appearance), request.size)
+        if plate_record.get("descriptionHash") not in (None, digest):
+            raise RuntimeError(
+                f"{request.consumer_id}: the plate does not match the location text. "
+                "Run `pnpm run content:plates`."
+            )
+        cached = self._cached(request, digest)
         if cached is not None and not self.refresh:
-            return self._ensure_uniform_fit(request, cached, appearance, source_id, digest)
+            return cached
         if self.offline:
             raise RuntimeError(
-                f"{request.consumer_id}: {appearance} is not in the library; offline mode does not generate"
+                f"{request.consumer_id}: no mesh yet; offline mode does not generate"
             )
-        return self._import_generated(request, appearance, source_id, digest)
+        return self._import_generated(request, digest)
 
-    def _cached(self, digest: str) -> ResolvedPrefab | None:
-        for root, origin in (
-            (self._show_assets(), "show"),
-            (self.library_dir / "prefabs", "library"),
-        ):
-            found = self._find_asset(root, digest, origin)
-            if found is not None:
-                return found
-        entry = self.lock["needs"].get(digest)
-        if not entry or self.refresh or entry.get("provisional"):
+    def _cached(self, request: AssetRequest, digest: str) -> ResolvedLocation | None:
+        directory = self._location_dir(request.location_id)
+        meta_path = directory / "location.json"
+        glb = directory / "model.glb"
+        if not meta_path.is_file() or not glb.is_file():
             return None
-        return self._find_prefab(str(entry.get("prefabId") or ""))
+        record = json.loads(meta_path.read_text(encoding="utf-8"))
+        if record.get("descriptionHash") != digest:
+            return None
+        if record.get("triangleBudget") != self.triangle_budget:
+            return None
+        if record.get("decimator") != DECIMATOR or record.get("fit") != "uniform":
+            return None
+        size = record.get("sizeMeters") or list(request.size)
+        return ResolvedLocation(
+            location_id=request.location_id,
+            glb=glb,
+            source=str(record.get("source") or GENERATED_SOURCE),
+            source_id=str(record.get("sourceId") or ""),
+            title=str(record.get("title") or request.appearance),
+            size=(float(size[0]), float(size[1]), float(size[2])),
+        )
 
-    def _show_assets(self) -> Path:
-        return self.shows_dir / self.show_id / "assets"
-
-    def _import_generated(
-        self,
-        request: AssetRequest,
-        appearance: str,
-        source_id: str,
-        digest: str,
-    ) -> ResolvedPrefab:
-        raw_dir = self.library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id)
+    def _import_generated(self, request: AssetRequest, digest: str) -> ResolvedLocation:
+        directory = self._location_dir(request.location_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        plate_copy = directory / "plate.png"
+        shutil.copyfile(self._plate_path(request.location_id), plate_copy)
         try:
             fetched = materialize_mesh(
-                self.generator(appearance, raw_dir, triangle_budget=self.triangle_budget)
+                self.generator(
+                    request.appearance,
+                    directory,
+                    triangle_budget=self.triangle_budget,
+                )
             )
         except Exception as exc:
             raise RuntimeError(f"{request.consumer_id}: {exc}") from exc
+        finally:
+            if plate_copy.is_file():
+                plate_copy.unlink()
         vertices, faces = read_schema_mesh(fetched)
-        # DecimateMesh already capped the triangle count. Scale uniformly into the box.
         fitted = fit_to_size(vertices, request.size)
-        leaf = f"{source_id[:16]}-{_size_token(request.size)}"
-        prefab_id = f"models/{leaf}"
-        directory = self.library_dir / "prefabs" / "models" / leaf
-        resolved = self._write_prefab(
-            directory,
-            prefab_id,
-            fitted,
-            faces,
-            request,
-            origin="generated",
-            source=GENERATED_SOURCE,
-            source_id=source_id,
-            title=appearance,
-            author="Qwen-Image-Edit-2511, TRELLIS.2",
-            license_name="MIT",
-            page_url="https://github.com/microsoft/TRELLIS.2",
-            digest=digest,
-            version="",
-        )
-        self._remember_source(resolved, "")
-        self.lock["needs"][digest] = _lock_entry(request, resolved, "", provisional=False)
-        return resolved
-
-    def _write_prefab(
-        self,
-        directory: Path,
-        prefab_id: str,
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        request: AssetRequest,
-        *,
-        origin: str,
-        source: str,
-        source_id: str,
-        title: str,
-        author: str,
-        license_name: str,
-        page_url: str,
-        digest: str | None,
-        version: str,
-    ) -> ResolvedPrefab:
-        directory.mkdir(parents=True, exist_ok=True)
-        write_schema_glb(directory / "model.glb", vertices, faces)
+        source_id = appearance_source_id(request.appearance)
+        write_schema_glb(directory / "model.glb", fitted, faces)
+        if fetched != directory / "model.glb" and fetched.is_file():
+            fetched.unlink()
         if self.write_thumbs:
             from spatial_previs import render_mesh_thumbnail
 
-            render_mesh_thumbnail(vertices, faces, directory / "thumb.png")
+            render_mesh_thumbnail(fitted, faces, directory / "thumb.png")
         record = {
-            "id": prefab_id,
-            "assetHash": digest,
+            "showId": self.show_id,
+            "locationId": request.location_id,
+            "space": "gltf-y-up",
             "sizeMeters": list(request.size),
-            "origin": origin,
-            "source": source,
+            "descriptionHash": digest,
+            "title": request.appearance,
+            "source": GENERATED_SOURCE,
             "sourceId": source_id,
-            "title": title,
-            "author": author,
-            "license": license_name,
-            "pageUrl": page_url,
-            "version": version,
+            "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+            "license": "MIT",
+            "pageUrl": "https://github.com/microsoft/TRELLIS.2",
             "retrieved": date.today().isoformat(),
             "triangleCount": int(len(faces)),
             "triangleBudget": self.triangle_budget,
             "decimator": DECIMATOR,
             "fit": "uniform",
+            "model": "model.glb",
         }
-        (directory / "prefab.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
-        return ResolvedPrefab(
-            prefab_id=prefab_id,
+        (directory / "location.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+        return ResolvedLocation(
+            location_id=request.location_id,
             glb=directory / "model.glb",
-            origin=origin,
-            source=source,
+            source=GENERATED_SOURCE,
             source_id=source_id,
-            title=title,
-            author=author,
-            license=license_name,
-            page_url=page_url,
+            title=request.appearance,
             size=request.size,
         )
 
-    def _find_prefab(self, prefab_id: str) -> ResolvedPrefab | None:
-        if not prefab_id:
-            return None
-        for path, origin in self._prefab_files():
-            record = json.loads(path.read_text(encoding="utf-8"))
-            if record.get("id") == prefab_id:
-                if self._needs_resimplify(path, record):
-                    return None
-                return self._read_prefab(path, record.get("origin") or origin)
-        return None
+    def _plate_path(self, location_id: str) -> Path:
+        return self.output_dir / "plates" / self.show_id / location_id / "plate.png"
 
-    def _find_asset(self, root: Path, digest: str, origin: str) -> ResolvedPrefab | None:
-        if not root.is_dir():
-            return None
-        for path in sorted(root.rglob("prefab.json")):
-            record = json.loads(path.read_text(encoding="utf-8"))
-            if record.get("assetHash") == digest:
-                if self._needs_resimplify(path, record):
-                    return None
-                return self._read_prefab(path, record.get("origin") or origin)
-        return None
-
-    def _prefab_files(self) -> list[tuple[Path, str]]:
-        roots = (
-            (self._show_assets(), "show"),
-            (self.library_dir / "prefabs", "library"),
-            (self.output_dir / self.show_id / "assets" / "fallback", "fallback"),
-        )
-        found: list[tuple[Path, str]] = []
-        for root, origin in roots:
-            if root.is_dir():
-                found.extend((path, origin) for path in sorted(root.rglob("prefab.json")))
-        return found
-
-    def _read_prefab(self, path: Path, origin: str) -> ResolvedPrefab | None:
-        self._cap_stored_mesh(path.parent)
-        record = json.loads(path.read_text(encoding="utf-8"))
-        glb = path.parent / "model.glb"
-        if not glb.is_file():
-            return None
-        size = record.get("sizeMeters") or [1, 1, 1]
-        return ResolvedPrefab(
-            prefab_id=str(record.get("id") or path.parent.name),
-            glb=glb,
-            origin=str(record.get("origin") or origin),
-            source=str(record.get("source") or origin),
-            source_id=str(record.get("sourceId") or ""),
-            title=str(record.get("title") or record.get("id") or path.parent.name),
-            author=str(record.get("author") or ""),
-            license=str(record.get("license") or ""),
-            page_url=str(record.get("pageUrl") or ""),
-            size=(float(size[0]), float(size[1]), float(size[2])),
-        )
-
-    def _ensure_uniform_fit(
-        self,
-        request: AssetRequest,
-        cached: ResolvedPrefab,
-        appearance: str,
-        source_id: str,
-        digest: str,
-    ) -> ResolvedPrefab:
-        """Rewrite a cached mesh that was stretched onto ``sizeMeters``."""
-        if cached.source != GENERATED_SOURCE:
-            return cached
-        meta_path = cached.glb.parent / "prefab.json"
-        record = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
-        if record.get("fit") == "uniform":
-            return cached
-        raw = self.library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id) / "model.glb"
-        if not raw.is_file():
-            return cached
-        vertices, faces = read_schema_mesh(raw)
-        fitted = fit_to_size(vertices, request.size)
-        return self._write_prefab(
-            cached.glb.parent,
-            cached.prefab_id,
-            fitted,
-            faces,
-            request,
-            origin=cached.origin,
-            source=cached.source,
-            source_id=source_id,
-            title=appearance,
-            author=cached.author or "Qwen-Image-Edit-2511, TRELLIS.2",
-            license_name=cached.license or "MIT",
-            page_url=cached.page_url or "https://github.com/microsoft/TRELLIS.2",
-            digest=digest,
-            version="",
-        )
-
-    def _needs_resimplify(self, path: Path, record: dict) -> bool:
-        """A library mesh simplified under an older budget is rebuilt from the raw download."""
-        try:
-            path.resolve().relative_to((self.library_dir / "prefabs").resolve())
-        except ValueError:
-            return False
-        if record.get("decimator") != DECIMATOR:
-            return True
-        return record.get("triangleBudget") != self.triangle_budget
-
-    def _cap_stored_mesh(self, directory: Path) -> None:
-        glb = directory / "model.glb"
-        meta = directory / "prefab.json"
-        if not glb.is_file():
-            return
-        record = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
-        recorded = record.get("triangleCount")
-        if isinstance(recorded, int) and recorded <= self.triangle_budget:
-            return
-        _vertices, faces = read_schema_mesh(glb)
-        if len(faces) <= self.triangle_budget and meta.is_file() and recorded != len(faces):
-            record["triangleCount"] = int(len(faces))
-            meta.write_text(json.dumps(record, indent=2), encoding="utf-8")
-
-    def _remember_source(self, resolved: ResolvedPrefab, version: str) -> None:
-        assets = self.sources_catalog["assets"]
-        assets[:] = [item for item in assets if item.get("prefabId") != resolved.prefab_id]
-        if resolved.origin == "fallback":
-            return
-        assets.append(
-            {
-                "prefabId": resolved.prefab_id,
-                "source": resolved.source,
-                "sourceId": resolved.source_id,
-                "url": resolved.page_url,
-                "author": resolved.author,
-                "license": resolved.license,
-                "version": version,
-                "retrieved": date.today().isoformat(),
-            }
-        )
-
-    def _write_resolved_index(self, resolved: dict[str, ResolvedPrefab]) -> None:
-        payload = {
-            "showId": self.show_id,
-            "prefabs": {
-                consumer_id: {
-                    "prefabId": item.prefab_id,
-                    "glb": str(item.glb),
-                    "origin": item.origin,
-                    "source": item.source,
-                    "license": item.license,
-                    "title": item.title,
-                }
-                for consumer_id, item in resolved.items()
-            },
-        }
-        path = self.output_dir / self.show_id / "assets" / "resolved.json"
-        self._write_json(path, payload)
-
-    def _build_sets(self, show: dict, resolved: dict[str, ResolvedPrefab]) -> None:
-        from coords import schema_to_gltf
-
-        for location_id, location in (show.get("locations") or {}).items():
-            item = resolved[f"location:{location_id}"]
-            vertices, faces = read_schema_mesh(item.glb)
-            directory = self.output_dir / self.show_id / "sets" / location_id
-            directory.mkdir(parents=True, exist_ok=True)
-            write_schema_glb(directory / "set.glb", vertices, faces)
-            spatial = location.get("spatial") or {}
-            size = spatial.get("sizeMeters") or list(item.size)
-            origin = schema_to_gltf((0.0, 0.0, 0.0))
-            (directory / "set.json").write_text(
-                json.dumps(
-                    {
-                        "locationId": location_id,
-                        "space": "gltf-y-up",
-                        "sizeMeters": size,
-                        "instances": [
-                            {
-                                "id": location_id,
-                                "prefabId": item.prefab_id,
-                                "position": list(origin),
-                                "schemaPosition": [0.0, 0.0, 0.0],
-                                "sizeMeters": list(item.size),
-                                "origin": item.origin,
-                                "source": item.source,
-                                "license": item.license,
-                                "title": item.title,
-                            }
-                        ],
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-
-    def _write_json(self, path: Path, payload: dict) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    def _location_dir(self, location_id: str) -> Path:
+        return self.output_dir / "assets" / self.show_id / location_id
 
 
 def location_scene_description(location_id: str, location: dict) -> str:
-    """One Trellis subject: an open place with room to stage a scene, and no people.
-
-    Landmark notes were written as isolated object shots. Those isolation lines
-    are dropped so the picture does not pack every feature into a dense diorama.
-    """
+    """One Trellis subject: the location text, as an open place with no people."""
     spatial = location.get("spatial") or {}
     size = _vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0))
     place = (_appearance(location.get("promptBlock")) or location_id.replace("_", " ")).rstrip(".")
-    pieces: list[str] = []
-    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
-        if not isinstance(landmark, dict):
-            continue
-        name = str(landmark_id).replace("_", " ")
-        note = _set_feature_note(landmark.get("appearance"))
-        span = _feature_span(landmark.get("size"))
-        label = f"{name}, about {span:g} meters across" if span else name
-        pieces.append(f"{label}: {note}" if note else label)
-    parts = [
-        f"A wide open set of {place}.",
-        "Most of the ground is bare floor, with wide empty space between the features.",
-        "The features are few, small beside the place, and spaced far apart.",
-        "The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform.",
-        "No human figures, figurines, statues, animals, or readable text.",
-    ]
-    if pieces:
-        parts.append("Small features only: " + "; ".join(pieces) + ".")
-    parts.append(
-        f"The whole place is about {size[0]:g} meters wide, {size[1]:g} meters deep, and {size[2]:g} meters tall."
+    return " ".join(
+        (
+            f"A wide open set of {place}.",
+            "Most of the ground is bare floor, with wide empty space between the features.",
+            "The features are few, small beside the place, and spaced far apart.",
+            "The floor reaches the edges of the model. Not a crowded diorama and not a boxed platform.",
+            "No human figures, figurines, statues, animals, or readable text.",
+            f"The whole place is about {size[0]:g} meters wide, {size[1]:g} meters deep, and {size[2]:g} meters tall.",
+        )
     )
-    return " ".join(parts)
 
 
 def write_location_plates(
     show: dict,
-    library_dir: Path,
     writer,
     *,
+    output_dir: Path = OUTPUT_DIR,
     refresh: bool = False,
     offline: bool = False,
 ) -> list[Path]:
     """Draw each location plate and leave the mesh for a later step.
 
     A redrawn plate drops the mesh that was built from the previous picture.
-    The place description is unchanged, so the prefab cache would otherwise
-    keep that old mesh.
     """
+    show_id = str(show.get("id") or "")
     plates: list[Path] = []
     for request in collect_requests(show):
-        if request.prefab_id:
-            print(f"  {request.label}: pinned prefab, no plate", flush=True)
-            continue
-        appearance = " ".join((request.appearance or "").split())
-        if not appearance:
-            raise RuntimeError(f"{request.consumer_id}: appearance is required")
-        source_id = appearance_source_id(appearance)
-        raw_dir = library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id)
-        plate = raw_dir / "plate.png"
-        if plate_is_ready(plate) and not refresh:
+        appearance = request.appearance
+        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), request.size)
+        plate = output_dir / "plates" / show_id / request.location_id / "plate.png"
+        meta_path = plate.with_name("plate.json")
+        stored = _read_json(meta_path, {})
+        if plate_is_ready(plate) and stored.get("descriptionHash") == digest and not refresh:
             print(f"  {request.label}: {plate}", flush=True)
             plates.append(plate)
             continue
@@ -488,38 +230,23 @@ def write_location_plates(
             raise RuntimeError(
                 f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one"
             )
-        writer(appearance, raw_dir)
-        discard_generated_mesh(library_dir, source_id, request.size)
+        writer(appearance, plate.parent)
+        _discard_location_mesh(output_dir, show_id, request.location_id)
+        meta_path.write_text(
+            json.dumps({"locationId": request.location_id, "descriptionHash": digest}, indent=2),
+            encoding="utf-8",
+        )
         print(f"  {request.label}: {plate}", flush=True)
         plates.append(plate)
     return plates
 
 
-def discard_generated_mesh(
-    library_dir: Path,
-    source_id: str,
-    size: tuple[float, float, float],
-) -> None:
-    """Remove the mesh for one place. The plate stays so it can be reviewed again."""
-    raw_mesh = library_dir / "raw" / GENERATED_SOURCE / _raw_folder(source_id) / "model.glb"
-    if raw_mesh.is_file():
-        raw_mesh.unlink()
-    prefab_dir = library_dir / "prefabs" / "models" / f"{source_id[:16]}-{_size_token(size)}"
-    if prefab_dir.is_dir():
-        shutil.rmtree(prefab_dir)
-    lock_path = library_dir / "lock.json"
-    if not lock_path.is_file():
-        return
-    lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    needs = lock.get("needs")
-    if not isinstance(needs, dict):
-        return
-    digest = asset_hash(GENERATED_SOURCE, source_id, size)
-    if digest not in needs:
-        return
-    del needs[digest]
-    lock["needs"] = needs
-    lock_path.write_text(json.dumps(lock, indent=2), encoding="utf-8")
+def _discard_location_mesh(output_dir: Path, show_id: str, location_id: str) -> None:
+    directory = output_dir / "assets" / show_id / location_id
+    for name in ("model.glb", "location.json", "thumb.png"):
+        path = directory / name
+        if path.is_file():
+            path.unlink()
 
 
 def collect_requests(show: dict) -> list[AssetRequest]:
@@ -531,12 +258,10 @@ def collect_requests(show: dict) -> list[AssetRequest]:
         requests.append(
             AssetRequest(
                 consumer_id=f"location:{location_id}",
-                label=location_id,
+                label=str(location_id),
                 size=_vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0)),
-                position=(0.0, 0.0, 0.0),
-                location_id=location_id,
-                appearance=location_scene_description(location_id, location),
-                prefab_id=location.get("prefabId") if isinstance(location.get("prefabId"), str) else None,
+                location_id=str(location_id),
+                appearance=location_scene_description(str(location_id), location),
             )
         )
     return requests
@@ -557,146 +282,30 @@ def asset_hash(source: str, source_id: str, size: tuple[float, float, float]) ->
     return hashlib.sha256(raw).hexdigest()
 
 
-def prune_unused_library(library_dir: Path, shows: list[dict]) -> list[str]:
-    """Delete library prefabs that no show script pins or still describes."""
-    prefab_root = library_dir / "prefabs"
-    records: list[tuple[Path, dict]] = []
-    if prefab_root.is_dir():
-        for path in sorted(prefab_root.rglob("prefab.json")):
-            records.append((path, json.loads(path.read_text(encoding="utf-8"))))
-    by_hash = {
-        str(record["assetHash"]): str(record.get("id") or "")
-        for _path, record in records
-        if record.get("assetHash") and record.get("id")
-    }
-    lock_path = library_dir / "lock.json"
-    lock = _read_json(lock_path, {"version": 1, "needs": {}})
-    needs = lock.get("needs") if isinstance(lock.get("needs"), dict) else {}
-    kept: set[str] = set()
-    for show in shows:
-        for request in collect_requests(show):
-            if request.prefab_id:
-                kept.add(str(request.prefab_id))
-            appearance = " ".join((request.appearance or "").split())
-            if not appearance:
-                continue
-            digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), request.size)
-            matched = by_hash.get(digest)
-            if matched:
-                kept.add(matched)
-            pinned = str((needs.get(digest) or {}).get("prefabId") or "")
-            if pinned:
-                kept.add(pinned)
-    removed: list[str] = []
-    kept_raw: set[tuple[str, str]] = set()
-    for path, record in records:
-        prefab_id = str(record.get("id") or "")
-        if prefab_id in kept:
-            source = str(record.get("source") or "")
-            source_id = str(record.get("sourceId") or "")
-            if source and source_id:
-                kept_raw.add((source, _raw_folder(source_id) if source == GENERATED_SOURCE else _slug(source_id)))
-            continue
-        shutil.rmtree(path.parent)
-        if prefab_id:
-            removed.append(prefab_id)
-    if prefab_root.is_dir():
-        for directory in sorted(prefab_root.rglob("*"), reverse=True):
-            if directory.is_dir() and not any(directory.iterdir()):
-                directory.rmdir()
-    lock["needs"] = {
-        digest: entry
-        for digest, entry in needs.items()
-        if str((entry or {}).get("prefabId") or "") in kept
-    }
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path.write_text(json.dumps(lock, indent=2), encoding="utf-8")
-    catalog_path = library_dir / "sources.json"
-    catalog = _read_json(catalog_path, {"assets": []})
-    assets = catalog.get("assets") if isinstance(catalog.get("assets"), list) else []
-    catalog["assets"] = [item for item in assets if str(item.get("prefabId") or "") in kept]
-    catalog_path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
-    raw_root = library_dir / "raw"
-    if raw_root.is_dir():
-        for source_dir in list(raw_root.iterdir()):
-            if not source_dir.is_dir():
-                continue
-            for item in list(source_dir.iterdir()):
-                if (source_dir.name, item.name) in kept_raw:
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
-            if not any(source_dir.iterdir()):
-                source_dir.rmdir()
-    return removed
-
-
-def apply_lock_override(lock_path: Path, digest: str, prefab_id: str) -> None:
-    lock = _read_json(lock_path, {"version": 1, "needs": {}})
-    entry = lock.setdefault("needs", {}).get(digest)
-    if entry is None:
-        raise SystemExit(f"No locked asset {digest}")
-    entry["prefabId"] = prefab_id
-    entry["origin"] = "override"
-    entry["provisional"] = False
-    lock_path.write_text(json.dumps(lock, indent=2), encoding="utf-8")
-
-
-def export_credits(catalog_path: Path, destination: Path) -> None:
-    catalog = _read_json(catalog_path, {"assets": []})
+def export_credits(output_dir: Path, destination: Path) -> None:
     lines = [
         "# Credits",
         "",
-        "Stage meshes are generated locally. Qwen-Image-Edit-2511 draws the whole place",
+        "Location meshes are generated for one show. Qwen-Image-Edit-2511 draws the place",
         "and TRELLIS.2 turns that picture into one mesh. Both models are used under",
         "their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
         "",
     ]
-    assets = catalog.get("assets") or []
-    if not assets:
+    records = sorted((output_dir / "assets").glob("*/*/location.json")) if (output_dir / "assets").is_dir() else []
+    if not records:
         lines.append("No generated meshes have been recorded.")
     else:
-        for asset in assets:
-            author = asset.get("author") or "Unknown"
-            license_name = asset.get("license") or "unknown"
-            url = asset.get("url") or ""
+        for path in records:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            show_id = record.get("showId") or path.parents[1].name
+            location_id = record.get("locationId") or path.parent.name
             lines.append(
-                f"- {asset.get('prefabId')} by {author} ({license_name}). Source: {asset.get('source')}. {url}"
+                f"- {show_id}/{location_id} by Qwen-Image-Edit-2511, TRELLIS.2 (MIT). "
+                "Source: trellis2. https://github.com/microsoft/TRELLIS.2"
             )
     lines.append("")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("\n".join(lines), encoding="utf-8")
-
-
-def _set_feature_note(raw) -> str | None:
-    """Drop product-shot instructions that tell the picture to isolate one object."""
-    text = _appearance(raw)
-    if not text:
-        return None
-    kept: list[str] = []
-    for clause in text.rstrip(".").split(","):
-        piece = re.sub(r"\bstanding alone\b", "", clause, flags=re.IGNORECASE)
-        piece = re.sub(
-            r"\ba single (?:object|building|platform|piece)\b",
-            "",
-            piece,
-            flags=re.IGNORECASE,
-        )
-        piece = " ".join(piece.split()).strip(" ,")
-        if not piece or piece.lower().startswith("no "):
-            continue
-        kept.append(piece)
-    return ", ".join(kept) or None
-
-
-def _feature_span(raw) -> float | None:
-    size = _vec3(raw, (0.0, 0.0, 0.0))
-    span = max(size)
-    if span <= 0.0:
-        return None
-    return span
 
 
 def _appearance(raw) -> str | None:
@@ -706,38 +315,10 @@ def _appearance(raw) -> str | None:
     return text or None
 
 
-def _raw_folder(source_id: str) -> str:
-    return source_id[:16]
-
-
-def _size_token(size: tuple[float, float, float]) -> str:
-    return "-".join(str(int(round(float(value) * 1000))) for value in size)
-
-
 def _vec3(raw, default: tuple[float, float, float]) -> tuple[float, float, float]:
     if not isinstance(raw, list) or len(raw) != 3:
         return default
     return (float(raw[0]), float(raw[1]), float(raw[2]))
-
-
-def _slug(value: str) -> str:
-    import re
-
-    token = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return token[:80] or "asset"
-
-
-def _lock_entry(request: AssetRequest, resolved: ResolvedPrefab, version: str, provisional: bool) -> dict:
-    return {
-        "appearance": request.appearance,
-        "sizeMeters": list(request.size),
-        "prefabId": resolved.prefab_id,
-        "source": resolved.source,
-        "sourceId": resolved.source_id,
-        "version": version,
-        "origin": resolved.origin,
-        "provisional": provisional,
-    }
 
 
 def _read_json(path: Path, default: dict) -> dict:

@@ -65,7 +65,7 @@ export class Stage {
     }
   }
 
-  async showPrefab(url) {
+  async showModel(url) {
     this.clear();
     const object = await this._load(url);
     this.root.add(object);
@@ -74,29 +74,30 @@ export class Stage {
     this._frameView(box);
   }
 
-  async showSet(setDocument, prefabs) {
+  async showScene(scene, modelUrl) {
     this.clear();
-    const group = new THREE.Group();
-    for (const instance of setDocument.instances || []) {
-      const prefab = prefabs.get(instance.prefabId);
-      const object = await this._instanceObject(instance, prefab);
-      const position = instance.position || [0, 0, 0];
-      object.position.set(position[0], position[1], position[2]);
-      group.add(object);
-      const height = (instance.sizeMeters || [1, 1, 1])[2];
-      group.add(this._label(instance.id, instance.origin, position[0], position[1] + height + 0.2, position[2]));
+    this.shot = scene;
+    if (modelUrl) this.root.add(await this._load(modelUrl));
+    for (const landmark of scene.landmarks || []) {
+      if (!landmark.position) continue;
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.35, 12, 8),
+        new THREE.MeshStandardMaterial({ color: 0x7eb6d9 }),
+      );
+      marker.position.set(landmark.position[0], landmark.position[1], landmark.position[2]);
+      this.root.add(marker);
+      this.root.add(
+        this._label(
+          landmark.id,
+          "show",
+          landmark.position[0],
+          landmark.position[1] + 0.8,
+          landmark.position[2],
+        ),
+      );
     }
-    this.root.add(group);
-    this._frameView(new THREE.Box3().setFromObject(group));
-  }
-
-  async showShot(shot, setDocument, prefabs) {
-    this.clear();
-    this.shot = shot;
-    if (setDocument) await this.showSet(setDocument, prefabs);
-    this.shot = shot;
     this.characters = new Map();
-    for (const character of shot.characters || []) {
+    for (const character of scene.characters || []) {
       const height = Number(character.proxy?.heightMeters) || 1.72;
       const build = character.proxy?.build || "average";
       const radius = 0.22 * ({ slim: 0.85, average: 1, broad: 1.15 }[build] || 1);
@@ -112,21 +113,16 @@ export class Stage {
       this.characters.set(character.id, holder);
     }
     this.props = [];
-    for (const prop of shot.props || []) {
-      const prefab = prefabs.get(prop.prefabId);
-      let object;
-      if (prefab?.modelUrl) object = await this._load(prefab.modelUrl);
-      else {
-        object = new THREE.Mesh(
-          new THREE.BoxGeometry(0.3, 0.3, 0.3),
-          new THREE.MeshStandardMaterial({ color: 0xc4a484 }),
-        );
-      }
+    for (const prop of scene.props || []) {
+      const object = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0xc4a484 }),
+      );
       this.root.add(object);
       this.props.push({ spec: prop, object });
     }
     this.setMode("god");
-    this.setTime((shot.timeRangeSeconds || [0, 0])[0]);
+    this.setTime((scene.timeRangeSeconds || [0, 0])[0]);
     this._frameView(new THREE.Box3().setFromObject(this.root));
   }
 
@@ -197,17 +193,6 @@ export class Stage {
       this.frustum = new THREE.CameraHelper(this.shotCamera);
       this.scene.add(this.frustum);
     }
-  }
-
-  async _instanceObject(instance, prefab) {
-    if (prefab?.modelUrl) return this._load(prefab.modelUrl);
-    const size = instance.sizeMeters || [1, 1, 1];
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(size[0], size[2], size[1]),
-      new THREE.MeshStandardMaterial({ color: colorFor(instance.origin), roughness: 0.8 }),
-    );
-    mesh.position.y = size[2] / 2;
-    return mesh;
   }
 
   _load(url) {

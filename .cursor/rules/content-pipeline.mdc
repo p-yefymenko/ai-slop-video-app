@@ -1,17 +1,25 @@
 ---
-description: Where authored shows, generated output, and shared prefabs live
+description: Where authored shows and generated output live
 globs: content-pipeline/**/*
 alwaysApply: false
 ---
 
 # Content pipeline layout
 
-`shows/<id>/script.json` and `shows/<id>/assets/` are authored. Do not write generated meshes, sets, previs, or postvis there.
+`shows/<id>/script.json` is authored. Do not write generated plates, meshes, previs, stills, or clips there.
 
-Pictures and meshes built from the script go in `output/<id>/`. `01_previs/blockout.mp4` is every scene blockout joined in script order. `library/` is the shared prefab cache. `content:assets` deletes library prefabs that no show script still references. `library/raw/` is gitignored and is not a place for show output.
+Everything the pipeline creates lives under `output/<command>/<show>/`:
 
-Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The stage viewer reads Y-up and does not convert.
+- `plates` — the location picture
+- `assets` — the location mesh
+- `previs` — clay scenes, including the episode `blockout.mp4`
+- `frames` — character portraits and scene stills
+- `generate` — scene clips and the episode cut
 
-Commands go through root `package.json` scripts. `docs/ASSETS.md` is the catalog and license contract.
+A location is the place. A scene is one timed shot in an episode. A landmark is an optional coordinate in the generated location mesh. Clay previs draws that mesh on the GPU; `pnpm run content:asset-deps` installs moderngl for the draw.
 
-`content:plates` has Qwen draw each location and stop. `content:assets` has TRELLIS.2 turn that reviewed picture into one mesh. Clay previs draws that mesh on the GPU; `pnpm run content:asset-deps` installs moderngl for the draw. Landmark `appearance` notes are small features on that open floor, not a packed diorama. There is no catalog id and no primitive stand-in. ComfyUI's DecimateMesh node caps each mesh. The default polygon limit is 300,000, and `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location `sizeMeters`, so the generated shape is not stretched.
+Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The viewer reads Y-up and does not convert. Open it with `pnpm run view -- --show <show-id>`.
+
+Commands go through root `package.json` scripts. `docs/ASSETS.md` is the mesh and license contract.
+
+`content:plates` has Qwen draw each location and stop. `content:assets` has TRELLIS.2 turn that reviewed picture into one mesh. ComfyUI's DecimateMesh node caps each mesh. The default polygon limit is 300,000, and `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location `sizeMeters`, so the generated shape is not stretched.

@@ -602,7 +602,7 @@ def load_show(path: Path) -> dict:
     if "locationCharacters" in show:
         raise SystemExit(
             f"{path.name} still has locationCharacters. Replace that object with locations "
-            "(set text only) and put characterIds on each scene."
+            "(location text only) and put characterIds on each scene."
         )
     locations = show.get("locations")
     if not isinstance(locations, dict) or not locations:
@@ -1387,8 +1387,8 @@ def generate_show(
 
     if stage == "frames":
         print(
-            f"Stills for {show_id} are in {OUTPUT_DIR / show_id}. "
-            "Review characters/, then each episode's 02_postvis/stills/scene_*_start.png. "
+            f"Stills for {show_id} are in {OUTPUT_DIR / 'frames' / show_id}. "
+            "Review characters/, then each episode's scene_*_start.png. "
             "Replace a file by hand, or delete it and rerun `pnpm run content:frames`. "
             "When they look right, run `pnpm run content:generate`.",
             flush=True,

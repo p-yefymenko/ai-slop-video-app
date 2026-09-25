@@ -9,38 +9,50 @@ if (!showId || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(showId)) {
 
 const root = path.resolve(__dirname, "..");
 const outputRoot = path.join(root, "content-pipeline", "output");
-const source = path.join(outputRoot, showId);
-if (!fs.existsSync(source)) {
+const stages = ["plates", "assets", "previs", "frames", "generate"];
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+let found = false;
+
+for (const stage of stages) {
+  const source = path.join(outputRoot, stage, showId);
+  if (!fs.existsSync(source)) continue;
+  found = true;
+  const destination = path.join(outputRoot, stage, `${showId}.archive-${stamp}`);
+  archiveDirectory(source, destination, stage === "frames");
+  console.log(`Archived ${source}`);
+  console.log(`      to ${destination}`);
+}
+
+const legacy = path.join(outputRoot, showId);
+if (fs.existsSync(legacy) && !stages.includes(showId)) {
+  found = true;
+  const destination = path.join(outputRoot, `${showId}.archive-${stamp}`);
+  archiveDirectory(legacy, destination, true);
+  console.log(`Archived ${legacy}`);
+  console.log(`      to ${destination}`);
+}
+
+if (!found) {
   console.log(`No generated output exists for ${showId}.`);
   process.exit(0);
 }
 
-const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const destination = path.join(outputRoot, `${showId}.archive-${stamp}`);
-try {
-  fs.renameSync(source, destination);
-  const archivedCharacters = path.join(destination, "characters");
-  if (fs.existsSync(archivedCharacters)) {
+function archiveDirectory(source, destination, keepCharacters) {
+  try {
+    fs.renameSync(source, destination);
+    if (!keepCharacters) return;
+    const archivedCharacters = path.join(destination, "characters");
+    if (!fs.existsSync(archivedCharacters)) return;
     const activeCharacters = path.join(source, "characters");
     fs.mkdirSync(source, { recursive: true });
     fs.cpSync(archivedCharacters, activeCharacters, { recursive: true });
-  }
-} catch (error) {
-  if (error.code !== "EPERM") {
-    throw error;
-  }
-  // Windows can refuse to rename a directory while Cursor previews a file in it.
-  // Copy the archive, then clear only generated episode folders in place.
-  fs.cpSync(source, destination, { recursive: true });
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    if (entry.name === "characters") {
-      continue;
+    console.log("Preserved reviewed character identity PNGs in the active output folder.");
+  } catch (error) {
+    if (error.code !== "EPERM") throw error;
+    fs.cpSync(source, destination, { recursive: true });
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+      if (keepCharacters && entry.name === "characters") continue;
+      fs.rmSync(path.join(source, entry.name), { recursive: true, force: true });
     }
-    fs.rmSync(path.join(source, entry.name), { recursive: true, force: true });
   }
-}
-console.log(`Archived ${source}`);
-console.log(`      to ${destination}`);
-if (fs.existsSync(path.join(source, "characters"))) {
-  console.log("Preserved reviewed character identity PNGs in the active output folder.");
 }
