@@ -30,7 +30,8 @@ export type Vec3 = [number, number, number];
 export type LocationLandmark = {
   /**
    * Meters in the generated location mesh: `[X right, Y forward, Z up]`.
-   * Omit until the mesh exists. The picture does not place this point.
+   * Omit until the mesh exists. `pnpm run content:landmarks` fills this from
+   * the mesh. A coordinate already set is kept, and it can still be edited by hand.
    */
   position?: Vec3;
 };

@@ -222,8 +222,10 @@ class SpatialPipelineTests(unittest.TestCase):
             for scene in self.episode["_allScenes"]
             if scene["locationId"] == "sun_well_court" and not scene["characterIds"]
         )
+        show = copy.deepcopy(self.show)
+        show["locations"]["sun_well_court"]["spatial"]["landmarks"]["sun_well"] = {}
         with self.assertRaises(ValueError) as caught:
-            spatial_target_screen_position(self.show, self.episode, coverage, "sun_well")
+            spatial_target_screen_position(show, self.episode, coverage, "sun_well")
         self.assertIn("no position", str(caught.exception))
 
     def test_a_landmark_position_projects_inside_the_frame(self) -> None:

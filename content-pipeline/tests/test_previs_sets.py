@@ -33,7 +33,7 @@ from spatial_previs import (  # noqa: E402
 class PrevisSetTests(unittest.TestCase):
     def tearDown(self) -> None:
         spatial_previs._MESH_CACHE.clear()
-        for stage in ("plates", "assets", "previs", "frames", "generate"):
+        for stage in ("plates", "assets", "landmarks", "previs", "frames", "generate"):
             shutil.rmtree(OUTPUT_DIR / stage / "unit-shot", ignore_errors=True)
 
     def test_missing_set_draws_no_landmark_mesh(self) -> None:

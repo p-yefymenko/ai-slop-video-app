@@ -28,6 +28,7 @@ from spatial_previs import (  # noqa: E402
     timeline_state,
     validate_spatial_episode,
     write_episode_blockout,
+    _scene_surfaces,
 )
 
 SHOW_JSON = (
@@ -221,13 +222,11 @@ class SpatialPrevisTests(unittest.TestCase):
         )
         time_seconds = float(scene["timeRangeSeconds"][0])
         character_id = scene["characterIds"][0]
-        state = episode_character_state(self.episode, character_id, time_seconds)
-        nose = project(
-            character_pose_joints(
-                self.show, self.episode, scene, state, time_seconds, character_id
-            )["nose"],
-            camera_at(scene, time_seconds),
+        camera, _batches, people = _scene_surfaces(
+            self.show, self.episode, scene, time_seconds
         )
+        joints = dict(people)[character_id]
+        nose = project(joints["nose"], camera)
         self.assertIsNotNone(nose)
         assert nose is not None
         with tempfile.TemporaryDirectory() as temp:

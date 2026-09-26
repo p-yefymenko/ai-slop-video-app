@@ -9,7 +9,7 @@ if (!showId || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(showId)) {
 
 const root = path.resolve(__dirname, "..");
 const outputRoot = path.join(root, "content-pipeline", "output");
-const stages = ["plates", "assets", "previs", "frames", "generate"];
+const stages = ["plates", "assets", "landmarks", "previs", "frames", "generate"];
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 let found = false;
 

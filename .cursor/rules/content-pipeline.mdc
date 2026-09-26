@@ -12,11 +12,12 @@ Everything the pipeline creates lives under `output/<command>/<show>/`:
 
 - `plates` — the location picture
 - `assets` — the location mesh
+- `landmarks` — shaded views used to place landmark coordinates
 - `previs` — clay scenes, including the episode `blockout.mp4`
 - `frames` — character portraits and scene stills
 - `generate` — scene clips and the episode cut
 
-A location is the place. A scene is one timed shot in an episode. A landmark is an optional coordinate in the generated location mesh. Clay previs draws that mesh on the GPU; `pnpm run content:asset-deps` installs moderngl for the draw.
+A location is the place. A scene is one timed shot in an episode. A landmark is an optional coordinate in the generated location mesh. `pnpm run content:landmarks` fills that coordinate from the mesh after `content:assets`. Clay previs draws that mesh on the GPU, stands people on its open deck, and moves an interior camera out of the stone. A camera already outside the mesh stays where it was authored. `pnpm run content:asset-deps` installs moderngl for the draw and Florence-2 for the landmark step.
 
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The viewer reads Y-up and does not convert. Open it with `pnpm run view -- --show <show-id>`.
 

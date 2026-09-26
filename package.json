@@ -21,6 +21,7 @@
     "content:validate": "pnpm --filter @reelshort/shared run validate",
     "content:plates": "node scripts/run-python.cjs content-pipeline/scripts/build_assets.py --stage plates",
     "content:assets": "node scripts/run-python.cjs content-pipeline/scripts/build_assets.py --stage meshes",
+    "content:landmarks": "node scripts/run-python.cjs content-pipeline/scripts/label_landmarks.py",
     "content:asset-deps": "node scripts/install-asset-deps.cjs",
     "content:previs": "node scripts/run-python.cjs content-pipeline/scripts/spatial_previs.py",
     "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_*.py",

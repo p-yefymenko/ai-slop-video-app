@@ -5,6 +5,7 @@ lives under ``output/<command>/<show>/``:
 
 - ``plates`` — the location picture
 - ``assets`` — the location mesh
+- ``landmarks`` — shaded views used to place landmark coordinates
 - ``previs`` — clay scenes
 - ``frames`` — character portraits and scene stills
 - ``generate`` — scene clips and the episode cut
@@ -35,7 +36,7 @@ def load_content_env() -> None:
 SHOWS_DIR = ROOT / "shows"
 LEGACY_SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
-STAGES = ("plates", "assets", "previs", "frames", "generate")
+STAGES = ("plates", "assets", "landmarks", "previs", "frames", "generate")
 
 _LEGACY_BLOCKOUT = re.compile(r"^scene_(\d+)_blockout\.mp4$")
 _LEGACY_CLAY = re.compile(r"^scene_(\d+)_(start|end)_blockout\.png$")

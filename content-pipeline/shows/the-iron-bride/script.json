@@ -33,8 +33,8 @@
       "spatial": {
         "sizeMeters": [200, 240, 140],
         "landmarks": {
-          "citadel_core": {},
-          "chain_pylon": {}
+          "citadel_core": {"position": [2.52, 1.74, 87.35]},
+          "chain_pylon": {"position": [42.5, 46.17, 9.57]}
         }
       }
     },
@@ -43,11 +43,11 @@
       "spatial": {
         "sizeMeters": [22, 30, 18],
         "landmarks": {
-          "sun_well": {},
-          "anvil_altar": {},
-          "throne_dais": {},
-          "gate_column_l": {},
-          "gate_column_r": {}
+          "sun_well": {"position": [0.16, -0.71, 0.91]},
+          "anvil_altar": {"position": [0.16, -0.71, 0.91]},
+          "throne_dais": {"position": [0.16, -0.71, 0.91]},
+          "gate_column_l": {"position": [-8.63, 8.44, 4.01]},
+          "gate_column_r": {"position": [-8.63, 8.44, 4.01]}
         }
       }
     }

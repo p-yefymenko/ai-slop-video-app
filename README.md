@@ -12,11 +12,12 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 | --- | --- | --- |
 | Location plates | `content:plates` | `output/plates/<show>/<location>/plate.png` |
 | Location meshes | `content:assets` | `output/assets/<show>/<location>/model.glb` |
+| Landmark coordinates | `content:landmarks` | writes `position` into `shows/<id>/script.json`; review images in `output/landmarks/<show>/<location>/` |
 | Clay previs | `content:previs` | `output/previs/<show>/<episode>/` — per-scene `blockout.mp4`, plus one episode `blockout.mp4` |
 | Qwen stills | `content:frames` | `output/frames/<show>/characters/` and `output/frames/<show>/<episode>/` |
 | LTX clips | `content:generate` | `output/generate/<show>/<episode>/` |
 
-Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do.
+Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. Script marks stay as authored. Previs stands people on the open deck of the location mesh and moves an interior camera out of the stone. A camera already outside the mesh stays put.
 
 Leave ComfyUI running in another terminal before the GPU stages:
 
@@ -37,6 +38,7 @@ or the same four stages by hand, so you can inspect the clay blockout and stills
 pnpm run content:validate
 pnpm run content:plates -- --show the-iron-bride
 pnpm run content:assets -- --show the-iron-bride
+pnpm run content:landmarks -- --show the-iron-bride
 pnpm run content:previs -- --show the-iron-bride --episode 1
 pnpm run view -- --show the-iron-bride
 pnpm run content:frames -- --show the-iron-bride --episode 1
@@ -68,6 +70,7 @@ pnpm run content:archive -- the-iron-bride
 | `content-pipeline/shows/<id>/script.json` | Authored show. Folder name must match `id`. |
 | `content-pipeline/output/plates/<id>/` | Location pictures |
 | `content-pipeline/output/assets/<id>/` | Location meshes |
+| `content-pipeline/output/landmarks/<id>/` | Shaded views used to place landmark coordinates |
 | `content-pipeline/output/previs/<id>/` | Clay scenes |
 | `content-pipeline/output/frames/<id>/` | Character portraits and scene stills |
 | `content-pipeline/output/generate/<id>/` | Scene clips and the episode cut |
@@ -91,7 +94,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view -- --show <show-id>` lists that show’s locations and scenes. Deep links: `/location/<locationId>`, `/scene/<episode>/<scene>`.
 
-`content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location size, so the generated shape stays intact.
+`content:plates` has Qwen draw each location and stop, so the picture can be reviewed. `content:assets` then has TRELLIS.2 build one mesh from that picture. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location size, so the generated shape stays intact. `content:landmarks` then writes each landmark `position` into the show script. It is not part of `content:render`. A position already in the script is kept unless `--force` is set.
 
 God camera (OrbitControls):
 
@@ -111,6 +114,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws the clay previs on the GPU. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`.
+`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into that same Python. trimesh reads glTF and OBJ files. moderngl draws the clay previs on the GPU. transformers, timm, and einops load Florence-2 for `content:landmarks`. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`. `content:landmarks` does not need ComfyUI running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

@@ -2,7 +2,7 @@
 
 Each location becomes one picture, then one mesh, for that show only.
 
-`pnpm run content:plates` has Qwen-Image-Edit-2511 draw the location text as an open floor and stop. The picture is `output/plates/<show>/<locationId>/plate.png`. Landmark names are not in that prompt. A landmark is a coordinate you fill in after the mesh exists, because the picture is not a measured floor plan and the mesh does not label its parts.
+`pnpm run content:plates` has Qwen-Image-Edit-2511 draw the location text as an open floor and stop. The picture is `output/plates/<show>/<locationId>/plate.png`. Landmark names are not in that prompt. A landmark is a coordinate in the mesh. The picture is not a measured floor plan, and TRELLIS does not label the parts.
 
 `pnpm run content:assets` has TRELLIS.2 turn that reviewed picture into one mesh, fitted inside the location's `sizeMeters`. The mesh is `output/assets/<show>/<locationId>/model.glb`, with `location.json` beside it. People and held props stay out of that mesh. A missing plate stops the build. If `plate.json` records a different description than the current location text, the mesh step stops and asks for `content:plates` again. An unchanged description, polygon limit, and fit reuses the mesh. `--force` and `--refresh` rebuild it. Redrawing a plate deletes the mesh made from the previous picture.
 
@@ -20,4 +20,6 @@ Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 is MIT. BiRefNet removes the plate
 
 Mixamo is not a source. Its terms restrict automated download. People in previs are clay mannequins.
 
-`pnpm run content:asset-deps` installs trimesh and moderngl into the ComfyUI Python. trimesh is what glTF and OBJ files need. moderngl draws clay previs. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:landmarks` runs after the mesh exists. It shades the mesh from known cameras, asks Florence-2 where each landmark name is, and writes `position` into `shows/<id>/script.json`. Review images land in `output/landmarks/<show>/<locationId>/`. A landmark that already has a position is left alone unless `--force` is set. A landmark the model does not find stays empty. ComfyUI does not need to be running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
+
+`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into the ComfyUI Python. trimesh is what glTF and OBJ files need. moderngl draws clay previs. transformers, timm, and einops load Florence-2 for landmark coordinates. Do not install `content-pipeline/requirements.txt` into that virtualenv.

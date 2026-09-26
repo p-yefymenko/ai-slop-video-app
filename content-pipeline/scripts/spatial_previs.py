@@ -185,7 +185,9 @@ def camera_at(scene: dict, time_seconds: float) -> dict:
     return _camera_pose(frames[-1])
 
 
-def _camera_basis(camera: dict) -> tuple[Vec3, Vec3, Vec3, Vec3, float]:
+def _camera_basis(
+    camera: dict, *, viewport_height: float | None = None
+) -> tuple[Vec3, Vec3, Vec3, Vec3, float]:
     position = vec(camera["position"])
     forward = normalize(sub(vec(camera["lookAt"]), position))
     world_up: Vec3 = (0.0, 0.0, 1.0)
@@ -200,9 +202,8 @@ def _camera_basis(camera: dict) -> tuple[Vec3, Vec3, Vec3, Vec3, float]:
             add(mul(right, cos_r), mul(up, sin_r)),
             add(mul(mul(right, -1.0), sin_r), mul(up, cos_r)),
         )
-    focal = (PROXY_HEIGHT / 2.0) / math.tan(
-        math.radians(float(camera["verticalFovDegrees"])) / 2.0
-    )
+    height = PROXY_HEIGHT if viewport_height is None else float(viewport_height)
+    focal = (height / 2.0) / math.tan(math.radians(float(camera["verticalFovDegrees"])) / 2.0)
     return position, right, up, forward, focal
 
 
@@ -220,12 +221,42 @@ def _screen_point(x: float, y: float, depth: float, focal: float) -> tuple[float
     )
 
 
-def project(point: Vec3, camera: dict) -> tuple[float, float, float] | None:
-    basis = _camera_basis(camera)
+def project(
+    point: Vec3,
+    camera: dict,
+    *,
+    width: float | None = None,
+    height: float | None = None,
+) -> tuple[float, float, float] | None:
+    view_w = PROXY_WIDTH if width is None else float(width)
+    view_h = PROXY_HEIGHT if height is None else float(height)
+    basis = _camera_basis(camera, viewport_height=view_h)
     x, y, depth = _view_point(point, basis)
     if depth <= NEAR_CLIP:
         return None
-    return _screen_point(x, y, depth, basis[4])
+    focal = basis[4]
+    return (
+        view_w / 2.0 + focal * x / depth,
+        view_h / 2.0 - focal * y / depth,
+        depth,
+    )
+
+
+def unproject(
+    pixel_x: float,
+    pixel_y: float,
+    depth: float,
+    camera: dict,
+    *,
+    width: float,
+    height: float,
+) -> Vec3:
+    """Inverse of ``project`` for one finite depth sample. Schema space, meters."""
+    basis = _camera_basis(camera, viewport_height=height)
+    position, right, up, forward, focal = basis
+    view_x = (float(pixel_x) - float(width) / 2.0) * float(depth) / focal
+    view_y = (float(height) / 2.0 - float(pixel_y)) * float(depth) / focal
+    return add(position, add(mul(right, view_x), add(mul(up, view_y), mul(forward, float(depth)))))
 
 
 def _clip_near(points: list[Vec3], near: float) -> list[Vec3]:
@@ -461,7 +492,8 @@ def _anchor_point(
     if target_id in tracks:
         state = episode_character_state(episode, target_id, time_seconds)
         _, _, head_height = _stance_heights(state["stance"], _height_scale(show, target_id))
-        return add(vec(state["position"]), (0.0, 0.0, head_height))
+        feet = _fitted_feet(show, scene["locationId"], vec(state["position"]))
+        return add(feet, (0.0, 0.0, head_height))
     prop_frames = ((episode.get("spatialTimeline") or {}).get("propTracks") or {}).get(target_id)
     if prop_frames:
         state = timeline_state(prop_frames, time_seconds)
@@ -470,7 +502,8 @@ def _anchor_point(
         holder_id = state.get("heldByCharacterId")
         if holder_id:
             holder = episode_character_state(episode, holder_id, time_seconds)
-            return add(vec(holder["position"]), (0.0, 0.0, 1.1 * _height_scale(show, holder_id)))
+            feet = _fitted_feet(show, scene["locationId"], vec(holder["position"]))
+            return add(feet, (0.0, 0.0, 1.1 * _height_scale(show, holder_id)))
     landmark = (
         show["locations"][scene["locationId"]].get("spatial", {}).get("landmarks", {}).get(target_id)
     )
@@ -782,6 +815,56 @@ def _location_set_mesh(show_id: str | None, location_id: str):
     return _cached_mesh(path)
 
 
+_STAGE_CACHE: dict[tuple, object] = {}
+
+
+def _location_stage(show: dict, location_id: str):
+    """Deck and solid cells for the location mesh. None when the mesh is absent."""
+    from mesh_stage import build_mesh_stage
+
+    mesh = _location_set_mesh(show.get("id"), location_id)
+    if mesh is None:
+        return None
+    _vertices, _faces, key = mesh
+    landmarks = (
+        show.get("locations", {}).get(location_id, {}).get("spatial", {}).get("landmarks") or {}
+    )
+    landmark_key = tuple(
+        sorted(
+            (name, tuple(value["position"]))
+            for name, value in landmarks.items()
+            if isinstance(value, dict) and value.get("position") is not None
+        )
+    )
+    cache_key = (key, landmark_key)
+    cached = _STAGE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    stage = build_mesh_stage(mesh[0], landmarks)
+    _STAGE_CACHE[cache_key] = stage
+    return stage
+
+
+def _fitted_camera(show: dict, scene: dict, time_seconds: float) -> dict:
+    camera = camera_at(scene, time_seconds)
+    stage = _location_stage(show, scene["locationId"])
+    if stage is None:
+        return camera
+    position, look_at = stage.place_camera(
+        camera["position"],
+        camera["lookAt"],
+        float(camera.get("verticalFovDegrees") or 40.0),
+    )
+    return {**camera, "position": list(position), "lookAt": list(look_at)}
+
+
+def _fitted_feet(show: dict, location_id: str, position: Vec3, avoid: list[Vec3] | None = None) -> Vec3:
+    stage = _location_stage(show, location_id)
+    if stage is None:
+        return vec(position)
+    return stage.place_feet(position, avoid)
+
+
 def _batch_from_triangles(triangles: list[tuple[Vec3, Vec3, Vec3]], base: int):
     from clay_gpu import ClayBatch
 
@@ -847,28 +930,33 @@ def _scene_surfaces(
 ):
     """Clay batches for one instant. The stage box is bounds, not a room mesh.
 
-    A floor is drawn only while the camera stands inside the stage, because that
-    is the ground the blocking stands on. Open sky stays the flat viewport gray.
-    The location set stays an indexed mesh and is drawn on the GPU.
+    With a location mesh, people stand on its open deck and the camera is moved
+    off solid mesh. The flat floor quad is only a stand-in when that mesh is
+    missing and the camera is inside the stage. Open sky stays the viewport gray.
     """
     from clay_gpu import ClayBatch
 
-    camera = camera_at(scene, time_seconds)
+    camera = _fitted_camera(show, scene, time_seconds)
     spatial = show["locations"][scene["locationId"]]["spatial"]
     batches: list[ClayBatch] = []
-    if _camera_inside_stage(camera, spatial):
+    set_mesh = _location_set_mesh(show.get("id"), scene["locationId"])
+    if set_mesh is None and _camera_inside_stage(camera, spatial):
         floor = _batch_from_triangles(_floor_triangles(spatial), 156)
         if floor is not None:
             batches.append(floor)
-    set_mesh = _location_set_mesh(show.get("id"), scene["locationId"])
     if set_mesh is not None:
         vertices, faces, key = set_mesh
         batches.append(ClayBatch(vertices, faces, 176, key=key))
     batches.extend(_prop_surfaces(show, episode, scene, time_seconds))
     people: list[tuple[str, dict[str, Vec3]]] = []
     character_triangles: list[tuple[Vec3, Vec3, Vec3]] = []
+    taken: list[Vec3] = []
     for character_id in scene["characterIds"]:
-        state = episode_character_state(episode, character_id, time_seconds)
+        state = dict(episode_character_state(episode, character_id, time_seconds))
+        state["position"] = list(
+            _fitted_feet(show, scene["locationId"], vec(state["position"]), taken)
+        )
+        taken.append(vec(state["position"]))
         joints = character_pose_joints(
             show, episode, scene, state, time_seconds, character_id
         )
@@ -958,7 +1046,7 @@ def render_scene_proxy(
     destination: Path,
     debug: bool = True,
 ) -> None:
-    camera = camera_at(scene, time_seconds)
+    camera = _fitted_camera(show, scene, time_seconds)
     location = show["locations"][scene["locationId"]]
     spatial = location["spatial"]
     image = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (13, 17, 25))
@@ -986,7 +1074,10 @@ def render_scene_proxy(
 
     states: list[tuple[float, str, dict]] = []
     for character_id in scene["characterIds"]:
-        state = episode_character_state(episode, character_id, time_seconds)
+        state = dict(episode_character_state(episode, character_id, time_seconds))
+        state["position"] = list(
+            _fitted_feet(show, scene["locationId"], vec(state["position"]))
+        )
         if state["locationId"] != scene["locationId"]:
             raise ValueError(
                 f"Scene {scene['sceneNumber']} shows {character_id} at "
@@ -1155,10 +1246,11 @@ def character_facing_direction(
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return None
     start = float(scene["timeRangeSeconds"][0])
-    camera = camera_at(scene, start)
+    camera = _fitted_camera(show or {}, scene, start)
     state = episode_character_state(episode, character_id, start)
+    feet = _fitted_feet(show or {}, scene["locationId"], vec(state["position"]))
     _, _, head_height = _stance_heights(state["stance"], _height_scale(show or {}, character_id))
-    head = add(vec(state["position"]), (0.0, 0.0, head_height))
+    head = add(feet, (0.0, 0.0, head_height))
     projected = project(head, camera)
     if projected is None:
         return None
@@ -1169,8 +1261,9 @@ def character_facing_direction(
         _, _, target_head_height = _stance_heights(
             target["stance"], _height_scale(show or {}, target_id)
         )
+        target_feet = _fitted_feet(show or {}, scene["locationId"], vec(target["position"]))
         target_projected = project(
-            add(vec(target["position"]), (0.0, 0.0, target_head_height)),
+            add(target_feet, (0.0, 0.0, target_head_height)),
             camera,
         )
     else:
@@ -1219,7 +1312,7 @@ def spatial_target_screen_position(
         raise ValueError(
             f"Unknown spatial focus target {target_id!r} in scene {scene['sceneNumber']}"
         )
-    projected = project(vec(position), camera_at(scene, start))
+    projected = project(vec(position), _fitted_camera(show, scene, start))
     if not projected:
         raise ValueError(
             f"Spatial focus target {target_id!r} is behind scene "
@@ -1247,7 +1340,11 @@ def write_scene_description(show: dict, episode: dict, scene: dict) -> Path:
 
     camera_frames = []
     for frame in camera_keyframes(scene):
-        pose = _camera_pose(frame)
+        pose = _fitted_camera(
+            show,
+            {**scene, "camera": {"keyframes": [frame]}},
+            float(frame["timeSeconds"]),
+        )
         camera_frames.append(
             {
                 "timeSeconds": float(frame["timeSeconds"]),
@@ -1267,7 +1364,9 @@ def write_scene_description(show: dict, episode: dict, scene: dict) -> Path:
             time_seconds = float(frame["timeSeconds"])
             if time_seconds < start - 1e-6 or time_seconds > finish + 1e-6:
                 continue
-            position = [float(value) for value in frame["position"]]
+            position = list(
+                _fitted_feet(show, scene["locationId"], vec(frame["position"]))
+            )
             keyframes.append(
                 {
                     "timeSeconds": time_seconds,
@@ -1279,7 +1378,9 @@ def write_scene_description(show: dict, episode: dict, scene: dict) -> Path:
             )
         if not keyframes and character_id in tracks:
             state = episode_character_state(episode, character_id, start)
-            position = [float(value) for value in state["position"]]
+            position = list(
+                _fitted_feet(show, scene["locationId"], vec(state["position"]))
+            )
             keyframes.append(
                 {
                     "timeSeconds": start,
@@ -1408,7 +1509,7 @@ def render_blocked_scene(
         blockout_path.parent.mkdir(parents=True, exist_ok=True)
         mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
-        camera = camera_at(scene, time_seconds)
+        camera = _fitted_camera(show, scene, time_seconds)
         _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
         render_structure_maps(
             show, episode, scene, time_seconds, depth_path, pose_path, zbuf
@@ -1460,10 +1561,9 @@ def generate_episode_previs(show: dict, episode: dict, scene_number: int | None 
             continue
         if not scene.get("camera") or not scene.get("timeRangeSeconds"):
             continue
-        print(
-            f"Blocking scene {scene['sceneNumber']:02d} from the stage (no model)...",
-            flush=True,
-        )
+        mesh = _location_set_mesh(show.get("id"), scene["locationId"])
+        where = "location mesh" if mesh is not None else "empty stage"
+        print(f"Blocking scene {scene['sceneNumber']:02d} on the {where}...", flush=True)
         generated.extend(render_blocked_scene(show, episode, scene))
     return generated
 

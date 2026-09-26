@@ -3,5 +3,5 @@ numpy>=1.26.0
 Pillow>=10.0.0
 opencv-python-headless>=4.10.0
 requests>=2.32.0
-# trimesh and moderngl are installed by `pnpm run content:asset-deps` into the ComfyUI venv.
+# trimesh, moderngl, transformers, timm, and einops are installed by `pnpm run content:asset-deps` into the ComfyUI venv.
 # Do not pip-install this whole file into that venv.
