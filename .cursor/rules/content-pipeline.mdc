@@ -17,10 +17,10 @@ Everything the pipeline creates lives under `output/<command>/<show>/`:
 - `frames` — character portraits and scene stills
 - `generate` — scene clips and the episode cut
 
-A location is the place. A scene is one timed shot in an episode. A landmark is an optional coordinate in the generated location mesh. `pnpm run content:landmarks` fills that coordinate from the mesh after `content:assets`. Clay previs draws that mesh on the GPU, stands people on its open deck, and moves an interior camera out of the stone. A camera already outside the mesh stays where it was authored. `pnpm run content:asset-deps` installs moderngl for the draw and Florence-2 for the landmark step.
+A location is the place. A scene is one timed shot in an episode. A landmark on an empty location is an optional coordinate in that location's one mesh. `pnpm run content:landmarks` fills that coordinate after `content:assets`. A landmark on a location with people is one object with `position`, `size`, and `appearance`; previs places its mesh there and does not move the camera or the people. `pnpm run content:asset-deps` installs moderngl for the draw and Florence-2 for the empty-location landmark step.
 
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The viewer reads Y-up and does not convert. Open it with `pnpm run view -- --show <show-id>`.
 
 Commands go through root `package.json` scripts. `docs/ASSETS.md` is the mesh and license contract.
 
-`content:plates` has Qwen draw each location and stop. `content:assets` has TRELLIS.2 turn that reviewed picture into one mesh. ComfyUI's DecimateMesh node caps each mesh. The default polygon limit is 300,000, and `pnpm run content:assets -- --triangles 300000` sets another limit. The mesh is scaled uniformly into the location `sizeMeters`, so the generated shape is not stretched.
+`content:plates` has Qwen draw and stop. An empty location is one picture of the place. A location with people is one picture per landmark. `content:assets` has TRELLIS.2 turn each reviewed picture into one mesh. ComfyUI's DecimateMesh node caps each mesh. The default polygon limit is 300,000, and `pnpm run content:assets -- --triangles 300000` sets another limit. An empty location's mesh is scaled uniformly into `sizeMeters`. A landmark mesh is scaled the same way into that landmark's `size`.

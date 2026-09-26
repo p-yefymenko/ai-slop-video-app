@@ -1,8 +1,8 @@
-"""Turn each location description into one plate, then one mesh.
+"""Turn a location into plates and meshes.
 
-Qwen draws the whole place. TRELLIS.2 turns that reviewed picture into one mesh.
-The files stay under ``output/plates/<show>`` and ``output/assets/<show>``.
-Characters stay out of the mesh. Their clay mannequins are built at previs time.
+A location with no people is one plate and one mesh of the whole place.
+A location with people is one plate and one mesh per landmark, fitted to the
+size written on that landmark. Characters stay out of those meshes.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from pathlib import Path
 
 from asset_generate import generate_asset_mesh, plate_is_ready
 from asset_sources import materialize_mesh
+from coords import schema_to_gltf
 from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
@@ -36,6 +37,8 @@ class AssetRequest:
     size: tuple[float, float, float]
     location_id: str
     appearance: str
+    landmark_id: str | None = None
+    position: tuple[float, float, float] | None = None
 
 
 @dataclass
@@ -76,7 +79,7 @@ class AssetResolver:
         return resolved
 
     def resolve_one(self, request: AssetRequest) -> ResolvedLocation:
-        plate = self._plate_path(request.location_id)
+        plate = self._plate_path(request)
         if not plate_is_ready(plate):
             raise RuntimeError(
                 f"{request.consumer_id}: no reviewed plate at {plate}. "
@@ -86,7 +89,7 @@ class AssetResolver:
         digest = asset_hash(GENERATED_SOURCE, appearance_source_id(request.appearance), request.size)
         if plate_record.get("descriptionHash") not in (None, digest):
             raise RuntimeError(
-                f"{request.consumer_id}: the plate does not match the location text. "
+                f"{request.consumer_id}: the plate does not match the current text. "
                 "Run `pnpm run content:plates`."
             )
         cached = self._cached(request, digest)
@@ -99,8 +102,8 @@ class AssetResolver:
         return self._import_generated(request, digest)
 
     def _cached(self, request: AssetRequest, digest: str) -> ResolvedLocation | None:
-        directory = self._location_dir(request.location_id)
-        meta_path = directory / "location.json"
+        directory = self._asset_dir(request)
+        meta_path = directory / self._record_name(request)
         glb = directory / "model.glb"
         if not meta_path.is_file() or not glb.is_file():
             return None
@@ -122,10 +125,10 @@ class AssetResolver:
         )
 
     def _import_generated(self, request: AssetRequest, digest: str) -> ResolvedLocation:
-        directory = self._location_dir(request.location_id)
+        directory = self._asset_dir(request)
         directory.mkdir(parents=True, exist_ok=True)
         plate_copy = directory / "plate.png"
-        shutil.copyfile(self._plate_path(request.location_id), plate_copy)
+        shutil.copyfile(self._plate_path(request), plate_copy)
         try:
             fetched = materialize_mesh(
                 self.generator(
@@ -168,7 +171,14 @@ class AssetResolver:
             "fit": "uniform",
             "model": "model.glb",
         }
-        (directory / "location.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+        if request.landmark_id:
+            record["landmarkId"] = request.landmark_id
+            if request.position is not None:
+                record["schemaPosition"] = list(request.position)
+                record["position"] = list(schema_to_gltf(request.position))
+        (directory / self._record_name(request)).write_text(
+            json.dumps(record, indent=2), encoding="utf-8"
+        )
         return ResolvedLocation(
             location_id=request.location_id,
             glb=directory / "model.glb",
@@ -178,11 +188,17 @@ class AssetResolver:
             size=request.size,
         )
 
-    def _plate_path(self, location_id: str) -> Path:
-        return self.output_dir / "plates" / self.show_id / location_id / "plate.png"
+    def _plate_path(self, request: AssetRequest) -> Path:
+        return self._asset_dir(request, "plates") / "plate.png"
 
-    def _location_dir(self, location_id: str) -> Path:
-        return self.output_dir / "assets" / self.show_id / location_id
+    def _asset_dir(self, request: AssetRequest, stage: str = "assets") -> Path:
+        directory = self.output_dir / stage / self.show_id / request.location_id
+        if request.landmark_id:
+            return directory / request.landmark_id
+        return directory
+
+    def _record_name(self, request: AssetRequest) -> str:
+        return "landmark.json" if request.landmark_id else "location.json"
 
 
 def location_scene_description(location_id: str, location: dict) -> str:
@@ -219,7 +235,10 @@ def write_location_plates(
     for request in collect_requests(show):
         appearance = request.appearance
         digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), request.size)
-        plate = output_dir / "plates" / show_id / request.location_id / "plate.png"
+        plate = output_dir / "plates" / show_id / request.location_id
+        if request.landmark_id:
+            plate = plate / request.landmark_id
+        plate = plate / "plate.png"
         meta_path = plate.with_name("plate.json")
         stored = _read_json(meta_path, {})
         if plate_is_ready(plate) and stored.get("descriptionHash") == digest and not refresh:
@@ -231,22 +250,41 @@ def write_location_plates(
                 f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one"
             )
         writer(appearance, plate.parent)
-        _discard_location_mesh(output_dir, show_id, request.location_id)
-        meta_path.write_text(
-            json.dumps({"locationId": request.location_id, "descriptionHash": digest}, indent=2),
-            encoding="utf-8",
-        )
+        _discard_mesh(output_dir, show_id, request)
+        meta = {"locationId": request.location_id, "descriptionHash": digest}
+        if request.landmark_id:
+            meta["landmarkId"] = request.landmark_id
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
         print(f"  {request.label}: {plate}", flush=True)
         plates.append(plate)
     return plates
 
 
-def _discard_location_mesh(output_dir: Path, show_id: str, location_id: str) -> None:
-    directory = output_dir / "assets" / show_id / location_id
-    for name in ("model.glb", "location.json", "thumb.png"):
+def _discard_mesh(output_dir: Path, show_id: str, request: AssetRequest) -> None:
+    directory = output_dir / "assets" / show_id / request.location_id
+    if request.landmark_id:
+        directory = directory / request.landmark_id
+    names = ("model.glb", "thumb.png", "landmark.json" if request.landmark_id else "location.json")
+    for name in names:
         path = directory / name
         if path.is_file():
             path.unlink()
+
+
+def location_has_people(show: dict, location_id: str) -> bool:
+    """True when a person stands in this location or a scene shows people there."""
+    for episode in show.get("episodes") or []:
+        if not isinstance(episode, dict):
+            continue
+        for scene in episode.get("scenes") or []:
+            if scene.get("locationId") == location_id and scene.get("characterIds"):
+                return True
+        tracks = ((episode.get("spatialTimeline") or {}).get("characterTracks")) or {}
+        for track in tracks.values():
+            for frame in track or []:
+                if isinstance(frame, dict) and frame.get("locationId") == location_id:
+                    return True
+    return False
 
 
 def collect_requests(show: dict) -> list[AssetRequest]:
@@ -255,6 +293,9 @@ def collect_requests(show: dict) -> list[AssetRequest]:
         if not isinstance(location, dict):
             continue
         spatial = location.get("spatial") or {}
+        if location_has_people(show, str(location_id)):
+            requests.extend(_landmark_requests(str(location_id), spatial))
+            continue
         requests.append(
             AssetRequest(
                 consumer_id=f"location:{location_id}",
@@ -262,6 +303,36 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 size=_vec3(spatial.get("sizeMeters"), (8.0, 10.0, 4.0)),
                 location_id=str(location_id),
                 appearance=location_scene_description(str(location_id), location),
+            )
+        )
+    return requests
+
+
+def _landmark_requests(location_id: str, spatial: dict) -> list[AssetRequest]:
+    requests: list[AssetRequest] = []
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if not isinstance(landmark, dict):
+            continue
+        appearance = _appearance(landmark.get("appearance"))
+        size = landmark.get("size")
+        position = landmark.get("position")
+        if not appearance or not isinstance(size, list) or len(size) != 3:
+            raise RuntimeError(
+                f"landmark:{location_id}:{landmark_id} needs position, size, and appearance"
+            )
+        if not isinstance(position, list) or len(position) != 3:
+            raise RuntimeError(
+                f"landmark:{location_id}:{landmark_id} needs position, size, and appearance"
+            )
+        requests.append(
+            AssetRequest(
+                consumer_id=f"landmark:{location_id}:{landmark_id}",
+                label=f"{location_id}/{landmark_id}",
+                size=(float(size[0]), float(size[1]), float(size[2])),
+                location_id=location_id,
+                appearance=appearance,
+                landmark_id=str(landmark_id),
+                position=(float(position[0]), float(position[1]), float(position[2])),
             )
         )
     return requests
@@ -286,21 +357,34 @@ def export_credits(output_dir: Path, destination: Path) -> None:
     lines = [
         "# Credits",
         "",
-        "Location meshes are generated for one show. Qwen-Image-Edit-2511 draws the place",
-        "and TRELLIS.2 turns that picture into one mesh. Both models are used under",
-        "their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
+        "Location meshes are generated for one show. An empty location is one mesh of the",
+        "place. A location with people is one mesh per landmark, fitted to the size in",
+        "the script. Qwen-Image-Edit-2511 draws the picture and TRELLIS.2 meshes it.",
+        "Both models are used under their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
         "",
     ]
-    records = sorted((output_dir / "assets").glob("*/*/location.json")) if (output_dir / "assets").is_dir() else []
+    roots = []
+    assets = output_dir / "assets"
+    if assets.is_dir():
+        roots.extend(assets.glob("*/*/location.json"))
+        roots.extend(assets.glob("*/*/*/landmark.json"))
+    records = sorted(roots)
     if not records:
         lines.append("No generated meshes have been recorded.")
     else:
         for path in records:
             record = json.loads(path.read_text(encoding="utf-8"))
-            show_id = record.get("showId") or path.parents[1].name
-            location_id = record.get("locationId") or path.parent.name
+            landmark_id = record.get("landmarkId")
+            if landmark_id:
+                show_id = record.get("showId") or path.parents[2].name
+                location_id = record.get("locationId") or path.parents[1].name
+                name = f"{show_id}/{location_id}/{landmark_id}"
+            else:
+                show_id = record.get("showId") or path.parents[1].name
+                location_id = record.get("locationId") or path.parent.name
+                name = f"{show_id}/{location_id}"
             lines.append(
-                f"- {show_id}/{location_id} by Qwen-Image-Edit-2511, TRELLIS.2 (MIT). "
+                f"- {name} by Qwen-Image-Edit-2511, TRELLIS.2 (MIT). "
                 "Source: trellis2. https://github.com/microsoft/TRELLIS.2"
             )
     lines.append("")

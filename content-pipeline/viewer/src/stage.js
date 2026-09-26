@@ -74,12 +74,43 @@ export class Stage {
     this._frameView(box);
   }
 
+  async showLandmarks(landmarks) {
+    this.clear();
+    const pieces = [];
+    for (const landmark of landmarks || []) {
+      if (!landmark.modelUrl || !landmark.position) continue;
+      const object = await this._load(landmark.modelUrl);
+      object.position.set(landmark.position[0], landmark.position[1], landmark.position[2]);
+      this.root.add(object);
+      pieces.push(object);
+    }
+    if (!pieces.length) return;
+    const box = new THREE.Box3();
+    for (const object of pieces) box.expandByObject(object);
+    this._frameView(box);
+  }
+
   async showScene(scene, modelUrl) {
     this.clear();
     this.shot = scene;
     if (modelUrl) this.root.add(await this._load(modelUrl));
     for (const landmark of scene.landmarks || []) {
       if (!landmark.position) continue;
+      if (landmark.model) {
+        const object = await this._load(`/pipeline/output/${landmark.model}`);
+        object.position.set(landmark.position[0], landmark.position[1], landmark.position[2]);
+        this.root.add(object);
+        this.root.add(
+          this._label(
+            landmark.id,
+            "show",
+            landmark.position[0],
+            landmark.position[1] + 0.8,
+            landmark.position[2],
+          ),
+        );
+        continue;
+      }
       const marker = new THREE.Mesh(
         new THREE.SphereGeometry(0.35, 12, 8),
         new THREE.MeshStandardMaterial({ color: 0x7eb6d9 }),

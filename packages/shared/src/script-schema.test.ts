@@ -27,6 +27,8 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
           landmarks: {
             bench: {
               position: [0, 1, 0],
+              size: [1.6, 0.6, 0.5],
+              appearance: "One stone bench, a single object, no room.",
             },
           },
         },
@@ -123,14 +125,24 @@ test("rejects a prop track whose id was never declared", () => {
   assert.match(report, /not declared/);
 });
 
-test("accepts a landmark with no coordinate yet", () => {
+test("accepts an empty landmark on a location with no people", () => {
   const show = minimalShow();
+  show.episodes[0].scenes[0].characterIds = [];
+  show.episodes[0].spatialTimeline.characterTracks = {};
   show.locations.room.spatial.landmarks.bench = {};
   const result = parseShowScript(show, {
     showId: "demo-show",
     showIdLabel: "the filename stem",
   });
   assert.equal(result.ok, true);
+});
+
+test("requires size and appearance where people stand", () => {
+  const show = minimalShow();
+  show.locations.room.spatial.landmarks.bench = { position: [0, 1, 0] };
+  const report = messages(show);
+  assert.match(report, /size is required/);
+  assert.match(report, /appearance is required/);
 });
 
 test("rejects a catalog search on a landmark", () => {
@@ -142,12 +154,15 @@ test("rejects a catalog search on a landmark", () => {
   assert.match(report, /need/);
 });
 
-test("rejects a landmark appearance note", () => {
+test("rejects a landmark appearance on a location with no people", () => {
   const show = minimalShow();
-  (show.locations.room.spatial.landmarks.bench as { appearance?: string }).appearance =
-    "One low stone fire ring, a single object.";
+  show.episodes[0].scenes[0].characterIds = [];
+  show.episodes[0].spatialTimeline.characterTracks = {};
+  show.locations.room.spatial.landmarks.bench = {
+    appearance: "One low stone fire ring, a single object.",
+  };
   const report = messages(show);
-  assert.match(report, /appearance/);
+  assert.match(report, /size and appearance belong on a location that has people/);
 });
 
 test("rejects a catalog id on a landmark", () => {

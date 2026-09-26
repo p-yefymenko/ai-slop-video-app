@@ -117,13 +117,14 @@ function showHome() {
 async function showLocation(locationId) {
   const listed = catalog.locations.find((item) => item.locationId === locationId);
   if (!listed) throw new Error(`No location ${locationId}`);
-  if (listed.modelUrl) await stage.showModel(listed.modelUrl);
+  if (listed.landmarks?.length) await stage.showLandmarks(listed.landmarks);
+  else if (listed.modelUrl) await stage.showModel(listed.modelUrl);
   else stage.clear();
   fillFacts("Location", [
     ["Show", catalog.showId || ""],
     ["Location", locationId],
     ["Size", formatSize(listed.sizeMeters)],
-    ["Mesh", listed.modelUrl ? "model.glb" : "not built"],
+    ["Mesh", listed.landmarks?.length ? `${listed.landmarks.length} landmarks` : listed.modelUrl ? "model.glb" : "not built"],
     ["Plate", listed.plateUrl ? "plate.png" : "not drawn"],
   ]);
   if (listed.plateUrl) {

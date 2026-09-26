@@ -43,11 +43,31 @@
       "spatial": {
         "sizeMeters": [22, 30, 18],
         "landmarks": {
-          "sun_well": {"position": [0.16, -0.71, 0.91]},
-          "anvil_altar": {"position": [0.16, -0.71, 0.91]},
-          "throne_dais": {"position": [0.16, -0.71, 0.91]},
-          "gate_column_l": {"position": [-8.63, 8.44, 4.01]},
-          "gate_column_r": {"position": [-8.63, 8.44, 4.01]}
+          "sun_well": {
+            "position": [0, 4.5, 0],
+            "size": [2.2, 2.2, 1.2],
+            "appearance": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard."
+          },
+          "anvil_altar": {
+            "position": [-6.2, 4.5, 0],
+            "size": [1.8, 1.2, 0.9],
+            "appearance": "One blacksmith anvil of dark forged iron, a single object, no tools and no workshop."
+          },
+          "throne_dais": {
+            "position": [0, 12.2, 0],
+            "size": [5.0, 3.0, 0.4],
+            "appearance": "One low rectangular stone dais with worn steps, a single platform, no throne and no room."
+          },
+          "gate_column_l": {
+            "position": [-4.2, -12.4, 0],
+            "size": [0.8, 0.8, 4.2],
+            "appearance": "One twisted marble column standing alone, no base building and no second column."
+          },
+          "gate_column_r": {
+            "position": [4.2, -12.4, 0],
+            "size": [0.8, 0.8, 4.2],
+            "appearance": "One twisted marble column standing alone, no base building and no second column."
+          }
         }
       }
     }

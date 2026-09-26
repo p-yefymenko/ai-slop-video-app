@@ -24,12 +24,27 @@ export function buildCatalog(pipelineRoot, showId) {
     const recordPath = path.join(directory, "location.json");
     const model = path.join(directory, "model.glb");
     const record = fs.existsSync(recordPath) ? JSON.parse(fs.readFileSync(recordPath, "utf8")) : {};
+    const landmarks = [];
+    for (const child of childDirs(directory)) {
+      const childModel = path.join(child, "model.glb");
+      const childRecordPath = path.join(child, "landmark.json");
+      if (!fs.existsSync(childModel) && !fs.existsSync(childRecordPath)) continue;
+      const childRecord = fs.existsSync(childRecordPath)
+        ? JSON.parse(fs.readFileSync(childRecordPath, "utf8"))
+        : {};
+      landmarks.push({
+        id: childRecord.landmarkId || path.basename(child),
+        modelUrl: fs.existsSync(childModel) ? fileUrl(pipelineRoot, childModel) : null,
+        position: childRecord.position || null,
+      });
+    }
     locations.set(locationId, {
       locationId,
       title: record.title || locationId,
       sizeMeters: record.sizeMeters || null,
-      modelUrl: fs.existsSync(model) ? fileUrl(pipelineRoot, model) : null,
+      modelUrl: landmarks.length || !fs.existsSync(model) ? null : fileUrl(pipelineRoot, model),
       plateUrl: null,
+      landmarks,
     });
   }
   const plateRoot = path.join(pipelineRoot, "output", "plates", showId);
@@ -42,6 +57,7 @@ export function buildCatalog(pipelineRoot, showId) {
       sizeMeters: null,
       modelUrl: null,
       plateUrl: null,
+      landmarks: [],
     };
     if (fs.existsSync(plate)) entry.plateUrl = fileUrl(pipelineRoot, plate);
     locations.set(locationId, entry);

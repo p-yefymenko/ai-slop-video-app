@@ -208,6 +208,49 @@ class AssetTests(unittest.TestCase):
         self.assertNotIn("sun well", lowered)
         self.assertNotIn("several people", lowered)
 
+    def test_a_location_with_people_builds_one_mesh_per_landmark(self) -> None:
+        show = self._show()
+        show["episodes"] = [
+            {
+                "scenes": [{"locationId": "room", "characterIds": ["ada"]}],
+                "spatialTimeline": {"characterTracks": {}},
+            }
+        ]
+        show["locations"]["room"]["spatial"]["landmarks"] = {
+            "bench": {
+                "position": [0, 1, 0],
+                "size": [2.0, 1.0, 0.5],
+                "appearance": "One stone bench, a single object, no room.",
+            },
+            "column": {
+                "position": [2, 1, 0],
+                "size": [0.4, 0.4, 3.0],
+                "appearance": "One marble column standing alone.",
+            },
+        }
+        requests = collect_requests(show)
+        self.assertEqual({item.landmark_id for item in requests}, {"bench", "column"})
+        self.assertNotIn("location:room", [item.consumer_id for item in requests])
+        generator = CountingGenerator(self.cube)
+        for request in requests:
+            plate = self.output / "plates" / "demo" / request.location_id / request.landmark_id / "plate.png"
+            plate.parent.mkdir(parents=True, exist_ok=True)
+            plate.write_bytes(b"x" * 2048)
+            from asset_resolver import appearance_source_id, asset_hash
+
+            digest = asset_hash("trellis2", appearance_source_id(request.appearance), request.size)
+            plate.with_name("plate.json").write_text(
+                json.dumps({"descriptionHash": digest}),
+                encoding="utf-8",
+            )
+        resolved = self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, 2)
+        bench = resolved["landmark:room:bench"]
+        vertices, _faces = read_schema_mesh(bench.glb)
+        extent = vertices.max(axis=0) - vertices.min(axis=0)
+        np.testing.assert_allclose(sorted(extent), sorted([0.5, 0.5, 0.5]), atol=1e-3)
+        self.assertTrue((bench.glb.parent / "landmark.json").is_file())
+
     def test_one_location_is_one_mesh(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show()

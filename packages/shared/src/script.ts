@@ -32,11 +32,22 @@ export type Vec3 = [number, number, number];
 
 export type LocationLandmark = {
   /**
-   * Meters in the generated location mesh: `[X right, Y forward, Z up]`.
-   * Omit until the mesh exists. `pnpm run content:landmarks` fills this from
-   * the mesh. A coordinate already set is kept, and it can still be edited by hand.
+   * Meters: `[X right, Y forward, Z up]`.
+   * A location with people authors this. A location with no people may omit it
+   * until `pnpm run content:landmarks` fills it from the whole-location mesh.
    */
   position?: Vec3;
+  /**
+   * Target size `[width X, depth Y, height Z]` in meters.
+   * Required on a location that has people. The landmark mesh is fitted into this box.
+   */
+  size?: Vec3;
+  /**
+   * What this one object looks like. Qwen draws it. TRELLIS.2 turns that picture
+   * into the mesh. No people, camera, or surrounding place.
+   * Required on a location that has people. Omitted on an empty location.
+   */
+  appearance?: string;
 };
 
 /**
@@ -52,7 +63,10 @@ export type ShowProp = {
 export type StageGeometry = {
   /** Location size `[width X, depth Y, height Z]` in meters. */
   sizeMeters: Vec3;
-  /** Named points in this location. A point may be empty until it is placed. */
+  /**
+   * Named objects. A location with people generates one mesh per landmark at `size`.
+   * A location with no people is one mesh, and these are optional points in it.
+   */
   landmarks: Record<string, LocationLandmark>;
 };
 

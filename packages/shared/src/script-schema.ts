@@ -70,6 +70,8 @@ function vec3(label: string, positive = false) {
 const locationLandmarkSchema = z
   .object({
     position: vec3("position").optional(),
+    size: vec3("size", true).optional(),
+    appearance: text("appearance").optional(),
   })
   .strict();
 
@@ -311,6 +313,17 @@ function outsideStage(
   );
 }
 
+function locationHasPeople(show: ShowScript, locationId: string): boolean {
+  return show.episodes.some((episode) => {
+    if (episode.scenes.some((scene) => scene.locationId === locationId && scene.characterIds.length > 0)) {
+      return true;
+    }
+    return Object.values(episode.spatialTimeline.characterTracks).some((track) =>
+      track.some((frame) => frame.locationId === locationId),
+    );
+  });
+}
+
 function checkSnakeId(issues: ScriptIssue[], path: string, id: string, label: string) {
   if (!SNAKE_ID.test(id)) {
     issues.push({
@@ -477,13 +490,26 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   }
   for (const [locationId, location] of Object.entries(show.locations)) {
     checkSnakeId(issues, `locations.${locationId}`, locationId, "location id");
-    for (const landmarkId of Object.keys(location.spatial.landmarks)) {
-      checkSnakeId(
-        issues,
-        `locations.${locationId}.spatial.landmarks.${landmarkId}`,
-        landmarkId,
-        "landmark id",
-      );
+    const occupied = locationHasPeople(show, locationId);
+    for (const [landmarkId, landmark] of Object.entries(location.spatial.landmarks)) {
+      const landmarkPath = `locations.${locationId}.spatial.landmarks.${landmarkId}`;
+      checkSnakeId(issues, landmarkPath, landmarkId, "landmark id");
+      if (occupied) {
+        if (!landmark.position) {
+          issues.push({ path: `${landmarkPath}.position`, message: "position is required" });
+        }
+        if (!landmark.size) {
+          issues.push({ path: `${landmarkPath}.size`, message: "size is required" });
+        }
+        if (!landmark.appearance) {
+          issues.push({ path: `${landmarkPath}.appearance`, message: "appearance is required" });
+        }
+      } else if (landmark.size || landmark.appearance) {
+        issues.push({
+          path: landmarkPath,
+          message: "size and appearance belong on a location that has people",
+        });
+      }
     }
   }
   for (const propId of Object.keys(show.props ?? {})) {

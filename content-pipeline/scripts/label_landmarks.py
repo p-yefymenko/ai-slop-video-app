@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Write landmark positions into the show script from the location mesh.
+"""Write landmark positions into the show script from a whole-location mesh.
 
-TRELLIS does not label the objects in a mesh, and the plate is not that mesh's
-camera. This step renders the fitted mesh from known cameras, asks Florence-2
-where each landmark is in those shaded views, and unprojects the depth buffer.
+Only locations with no people use one mesh. This step renders that mesh from
+known cameras, asks Florence-2 where each landmark is, and unprojects the
+depth buffer. A location with people already has those positions in the script.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from asset_resolver import location_has_people  # noqa: E402
 from mesh_io import read_schema_mesh  # noqa: E402
 from pipeline_paths import (  # noqa: E402
     OUTPUT_DIR,
@@ -362,6 +363,9 @@ def label_script(
             continue
         saw_location = True
         if not isinstance(location, dict):
+            continue
+        if location_has_people(show, str(location_id)):
+            print(f"{location_id}: positions are authored with each landmark", flush=True)
             continue
         spatial = location.get("spatial") or {}
         landmarks = spatial.get("landmarks") or {}
