@@ -23,7 +23,6 @@ from PIL import Image
 from pipeline_paths import (
     OUTPUT_DIR,
     character_image_path,
-    clay_frame_path,
     clip_path,
     discover_show_scripts,
     end_still_path,
@@ -883,25 +882,57 @@ def _disable_face_pass(graph: dict) -> None:
         graph.pop(node_id, None)
 
 
+def structure_pictures(guides: list[str]) -> str:
+    """How Qwen should read the previs guides. The shaded clay frame is not one of them."""
+    lines = [
+        "Picture 1 is a depth map of this exact camera, not a photograph. "
+        "Brighter surfaces are closer. Black is empty space. "
+        "Match that camera, scale, occlusion, and object placement."
+    ]
+    sentences = {
+        "Pose": "Picture {n} is the pose of the people in that same camera. Stand each person on that pose.",
+        "Edges": "Picture {n} is the geometric edges of that same camera. Keep those edges sharp.",
+        "Normals": (
+            "Picture {n} is the surface direction of that same camera. "
+            "Use it for which faces catch the light. Do not copy its colors."
+        ),
+    }
+    for index, title in enumerate(guides, start=2):
+        lines.append(sentences[title].format(n=index))
+    return " ".join(lines)
+
+
+_GUIDE_NODES = (("40", "image2"), ("41", "image3"))
+
+
 def inject_qwen_spatial_refs(
     graph: dict,
     characters: list[dict],
-    blockout_name: str,
+    depth_name: str,
     mask_name: str | None,
+    guides: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Picture 1 is the clay blockout. Identity portraits are a masked second pass."""
-    blockout = graph.get("6")
-    if not isinstance(blockout, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the clay blockout loader")
-    blockout.setdefault("inputs", {})["image"] = blockout_name
-    blockout["_meta"] = {"title": "Clay blockout"}
+    """Picture 1 is the previs depth. Later pictures are pose, edges, or normals."""
+    depth = graph.get("6")
+    if not isinstance(depth, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the depth loader")
+    depth.setdefault("inputs", {})["image"] = depth_name
+    depth["_meta"] = {"title": "Depth"}
     blockout_encoder = _qwen_encoder(graph, "Blockout instruction")
     if blockout_encoder is None:
         raise RuntimeError("Spatial Qwen workflow is missing the blockout instruction")
     blockout_inputs = blockout_encoder.setdefault("inputs", {})
     blockout_inputs["image1"] = ["6", 0]
-    blockout_inputs.pop("image2", None)
-    blockout_inputs.pop("image3", None)
+    for node_id, image_key in _GUIDE_NODES:
+        blockout_inputs.pop(image_key, None)
+        graph.pop(node_id, None)
+    for (node_id, image_key), (image_name, title) in zip(_GUIDE_NODES, guides or []):
+        graph[node_id] = {
+            "inputs": {"image": image_name},
+            "class_type": "LoadImage",
+            "_meta": {"title": title},
+        }
+        blockout_inputs[image_key] = [node_id, 0]
     if not characters or mask_name is None:
         _disable_face_pass(graph)
         return
@@ -1157,19 +1188,36 @@ def render_spatial_still(
     scene: dict,
     location: dict,
     dest: Path,
-    blockout_path: Path,
+    depth_path: Path,
     mask_path: Path,
+    pose_path: Path,
+    edge_path: Path,
+    normal_path: Path,
     seed: int,
     mode: str,
 ) -> None:
-    """Restyle one clay blockout into a photoreal still. The blockout is picture 1."""
-    if not present(blockout_path):
+    """Generate one still from the previs depth, edges, and normals. People also get the pose."""
+    missing = [
+        path
+        for path in (depth_path, edge_path, normal_path)
+        if not present(path)
+    ]
+    if missing:
         raise SystemExit(
-            f"Missing blocked scene frame {blockout_path}. Run `pnpm run content:previs` first."
+            f"Missing previs guide {missing[0]}. Run `pnpm run content:previs` first."
         )
     characters = resolve_scene_characters(show, scene)
+    use_pose = bool(characters) and present(pose_path) and not pose_image_is_blank(pose_path)
+    guides: list[tuple[str, str]] = []
+    if use_pose:
+        guides.append((stage_named_image(pose_path, "pose"), "Pose"))
+        guides.append((stage_named_image(edge_path, "edges"), "Edges"))
+    else:
+        guides.append((stage_named_image(edge_path, "edges"), "Edges"))
+        guides.append((stage_named_image(normal_path, "normal"), "Normals"))
     character_ids = scene["characterIds"]
     values = {
+        "structurePictures": structure_pictures([title for _name, title in guides]),
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
         "locationPromptBlock": location["promptBlock"],
@@ -1180,21 +1228,24 @@ def render_spatial_still(
     face_prompt = None
     if characters and present(mask_path) and not pose_image_is_blank(mask_path):
         identity_ids = character_ids[:MAX_QWEN_REFS]
-        values = {
-            **values,
+        face_values = {
+            "characterCount": values["characterCount"],
+            "characterIds": values["characterIds"],
+            "locationPromptBlock": values["locationPromptBlock"],
+            "imagePrompt": values["imagePrompt"],
             "referenceMap": "; ".join(
                 f"Picture {index} = the face of {character_id} only"
                 for index, character_id in enumerate(identity_ids, start=2)
             ),
         }
-        face_prompt = show_prompt(show, "spatialFaces", values)
+        face_prompt = show_prompt(show, "spatialFaces", face_values)
         mask_name = stage_named_image(mask_path, "faces")
-    blockout_name = stage_named_image(blockout_path, "blockout")
+    depth_name = stage_named_image(depth_path, "depth")
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
     graph = clone_workflow(workflow)
     inject_seed(graph, seed)
     inject_qwen_prompt(graph, blockout_prompt, "Blockout instruction")
-    inject_qwen_spatial_refs(graph, characters, blockout_name, mask_name)
+    inject_qwen_spatial_refs(graph, characters, depth_name, mask_name, guides)
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
     print(f"  Graph seed {seed}", flush=True)
@@ -1326,8 +1377,11 @@ def generate_show(
                         scene,
                         location,
                         still_path,
-                        clay_frame_path(show_id, episode_number, scene_number, "start"),
+                        guide_path(show_id, episode_number, scene_number, "start", "depth"),
                         guide_path(show_id, episode_number, scene_number, "start", "faces"),
+                        guide_path(show_id, episode_number, scene_number, "start", "pose"),
+                        guide_path(show_id, episode_number, scene_number, "start", "edges"),
+                        guide_path(show_id, episode_number, scene_number, "start", "normal"),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
                     )
@@ -1337,8 +1391,11 @@ def generate_show(
                         scene,
                         location,
                         end_path,
-                        clay_frame_path(show_id, episode_number, scene_number, "end"),
+                        guide_path(show_id, episode_number, scene_number, "end", "depth"),
                         guide_path(show_id, episode_number, scene_number, "end", "faces"),
+                        guide_path(show_id, episode_number, scene_number, "end", "pose"),
+                        guide_path(show_id, episode_number, scene_number, "end", "edges"),
+                        guide_path(show_id, episode_number, scene_number, "end", "normal"),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
                     )

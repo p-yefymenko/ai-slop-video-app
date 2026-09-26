@@ -72,11 +72,25 @@ void main() {
 _FRAGMENT = """
 #version 330 core
 uniform int u_base;
+uniform int u_pass;
+uniform vec3 u_right;
+uniform vec3 u_up;
+uniform vec3 u_forward;
 flat in vec3 g_normal;
 out vec4 frag_color;
 
 void main() {
     float length_n = length(g_normal);
+    if (u_pass == 1) {
+        if (length_n < 1e-6) {
+            frag_color = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+        vec3 normal = g_normal / length_n;
+        vec3 encoded = vec3(dot(normal, u_right), dot(normal, u_up), dot(normal, u_forward));
+        frag_color = vec4(encoded * 0.5 + 0.5, 1.0);
+        return;
+    }
     float value = float(u_base);
     if (length_n >= 1e-6) {
         vec3 normal = g_normal / length_n;
@@ -196,6 +210,7 @@ class _Renderer:
         height: int,
         near: float,
         background: tuple[int, int, int],
+        shading: str = "clay",
     ) -> tuple[Image.Image, np.ndarray]:
         self._ensure_target(width, height)
         assert self.fbo is not None and self.depth is not None
@@ -211,6 +226,7 @@ class _Renderer:
         self.program["u_near"].value = float(near)
         self.program["u_far"].value = float(FAR_CLIP)
         red, green, blue = (channel / 255.0 for channel in background)
+        self.program["u_pass"].value = 1 if shading == "normal" else 0
         self.fbo.clear(red, green, blue, 1.0, depth=1.0)
         for batch in batches:
             if batch.faces.size == 0:
@@ -265,6 +281,7 @@ def raster_clay(
     height: int,
     near: float,
     background: tuple[int, int, int],
+    shading: str = "clay",
 ) -> tuple[Image.Image, np.ndarray]:
     global _RENDERER
     if _RENDERER is None:
@@ -276,4 +293,26 @@ def raster_clay(
         height=height,
         near=near,
         background=background,
+        shading=shading,
     )
+
+
+def raster_normals(
+    batches: list[ClayBatch],
+    basis: tuple,
+    *,
+    width: int,
+    height: int,
+    near: float,
+) -> Image.Image:
+    """Camera-space normals of the same draw. Empty space stays black."""
+    image, _depth = raster_clay(
+        batches,
+        basis,
+        width=width,
+        height=height,
+        near=near,
+        background=(0, 0, 0),
+        shading="normal",
+    )
+    return image

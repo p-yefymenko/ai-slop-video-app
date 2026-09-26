@@ -728,6 +728,40 @@ def render_mesh_thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: 
     image.resize((width, thumb_height), Image.Resampling.LANCZOS).save(destination)
 
 
+def _edge_image(zbuf: np.ndarray) -> Image.Image:
+    """White lines where depth jumps or a surface meets empty space."""
+    valid = np.isfinite(zbuf)
+    depth = np.where(valid, zbuf, 0.0).astype(np.float32)
+    dx = np.zeros_like(depth)
+    dy = np.zeros_like(depth)
+    dx[:, 1:] = np.abs(depth[:, 1:] - depth[:, :-1])
+    dy[1:, :] = np.abs(depth[1:, :] - depth[:-1, :])
+    scale = np.maximum(depth, 1e-3)
+    jump = ((dx / scale) > 0.04) | ((dy / scale) > 0.04)
+    empty = ~valid
+    silhouette = np.zeros(valid.shape, dtype=bool)
+    silhouette[:, 1:] |= valid[:, 1:] & empty[:, :-1]
+    silhouette[:, :-1] |= valid[:, :-1] & empty[:, 1:]
+    silhouette[1:, :] |= valid[1:, :] & empty[:-1, :]
+    silhouette[:-1, :] |= valid[:-1, :] & empty[1:, :]
+    edges = valid & (jump | silhouette)
+    gray = np.zeros(zbuf.shape, dtype=np.uint8)
+    gray[edges] = 255
+    return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
+
+
+def _raster_normals(batches: list, camera: dict) -> Image.Image:
+    from clay_gpu import raster_normals
+
+    return raster_normals(
+        batches,
+        _camera_basis(camera),
+        width=PROXY_WIDTH,
+        height=PROXY_HEIGHT,
+        near=NEAR_CLIP,
+    )
+
+
 def _depth_image(zbuf: np.ndarray) -> Image.Image:
     valid = np.isfinite(zbuf)
     gray = np.zeros(zbuf.shape, dtype=np.uint8)
@@ -736,8 +770,7 @@ def _depth_image(zbuf: np.ndarray) -> Image.Image:
         far = float(np.percentile(zbuf[valid], 99))
         span = max(far - near, 1e-3)
         normalized = np.clip((far - zbuf) / span, 0.0, 1.0)
-        # Far surfaces stay gray, not black, so the control image is a depth
-        # drawing rather than an underexposed frame.
+        # Near surfaces are bright. Empty space stays black.
         gray[valid] = np.rint(48.0 + normalized[valid] * 207.0).astype(np.uint8)
     return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
 
@@ -998,16 +1031,26 @@ def render_structure_maps(
     depth_destination: Path,
     pose_destination: Path,
     zbuf: np.ndarray | None = None,
+    edge_destination: Path | None = None,
+    normal_destination: Path | None = None,
 ) -> None:
-    """Depth and pose previews of the same clay surfaces. Not sent to a model.
+    """Depth, edges, normals, and pose of this camera.
 
-    Pass the clay frame's depth buffer so the set is not drawn a second time.
+    content:frames sends these as the 3D ground truth. The shaded clay frame
+    stays a preview. Pass the clay frame's depth buffer so the set is not
+    drawn a second time for the depth and edge maps.
     """
     camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
     depth_destination.parent.mkdir(parents=True, exist_ok=True)
     if zbuf is None:
         _image, zbuf = _raster_clay(batches, camera)
     _depth_image(zbuf).save(depth_destination)
+    if edge_destination is not None:
+        edge_destination.parent.mkdir(parents=True, exist_ok=True)
+        _edge_image(zbuf).save(edge_destination)
+    if normal_destination is not None:
+        normal_destination.parent.mkdir(parents=True, exist_ok=True)
+        _raster_normals(batches, camera).save(normal_destination)
     pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
     _draw_openpose(ImageDraw.Draw(pose), camera, [joints for _character_id, joints in people])
     pose.save(pose_destination)
@@ -1484,15 +1527,37 @@ def render_blocked_scene(
             label,
             "pose",
         )
+        edge_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "edges",
+        )
+        normal_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "normal",
+        )
         blockout_path.parent.mkdir(parents=True, exist_ok=True)
         mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
         camera = camera_at(scene, time_seconds)
         _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
         render_structure_maps(
-            show, episode, scene, time_seconds, depth_path, pose_path, zbuf
+            show,
+            episode,
+            scene,
+            time_seconds,
+            depth_path,
+            pose_path,
+            zbuf,
+            edge_path,
+            normal_path,
         )
-        written.extend((blockout_path, mask_path, depth_path, pose_path))
+        written.extend((blockout_path, mask_path, depth_path, pose_path, edge_path, normal_path))
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )

@@ -13,6 +13,7 @@ from spatial_previs import (  # noqa: E402
     PROXY_HEIGHT,
     PROXY_WIDTH,
     VIEWPORT_GRAY,
+    _edge_image,
     blockout_sample_times,
     camera_at,
     character_facing_direction,
@@ -232,6 +233,8 @@ class SpatialPrevisTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             depth_path = Path(temp) / "depth.png"
             pose_path = Path(temp) / "pose.png"
+            edge_path = Path(temp) / "edges.png"
+            normal_path = Path(temp) / "normal.png"
             render_structure_maps(
                 self.show,
                 self.episode,
@@ -239,17 +242,33 @@ class SpatialPrevisTests(unittest.TestCase):
                 time_seconds,
                 depth_path,
                 pose_path,
+                edge_destination=edge_path,
+                normal_destination=normal_path,
             )
             from PIL import Image
 
-            with Image.open(pose_path) as pose, Image.open(depth_path) as depth:
+            with Image.open(pose_path) as pose, Image.open(depth_path) as depth, Image.open(edge_path) as edges, Image.open(normal_path) as normal:
                 self.assertEqual(pose.size, (PROXY_WIDTH, PROXY_HEIGHT))
                 self.assertEqual(depth.size, (PROXY_WIDTH, PROXY_HEIGHT))
+                self.assertEqual(edges.size, (PROXY_WIDTH, PROXY_HEIGHT))
+                self.assertEqual(normal.size, (PROXY_WIDTH, PROXY_HEIGHT))
                 x, y = int(nose[0]), int(nose[1])
                 self.assertGreater(sum(pose.getpixel((x, y))), 0)
                 self.assertGreater(sum(depth.getpixel((x, y))), 0)
                 extrema = depth.getextrema()
                 self.assertGreater(extrema[0][1], extrema[0][0])
+                self.assertGreater(edges.convert("L").getextrema()[1], 0)
+                self.assertGreater(normal.convert("L").getextrema()[1], 0)
+
+    def test_a_depth_step_becomes_an_edge(self) -> None:
+        import numpy as np
+
+        depth = np.full((8, 8), np.inf)
+        depth[:, :4] = 2.0
+        depth[:, 4:] = 10.0
+        image = _edge_image(depth)
+        self.assertEqual(image.getpixel((4, 4)), (255, 255, 255))
+        self.assertEqual(image.getpixel((1, 1)), (0, 0, 0))
 
     def test_interior_blockout_keeps_the_floor(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)

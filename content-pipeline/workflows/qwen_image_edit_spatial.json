@@ -39,10 +39,10 @@
     },
     "6": {
       "inputs": {
-        "image": "BLOCKOUT.png"
+        "image": "DEPTH.png"
       },
       "class_type": "LoadImage",
-      "_meta": { "title": "Clay blockout" }
+      "_meta": { "title": "Depth" }
     },
     "7": {
       "inputs": {
@@ -57,7 +57,7 @@
     "8": {
       "inputs": {
         "clip": ["2", 0],
-        "prompt": "gray clay render, untextured viewport, mannequin, wireframe, blueprint, bounding box, extra people, duplicate person, collage, inset portrait, changed camera, readable text"
+        "prompt": "gray clay render, grayscale, untextured viewport, mannequin, wireframe, blueprint, bounding box, extra people, duplicate person, collage, inset portrait, changed camera, readable text"
       },
       "class_type": "TextEncodeQwenImageEditPlus",
       "_meta": { "title": "Negative instruction" }
@@ -76,14 +76,14 @@
         "cfg": 1.0,
         "sampler_name": "euler",
         "scheduler": "simple",
-        "denoise": 0.65,
+        "denoise": 1.0,
         "model": ["5", 0],
         "positive": ["7", 0],
         "negative": ["8", 0],
         "latent_image": ["9", 0]
       },
       "class_type": "KSampler",
-      "_meta": { "title": "Restyle clay blockout" }
+      "_meta": { "title": "Generate from depth" }
     },
     "11": {
       "inputs": {
