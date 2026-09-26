@@ -17,7 +17,7 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 | Qwen stills | `content:frames` | `output/frames/<show>/characters/` and `output/frames/<show>/<episode>/` |
 | LTX clips | `content:generate` | `output/generate/<show>/<episode>/` |
 
-Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. People and cameras stay on the script marks. An empty location is one mesh. A location with people is one mesh per landmark, fitted to the size in the script.
+Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. People and cameras stay on the script marks. An empty location is one mesh. A location with people is one mesh per landmark, fitted to the size in the script. The same appearance and size are built once and placed at each position.
 
 Leave ComfyUI running in another terminal before the GPU stages:
 
@@ -94,7 +94,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view -- --show <show-id>` lists that show’s locations and scenes. Deep links: `/location/<locationId>`, `/scene/<episode>/<scene>`.
 
-`content:plates` has Qwen draw and stop, so the picture can be reviewed. An empty location is one picture of the place. A location with people is one picture per landmark. `content:assets` then has TRELLIS.2 build one mesh from each reviewed picture, fitted uniformly into the size in the script. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. `content:landmarks` writes positions only for an empty location's mesh. A location with people already has those positions. It is not part of `content:render`. A position already in the script is kept unless `--force` is set.
+`content:plates` has Qwen draw and stop, so the picture can be reviewed. An empty location is one picture of the place. A location with people is one picture per landmark. The same appearance and size are drawn once. `content:assets` then has TRELLIS.2 build one mesh from each reviewed picture, fitted uniformly into the size in the script. The same appearance and size are meshed once. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. `content:landmarks` writes positions only for an empty location's mesh. A location with people already has those positions. It is not part of `content:render`. A position already in the script is kept unless `--force` is set.
 
 God camera (OrbitControls):
 

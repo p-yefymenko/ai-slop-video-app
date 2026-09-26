@@ -1,6 +1,6 @@
 # Location meshes
 
-An empty location becomes one picture, then one mesh, for that show only. A location with people becomes one picture and one mesh per landmark, fitted to the size in the script.
+An empty location becomes one picture, then one mesh, for that show only. A location with people becomes one picture and one mesh per landmark, fitted to the size in the script. Landmarks with the same appearance and size share that picture and mesh, and each copy is placed at its own position.
 
 `pnpm run content:plates` has Qwen-Image-Edit-2511 draw and stop. An empty location's picture is `output/plates/<show>/<locationId>/plate.png`, prompted as a movie set of that place. Landmark names are not in that prompt. A location with people writes `output/plates/<show>/<locationId>/<landmarkId>/plate.png` from that landmark's `appearance`, prompted as one isolated object.
 

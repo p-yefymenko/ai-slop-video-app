@@ -2,7 +2,9 @@
 
 A location with no people is one plate and one mesh of the whole place.
 A location with people is one plate and one mesh per landmark, fitted to the
-size written on that landmark. Characters stay out of those meshes.
+size written on that landmark. Landmarks with the same appearance and size
+share that picture and mesh, then each one is placed at its own position.
+Characters stay out of those meshes.
 """
 
 from __future__ import annotations
@@ -74,8 +76,18 @@ class AssetResolver:
 
     def resolve_show(self, show: dict) -> dict[str, ResolvedLocation]:
         resolved: dict[str, ResolvedLocation] = {}
+        shared: dict[str, tuple[ResolvedLocation, str]] = {}
         for request in collect_requests(show):
-            resolved[request.consumer_id] = self.resolve_one(request)
+            digest = description_hash(request) if request.landmark_id else None
+            if digest and digest in shared:
+                source, label = shared[digest]
+                print(f"  {request.label}: reuses {label}", flush=True)
+                resolved[request.consumer_id] = self._place_shared_mesh(request, source)
+                continue
+            item = self.resolve_one(request)
+            resolved[request.consumer_id] = item
+            if digest:
+                shared[digest] = (item, request.label)
         return resolved
 
     def resolve_one(self, request: AssetRequest) -> ResolvedLocation:
@@ -188,6 +200,42 @@ class AssetResolver:
             size=request.size,
         )
 
+    def _place_shared_mesh(self, request: AssetRequest, source: ResolvedLocation) -> ResolvedLocation:
+        """Copy a mesh that was already built for the same appearance and size."""
+        directory = self._asset_dir(request)
+        directory.mkdir(parents=True, exist_ok=True)
+        dest = directory / "model.glb"
+        if dest.resolve() != source.glb.resolve():
+            shutil.copyfile(source.glb, dest)
+        record_path = source.glb.parent / "landmark.json"
+        record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.is_file() else {}
+        record.update(
+            {
+                "showId": self.show_id,
+                "locationId": request.location_id,
+                "landmarkId": request.landmark_id,
+                "space": "gltf-y-up",
+                "sizeMeters": list(request.size),
+                "descriptionHash": description_hash(request),
+                "title": request.appearance,
+                "source": source.source,
+                "sourceId": source.source_id,
+                "model": "model.glb",
+            }
+        )
+        if request.position is not None:
+            record["schemaPosition"] = list(request.position)
+            record["position"] = list(schema_to_gltf(request.position))
+        (directory / "landmark.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+        return ResolvedLocation(
+            location_id=request.location_id,
+            glb=dest,
+            source=source.source,
+            source_id=source.source_id,
+            title=request.appearance,
+            size=request.size,
+        )
+
     def _plate_path(self, request: AssetRequest) -> Path:
         return self._asset_dir(request, "plates") / "plate.png"
 
@@ -229,9 +277,11 @@ def write_location_plates(
     """Draw each location plate and leave the mesh for a later step.
 
     A redrawn plate drops the mesh that was built from the previous picture.
+    Landmarks with the same appearance and size share one picture.
     """
     show_id = str(show.get("id") or "")
     plates: list[Path] = []
+    shared: dict[str, tuple[Path, str]] = {}
     for request in collect_requests(show):
         appearance = request.appearance
         digest = description_hash(request)
@@ -241,9 +291,21 @@ def write_location_plates(
         plate = plate / "plate.png"
         meta_path = plate.with_name("plate.json")
         stored = _read_json(meta_path, {})
+        source = shared.get(digest) if request.landmark_id else None
+        if source is not None:
+            source_plate, source_label = source
+            reused = plate_is_ready(plate) and stored.get("descriptionHash") == digest and not refresh
+            if not reused:
+                _copy_plate(source_plate, plate, request, digest)
+                _discard_mesh(output_dir, show_id, request)
+            print(f"  {request.label}: reuses {source_label}", flush=True)
+            plates.append(plate)
+            continue
         if plate_is_ready(plate) and stored.get("descriptionHash") == digest and not refresh:
             print(f"  {request.label}: {plate}", flush=True)
             plates.append(plate)
+            if request.landmark_id:
+                shared[digest] = (plate, request.label)
             continue
         if offline:
             raise RuntimeError(
@@ -257,10 +319,22 @@ def write_location_plates(
         meta = {"locationId": request.location_id, "descriptionHash": digest}
         if request.landmark_id:
             meta["landmarkId"] = request.landmark_id
+            shared[digest] = (plate, request.label)
         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
         print(f"  {request.label}: {plate}", flush=True)
         plates.append(plate)
     return plates
+
+
+def _copy_plate(source: Path, destination: Path, request: AssetRequest, digest: str) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    meta = {
+        "locationId": request.location_id,
+        "descriptionHash": digest,
+        "landmarkId": request.landmark_id,
+    }
+    destination.with_name("plate.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def _discard_mesh(output_dir: Path, show_id: str, request: AssetRequest) -> None:

@@ -257,6 +257,59 @@ class AssetTests(unittest.TestCase):
         np.testing.assert_allclose(sorted(extent), sorted([0.5, 0.5, 0.5]), atol=1e-3)
         self.assertTrue((bench.glb.parent / "landmark.json").is_file())
 
+    def test_identical_landmarks_are_generated_once(self) -> None:
+        show = self._show()
+        show["episodes"] = [
+            {
+                "scenes": [{"locationId": "room", "characterIds": ["ada"]}],
+                "spatialTimeline": {"characterTracks": {}},
+            }
+        ]
+        appearance = "One twisted marble column standing alone."
+        show["locations"]["room"]["spatial"]["landmarks"] = {
+            "gate_column_l": {
+                "position": [-4.2, -12.4, 0],
+                "size": [0.8, 0.8, 4.2],
+                "appearance": appearance,
+            },
+            "gate_column_r": {
+                "position": [4.2, -12.4, 0],
+                "size": [0.8, 0.8, 4.2],
+                "appearance": appearance,
+            },
+        }
+        drawn: list[Path] = []
+
+        def writer(text: str, raw_dir: Path, landmark: bool = False) -> Path:
+            del text, landmark
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            plate = raw_dir / "plate.png"
+            plate.write_bytes(b"column" * 400)
+            drawn.append(plate)
+            return plate
+
+        plates = write_location_plates(show, writer, output_dir=self.output)
+        self.assertEqual(len(drawn), 1)
+        self.assertEqual(len(plates), 2)
+        self.assertEqual(plates[0].read_bytes(), plates[1].read_bytes())
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, 1)
+        left = json.loads(
+            (resolved["landmark:room:gate_column_l"].glb.parent / "landmark.json").read_text(encoding="utf-8")
+        )
+        right = json.loads(
+            (resolved["landmark:room:gate_column_r"].glb.parent / "landmark.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(left["schemaPosition"], [-4.2, -12.4, 0.0])
+        self.assertEqual(right["schemaPosition"], [4.2, -12.4, 0.0])
+        self.assertEqual(generator.calls, 1)
+        self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, 1)
+        show["locations"]["room"]["spatial"]["landmarks"]["gate_column_r"]["size"] = [1.0, 1.0, 4.2]
+        write_location_plates(show, writer, output_dir=self.output)
+        self.assertEqual(len(drawn), 2)
+
     def test_one_location_is_one_mesh(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show()
