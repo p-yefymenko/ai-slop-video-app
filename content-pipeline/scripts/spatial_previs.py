@@ -1037,20 +1037,21 @@ def render_structure_maps(
     """Depth, edges, normals, and pose of this camera.
 
     content:frames sends these as the 3D ground truth. The shaded clay frame
-    stays a preview. Pass the clay frame's depth buffer so the set is not
-    drawn a second time for the depth and edge maps.
+    stays a preview. People are drawn only in the pose guide. Depth, edges,
+    and normals are the place, so the still does not copy a mannequin body.
     """
     camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
     depth_destination.parent.mkdir(parents=True, exist_ok=True)
-    if zbuf is None:
-        _image, zbuf = _raster_clay(batches, camera)
+    place = [batch for batch in batches if batch.base != 214]
+    if zbuf is None or len(place) != len(batches):
+        _image, zbuf = _raster_clay(place, camera)
     _depth_image(zbuf).save(depth_destination)
     if edge_destination is not None:
         edge_destination.parent.mkdir(parents=True, exist_ok=True)
         _edge_image(zbuf).save(edge_destination)
     if normal_destination is not None:
         normal_destination.parent.mkdir(parents=True, exist_ok=True)
-        _raster_normals(batches, camera).save(normal_destination)
+        _raster_normals(place, camera).save(normal_destination)
     pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
     _draw_openpose(ImageDraw.Draw(pose), camera, [joints for _character_id, joints in people])
     pose.save(pose_destination)

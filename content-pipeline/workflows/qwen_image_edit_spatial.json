@@ -57,7 +57,7 @@
     "8": {
       "inputs": {
         "clip": ["2", 0],
-        "prompt": "gray clay render, grayscale, untextured viewport, mannequin, wireframe, blueprint, bounding box, extra people, duplicate person, collage, inset portrait, changed camera, readable text"
+        "prompt": "gray clay render, grayscale, untextured viewport, mannequin, blocky body, rectangular torso, stick limbs, geometric person, wireframe, blueprint, bounding box, extra people, duplicate person, collage, inset portrait, changed camera, readable text"
       },
       "class_type": "TextEncodeQwenImageEditPlus",
       "_meta": { "title": "Negative instruction" }

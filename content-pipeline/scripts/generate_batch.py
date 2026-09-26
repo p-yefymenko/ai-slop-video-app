@@ -884,14 +884,26 @@ def _disable_face_pass(graph: dict) -> None:
 
 def structure_pictures(guides: list[str]) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them."""
-    lines = [
-        "Picture 1 is a depth map of this exact camera, not a photograph. "
-        "Brighter surfaces are closer. Black is empty space. "
-        "Match that camera, scale, occlusion, and object placement."
-    ]
+    if "Pose" in guides:
+        depth = (
+            "Picture 1 is a depth map of the place only, not a photograph and not the people. "
+            "Brighter surfaces are closer. Black is empty space. "
+            "Match the camera and the placement of the place. People are not in this picture."
+        )
+    else:
+        depth = (
+            "Picture 1 is a depth map of this exact camera, not a photograph. "
+            "Brighter surfaces are closer. Black is empty space. "
+            "Match that camera, scale, occlusion, and object placement."
+        )
+    lines = [depth]
     sentences = {
-        "Pose": "Picture {n} is the pose of the people in that same camera. Stand each person on that pose.",
-        "Edges": "Picture {n} is the geometric edges of that same camera. Keep those edges sharp.",
+        "Pose": (
+            "Picture {n} is an OpenPose skeleton on black, not a body. "
+            "Draw one real adult human on each skeleton, with a normal head, face, torso, arms, hands, and legs, "
+            "in that exact pose and position. Do not draw a mannequin, blocks, boxes, or sticks."
+        ),
+        "Edges": "Picture {n} is the edges of the place only. Keep those edges. It contains no people.",
         "Normals": (
             "Picture {n} is the surface direction of that same camera. "
             "Use it for which faces catch the light. Do not copy its colors."
