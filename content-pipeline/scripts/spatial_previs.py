@@ -460,17 +460,14 @@ BODY_LIMBS = (
     ("neck", "nose"),
 )
 _VOLUME_LIMBS = (
-    ("neck", "right_hip", 0.12),
-    ("neck", "left_hip", 0.12),
-    ("right_shoulder", "left_shoulder", 0.06),
-    ("right_shoulder", "right_elbow", 0.05),
-    ("right_elbow", "right_wrist", 0.04),
-    ("left_shoulder", "left_elbow", 0.05),
-    ("left_elbow", "left_wrist", 0.04),
-    ("right_hip", "right_knee", 0.07),
-    ("right_knee", "right_ankle", 0.055),
-    ("left_hip", "left_knee", 0.07),
-    ("left_knee", "left_ankle", 0.055),
+    ("right_shoulder", "right_elbow", 0.055),
+    ("right_elbow", "right_wrist", 0.045),
+    ("left_shoulder", "left_elbow", 0.055),
+    ("left_elbow", "left_wrist", 0.045),
+    ("right_hip", "right_knee", 0.095),
+    ("right_knee", "right_ankle", 0.07),
+    ("left_hip", "left_knee", 0.095),
+    ("left_knee", "left_ankle", 0.07),
 )
 
 
@@ -651,11 +648,25 @@ def _capsule_triangles(start: Vec3, finish: Vec3, radius: float, sides: int = 8)
 def _character_triangles(
     joints: dict[str, Vec3], thickness: float = 1.0
 ) -> list[tuple[Vec3, Vec3, Vec3]]:
-    top = add(joints["nose"], (0.0, 0.0, 0.10 * thickness))
-    triangles = _capsule_triangles(joints["neck"], top, 0.11 * thickness, sides=10)
+    """A human volume, not two tubes from the neck to the hips.
+
+    The depth map uses this for where a person stands and what they hide.
+    A round head and one torso keep Qwen from tracing a stick mannequin.
+    """
+    scale = thickness
+    shoulder = lerp(joints["right_shoulder"], joints["left_shoulder"], 0.5)
+    hip = lerp(joints["right_hip"], joints["left_hip"], 0.5)
+    crown = add(joints["nose"], (0.0, 0.0, 0.11 * scale))
+    chin = add(joints["nose"], (0.0, 0.0, -0.07 * scale))
+    triangles = _capsule_triangles(chin, crown, 0.12 * scale, sides=10)
+    triangles.extend(_capsule_triangles(joints["neck"], shoulder, 0.055 * scale))
+    triangles.extend(_capsule_triangles(shoulder, hip, 0.16 * scale, sides=10))
+    triangles.extend(
+        _capsule_triangles(joints["right_shoulder"], joints["left_shoulder"], 0.08 * scale)
+    )
     for start_name, end_name, radius in _VOLUME_LIMBS:
         triangles.extend(
-            _capsule_triangles(joints[start_name], joints[end_name], radius * thickness)
+            _capsule_triangles(joints[start_name], joints[end_name], radius * scale)
         )
     return triangles
 
@@ -848,6 +859,46 @@ def _location_set_mesh(show_id: str | None, location_id: str):
     return _cached_mesh(path)
 
 
+# A stored character mesh already faces schema +Y, which is body yaw 0.
+CHARACTER_FRONT_YAW = 0.0
+CHARACTER_MESH_BASE = 208
+
+
+def _yaw_vertices(vertices: np.ndarray, yaw_degrees: float) -> np.ndarray:
+    """Turn schema-space points around Z. Zero yaw leaves +Y pointing forward."""
+    yaw = math.radians(float(yaw_degrees))
+    cosine, sine = math.cos(yaw), math.sin(yaw)
+    turned = np.array(vertices, dtype=np.float32, copy=True)
+    x = turned[:, 0].copy()
+    y = turned[:, 1].copy()
+    turned[:, 0] = x * cosine + y * sine
+    turned[:, 1] = -x * sine + y * cosine
+    return turned
+
+
+def _character_mesh_batch(show: dict, character_id: str, state: dict):
+    """The generated character, feet on their mark. Missing files use the capsule."""
+    from clay_gpu import ClayBatch
+    from pipeline_paths import stage_dir
+
+    show_id = str(show.get("id") or "")
+    path = stage_dir("assets", show_id) / "characters" / character_id / "model.glb"
+    if not path.is_file():
+        return None
+    vertices, faces, key = _cached_mesh(path)
+    yaw = float(state.get("bodyYawDegrees") or 0.0) + CHARACTER_FRONT_YAW
+    position = state.get("position")
+    if position is None:
+        return None
+    return ClayBatch(
+        _yaw_vertices(vertices, yaw),
+        faces,
+        CHARACTER_MESH_BASE,
+        offset=vec(position),
+        key=(*key, round(yaw, 2)),
+    )
+
+
 def _landmark_batches(show: dict, location_id: str):
     """Landmark meshes placed at their script positions. Missing files are skipped."""
     from clay_gpu import ClayBatch
@@ -936,8 +987,8 @@ def _scene_surfaces(
 
     A location with no people draws its one generated mesh. A location with
     people draws the open floor and each landmark mesh at the script position.
-    Cameras and people stay on the marks in the script. Open sky stays the
-    viewport gray.
+    A character with a generated mesh stands on their mark, turned by body yaw.
+    Otherwise they stay the capsule volume. Open sky stays the viewport gray.
     """
     from asset_resolver import location_has_people
     from clay_gpu import ClayBatch
@@ -969,6 +1020,10 @@ def _scene_surfaces(
             show, episode, scene, state, time_seconds, character_id
         )
         people.append((character_id, joints))
+        mesh = _character_mesh_batch(show, character_id, state)
+        if mesh is not None:
+            batches.append(mesh)
+            continue
         thickness = _height_scale(show, character_id) * _build_factor(show, character_id)
         character_triangles.extend(_character_triangles(joints, thickness))
     characters = _batch_from_triangles(character_triangles, 214)
@@ -1037,21 +1092,26 @@ def render_structure_maps(
     """Depth, edges, normals, and pose of this camera.
 
     content:frames sends these as the 3D ground truth. The shaded clay frame
-    stays a preview. People are drawn only in the pose guide. Depth, edges,
-    and normals are the place, so the still does not copy a mannequin body.
+    stays a preview. Depth includes each person. A generated character mesh
+    keeps their features, position, and occlusion. The capsule fallback stays
+    out of the edges. The pose guide is the joints.
     """
     camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
     depth_destination.parent.mkdir(parents=True, exist_ok=True)
     place = [batch for batch in batches if batch.base != 214]
-    if zbuf is None or len(place) != len(batches):
-        _image, zbuf = _raster_clay(place, camera)
+    if zbuf is None:
+        _image, zbuf = _raster_clay(batches, camera)
     _depth_image(zbuf).save(depth_destination)
-    if edge_destination is not None:
-        edge_destination.parent.mkdir(parents=True, exist_ok=True)
-        _edge_image(zbuf).save(edge_destination)
-    if normal_destination is not None:
-        normal_destination.parent.mkdir(parents=True, exist_ok=True)
-        _raster_normals(place, camera).save(normal_destination)
+    if edge_destination is not None or normal_destination is not None:
+        place_z = zbuf
+        if len(place) != len(batches):
+            _image, place_z = _raster_clay(place, camera)
+        if edge_destination is not None:
+            edge_destination.parent.mkdir(parents=True, exist_ok=True)
+            _edge_image(place_z).save(edge_destination)
+        if normal_destination is not None:
+            normal_destination.parent.mkdir(parents=True, exist_ok=True)
+            _raster_normals(place, camera).save(normal_destination)
     pose = Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (0, 0, 0))
     _draw_openpose(ImageDraw.Draw(pose), camera, [joints for _character_id, joints in people])
     pose.save(pose_destination)

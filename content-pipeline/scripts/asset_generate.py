@@ -21,9 +21,14 @@ PLATE_SIZE = 1024
 UPSAMPLE_RESOLUTION = 1024
 
 
-def plate_prompt(appearance: str, *, landmark: bool = False) -> str:
+def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = False) -> str:
     prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    key = "landmarkPlate" if landmark else "locationPlate"
+    if character:
+        key = "characterPlate"
+    elif landmark:
+        key = "landmarkPlate"
+    else:
+        key = "locationPlate"
     template = prompts.get(key)
     if not isinstance(template, str) or "{appearance}" not in template:
         raise RuntimeError(f"{PROMPTS_PATH} is missing a {key} template with {{appearance}}")
@@ -186,7 +191,9 @@ def plate_is_ready(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 1024
 
 
-def generate_asset_plate(appearance: str, raw_dir: Path, *, landmark: bool = False) -> Path:
+def generate_asset_plate(
+    appearance: str, raw_dir: Path, *, landmark: bool = False, character: bool = False
+) -> Path:
     """Write ``plate.png`` and stop. ComfyUI must already be running."""
     from generate_batch import (
         clone_workflow,
@@ -203,7 +210,9 @@ def generate_asset_plate(appearance: str, raw_dir: Path, *, landmark: bool = Fal
     write_solid_png(blank, (210, 210, 210), PLATE_SIZE, PLATE_SIZE)
     plate_graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
     plate_graph["6"]["inputs"]["image"] = stage_named_image(blank, "asset_blank")
-    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, landmark=landmark)
+    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(
+        appearance, landmark=landmark, character=character
+    )
     plate_graph["10"]["inputs"]["seed"] = seed
     plate_path = raw_dir / "plate.png"
     try:
@@ -212,7 +221,13 @@ def generate_asset_plate(appearance: str, raw_dir: Path, *, landmark: bool = Fal
             plate_graph,
             plate_path,
             prefer="image",
-            mode="Qwen landmark plate" if landmark else "Qwen location plate",
+            mode=(
+                "Qwen character plate"
+                if character
+                else "Qwen landmark plate"
+                if landmark
+                else "Qwen location plate"
+            ),
         )
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc

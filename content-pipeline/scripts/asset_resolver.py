@@ -4,7 +4,8 @@ A location with no people is one plate and one mesh of the whole place.
 A location with people is one plate and one mesh per landmark, fitted to the
 size written on that landmark. Landmarks with the same appearance and size
 share that picture and mesh, then each one is placed at its own position.
-Characters stay out of those meshes.
+Characters stay out of those meshes. Each character is their own plate and
+mesh, fitted to their standing height, the same way a landmark is built.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ class AssetRequest:
     location_id: str
     appearance: str
     landmark_id: str | None = None
+    character_id: str | None = None
     position: tuple[float, float, float] | None = None
 
 
@@ -77,7 +79,7 @@ class AssetResolver:
     def resolve_show(self, show: dict) -> dict[str, ResolvedLocation]:
         resolved: dict[str, ResolvedLocation] = {}
         shared: dict[str, tuple[ResolvedLocation, str]] = {}
-        for request in collect_requests(show):
+        for request in [*collect_requests(show), *collect_character_requests(show)]:
             digest = description_hash(request) if request.landmark_id else None
             if digest and digest in shared:
                 source, label = shared[digest]
@@ -183,7 +185,9 @@ class AssetResolver:
             "fit": "uniform",
             "model": "model.glb",
         }
-        if request.landmark_id:
+        if request.character_id:
+            record["characterId"] = request.character_id
+        elif request.landmark_id:
             record["landmarkId"] = request.landmark_id
             if request.position is not None:
                 record["schemaPosition"] = list(request.position)
@@ -240,12 +244,16 @@ class AssetResolver:
         return self._asset_dir(request, "plates") / "plate.png"
 
     def _asset_dir(self, request: AssetRequest, stage: str = "assets") -> Path:
+        if request.character_id:
+            return self.output_dir / stage / self.show_id / "characters" / request.character_id
         directory = self.output_dir / stage / self.show_id / request.location_id
         if request.landmark_id:
             return directory / request.landmark_id
         return directory
 
     def _record_name(self, request: AssetRequest) -> str:
+        if request.character_id:
+            return "character.json"
         return "landmark.json" if request.landmark_id else "location.json"
 
 
@@ -282,13 +290,16 @@ def write_location_plates(
     show_id = str(show.get("id") or "")
     plates: list[Path] = []
     shared: dict[str, tuple[Path, str]] = {}
-    for request in collect_requests(show):
+    for request in [*collect_requests(show), *collect_character_requests(show)]:
         appearance = request.appearance
         digest = description_hash(request)
-        plate = output_dir / "plates" / show_id / request.location_id
-        if request.landmark_id:
-            plate = plate / request.landmark_id
-        plate = plate / "plate.png"
+        if request.character_id:
+            plate = output_dir / "plates" / show_id / "characters" / request.character_id / "plate.png"
+        else:
+            plate = output_dir / "plates" / show_id / request.location_id
+            if request.landmark_id:
+                plate = plate / request.landmark_id
+            plate = plate / "plate.png"
         meta_path = plate.with_name("plate.json")
         stored = _read_json(meta_path, {})
         source = shared.get(digest) if request.landmark_id else None
@@ -311,13 +322,17 @@ def write_location_plates(
             raise RuntimeError(
                 f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one"
             )
-        if request.landmark_id:
+        if request.character_id:
+            writer(appearance, plate.parent, character=True)
+        elif request.landmark_id:
             writer(appearance, plate.parent, landmark=True)
         else:
             writer(appearance, plate.parent)
         _discard_mesh(output_dir, show_id, request)
         meta = {"locationId": request.location_id, "descriptionHash": digest}
-        if request.landmark_id:
+        if request.character_id:
+            meta["characterId"] = request.character_id
+        elif request.landmark_id:
             meta["landmarkId"] = request.landmark_id
             shared[digest] = (plate, request.label)
         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
@@ -338,10 +353,15 @@ def _copy_plate(source: Path, destination: Path, request: AssetRequest, digest: 
 
 
 def _discard_mesh(output_dir: Path, show_id: str, request: AssetRequest) -> None:
-    directory = output_dir / "assets" / show_id / request.location_id
-    if request.landmark_id:
-        directory = directory / request.landmark_id
-    names = ("model.glb", "thumb.png", "landmark.json" if request.landmark_id else "location.json")
+    if request.character_id:
+        directory = output_dir / "assets" / show_id / "characters" / request.character_id
+        record_name = "character.json"
+    else:
+        directory = output_dir / "assets" / show_id / request.location_id
+        if request.landmark_id:
+            directory = directory / request.landmark_id
+        record_name = "landmark.json" if request.landmark_id else "location.json"
+    names = ("model.glb", "thumb.png", record_name)
     for name in names:
         path = directory / name
         if path.is_file():
@@ -415,13 +435,47 @@ def _landmark_requests(location_id: str, spatial: dict) -> list[AssetRequest]:
     return requests
 
 
+def collect_character_requests(show: dict) -> list[AssetRequest]:
+    """One standing mesh per character, fitted to their height the way a landmark is."""
+    requests: list[AssetRequest] = []
+    for character_id, character in (show.get("characters") or {}).items():
+        if not isinstance(character, dict):
+            continue
+        appearance = _appearance(character.get("promptBlock"))
+        if not appearance:
+            continue
+        height = 1.72
+        proxy = character.get("proxy") or {}
+        try:
+            parsed = float(proxy.get("heightMeters") or height)
+        except (TypeError, ValueError):
+            parsed = height
+        if parsed > 0:
+            height = parsed
+        requests.append(
+            AssetRequest(
+                consumer_id=f"character:{character_id}",
+                label=f"characters/{character_id}",
+                size=(height, height, height),
+                location_id="characters",
+                appearance=appearance,
+                character_id=str(character_id),
+            )
+        )
+    return requests
+
+
 def description_hash(request: AssetRequest) -> str:
-    """Identity of the picture. A landmark includes its object prompt, so a prompt edit redraws it."""
+    """Identity of the picture. A landmark or character includes its plate prompt."""
     text = request.appearance
-    if request.landmark_id:
+    if request.character_id or request.landmark_id:
         from asset_generate import plate_prompt
 
-        text = plate_prompt(request.appearance, landmark=True)
+        text = plate_prompt(
+            request.appearance,
+            landmark=bool(request.landmark_id),
+            character=bool(request.character_id),
+        )
     return asset_hash(GENERATED_SOURCE, appearance_source_id(text), request.size)
 
 

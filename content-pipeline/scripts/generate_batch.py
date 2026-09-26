@@ -882,36 +882,49 @@ def _disable_face_pass(graph: dict) -> None:
         graph.pop(node_id, None)
 
 
-def structure_pictures(guides: list[str]) -> str:
-    """How Qwen should read the previs guides. The shaded clay frame is not one of them."""
-    if "Pose" in guides:
-        depth = (
-            "Picture 1 is a depth map of the place only, not a photograph and not the people. "
-            "Brighter surfaces are closer. Black is empty space. "
-            "Match the camera and the placement of the place. People are not in this picture."
+def structure_pictures(pictures: list[str]) -> str:
+    """How Qwen should read the previs guides. The shaded clay frame is not one of them.
+
+    On a people shot the depth is picture 1 and includes the person volumes, so
+    Qwen keeps their position and what they hide. The skeleton is the next
+    picture and only sets the joints.
+    """
+    people = "Pose" in pictures
+    lines = []
+    for index, title in enumerate(pictures, start=1):
+        lines.append(_picture_sentence(title, index, people=people))
+    return " ".join(lines)
+
+
+def _picture_sentence(title: str, index: int, *, people: bool) -> str:
+    if title == "Pose":
+        return (
+            f"Picture {index} is an OpenPose skeleton of those same people, on black. "
+            "Match each joint. Do not draw the skeleton, and do not move anyone off the person-shaped volume."
         )
-    else:
-        depth = (
-            "Picture 1 is a depth map of this exact camera, not a photograph. "
+    if title == "Depth" and people:
+        return (
+            f"Picture {index} is a depth map of this exact camera, not a photograph. "
+            "Brighter surfaces are closer. Black is empty space. "
+            "Each person-shaped volume is where one real adult stands and what they hide. "
+            "Draw a real human inside it, with a normal head, torso, arms, and legs, "
+            "and match that volume's position, size, and occlusion. "
+            "Do not copy the volume as clay, a cylinder, or blocks."
+        )
+    if title == "Depth":
+        return (
+            f"Picture {index} is a depth map of this exact camera, not a photograph. "
             "Brighter surfaces are closer. Black is empty space. "
             "Match that camera, scale, occlusion, and object placement."
         )
-    lines = [depth]
-    sentences = {
-        "Pose": (
-            "Picture {n} is an OpenPose skeleton on black, not a body. "
-            "Draw one real adult human on each skeleton, with a normal head, face, torso, arms, hands, and legs, "
-            "in that exact pose and position. Do not draw a mannequin, blocks, boxes, or sticks."
-        ),
-        "Edges": "Picture {n} is the edges of the place only. Keep those edges. It contains no people.",
-        "Normals": (
-            "Picture {n} is the surface direction of that same camera. "
+    if title == "Edges":
+        return f"Picture {index} is the edges of the place only. Keep those edges. It contains no people."
+    if title == "Normals":
+        return (
+            f"Picture {index} is the surface direction of that same camera. "
             "Use it for which faces catch the light. Do not copy its colors."
-        ),
-    }
-    for index, title in enumerate(guides, start=2):
-        lines.append(sentences[title].format(n=index))
-    return " ".join(lines)
+        )
+    raise KeyError(title)
 
 
 _GUIDE_NODES = (("40", "image2"), ("41", "image3"))
@@ -920,16 +933,17 @@ _GUIDE_NODES = (("40", "image2"), ("41", "image3"))
 def inject_qwen_spatial_refs(
     graph: dict,
     characters: list[dict],
-    depth_name: str,
+    lead_name: str,
     mask_name: str | None,
     guides: list[tuple[str, str]] | None = None,
+    lead_title: str = "Depth",
 ) -> None:
-    """Picture 1 is the previs depth. Later pictures are pose, edges, or normals."""
+    """Picture 1 is the depth. People shots then pass the pose and the place edges."""
     depth = graph.get("6")
     if not isinstance(depth, dict):
         raise RuntimeError("Spatial Qwen workflow is missing the depth loader")
-    depth.setdefault("inputs", {})["image"] = depth_name
-    depth["_meta"] = {"title": "Depth"}
+    depth.setdefault("inputs", {})["image"] = lead_name
+    depth["_meta"] = {"title": lead_title}
     blockout_encoder = _qwen_encoder(graph, "Blockout instruction")
     if blockout_encoder is None:
         raise RuntimeError("Spatial Qwen workflow is missing the blockout instruction")
@@ -1208,7 +1222,7 @@ def render_spatial_still(
     seed: int,
     mode: str,
 ) -> None:
-    """Generate one still from the previs depth, edges, and normals. People also get the pose."""
+    """Generate one still from the depth. People shots also pass the pose."""
     missing = [
         path
         for path in (depth_path, edge_path, normal_path)
@@ -1220,16 +1234,22 @@ def render_spatial_still(
         )
     characters = resolve_scene_characters(show, scene)
     use_pose = bool(characters) and present(pose_path) and not pose_image_is_blank(pose_path)
-    guides: list[tuple[str, str]] = []
+    depth_name = stage_named_image(depth_path, "depth")
     if use_pose:
-        guides.append((stage_named_image(pose_path, "pose"), "Pose"))
-        guides.append((stage_named_image(edge_path, "edges"), "Edges"))
+        pictures = [
+            (depth_name, "Depth"),
+            (stage_named_image(pose_path, "pose"), "Pose"),
+            (stage_named_image(edge_path, "edges"), "Edges"),
+        ]
     else:
-        guides.append((stage_named_image(edge_path, "edges"), "Edges"))
-        guides.append((stage_named_image(normal_path, "normal"), "Normals"))
+        pictures = [
+            (depth_name, "Depth"),
+            (stage_named_image(edge_path, "edges"), "Edges"),
+            (stage_named_image(normal_path, "normal"), "Normals"),
+        ]
     character_ids = scene["characterIds"]
     values = {
-        "structurePictures": structure_pictures([title for _name, title in guides]),
+        "structurePictures": structure_pictures([title for _name, title in pictures]),
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
         "locationPromptBlock": location["promptBlock"],
@@ -1252,12 +1272,18 @@ def render_spatial_still(
         }
         face_prompt = show_prompt(show, "spatialFaces", face_values)
         mask_name = stage_named_image(mask_path, "faces")
-    depth_name = stage_named_image(depth_path, "depth")
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
     graph = clone_workflow(workflow)
     inject_seed(graph, seed)
     inject_qwen_prompt(graph, blockout_prompt, "Blockout instruction")
-    inject_qwen_spatial_refs(graph, characters, depth_name, mask_name, guides)
+    inject_qwen_spatial_refs(
+        graph,
+        characters,
+        pictures[0][0],
+        mask_name,
+        pictures[1:],
+        lead_title=pictures[0][1],
+    )
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
     print(f"  Graph seed {seed}", flush=True)

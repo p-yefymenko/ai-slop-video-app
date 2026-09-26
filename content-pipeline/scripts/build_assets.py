@@ -90,7 +90,7 @@ def main() -> None:
         resolved = resolver.resolve_show(show)
         for warning in resolver.warnings:
             print(warning)
-        print(f"{show_id}: {len(resolved)} locations, polygon limit {triangle_budget}")
+        print(f"{show_id}: {len(resolved)} meshes, polygon limit {triangle_budget}")
 
 
 if __name__ == "__main__":

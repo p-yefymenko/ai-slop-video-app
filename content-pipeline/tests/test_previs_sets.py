@@ -13,7 +13,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import spatial_previs  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
-from mesh_io import primitive_mesh, write_schema_glb  # noqa: E402
+from mesh_io import box_mesh, primitive_mesh, write_schema_glb  # noqa: E402
 from pipeline_paths import OUTPUT_DIR, location_dir  # noqa: E402
 from clay_gpu import ClayBatch  # noqa: E402
 from spatial_previs import (  # noqa: E402
@@ -53,6 +53,34 @@ class PrevisSetTests(unittest.TestCase):
         landmarks = [item for item in surfaces if item.base == 176]
         self.assertEqual(len(landmarks), 1)
         self.assertGreater(int(landmarks[0].faces.shape[0]), 0)
+
+    def test_a_character_mesh_stands_on_their_mark(self) -> None:
+        show, episode, scene = _bare_scene()
+        show["characters"] = {"ada": {"promptBlock": "Adult woman."}}
+        scene["characterIds"] = ["ada"]
+        episode["spatialTimeline"] = {
+            "characterTracks": {
+                "ada": [
+                    {
+                        "timeSeconds": 0,
+                        "locationId": "room",
+                        "position": [1.0, 2.0, 0.0],
+                        "bodyYawDegrees": 0,
+                        "stance": "standing",
+                    }
+                ]
+            }
+        }
+        directory = OUTPUT_DIR / "assets" / "unit-shot" / "characters" / "ada"
+        directory.mkdir(parents=True)
+        vertices, faces = box_mesh((0.4, 0.3, 1.7))
+        write_schema_glb(directory / "model.glb", vertices, faces)
+        _camera, surfaces, people = _scene_surfaces(show, episode, scene, 0.0)
+        meshes = [item for item in surfaces if item.base == 208]
+        self.assertEqual(len(meshes), 1)
+        self.assertEqual(meshes[0].offset, (1.0, 2.0, 0.0))
+        self.assertEqual([item for item in surfaces if item.base == 214], [])
+        self.assertEqual([character_id for character_id, _joints in people], ["ada"])
 
     def test_shot_description_stores_gltf_positions(self) -> None:
         show, episode, scene = _bare_scene()

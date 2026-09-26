@@ -276,6 +276,17 @@ class SpatialPipelineTests(unittest.TestCase):
             ["scene_depth.png", "scene_edges.png", "scene_normal.png"],
         )
 
+    def test_people_prompt_keeps_the_person_volume_in_the_depth(self) -> None:
+        text = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
+        self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
+        self.assertIn("person-shaped volume", text)
+        self.assertIn("Picture 2 is an OpenPose skeleton", text)
+
+    def test_empty_prompt_lets_the_depth_set_the_camera(self) -> None:
+        text = pipeline.structure_pictures(["Depth", "Edges", "Normals"])
+        self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
+        self.assertNotIn("OpenPose", text)
+
     def test_spatial_still_generates_from_the_depth(self) -> None:
         graph = pipeline.clone_workflow(self.qwen_spatial)
         scene = next(item for item in self.episode["scenes"] if len(item["characterIds"]) >= 2)

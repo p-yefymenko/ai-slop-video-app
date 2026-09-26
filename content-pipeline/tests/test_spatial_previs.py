@@ -254,7 +254,7 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertEqual(normal.size, (PROXY_WIDTH, PROXY_HEIGHT))
                 x, y = int(nose[0]), int(nose[1])
                 self.assertGreater(sum(pose.getpixel((x, y))), 0)
-                self.assertEqual(depth.getpixel((x, y)), (0, 0, 0))
+                self.assertGreater(sum(depth.getpixel((x, y))), 0)
                 extrema = depth.getextrema()
                 self.assertGreater(extrema[0][1], extrema[0][0])
                 self.assertGreater(edges.convert("L").getextrema()[1], 0)

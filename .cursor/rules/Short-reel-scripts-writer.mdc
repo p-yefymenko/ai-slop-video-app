@@ -18,7 +18,7 @@ export type ShowCharacter = {
    */
   promptBlock: string;
   /**
-   * Clay mannequin only. Standing height in meters, and slim / average / broad.
+   * Standing height in meters, and slim / average / broad. The mesh is fitted to this height.
    * Omit to use 1.72m average. This is not the identity portrait.
    */
   proxy?: { heightMeters: number; build: "slim" | "average" | "broad" };

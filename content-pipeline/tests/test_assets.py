@@ -126,6 +126,10 @@ class AssetTests(unittest.TestCase):
         self.assertNotIn("movie set", landmark.lower())
         self.assertNotIn("place", landmark.lower())
         self.assertIn("a stone bench", landmark)
+        person = plate_prompt("black hair", character=True)
+        self.assertIn("full-body", person)
+        self.assertIn("black hair", person)
+        self.assertNotIn("movie set", person.lower())
 
     def test_triangle_limit_is_recorded_on_the_location(self) -> None:
         generator = CountingGenerator(self.cube)
@@ -333,6 +337,37 @@ class AssetTests(unittest.TestCase):
         resolved = self._resolver(generator).resolve_show(show)
         vertices, _faces = read_schema_mesh(resolved["location:room"].glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.2, 0.2, 0.2], atol=1e-3)
+
+    def test_a_character_is_plated_and_fitted_like_a_landmark(self) -> None:
+        show = self._show()
+        show["characters"] = {
+            "ada": {
+                "promptBlock": "Adult woman, black hair.",
+                "proxy": {"heightMeters": 1.6, "build": "slim"},
+            }
+        }
+        drawn: list[tuple[bool, Path]] = []
+
+        def writer(text: str, raw_dir: Path, landmark: bool = False, character: bool = False) -> Path:
+            del text, landmark
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            plate = raw_dir / "plate.png"
+            plate.write_bytes(b"x" * 2048)
+            drawn.append((character, plate))
+            return plate
+
+        write_location_plates(show, writer, output_dir=self.output)
+        character_plates = [plate for character, plate in drawn if character]
+        self.assertEqual(len(character_plates), 1)
+        self.assertEqual(character_plates[0].parent.name, "ada")
+        resolved = self._resolver(CountingGenerator(self.cube)).resolve_show(show)
+        item = resolved["character:ada"]
+        vertices, _faces = read_schema_mesh(item.glb)
+        extent = vertices.max(axis=0) - vertices.min(axis=0)
+        np.testing.assert_allclose(extent, [1.6, 1.6, 1.6], atol=1e-3)
+        record = json.loads((item.glb.parent / "character.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["characterId"], "ada")
+        self.assertEqual(record["fit"], "uniform")
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)
