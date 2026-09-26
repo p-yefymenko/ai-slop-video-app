@@ -2,7 +2,7 @@
 
 An empty location becomes one picture, then one mesh, for that show only. A location with people becomes one picture and one mesh per landmark, fitted to the size in the script.
 
-`pnpm run content:plates` has Qwen-Image-Edit-2511 draw and stop. An empty location's picture is `output/plates/<show>/<locationId>/plate.png`. Landmark names are not in that prompt. A location with people writes `output/plates/<show>/<locationId>/<landmarkId>/plate.png` from that landmark's `appearance`.
+`pnpm run content:plates` has Qwen-Image-Edit-2511 draw and stop. An empty location's picture is `output/plates/<show>/<locationId>/plate.png`, prompted as a movie set of that place. Landmark names are not in that prompt. A location with people writes `output/plates/<show>/<locationId>/<landmarkId>/plate.png` from that landmark's `appearance`, prompted as one isolated object.
 
 `pnpm run content:assets` has TRELLIS.2 turn each reviewed picture into one mesh. An empty location's mesh is `output/assets/<show>/<locationId>/model.glb`, fitted inside `sizeMeters`, with `location.json` beside it. A landmark's mesh is `output/assets/<show>/<locationId>/<landmarkId>/model.glb`, fitted inside that landmark's `size`, with `landmark.json` beside it. People and held props stay out of those meshes. A missing plate stops the build. If `plate.json` records a different description than the current text, the mesh step stops and asks for `content:plates` again. An unchanged description, polygon limit, and fit reuses the mesh. `--force` and `--refresh` rebuild it. Redrawing a plate deletes the mesh made from the previous picture.
 

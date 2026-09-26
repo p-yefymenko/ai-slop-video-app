@@ -21,11 +21,12 @@ PLATE_SIZE = 1024
 UPSAMPLE_RESOLUTION = 1024
 
 
-def asset_plate_prompt(appearance: str) -> str:
+def plate_prompt(appearance: str, *, landmark: bool = False) -> str:
     prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    template = prompts.get("assetPlate")
+    key = "landmarkPlate" if landmark else "locationPlate"
+    template = prompts.get(key)
     if not isinstance(template, str) or "{appearance}" not in template:
-        raise RuntimeError(f"{PROMPTS_PATH} is missing an assetPlate template with {{appearance}}")
+        raise RuntimeError(f"{PROMPTS_PATH} is missing a {key} template with {{appearance}}")
     text = " ".join(appearance.split())
     if not text:
         raise RuntimeError("appearance is empty")
@@ -185,7 +186,7 @@ def plate_is_ready(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 1024
 
 
-def generate_asset_plate(appearance: str, raw_dir: Path) -> Path:
+def generate_asset_plate(appearance: str, raw_dir: Path, *, landmark: bool = False) -> Path:
     """Write ``plate.png`` and stop. ComfyUI must already be running."""
     from generate_batch import (
         clone_workflow,
@@ -202,12 +203,17 @@ def generate_asset_plate(appearance: str, raw_dir: Path) -> Path:
     write_solid_png(blank, (210, 210, 210), PLATE_SIZE, PLATE_SIZE)
     plate_graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
     plate_graph["6"]["inputs"]["image"] = stage_named_image(blank, "asset_blank")
-    plate_graph["7"]["inputs"]["prompt"] = asset_plate_prompt(appearance)
+    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, landmark=landmark)
     plate_graph["10"]["inputs"]["seed"] = seed
     plate_path = raw_dir / "plate.png"
     try:
         free_comfy_models()
-        execute_queued_graph(plate_graph, plate_path, prefer="image", mode="Qwen asset plate")
+        execute_queued_graph(
+            plate_graph,
+            plate_path,
+            prefer="image",
+            mode="Qwen landmark plate" if landmark else "Qwen location plate",
+        )
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc
     return plate_path

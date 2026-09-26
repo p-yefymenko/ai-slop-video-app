@@ -86,7 +86,7 @@ class AssetResolver:
                 "Run `pnpm run content:plates`."
             )
         plate_record = _read_json(plate.with_name("plate.json"), {})
-        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(request.appearance), request.size)
+        digest = description_hash(request)
         if plate_record.get("descriptionHash") not in (None, digest):
             raise RuntimeError(
                 f"{request.consumer_id}: the plate does not match the current text. "
@@ -234,7 +234,7 @@ def write_location_plates(
     plates: list[Path] = []
     for request in collect_requests(show):
         appearance = request.appearance
-        digest = asset_hash(GENERATED_SOURCE, appearance_source_id(appearance), request.size)
+        digest = description_hash(request)
         plate = output_dir / "plates" / show_id / request.location_id
         if request.landmark_id:
             plate = plate / request.landmark_id
@@ -249,7 +249,10 @@ def write_location_plates(
             raise RuntimeError(
                 f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one"
             )
-        writer(appearance, plate.parent)
+        if request.landmark_id:
+            writer(appearance, plate.parent, landmark=True)
+        else:
+            writer(appearance, plate.parent)
         _discard_mesh(output_dir, show_id, request)
         meta = {"locationId": request.location_id, "descriptionHash": digest}
         if request.landmark_id:
@@ -336,6 +339,16 @@ def _landmark_requests(location_id: str, spatial: dict) -> list[AssetRequest]:
             )
         )
     return requests
+
+
+def description_hash(request: AssetRequest) -> str:
+    """Identity of the picture. A landmark includes its object prompt, so a prompt edit redraws it."""
+    text = request.appearance
+    if request.landmark_id:
+        from asset_generate import plate_prompt
+
+        text = plate_prompt(request.appearance, landmark=True)
+    return asset_hash(GENERATED_SOURCE, appearance_source_id(text), request.size)
 
 
 def appearance_source_id(appearance: str) -> str:

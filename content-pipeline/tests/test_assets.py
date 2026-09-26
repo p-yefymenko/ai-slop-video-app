@@ -12,7 +12,7 @@ import numpy as np
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from asset_generate import asset_plate_prompt, generate_asset_mesh, trellis_graph  # noqa: E402
+from asset_generate import generate_asset_mesh, plate_prompt, trellis_graph  # noqa: E402
 from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
@@ -119,7 +119,13 @@ class AssetTests(unittest.TestCase):
         crop = next(node for node in graph.values() if node["class_type"] == "ImageCropToMask")
         self.assertEqual(crop["inputs"]["pad_factor"], 1.0)
         self.assertEqual(latent_size(graph), (1024, 1024, 1))
-        self.assertIn("a stone bench", asset_plate_prompt("  a   stone bench "))
+        self.assertIn("a stone bench", plate_prompt("  a   stone bench "))
+        place = plate_prompt("a stone bench")
+        landmark = plate_prompt("a stone bench", landmark=True)
+        self.assertIn("movie set", place.lower())
+        self.assertNotIn("movie set", landmark.lower())
+        self.assertNotIn("place", landmark.lower())
+        self.assertIn("a stone bench", landmark)
 
     def test_triangle_limit_is_recorded_on_the_location(self) -> None:
         generator = CountingGenerator(self.cube)
@@ -236,9 +242,9 @@ class AssetTests(unittest.TestCase):
             plate = self.output / "plates" / "demo" / request.location_id / request.landmark_id / "plate.png"
             plate.parent.mkdir(parents=True, exist_ok=True)
             plate.write_bytes(b"x" * 2048)
-            from asset_resolver import appearance_source_id, asset_hash
+            from asset_resolver import description_hash
 
-            digest = asset_hash("trellis2", appearance_source_id(request.appearance), request.size)
+            digest = description_hash(request)
             plate.with_name("plate.json").write_text(
                 json.dumps({"descriptionHash": digest}),
                 encoding="utf-8",
