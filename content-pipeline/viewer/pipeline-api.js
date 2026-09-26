@@ -15,12 +15,12 @@ export function resolvePipelineFile(pipelineRoot, relative) {
 }
 
 export function buildCatalog(pipelineRoot, showId) {
-  if (!showId) return { showId: null, locations: [], scenes: [] };
+  if (!showId) return { showId: null, locations: [], characters: [], scenes: [] };
   const locations = new Map();
   const assetRoot = path.join(pipelineRoot, "output", "assets", showId);
   for (const directory of childDirs(assetRoot)) {
     const locationId = path.basename(directory);
-    if (locationId === "props") continue;
+    if (locationId === "props" || locationId === "characters") continue;
     const recordPath = path.join(directory, "location.json");
     const model = path.join(directory, "model.glb");
     const record = fs.existsSync(recordPath) ? JSON.parse(fs.readFileSync(recordPath, "utf8")) : {};
@@ -50,6 +50,7 @@ export function buildCatalog(pipelineRoot, showId) {
   const plateRoot = path.join(pipelineRoot, "output", "plates", showId);
   for (const directory of childDirs(plateRoot)) {
     const locationId = path.basename(directory);
+    if (locationId === "props" || locationId === "characters") continue;
     const plate = path.join(directory, "plate.png");
     const entry = locations.get(locationId) || {
       locationId,
@@ -80,7 +81,7 @@ export function buildCatalog(pipelineRoot, showId) {
   }
   scenes.sort((a, b) => a.episodeNumber - b.episodeNumber || a.sceneNumber - b.sceneNumber);
   const listed = [...locations.values()].sort((a, b) => a.locationId.localeCompare(b.locationId));
-  return { showId, locations: listed, scenes };
+  return { showId, locations: listed, characters: collectCharacters(pipelineRoot, showId), scenes };
 }
 
 export function pipelineApi(pipelineRoot, showId) {
@@ -108,6 +109,28 @@ export function pipelineApi(pipelineRoot, showId) {
       });
     },
   };
+}
+
+function collectCharacters(pipelineRoot, showId) {
+  const assetRoot = path.join(pipelineRoot, "output", "assets", showId, "characters");
+  const plateRoot = path.join(pipelineRoot, "output", "plates", showId, "characters");
+  const ids = new Set([
+    ...childDirs(assetRoot).map((directory) => path.basename(directory)),
+    ...childDirs(plateRoot).map((directory) => path.basename(directory)),
+  ]);
+  return [...ids].sort().map((characterId) => {
+    const recordPath = path.join(assetRoot, characterId, "character.json");
+    const model = path.join(assetRoot, characterId, "model.glb");
+    const plate = path.join(plateRoot, characterId, "plate.png");
+    const record = fs.existsSync(recordPath) ? JSON.parse(fs.readFileSync(recordPath, "utf8")) : {};
+    return {
+      characterId: record.characterId || characterId,
+      title: record.title || characterId,
+      sizeMeters: record.sizeMeters || null,
+      modelUrl: fs.existsSync(model) ? fileUrl(pipelineRoot, model) : null,
+      plateUrl: fs.existsSync(plate) ? fileUrl(pipelineRoot, plate) : null,
+    };
+  });
 }
 
 function fileUrl(pipelineRoot, file) {

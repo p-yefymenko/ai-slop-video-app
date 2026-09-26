@@ -16,7 +16,7 @@ stageHost.append(toolbar);
 app.append(sidebar, stageHost, inspector);
 
 const stage = new Stage(canvas);
-let catalog = { showId: null, locations: [], scenes: [] };
+let catalog = { showId: null, locations: [], characters: [], scenes: [] };
 
 window.addEventListener("popstate", () => {
   void renderRoute();
@@ -33,6 +33,9 @@ function drawSidebar() {
   sidebar.append(link("/", "Overview"));
   addGroup("Locations", catalog.locations, (location) =>
     link(`/location/${encodeURIComponent(location.locationId)}`, location.locationId),
+  );
+  addGroup("Characters", catalog.characters || [], (character) =>
+    link(`/character/${encodeURIComponent(character.characterId)}`, character.characterId),
   );
   addGroup("Scenes", catalog.scenes, (scene) =>
     link(
@@ -80,7 +83,14 @@ async function renderRoute() {
   toolbar.replaceChildren();
   inspector.replaceChildren();
   try {
-    if (route.kind === "location") await showLocation(route.location);
+    if (route.kind === "location" && route.location === "characters") {
+      const first = catalog.characters?.[0];
+      if (!first) throw new Error("No characters");
+      history.replaceState({}, "", `/character/${encodeURIComponent(first.characterId)}`);
+      markActive(location.pathname);
+      await showCharacter(first.characterId);
+    } else if (route.kind === "location") await showLocation(route.location);
+    else if (route.kind === "character") await showCharacter(route.character);
     else if (route.kind === "scene") await showScene(route.episode, route.scene);
     else showHome();
   } catch (error) {
@@ -92,6 +102,7 @@ async function renderRoute() {
 function parseRoute(pathname) {
   const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts[0] === "location") return { kind: "location", location: parts.slice(1).join("/") };
+  if (parts[0] === "character") return { kind: "character", character: parts.slice(1).join("/") };
   if (parts[0] === "scene") return { kind: "scene", episode: Number(parts[1]), scene: Number(parts[2]) };
   return { kind: "home" };
 }
@@ -112,6 +123,27 @@ function showHome() {
         : "Start this viewer with pnpm run view -- --show <show-id>.",
     ),
   );
+}
+
+async function showCharacter(characterId) {
+  const listed = (catalog.characters || []).find((item) => item.characterId === characterId);
+  if (!listed) throw new Error(`No character ${characterId}`);
+  if (listed.modelUrl) await stage.showModel(listed.modelUrl);
+  else stage.clear();
+  const height = listed.sizeMeters?.[2];
+  fillFacts("Character", [
+    ["Show", catalog.showId || ""],
+    ["Character", characterId],
+    ["Height", height ? `${height} m` : "unknown"],
+    ["Mesh", listed.modelUrl ? "model.glb" : "not built"],
+    ["Plate", listed.plateUrl ? "plate.png" : "not drawn"],
+  ]);
+  if (listed.plateUrl) {
+    const image = document.createElement("img");
+    image.alt = `${characterId} plate`;
+    image.src = listed.plateUrl;
+    inspector.append(image);
+  }
 }
 
 async function showLocation(locationId) {

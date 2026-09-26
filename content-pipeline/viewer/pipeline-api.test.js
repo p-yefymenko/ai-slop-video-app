@@ -47,3 +47,25 @@ test("catalog lists one show's locations and scenes", () => {
   assert.equal(catalog.scenes[0].sceneNumber, 2);
   assert.equal(buildCatalog(root, "").locations.length, 0);
 });
+
+test("character meshes are not a location", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "stage-"));
+  const sela = path.join(root, "output", "assets", "demo", "characters", "sela");
+  fs.mkdirSync(sela, { recursive: true });
+  fs.writeFileSync(path.join(sela, "model.glb"), "glb");
+  fs.writeFileSync(
+    path.join(sela, "character.json"),
+    JSON.stringify({ characterId: "sela", title: "Sela", sizeMeters: [1.68, 1.68, 1.68] }),
+  );
+  const plate = path.join(root, "output", "plates", "demo", "characters", "sela");
+  fs.mkdirSync(plate, { recursive: true });
+  fs.writeFileSync(path.join(plate, "plate.png"), "png");
+
+  const catalog = buildCatalog(root, "demo");
+  assert.deepEqual(catalog.locations, []);
+  assert.equal(catalog.characters.length, 1);
+  assert.equal(catalog.characters[0].characterId, "sela");
+  assert.equal(catalog.characters[0].modelUrl, "/pipeline/output/assets/demo/characters/sela/model.glb");
+  assert.equal(catalog.characters[0].plateUrl, "/pipeline/output/plates/demo/characters/sela/plate.png");
+  assert.equal(catalog.characters[0].sizeMeters[2], 1.68);
+});
