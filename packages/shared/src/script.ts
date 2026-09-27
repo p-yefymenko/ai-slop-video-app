@@ -75,11 +75,25 @@ export type StageGeometry = {
   landmarks: Record<string, LocationLandmark>;
 };
 
+export type LocationBackdrop = {
+  /** Empty space above the set, and the flat color painted there. */
+  sky: string;
+  skyColor: [number, number, number];
+  /** Empty space on the ground inside the location, and the flat color painted there. */
+  ground: string;
+  groundColor: [number, number, number];
+  /** Empty space beyond the location, at the horizon, and the flat color painted there. */
+  surround: string;
+  surroundColor: [number, number, number];
+};
+
 export type ShowLocation = {
   /**
    * Materials and light next to the people. Not a viewpoint. Not a space you look down.
    */
   promptBlock: string;
+  /** What to paint where the camera sees no asset. */
+  backdrop: LocationBackdrop;
   /** Deterministic blocking space used by every scene at this location. */
   spatial: StageGeometry;
 };

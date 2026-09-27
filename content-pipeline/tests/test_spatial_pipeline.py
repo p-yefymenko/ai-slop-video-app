@@ -284,6 +284,20 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("matching part of the body", text)
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
+        backdrop = pipeline.structure_pictures(
+            ["Depth", "Edges", "Normals", "Backdrop"],
+            backdrop={
+                "sky": "storm sky",
+                "skyColor": [36, 42, 58],
+                "ground": "iron floor",
+                "groundColor": [48, 44, 40],
+                "surround": "open ocean",
+                "surroundColor": [16, 42, 62],
+            },
+        )
+        self.assertIn("Picture 4 is the empty space from this exact camera", backdrop)
+        self.assertIn("36 42 58 is the sky: storm sky", backdrop)
+        self.assertIn("16 42 62 is the surroundings beyond the set: open ocean", backdrop)
 
     def test_close_clothes_cutout_falls_back_to_the_pose(self) -> None:
         from PIL import Image
@@ -449,6 +463,69 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(face["inputs"]["image1"], ["6", 0])
         self.assertEqual(graph["22"]["inputs"]["pixels"], ["6", 0])
         self.assertEqual(graph["6"]["inputs"]["image"], "shot.png")
+
+    def test_backdrop_label_is_a_fourth_picture_and_not_a_face_input(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline.inject_qwen_spatial_refs(
+            graph,
+            [],
+            "scene_depth.png",
+            None,
+            [("scene_edges.png", "Edges"), ("scene_normal.png", "Normals")],
+            backdrop_name="scene_backdrop.png",
+        )
+        blockout = pipeline._qwen_encoder(graph, "Blockout instruction")
+        assert blockout is not None
+        self.assertEqual(blockout["class_type"], "TextEncodeQwenBackdrop")
+        self.assertEqual(blockout["inputs"]["image4"], ["42", 0])
+        self.assertEqual(graph["42"]["inputs"]["image"], "scene_backdrop.png")
+        self.assertNotIn("70", graph)
+        self.assertNotIn("32", graph)
+
+    def test_blockout_pass_is_saved_beside_the_face_pass(self) -> None:
+        dest = Path("scene_03_start.png")
+        self.assertEqual(
+            pipeline.kept_pass_path(dest, "blockout"),
+            Path("scene_03_start_blockout.png"),
+        )
+        self.assertEqual(
+            pipeline.kept_pass_path(dest, "face1"),
+            Path("scene_03_start_face1.png"),
+        )
+        files = [
+            {"filename": "reelshort_blockout_00001_.png"},
+            {"filename": "reelshort_start_00002_.png"},
+        ]
+        self.assertTrue(
+            pipeline._has_output_prefixes(files, ["reelshort_blockout", "reelshort_start"])
+        )
+        self.assertEqual(
+            pipeline.output_named(files, "reelshort_blockout")["filename"],
+            "reelshort_blockout_00001_.png",
+        )
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline._save_blockout_pass(graph)
+        self.assertEqual(graph["32"]["inputs"]["images"], ["11", 0])
+        self.assertEqual(graph["32"]["inputs"]["filename_prefix"], "reelshort_blockout")
+        self.assertEqual(graph["12"]["inputs"]["images"], ["31", 0])
+
+    def test_face_prompt_names_identity_and_not_the_place(self) -> None:
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        prompt = pipeline.face_prompt_for(
+            self.show,
+            {
+                "characterCount": "1",
+                "characterIds": "sela",
+                "locationPromptBlock": location["promptBlock"],
+                "imagePrompt": scene["imagePrompt"],
+            },
+            [{"id": "sela"}],
+        )
+        self.assertIn("Picture 2 = the face of sela only", prompt)
+        self.assertNotIn(location["promptBlock"], prompt)
+        self.assertNotIn(scene["imagePrompt"], prompt)
+        self.assertNotIn("sun-well", prompt)
 
 
 if __name__ == "__main__":

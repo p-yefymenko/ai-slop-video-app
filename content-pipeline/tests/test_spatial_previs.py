@@ -35,6 +35,8 @@ from spatial_previs import (  # noqa: E402
     validate_spatial_episode,
     visible_face_ids,
     write_episode_blockout,
+    _face_ellipse,
+    _face_mask,
     _scene_surfaces,
 )
 
@@ -368,6 +370,40 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertEqual(destination.parent.name, "1")
                 self.assertEqual(destination.parents[2].name, "previs")
 
+    def test_backdrop_labels_sky_ground_and_the_horizon(self) -> None:
+        from spatial_previs import BACKDROP_GROUND, BACKDROP_SKY, BACKDROP_SURROUND, render_backdrop
+
+        colors = {"sky": BACKDROP_SKY, "ground": BACKDROP_GROUND, "surround": BACKDROP_SURROUND}
+
+        looking_down = {
+            "position": [5.0, 0.0, 2.0],
+            "lookAt": [5.0, 0.0, 0.0],
+            "verticalFovDegrees": 40.0,
+            "rollDegrees": 0.0,
+        }
+        empty = np.full((64, 48), np.inf, dtype=np.float32)
+        wide = render_backdrop(looking_down, empty, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
+        self.assertEqual(wide.getpixel((24, 32)), BACKDROP_GROUND)
+        tight = render_backdrop(looking_down, empty, {"sizeMeters": [0.2, 0.2, 10.0]}, colors)
+        self.assertEqual(tight.getpixel((24, 32)), BACKDROP_SURROUND)
+        looking_up = {
+            "position": [0.0, 0.0, 2.0],
+            "lookAt": [0.0, 0.0, 4.0],
+            "verticalFovDegrees": 40.0,
+            "rollDegrees": 0.0,
+        }
+        sky = render_backdrop(looking_up, empty, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
+        self.assertEqual(sky.getpixel((24, 32)), BACKDROP_SKY)
+        blocked = empty.copy()
+        blocked[32, 24] = 1.0
+        covered = render_backdrop(looking_down, blocked, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
+        self.assertEqual(covered.getpixel((24, 32)), (0, 0, 0))
+        holed = empty.copy()
+        holed[20:44, 10:38] = 1.0
+        holed[30:33, 20:24] = np.inf
+        sealed = render_backdrop(looking_down, holed, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
+        self.assertEqual(sealed.getpixel((21, 31)), (0, 0, 0))
+
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors
 
@@ -430,6 +466,41 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertCountEqual(visible, ["vardan", "nira", "kesh", "rhel"])
         turned_away = next(joints for character_id, joints in people if character_id == "sela")
         self.assertFalse(face_points_at_camera(camera, turned_away))
+
+    def test_close_face_mask_covers_the_face_and_leaves_the_sky_black(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        time_seconds = float(scene["timeRangeSeconds"][0])
+        camera = camera_at(scene, time_seconds)
+        state = episode_character_state(self.episode, "sela", time_seconds)
+        joints = character_pose_joints(
+            self.show, self.episode, scene, state, time_seconds, "sela"
+        )
+        box = _face_ellipse(joints, camera)
+        assert box is not None
+        left, top, right, bottom = box
+        self.assertGreater(top, 80)
+        self.assertGreater(bottom, 400)
+        zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), 2.0, dtype=np.float32)
+        zbuf[:40, :] = np.inf
+        mask = np.asarray(
+            _face_mask(camera, [("sela", joints)], ["sela"], zbuf).convert("L")
+        )
+        self.assertGreater(int(mask[(top + bottom) // 2, (left + right) // 2]), 200)
+        self.assertEqual(int(mask[15, (left + right) // 2]), 0)
+        self.assertEqual(int(mask[:40].max()), 0)
+
+        wide = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 5)
+        wide_time = float(wide["timeRangeSeconds"][0])
+        wide_camera = camera_at(wide, wide_time)
+        wide_state = episode_character_state(self.episode, "vardan", wide_time)
+        wide_joints = character_pose_joints(
+            self.show, self.episode, wide, wide_state, wide_time, "vardan"
+        )
+        wide_eye = project(wide_joints["left_eye"], wide_camera)
+        wide_box = _face_ellipse(wide_joints, wide_camera)
+        assert wide_eye is not None and wide_box is not None
+        self.assertLess(wide_box[1], wide_eye[1])
+        self.assertGreater(wide_box[3], wide_eye[1])
 
 
 if __name__ == "__main__":

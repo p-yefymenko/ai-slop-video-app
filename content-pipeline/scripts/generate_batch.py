@@ -434,6 +434,7 @@ def wait_for_output(
     timeout_s: int = 7200,
     monitor: GpuMonitor | None = None,
     prefer: str = "video",
+    require_prefixes: list[str] | None = None,
 ) -> tuple[list[dict], dict | None]:
     started = time.time()
     last_heartbeat = started
@@ -482,6 +483,10 @@ def wait_for_output(
                         if "-audio." in str(info.get("filename") or "")
                     ]
                     files = with_audio or files
+                if require_prefixes and not _has_output_prefixes(files, require_prefixes):
+                    if not status.get("completed"):
+                        time.sleep(2)
+                        continue
                 return files, item
             if status.get("completed"):
                 raise RuntimeError(
@@ -489,6 +494,33 @@ def wait_for_output(
                 )
         time.sleep(2)
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish in time")
+
+
+def _output_prefix(filename: str) -> str:
+    return str(filename or "")
+
+
+def _has_output_prefixes(files: list[dict], prefixes: list[str]) -> bool:
+    names = [_output_prefix(info.get("filename", "")) for info in files]
+    return all(any(name.startswith(f"{prefix}_") for name in names) for prefix in prefixes)
+
+
+def output_named(files: list[dict], prefix: str) -> dict:
+    """Pick the SaveImage whose filename starts with this prefix."""
+    matches = [
+        info
+        for info in files
+        if _output_prefix(info.get("filename", "")).startswith(f"{prefix}_")
+    ]
+    if len(matches) != 1:
+        names = [_output_prefix(info.get("filename", "")) for info in files]
+        raise RuntimeError(f"Expected one {prefix} image, got {names}")
+    return matches[0]
+
+
+def kept_pass_path(dest: Path, label: str) -> Path:
+    """An earlier Qwen pass, kept beside the still that later passes replace."""
+    return dest.with_name(f"{dest.stem}_{label}{dest.suffix}")
 
 
 def download_output(file_info: dict, dest: Path) -> None:
@@ -578,6 +610,20 @@ def ensure_neutral_canvas() -> str:
     return dest.name
 
 
+def _backdrop_color(raw: object, where: str) -> list[int]:
+    if not isinstance(raw, list) or len(raw) != 3:
+        raise SystemExit(f"{where} must be three numbers")
+    color: list[int] = []
+    for channel in raw:
+        if isinstance(channel, bool) or not isinstance(channel, (int, float)):
+            raise SystemExit(f"{where} must be three numbers")
+        number = int(channel)
+        if number < 0 or number > 255:
+            raise SystemExit(f"{where} must be between 0 and 255")
+        color.append(number)
+    return color
+
+
 def load_show(path: Path) -> dict:
     show = load_json(path)
     show_id = require_text(show, "id", path.name)
@@ -612,9 +658,21 @@ def load_show(path: Path) -> dict:
     for loc_id, loc in locations.items():
         if not isinstance(loc, dict):
             raise SystemExit(f"locations[{loc_id!r}] must be an object")
+        backdrop = loc.get("backdrop")
+        if not isinstance(backdrop, dict):
+            raise SystemExit(f"locations[{loc_id!r}] is missing backdrop")
+        where = f"locations[{loc_id!r}].backdrop"
         cleaned_locs[str(loc_id)] = {
             "id": str(loc_id),
             "promptBlock": require_text(loc, "promptBlock", f"locations[{loc_id!r}]"),
+            "backdrop": {
+                "sky": require_text(backdrop, "sky", where),
+                "skyColor": _backdrop_color(backdrop.get("skyColor"), f"{where}.skyColor"),
+                "ground": require_text(backdrop, "ground", where),
+                "groundColor": _backdrop_color(backdrop.get("groundColor"), f"{where}.groundColor"),
+                "surround": require_text(backdrop, "surround", where),
+                "surroundColor": _backdrop_color(backdrop.get("surroundColor"), f"{where}.surroundColor"),
+            },
             "spatial": loc.get("spatial"),
         }
     show["locations"] = cleaned_locs
@@ -876,6 +934,18 @@ def inject_qwen_character_canvas(graph: dict) -> None:
 _FACE_PASS_NODES = ("20", "21", "22", "23", "24", "25", "30", "31", "70")
 
 
+def _save_blockout_pass(graph: dict) -> None:
+    """Keep the image from the first sampler when a face pass replaces it."""
+    graph["32"] = {
+        "inputs": {
+            "filename_prefix": "reelshort_blockout",
+            "images": ["11", 0],
+        },
+        "class_type": "SaveImage",
+        "_meta": {"title": "Blockout still"},
+    }
+
+
 def _disable_face_pass(graph: dict) -> None:
     save = graph.get("12")
     if isinstance(save, dict):
@@ -884,21 +954,25 @@ def _disable_face_pass(graph: dict) -> None:
         graph.pop(node_id, None)
 
 
-def structure_pictures(pictures: list[str]) -> str:
+def structure_pictures(pictures: list[str], backdrop: dict | None = None) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
     On a people shot the depth is picture 1 and includes the person volumes, so
     Qwen keeps their position and what they hide. The clothes cutout is the next
-    picture and sets garment color.
+    picture and sets garment color. The backdrop label names empty space.
     """
     people = "Pose" in pictures or "Clothes" in pictures
     lines = []
     for index, title in enumerate(pictures, start=1):
-        lines.append(_picture_sentence(title, index, people=people))
+        lines.append(_picture_sentence(title, index, people=people, backdrop=backdrop))
     return " ".join(lines)
 
 
-def _picture_sentence(title: str, index: int, *, people: bool) -> str:
+def _color_word(color: list[int]) -> str:
+    return f"{color[0]} {color[1]} {color[2]}"
+
+
+def _picture_sentence(title: str, index: int, *, people: bool, backdrop: dict | None = None) -> str:
     if title == "Pose":
         return (
             f"Picture {index} is an OpenPose skeleton of those same people, on black. "
@@ -934,6 +1008,17 @@ def _picture_sentence(title: str, index: int, *, people: bool) -> str:
             f"Picture {index} is the surface direction of that same camera. "
             "Use it for which faces catch the light. Do not copy its colors."
         )
+    if title == "Backdrop":
+        if backdrop is None:
+            raise KeyError("Backdrop")
+        return (
+            f"Picture {index} is the empty space from this exact camera, in flat color, not a finished photograph. "
+            f"Flat color {_color_word(backdrop['skyColor'])} is the sky: {backdrop['sky']}. "
+            f"Flat color {_color_word(backdrop['groundColor'])} is the ground: {backdrop['ground']}. "
+            f"Flat color {_color_word(backdrop['surroundColor'])} is the surroundings beyond the set: {backdrop['surround']}. "
+            "Black is an asset. Develop each flat color into that place. "
+            "Do not invent walls, windows, or a white void, and do not leave the color flat."
+        )
     raise KeyError(title)
 
 
@@ -947,6 +1032,7 @@ def inject_qwen_spatial_refs(
     mask_name: str | None,
     guides: list[tuple[str, str]] | None = None,
     lead_title: str = "Depth",
+    backdrop_name: str | None = None,
 ) -> None:
     """Picture 1 is the depth. People shots then pass the pose and the place edges."""
     depth = graph.get("6")
@@ -969,6 +1055,14 @@ def inject_qwen_spatial_refs(
             "_meta": {"title": title},
         }
         blockout_inputs[image_key] = [node_id, 0]
+    if backdrop_name is not None:
+        blockout_encoder["class_type"] = "TextEncodeQwenBackdrop"
+        graph["42"] = {
+            "inputs": {"image": backdrop_name},
+            "class_type": "LoadImage",
+            "_meta": {"title": "Backdrop"},
+        }
+        blockout_inputs["image4"] = ["42", 0]
     if not characters or mask_name is None:
         _disable_face_pass(graph)
         return
@@ -995,7 +1089,10 @@ def inject_qwen_spatial_refs(
 
 def _qwen_encoder(graph: dict, title: str) -> dict | None:
     for node in graph.values():
-        if not isinstance(node, dict) or node.get("class_type") != "TextEncodeQwenImageEditPlus":
+        if not isinstance(node, dict) or node.get("class_type") not in {
+            "TextEncodeQwenImageEditPlus",
+            "TextEncodeQwenBackdrop",
+        }:
             continue
         if str((node.get("_meta") or {}).get("title", "")) == title:
             return node
@@ -1092,8 +1189,6 @@ def face_prompt_for(
         {
             "characterCount": values["characterCount"],
             "characterIds": values["characterIds"],
-            "locationPromptBlock": values["locationPromptBlock"],
-            "imagePrompt": values["imagePrompt"],
             "referenceMap": "; ".join(
                 f"Picture {index} = the face of {character['id']} only"
                 for index, character in enumerate(group, start=2)
@@ -1309,7 +1404,13 @@ def inject_dialogue_multimodal_guider(graph: dict) -> None:
     }
 
 
-def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> None:
+def execute_queued_graph(
+    graph: dict,
+    dest: Path,
+    prefer: str,
+    mode: str,
+    also: list[tuple[str, Path]] | None = None,
+) -> None:
     meta = graph_meta(graph)
     clip_seconds = None
     if meta["frame_rate"]:
@@ -1328,8 +1429,20 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     monitor.sample()
     started = time.time()
     prompt_id = queue_prompt(graph)
-    outputs, history_item = wait_for_output(prompt_id, monitor=monitor, prefer=prefer)
-    download_output(outputs[0], dest)
+    prefixes = [prefix for prefix, _path in also or []]
+    if also:
+        prefixes.append("reelshort_start")
+    outputs, history_item = wait_for_output(
+        prompt_id,
+        monitor=monitor,
+        prefer=prefer,
+        require_prefixes=prefixes or None,
+    )
+    for prefix, path in also or []:
+        download_output(output_named(outputs, prefix), path)
+        print(f"  Wrote {path} ({format_bytes(path.stat().st_size)})", flush=True)
+    final = output_named(outputs, "reelshort_start") if also else outputs[0]
+    download_output(final, dest)
     monitor.sample()
     elapsed = time.time() - started
     timing = f"in {format_duration(elapsed)}"
@@ -1378,9 +1491,10 @@ def render_spatial_still(
     mode: str,
 ) -> None:
     """Generate one still from the depth. People shots also pass the pose."""
+    backdrop_path = depth_path.with_name(depth_path.name.replace("_depth.png", "_backdrop.png"))
     missing = [
         path
-        for path in (depth_path, edge_path, normal_path)
+        for path in (depth_path, edge_path, normal_path, backdrop_path)
         if not present(path)
     ]
     if missing:
@@ -1402,7 +1516,10 @@ def render_spatial_still(
     ]
     character_ids = scene["characterIds"]
     values = {
-        "structurePictures": structure_pictures([title for _name, title in pictures]),
+        "structurePictures": structure_pictures(
+            [title for _name, title in pictures] + ["Backdrop"],
+            backdrop=location["backdrop"],
+        ),
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
         "locationPromptBlock": location["promptBlock"],
@@ -1424,16 +1541,23 @@ def render_spatial_still(
         mask_name,
         pictures[1:],
         lead_title=pictures[0][1],
+        backdrop_name=stage_named_image(backdrop_path, "backdrop"),
     )
+    passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
+        _save_blockout_pass(graph)
+        passes.append(("reelshort_blockout", kept_pass_path(dest, "blockout")))
         print(
             f"  Face pass 1: {', '.join(item['id'] for item in first)}",
             flush=True,
         )
     print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode, also=passes or None)
     for index, group in enumerate(groups[1:], start=2):
+        previous = kept_pass_path(dest, f"face{index - 1}")
+        shutil.copy2(dest, previous)
+        print(f"  Kept {previous}", flush=True)
         render_identity_followup(
             show,
             values,

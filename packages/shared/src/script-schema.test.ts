@@ -25,6 +25,14 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     locations: {
       room: {
         promptBlock: "A small stone room.",
+        backdrop: {
+          sky: "a gray sky",
+          skyColor: [40, 48, 64],
+          ground: "stone paving",
+          groundColor: [48, 44, 40],
+          surround: "open fields",
+          surroundColor: [24, 56, 40],
+        },
         spatial: {
           sizeMeters: [8, 10, 4],
           landmarks: {

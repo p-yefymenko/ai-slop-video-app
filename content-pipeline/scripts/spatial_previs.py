@@ -36,6 +36,10 @@ FACE_TOWARD_CAMERA = 0.25
 CLOTHES_COLOR_BIN = 32
 # A window this wide replaces speckle with the color around it. Larger areas stay.
 CLOTHES_FLATTEN_RADIUS = 3
+# Label colors for empty space. They are not paint. The still is told what each one means.
+BACKDROP_SKY = (255, 0, 255)
+BACKDROP_GROUND = (0, 255, 0)
+BACKDROP_SURROUND = (255, 255, 0)
 BLOCKOUT_FPS = 8
 
 Vec3 = tuple[float, float, float]
@@ -764,6 +768,44 @@ def render_mesh_thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: 
     image.resize((width, thumb_height), Image.Resampling.LANCZOS).save(destination)
 
 
+def render_backdrop(camera: dict, zbuf: np.ndarray, spatial: dict, colors: dict) -> Image.Image:
+    """Paint empty pixels with that place's flat color. An asset stays black.
+
+    Sky, ground inside the location, and the horizon each keep their own color,
+    so the still knows what belongs there.
+    """
+    height, width = zbuf.shape
+    position, right, up, forward, focal = _camera_basis(camera, viewport_height=float(height))
+    ys, xs = np.indices((height, width))
+    vx = (xs + 0.5 - width / 2.0) / focal
+    vy = (height / 2.0 - (ys + 0.5)) / focal
+    dx = right[0] * vx + up[0] * vy + forward[0]
+    dy = right[1] * vx + up[1] * vy + forward[1]
+    dz = right[2] * vx + up[2] * vy + forward[2]
+    length = np.sqrt(dx * dx + dy * dy + dz * dz)
+    dx /= length
+    dy /= length
+    dz /= length
+    t = np.full((height, width), np.inf, dtype=np.float64)
+    downward = dz < -1e-4
+    t[downward] = -position[2] / dz[downward]
+    hit = np.isfinite(t) & (t > NEAR_CLIP)
+    hx = position[0] + np.where(hit, t, 0.0) * dx
+    hy = position[1] + np.where(hit, t, 0.0) * dy
+    loc_w, loc_d, _loc_h = vec(spatial["sizeMeters"])
+    inside = hit & (np.abs(hx) <= loc_w / 2.0) & (np.abs(hy) <= loc_d / 2.0)
+    image = np.empty((height, width, 3), dtype=np.uint8)
+    image[:] = tuple(int(channel) for channel in colors["sky"])
+    image[hit & ~inside] = tuple(int(channel) for channel in colors["surround"])
+    image[inside] = tuple(int(channel) for channel in colors["ground"])
+    from scipy import ndimage
+
+    # A crack in a mesh is not sky. Close it before the label is painted through.
+    asset = ndimage.binary_fill_holes(ndimage.binary_closing(np.isfinite(zbuf), iterations=3))
+    image[asset] = (0, 0, 0)
+    return Image.fromarray(image, "RGB")
+
+
 def _edge_image(zbuf: np.ndarray) -> Image.Image:
     """White lines where depth jumps or a surface meets empty space."""
     valid = np.isfinite(zbuf)
@@ -1256,6 +1298,86 @@ def visible_face_ids(
     return [character_id for _, character_id in ranked]
 
 
+def _face_scale(joints: dict[str, Vec3]) -> float | None:
+    """Body scale from the eye spacing used when the joints were built."""
+    right_eye = joints.get("right_eye")
+    left_eye = joints.get("left_eye")
+    if right_eye is None or left_eye is None:
+        return None
+    gap = length(sub(right_eye, left_eye))
+    if gap < 1e-6:
+        return None
+    return gap / 0.064
+
+
+def _face_ellipse(
+    joints: dict[str, Vec3], camera: dict
+) -> tuple[int, int, int, int] | None:
+    """Screen box from the brow to the chin and across the ears.
+
+    On a close view the joint eyes fall at the top edge, and the drawn face
+    sits lower. The box then starts below the crown and reaches past the neck.
+    """
+    scale = _face_scale(joints)
+    nose = joints.get("nose")
+    neck = joints.get("neck")
+    right_eye = joints.get("right_eye")
+    left_eye = joints.get("left_eye")
+    if scale is None or nose is None or neck is None or right_eye is None or left_eye is None:
+        return None
+    nose_px = project(nose, camera)
+    neck_px = project(neck, camera)
+    left_px = project(left_eye, camera)
+    right_px = project(right_eye, camera)
+    if nose_px is None or neck_px is None or left_px is None or right_px is None:
+        return None
+    ears = []
+    for point in (joints.get("left_ear"), joints.get("right_ear")):
+        if point is None:
+            return None
+        screen = project(point, camera)
+        if screen is None:
+            return None
+        ears.append(screen)
+    span = abs(nose_px[1] - neck_px[1])
+    eye_y = min(left_px[1], right_px[1])
+    if eye_y < PROXY_HEIGHT * 0.05:
+        top = neck_px[1] - 0.75 * span
+        bottom = neck_px[1] + 0.65 * span
+    else:
+        brow = add(lerp(left_eye, right_eye, 0.5), (0.0, 0.0, 0.03 * scale))
+        chin = add(nose, (0.0, 0.0, -0.07 * scale))
+        brow_px = project(brow, camera)
+        chin_px = project(chin, camera)
+        if brow_px is None or chin_px is None:
+            return None
+        top = min(brow_px[1], chin_px[1])
+        bottom = max(brow_px[1], chin_px[1])
+    left = min(point[0] for point in ears)
+    right = max(point[0] for point in ears)
+    pad_x = max(4.0, 0.12 * (right - left))
+    pad_y = max(4.0, 0.08 * abs(bottom - top))
+    return (
+        int(left - pad_x),
+        int(top - pad_y),
+        int(right + pad_x),
+        int(bottom + pad_y),
+    )
+
+
+def _clip_mask_to_surface(mask: Image.Image, zbuf: np.ndarray) -> Image.Image:
+    """Drop mask pixels that have no surface, so the sky is never repainted."""
+    values = np.asarray(mask, dtype=np.uint8)
+    if values.shape != zbuf.shape:
+        return mask
+    from scipy import ndimage
+
+    surface = ndimage.binary_closing(np.isfinite(zbuf), iterations=2)
+    values = values.copy()
+    values[~surface] = 0
+    return Image.fromarray(values, mode="L")
+
+
 def _face_mask(
     camera: dict,
     people: list[tuple[str, dict[str, Vec3]]],
@@ -1269,25 +1391,22 @@ def _face_mask(
         if character_id not in allowed or not face_points_at_camera(camera, joints):
             continue
         nose = project(joints["nose"], camera)
-        neck = project(joints["neck"], camera)
         if nose is None:
             continue
         x = int(round(nose[0]))
         y = int(round(nose[1]))
         if not (0 <= x < PROXY_WIDTH and 0 <= y < PROXY_HEIGHT):
             continue
-        if np.isfinite(zbuf[y, x]) and zbuf[y, x] + 0.2 < nose[2]:
+        if 0 <= y < zbuf.shape[0] and 0 <= x < zbuf.shape[1]:
+            if np.isfinite(zbuf[y, x]) and zbuf[y, x] + 0.2 < nose[2]:
+                continue
+        box = _face_ellipse(joints, camera)
+        if box is None:
             continue
-        if neck is None:
-            radius = 18
-        else:
-            radius = max(14, int(math.hypot(nose[0] - neck[0], nose[1] - neck[1]) * 0.85))
-        draw.ellipse(
-            (x - radius, y - int(radius * 1.25), x + radius, y + int(radius * 0.85)),
-            fill=255,
-        )
+        draw.ellipse(box, fill=255)
     blurred = mask.filter(ImageFilter.GaussianBlur(radius=8))
-    return Image.merge("RGB", (blurred, blurred, blurred))
+    clipped = _clip_mask_to_surface(blurred, zbuf)
+    return Image.merge("RGB", (clipped, clipped, clipped))
 
 
 def render_blocked_frame(
@@ -1855,6 +1974,13 @@ def render_blocked_scene(
             label,
             "clothes",
         )
+        backdrop_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "backdrop",
+        )
         blockout_path.parent.mkdir(parents=True, exist_ok=True)
         mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
@@ -1878,7 +2004,20 @@ def render_blocked_scene(
         )
         clothes_path.parent.mkdir(parents=True, exist_ok=True)
         render_clothes_cutout(show, episode, scene, time_seconds).save(clothes_path)
-        written.extend((blockout_path, depth_path, pose_path, edge_path, normal_path, clothes_path))
+        location = show["locations"][scene["locationId"]]
+        render_backdrop(
+            camera,
+            zbuf,
+            location["spatial"],
+            {
+                "sky": location["backdrop"]["skyColor"],
+                "ground": location["backdrop"]["groundColor"],
+                "surround": location["backdrop"]["surroundColor"],
+            },
+        ).save(backdrop_path)
+        written.extend(
+            (blockout_path, depth_path, pose_path, edge_path, normal_path, clothes_path, backdrop_path)
+        )
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )

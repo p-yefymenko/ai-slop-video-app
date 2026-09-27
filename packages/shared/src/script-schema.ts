@@ -251,6 +251,16 @@ const showScriptSchema = z
         z
           .object({
             promptBlock: text("promptBlock"),
+            backdrop: z
+              .object({
+                sky: text("backdrop.sky"),
+                skyColor: z.tuple([z.number(), z.number(), z.number()]),
+                ground: text("backdrop.ground"),
+                groundColor: z.tuple([z.number(), z.number(), z.number()]),
+                surround: text("backdrop.surround"),
+                surroundColor: z.tuple([z.number(), z.number(), z.number()]),
+              })
+              .strict(),
             spatial: stageGeometrySchema,
           })
           .strict(),

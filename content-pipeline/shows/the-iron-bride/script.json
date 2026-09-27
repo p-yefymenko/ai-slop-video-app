@@ -36,6 +36,14 @@
   "locations": {
     "sky_forge_exterior": {
       "promptBlock": "A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains.",
+      "backdrop": {
+        "sky": "storm ash, slag-gold fire in the clouds, and broken sky-chains",
+        "skyColor": [48, 36, 28],
+        "ground": "molten rivers far below the citadel",
+        "groundColor": [64, 32, 16],
+        "surround": "open storm around the hanging citadel",
+        "surroundColor": [32, 34, 40]
+      },
       "spatial": {
         "sizeMeters": [200, 240, 140],
         "landmarks": {
@@ -46,6 +54,14 @@
     },
     "sun_well_court": {
       "promptBlock": "An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls.",
+      "backdrop": {
+        "sky": "storm sky of ash and blue-black cloud",
+        "skyColor": [36, 42, 58],
+        "ground": "iron floor veined with slag-gold",
+        "groundColor": [48, 44, 40],
+        "surround": "open ocean under the storm, no walls",
+        "surroundColor": [16, 42, 62]
+      },
       "spatial": {
         "sizeMeters": [22, 30, 18],
         "landmarks": {
