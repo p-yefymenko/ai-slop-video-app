@@ -476,6 +476,21 @@ def _yaw_axes(yaw_degrees: float) -> tuple[Vec3, Vec3]:
     return (math.sin(yaw), math.cos(yaw), 0.0), (math.cos(yaw), -math.sin(yaw), 0.0)
 
 
+def facing_yaw_degrees(state: dict, look_target: Vec3 | None) -> float:
+    """Yaw around Z whose front points at lookAtId. Body yaw is the fallback.
+
+    A stored mesh has one front. The face uses the eye target, because the
+    mesh cannot turn its head separately from the body.
+    """
+    if look_target is not None and state.get("position") is not None:
+        feet = vec(state["position"])
+        dx = float(look_target[0]) - feet[0]
+        dy = float(look_target[1]) - feet[1]
+        if math.hypot(dx, dy) > 1e-3:
+            return math.degrees(math.atan2(dx, dy))
+    return float(state.get("bodyYawDegrees") or 0.0)
+
+
 def _anchor_point(
     show: dict,
     episode: dict,
@@ -520,13 +535,13 @@ def character_pose_joints(
     """OpenPose-18 joints for one blocking state. Right/left are the character's."""
     scale = _height_scale(show, character_id)
     feet = vec(state["position"])
-    forward, right = _yaw_axes(state["bodyYawDegrees"])
+    look_target = _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds)
+    forward, right = _yaw_axes(facing_yaw_degrees(state, look_target))
     hip_z, shoulder_z, head_z = _stance_heights(state["stance"], scale)
     neck = add(feet, (0.0, 0.0, shoulder_z + (head_z - shoulder_z) * 0.45))
     hip = add(feet, (0.0, 0.0, hip_z))
     shoulder = add(feet, (0.0, 0.0, shoulder_z))
     gaze = forward
-    look_target = _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds)
     if look_target is not None:
         aim = sub(look_target, neck)
         flat = (aim[0], aim[1], 0.0)
@@ -876,8 +891,10 @@ def _yaw_vertices(vertices: np.ndarray, yaw_degrees: float) -> np.ndarray:
     return turned
 
 
-def _character_mesh_batch(show: dict, character_id: str, state: dict):
-    """The generated character, feet on their mark. Missing files use the capsule."""
+def _character_mesh_batch(
+    show: dict, character_id: str, state: dict, look_target: Vec3 | None = None
+):
+    """The generated character, feet on their mark, front toward lookAtId."""
     from clay_gpu import ClayBatch
     from pipeline_paths import stage_dir
 
@@ -886,7 +903,7 @@ def _character_mesh_batch(show: dict, character_id: str, state: dict):
     if not path.is_file():
         return None
     vertices, faces, key = _cached_mesh(path)
-    yaw = float(state.get("bodyYawDegrees") or 0.0) + CHARACTER_FRONT_YAW
+    yaw = facing_yaw_degrees(state, look_target) + CHARACTER_FRONT_YAW
     position = state.get("position")
     if position is None:
         return None
@@ -987,7 +1004,7 @@ def _scene_surfaces(
 
     A location with no people draws its one generated mesh. A location with
     people draws the open floor and each landmark mesh at the script position.
-    A character with a generated mesh stands on their mark, turned by body yaw.
+    A character with a generated mesh stands on their mark, front toward lookAtId.
     Otherwise they stay the capsule volume. Open sky stays the viewport gray.
     """
     from asset_resolver import location_has_people
@@ -1020,7 +1037,12 @@ def _scene_surfaces(
             show, episode, scene, state, time_seconds, character_id
         )
         people.append((character_id, joints))
-        mesh = _character_mesh_batch(show, character_id, state)
+        mesh = _character_mesh_batch(
+            show,
+            character_id,
+            state,
+            _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds),
+        )
         if mesh is not None:
             batches.append(mesh)
             continue

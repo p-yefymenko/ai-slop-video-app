@@ -20,6 +20,7 @@ from spatial_previs import (  # noqa: E402
     character_pose_joints,
     compile_spatial_video_prompt,
     episode_character_state,
+    facing_yaw_degrees,
     project,
     render_blocked_frame,
     render_scene_proxy,
@@ -27,6 +28,7 @@ from spatial_previs import (  # noqa: E402
     scene_blockouts,
     scene_has_spatial_change,
     timeline_state,
+    _yaw_axes,
     validate_spatial_episode,
     write_episode_blockout,
     _scene_surfaces,
@@ -77,6 +79,35 @@ class SpatialPrevisTests(unittest.TestCase):
         )
         self.assertEqual(state["position"], [1.0, 0.0, 0.0])
         self.assertAlmostEqual(abs(state["bodyYawDegrees"]), 180.0)
+
+    def test_front_aims_at_look_at_and_the_face_cameras_sit_there(self) -> None:
+        state = {"position": [-1.4, -2.0, 0.0], "bodyYawDegrees": 0}
+        forward, _right = _yaw_axes(facing_yaw_degrees(state, (0.0, 6.0, 0.0)))
+        self.assertGreater(forward[1], 0.9)
+        backward, _right = _yaw_axes(facing_yaw_degrees(state, (-1.4, -8.0, 0.0)))
+        self.assertLess(backward[1], -0.9)
+        self.assertEqual(facing_yaw_degrees({"bodyYawDegrees": 35}, None), 35.0)
+        for scene_number, character_id in ((3, "sela"), (12, "sela"), (17, "sela"), (18, "tomas")):
+            scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == scene_number)
+            time_seconds = float(scene["timeRangeSeconds"][0])
+            character = episode_character_state(self.episode, character_id, time_seconds)
+            camera = camera_at(scene, time_seconds)
+            feet = character["position"]
+            to_camera = (
+                camera["position"][0] - feet[0],
+                camera["position"][1] - feet[1],
+            )
+            face = _yaw_axes(
+                facing_yaw_degrees(
+                    character,
+                    (0.0, 6.0, 0.0) if character.get("lookAtId") == "vardan" else (0.0, 4.5, 0.0),
+                )
+            )[0]
+            self.assertGreater(
+                face[0] * to_camera[0] + face[1] * to_camera[1],
+                0.0,
+                f"scene {scene_number} camera is behind {character_id}",
+            )
 
     def test_episode_has_valid_geometry(self) -> None:
         self.assertEqual(validate_spatial_episode(self.show, self.episode), [])
