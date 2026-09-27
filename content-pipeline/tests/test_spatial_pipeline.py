@@ -301,7 +301,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("36 42 58 is the sky: storm sky", backdrop)
         self.assertIn("16 42 62 is the surroundings beyond the set: open ocean", backdrop)
 
-    def test_close_clothes_cutout_falls_back_to_the_pose(self) -> None:
+    def test_people_shots_pass_clothes_even_when_they_fill_the_frame(self) -> None:
         from PIL import Image
 
         with tempfile.TemporaryDirectory() as temp:
@@ -341,7 +341,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 pose_path=pose,
                 edge_path=edges,
             )
-            self.assertEqual([title for _path, title in close], ["Depth", "Pose", "Edges"])
+            self.assertEqual([title for _path, title in close], ["Depth", "Clothes", "Edges"])
             wide = Image.new("RGB", size, (0, 0, 0))
             for x in range(20):
                 for y in range(20):
@@ -505,6 +505,9 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(blockout["class_type"], "TextEncodeQwenImageEditPlus")
         self.assertNotIn("42", graph)
         self.assertNotIn("image4", blockout["inputs"])
+
+    def test_face_pass_is_off(self) -> None:
+        self.assertFalse(pipeline.FACE_PASS)
 
     def test_blockout_pass_is_saved_beside_the_face_pass(self) -> None:
         dest = Path("scene_03_start.png")

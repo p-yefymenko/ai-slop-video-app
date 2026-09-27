@@ -51,6 +51,8 @@ PROMPT_KEYS = (
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 # Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
 MAX_QWEN_REFS = 2
+# Identity faces are off. Each still is one Qwen pass.
+FACE_PASS = False
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 SPATIAL_QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit_spatial.json"
@@ -1213,21 +1215,6 @@ def pose_image_is_blank(path: Path) -> bool:
     return all(channel[1] == 0 for channel in extrema)
 
 
-# A wide shot's people cover under a tenth of the frame. A close view covers
-# about a third or more. Qwen keeps a same-camera picture that fills the frame,
-# so those shots must not be given the mesh render.
-CLOTHES_FRAME_LIMIT = 0.20
-
-
-def clothes_fills_frame(path: Path) -> bool:
-    with Image.open(path) as image:
-        small = image.convert("RGB").resize((96, 170), Image.Resampling.BOX)
-        red, green, blue = small.split()
-        peak = ImageChops.lighter(ImageChops.lighter(red, green), blue)
-        covered = peak.point(lambda value: 255 if value > 8 else 0).histogram()[255]
-    return covered / (96 * 170) > CLOTHES_FRAME_LIMIT
-
-
 def spatial_still_pictures(
     *,
     has_characters: bool,
@@ -1236,12 +1223,11 @@ def spatial_still_pictures(
     pose_path: Path,
     edge_path: Path,
 ) -> list[tuple[Path, str]]:
-    """Depth, then the clothes cutout, the pose on a close view, or the edges."""
+    """Depth, then the clothes cutout, the pose if clothes is missing, or the edges."""
     use_clothes = (
         has_characters
         and present(clothes_path)
         and not pose_image_is_blank(clothes_path)
-        and not clothes_fills_frame(clothes_path)
     )
     use_pose = has_characters and present(pose_path) and not pose_image_is_blank(pose_path)
     if use_clothes:
@@ -1526,10 +1512,15 @@ def render_spatial_still(
         "imagePrompt": scene["imagePrompt"],
     }
     blockout_prompt = show_prompt(show, "spatialBlockout", values)
-    groups = identity_face_groups(mask_path, characters) if characters else []
-    first = groups[0] if groups else []
-    mask_name = stage_combined_mask(first, "faces") if first else None
-    face_prompt = face_prompt_for(show, values, first) if first else None
+    groups: list[list[dict]] = []
+    first: list[dict] = []
+    mask_name = None
+    face_prompt = None
+    if FACE_PASS and characters:
+        groups = identity_face_groups(mask_path, characters)
+        first = groups[0] if groups else []
+        mask_name = stage_combined_mask(first, "faces") if first else None
+        face_prompt = face_prompt_for(show, values, first) if first else None
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
     graph = clone_workflow(workflow)
     inject_seed(graph, seed)
