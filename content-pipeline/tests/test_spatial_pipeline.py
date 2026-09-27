@@ -283,6 +283,11 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("person-shaped volume", text)
         self.assertIn("Cloth, skin, and hair are each a flat color", text)
         self.assertIn("matching part of the body", text)
+        self.assertIn("Picture 3 is the outlines of this exact camera, including the people", text)
+        self.assertNotIn("It contains no people", text)
+        empty_edges = pipeline.structure_pictures(["Depth", "Edges"], people=False)
+        self.assertIn("edges of the place only", empty_edges)
+        self.assertIn("It contains no people", empty_edges)
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
         wide = pipeline.structure_pictures(["Depth", "Edges"], people=True)
@@ -584,6 +589,32 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["32"]["inputs"]["images"], ["11", 0])
         self.assertEqual(graph["32"]["inputs"]["filename_prefix"], "reelshort_blockout")
         self.assertEqual(graph["12"]["inputs"]["images"], ["31", 0])
+
+    def test_people_blockout_does_not_name_anyone_or_their_clothes(self) -> None:
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 6)
+        prompt = pipeline.show_prompt(
+            self.show,
+            "spatialBlockout",
+            {
+                "structurePictures": pipeline.structure_pictures(
+                    ["Depth", "Clothes", "Edges"]
+                ),
+                "peopleLine": pipeline.still_people_line(scene["characterIds"]),
+                "locationPromptBlock": location["promptBlock"],
+                "sceneLine": pipeline.still_scene_line(scene),
+            },
+        )
+        self.assertIn("Exactly 6 visible people", prompt)
+        self.assertIn(location["promptBlock"], prompt)
+        self.assertNotIn("sela", prompt.lower())
+        self.assertNotIn("vardan", prompt.lower())
+        self.assertNotIn(scene["imagePrompt"], prompt)
+        self.assertNotIn("sun-priest plate", prompt)
+        self.assertNotIn("It contains no people", prompt)
+        empty = next(item for item in self.episode["scenes"] if not item["characterIds"])
+        self.assertEqual(pipeline.still_scene_line(empty), empty["imagePrompt"])
+        self.assertEqual(pipeline.still_people_line([]), "No people.")
 
     def test_face_prompt_names_identity_and_not_the_place(self) -> None:
         location = self.show["locations"]["sun_well_court"]

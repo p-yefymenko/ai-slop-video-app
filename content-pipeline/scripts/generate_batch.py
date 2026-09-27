@@ -1010,6 +1010,11 @@ def _picture_sentence(title: str, index: int, *, people: bool, backdrop: dict | 
             "Brighter surfaces are closer. Black is empty space. "
             "Match that camera, scale, occlusion, and object placement."
         )
+    if title == "Edges" and people:
+        return (
+            f"Picture {index} is the outlines of this exact camera, including the people. "
+            "Keep those outlines."
+        )
     if title == "Edges":
         return f"Picture {index} is the edges of the place only. Keep those edges. It contains no people."
     if title == "Backdrop":
@@ -1181,6 +1186,22 @@ def stage_combined_mask(group: list[dict], label: str) -> str:
         return stage_named_image(destination, label)
     finally:
         destination.unlink(missing_ok=True)
+
+
+def still_people_line(character_ids: list[str]) -> str:
+    if not character_ids:
+        return "No people."
+    return (
+        f"Exactly {len(character_ids)} visible people. "
+        "Each person appears once. No extra people, duplicates, wireframes, grids, or readable text."
+    )
+
+
+def still_scene_line(scene: dict) -> str:
+    """Atmosphere for empty shots. People shots get wardrobe from the clothes picture."""
+    if scene["characterIds"]:
+        return ""
+    return str(scene.get("imagePrompt") or "").strip()
 
 
 def face_prompt_for(
@@ -1610,10 +1631,13 @@ def render_spatial_still(
             backdrop=location["backdrop"] if use_backdrop else None,
             people=bool(characters),
         ),
+        "peopleLine": still_people_line(character_ids),
+        "locationPromptBlock": location["promptBlock"],
+        "sceneLine": still_scene_line(scene),
+    }
+    face_values = {
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
-        "locationPromptBlock": location["promptBlock"],
-        "imagePrompt": scene["imagePrompt"],
     }
     blockout_prompt = show_prompt(show, "spatialBlockout", values)
     groups: list[list[dict]] = []
@@ -1624,7 +1648,7 @@ def render_spatial_still(
         groups = identity_face_groups(mask_path, characters)
         first = groups[0] if groups else []
         mask_name = stage_combined_mask(first, "faces") if first else None
-        face_prompt = face_prompt_for(show, values, first) if first else None
+        face_prompt = face_prompt_for(show, face_values, first) if first else None
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
     graph = clone_workflow(workflow)
     inject_seed(graph, seed)
@@ -1674,7 +1698,7 @@ def render_spatial_still(
         print(f"  Kept {previous}", flush=True)
         render_identity_followup(
             show,
-            values,
+            face_values,
             dest,
             group,
             seed + index - 1,
