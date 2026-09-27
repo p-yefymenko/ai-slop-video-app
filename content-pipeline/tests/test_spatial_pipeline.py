@@ -11,7 +11,11 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import generate_batch as pipeline  # noqa: E402
-from spatial_previs import spatial_target_screen_position  # noqa: E402
+from spatial_previs import (  # noqa: E402
+    camera_at,
+    spatial_target_screen_position,
+    visible_place_line,
+)
 
 SHOW_JSON = (
     Path(__file__).resolve().parents[1] / "shows" / "the-iron-bride" / "script.json"
@@ -601,12 +605,16 @@ class SpatialPipelineTests(unittest.TestCase):
                     ["Depth", "Clothes", "Edges"]
                 ),
                 "peopleLine": pipeline.still_people_line(scene["characterIds"]),
-                "locationPromptBlock": location["promptBlock"],
+                "locationPromptBlock": visible_place_line(
+                    location,
+                    camera_at(scene, float(scene["timeRangeSeconds"][0])),
+                ),
                 "sceneLine": pipeline.still_scene_line(scene),
             },
         )
         self.assertIn("Exactly 6 visible people", prompt)
-        self.assertIn(location["promptBlock"], prompt)
+        self.assertNotIn(location["promptBlock"], prompt)
+        self.assertNotIn("sun-well of white-gold fire", prompt)
         self.assertNotIn("sela", prompt.lower())
         self.assertNotIn("vardan", prompt.lower())
         self.assertNotIn(scene["imagePrompt"], prompt)
@@ -615,6 +623,21 @@ class SpatialPipelineTests(unittest.TestCase):
         empty = next(item for item in self.episode["scenes"] if not item["characterIds"])
         self.assertEqual(pipeline.still_scene_line(empty), empty["imagePrompt"])
         self.assertEqual(pipeline.still_people_line([]), "No people.")
+
+    def test_still_prompt_names_only_landmarks_this_camera_sees(self) -> None:
+        location = self.show["locations"]["sun_well_court"]
+        close = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15)
+        close_line = visible_place_line(
+            location, camera_at(close, float(close["timeRangeSeconds"][0]))
+        )
+        self.assertNotIn("sun well", close_line.lower())
+        self.assertNotIn(location["promptBlock"], close_line)
+        well = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        well_line = visible_place_line(
+            location, camera_at(well, float(well["timeRangeSeconds"][0]))
+        )
+        self.assertIn("sun well", well_line.lower())
+        self.assertNotIn(location["promptBlock"], well_line)
 
     def test_face_prompt_names_identity_and_not_the_place(self) -> None:
         location = self.show["locations"]["sun_well_court"]

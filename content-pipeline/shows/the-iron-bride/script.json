@@ -447,9 +447,9 @@
             "keyframes": [
               {
                 "timeSeconds": 15,
-                "position": [1.55, -3.9, 1.62],
-                "lookAt": [0.2, 6.0, 1.52],
-                "verticalFovDegrees": 30
+                "position": [1.75, -5.4, 1.58],
+                "lookAt": [0.15, 5.8, 1.52],
+                "verticalFovDegrees": 32
               }
             ]
           }
@@ -467,9 +467,9 @@
             "keyframes": [
               {
                 "timeSeconds": 17,
-                "position": [0.2, -4.4, 1.62],
-                "lookAt": [0.0, -2.1, 1.46],
-                "verticalFovDegrees": 34
+                "position": [0.0, -9.0, 1.62],
+                "lookAt": [-0.05, -2.1, 1.48],
+                "verticalFovDegrees": 50
               }
             ]
           }
@@ -523,15 +523,15 @@
             "keyframes": [
               {
                 "timeSeconds": 29,
-                "position": [0.0, 2.6, 0.32],
-                "lookAt": [-1.0, -1.4, 1.05],
-                "verticalFovDegrees": 40
+                "position": [-1.25, -0.35, 0.32],
+                "lookAt": [-1.4, -2.0, 0.48],
+                "verticalFovDegrees": 36
               },
               {
                 "timeSeconds": 31,
-                "position": [0.2, 2.8, 0.38],
-                "lookAt": [-0.4, 0.4, 1.1],
-                "verticalFovDegrees": 36
+                "position": [-0.55, 2.15, 0.34],
+                "lookAt": [-0.4, 1.0, 0.5],
+                "verticalFovDegrees": 34
               }
             ]
           }
@@ -585,9 +585,9 @@
             "keyframes": [
               {
                 "timeSeconds": 38,
-                "position": [0.0, 3.5, 0.22],
-                "lookAt": [0.0, 2.4, 0.12],
-                "verticalFovDegrees": 28
+                "position": [1.1, 2.55, 0.28],
+                "lookAt": [0.0, 3.2, 0.12],
+                "verticalFovDegrees": 30
               }
             ]
           }

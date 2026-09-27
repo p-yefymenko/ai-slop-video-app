@@ -255,6 +255,75 @@ def project(
     )
 
 
+def point_in_view(point: Vec3, camera: dict) -> bool:
+    projected = project(point, camera)
+    if projected is None:
+        return False
+    x, y, _depth = projected
+    return 0.0 <= x < PROXY_WIDTH and 0.0 <= y < PROXY_HEIGHT
+
+
+def landmark_in_view(landmark: dict, camera: dict) -> bool:
+    """True when this camera can see the landmark's box, not only its name."""
+    position = landmark.get("position")
+    if not isinstance(position, list) or len(position) < 3:
+        return False
+    origin = vec(position)
+    samples = [origin, add(origin, (0.0, 0.0, 0.4))]
+    size = landmark.get("size")
+    if isinstance(size, list) and len(size) >= 3:
+        half_x, half_y, height = float(size[0]) / 2.0, float(size[1]) / 2.0, float(size[2])
+        for dx in (-half_x, 0.0, half_x):
+            for dy in (-half_y, 0.0, half_y):
+                samples.append(add(origin, (dx, dy, 0.0)))
+                samples.append(add(origin, (dx, dy, height)))
+    hits = sum(1 for sample in samples if point_in_view(sample, camera))
+    needed = 2 if isinstance(size, list) and len(size) >= 3 else 1
+    return hits >= needed
+
+
+def visible_place_line(
+    location: dict,
+    camera: dict,
+    backdrop_path: Path | None = None,
+) -> str:
+    """Name only landmarks and empty-space regions this camera actually sees."""
+    seen: list[str] = []
+    spatial = location.get("spatial") or {}
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if isinstance(landmark, dict) and landmark_in_view(landmark, camera):
+            seen.append(str(landmark_id).replace("_", " "))
+    bits: list[str] = []
+    if len(seen) == 1:
+        bits.append(f"This camera sees the {seen[0]}.")
+    elif len(seen) > 1:
+        bits.append(
+            "This camera sees the " + ", ".join(seen[:-1]) + f", and the {seen[-1]}."
+        )
+    bits.extend(_visible_backdrop_sentences(location.get("backdrop") or {}, backdrop_path))
+    return " ".join(bits)
+
+
+def _visible_backdrop_sentences(backdrop: dict, path: Path | None) -> list[str]:
+    if path is None or not path.is_file() or not backdrop:
+        return []
+    image = np.asarray(Image.open(path).convert("RGB"))
+    total = max(int(image.shape[0] * image.shape[1]), 1)
+    minimum = max(1, int(total * 0.004))
+    sentences: list[str] = []
+    for field, swatch in (
+        ("sky", BACKDROP_SKY),
+        ("ground", BACKDROP_GROUND),
+        ("surround", BACKDROP_SURROUND),
+    ):
+        text = str(backdrop.get(field) or "").strip()
+        if not text:
+            continue
+        if int(np.all(image == swatch, axis=2).sum()) >= minimum:
+            sentences.append(text[0].upper() + text[1:] + ".")
+    return sentences
+
+
 def unproject(
     pixel_x: float,
     pixel_y: float,

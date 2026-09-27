@@ -35,10 +35,12 @@ from pipeline_paths import (
 from spatial_previs import (
     PROXY_HEIGHT,
     PROXY_WIDTH,
+    camera_at,
     compile_spatial_video_prompt,
     generate_episode_previs,
     scene_has_spatial_change,
     validate_spatial_episode,
+    visible_place_line,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1625,6 +1627,7 @@ def render_spatial_still(
             f"Missing previs guide {backdrop_path}. Run `pnpm run content:previs` first."
         )
     character_ids = scene["characterIds"]
+    time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
     values = {
         "structurePictures": structure_pictures(
             titles + (["Backdrop"] if use_backdrop else []),
@@ -1632,7 +1635,11 @@ def render_spatial_still(
             people=bool(characters),
         ),
         "peopleLine": still_people_line(character_ids),
-        "locationPromptBlock": location["promptBlock"],
+        "locationPromptBlock": visible_place_line(
+            location,
+            camera_at(scene, time_seconds),
+            backdrop_path if present(backdrop_path) else None,
+        ),
         "sceneLine": still_scene_line(scene),
     }
     face_values = {

@@ -12,6 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from spatial_previs import (  # noqa: E402
+    BACKDROP_SKY,
     PROXY_HEIGHT,
     PROXY_WIDTH,
     VIEWPORT_GRAY,
@@ -34,6 +35,8 @@ from spatial_previs import (  # noqa: E402
     _yaw_axes,
     validate_spatial_episode,
     visible_face_ids,
+    visible_place_line,
+    landmark_in_view,
     write_episode_blockout,
     _face_ellipse,
     _face_mask,
@@ -403,6 +406,34 @@ class SpatialPrevisTests(unittest.TestCase):
         holed[30:33, 20:24] = np.inf
         sealed = render_backdrop(looking_down, holed, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
         self.assertEqual(sealed.getpixel((21, 31)), (0, 0, 0))
+
+    def test_place_line_names_only_landmarks_in_this_camera(self) -> None:
+        location = self.show["locations"]["sun_well_court"]
+        well = location["spatial"]["landmarks"]["sun_well"]
+        close = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15)
+        close_camera = camera_at(close, float(close["timeRangeSeconds"][0]))
+        self.assertFalse(landmark_in_view(well, close_camera))
+        self.assertNotIn("sun well", visible_place_line(location, close_camera).lower())
+        wide = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        wide_camera = camera_at(wide, float(wide["timeRangeSeconds"][0]))
+        self.assertTrue(landmark_in_view(well, wide_camera))
+        self.assertIn("sun well", visible_place_line(location, wide_camera).lower())
+
+    def test_place_line_mentions_backdrop_regions_in_the_guide(self) -> None:
+        from PIL import Image
+
+        location = self.show["locations"]["sun_well_court"]
+        camera = camera_at(
+            next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15),
+            40.0,
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "backdrop.png"
+            Image.new("RGB", (64, 64), BACKDROP_SKY).save(path)
+            line = visible_place_line(location, camera, path)
+        self.assertIn("Storm sky", line)
+        self.assertNotIn("sun well", line.lower())
+        self.assertNotIn("iron floor", line.lower())
 
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors
