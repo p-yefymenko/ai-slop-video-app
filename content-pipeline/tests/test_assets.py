@@ -33,6 +33,7 @@ from mesh_io import (  # noqa: E402
     primitive_mesh,
     proportions_match,
     read_schema_mesh,
+    read_vertex_colors,
     write_schema_glb,
 )
 
@@ -163,6 +164,20 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(conditioning["inputs"]["image"], ["4", 0])
         structure = next(node for node in aligned.values() if node["class_type"] == "VaeDecodeStructureTrellis2")
         self.assertEqual(structure["inputs"]["resolution"], "32")
+        texture = next(node for node in aligned.values() if node["class_type"] == "Trellis2TextureStage")
+        self.assertEqual(texture["inputs"]["shape_latent"], ["20", 0])
+        paint = next(node for node in aligned.values() if node["class_type"] == "PaintMesh")
+        self.assertEqual(paint["inputs"]["mesh"], ["22", 0])
+        aligned_save = next(node for node in aligned.values() if node["class_type"] == "SaveGLB")
+        self.assertEqual(aligned_save["inputs"]["mesh"], ["37", 0])
+        texture_vae = [
+            node for node in aligned.values() if node["class_type"] == "VAELoader"
+        ]
+        self.assertEqual(
+            [node["inputs"]["vae_name"] for node in texture_vae],
+            ["trellis_2_shape_vae_bf16.safetensors", "trellis_2_texture_vae_bf16.safetensors"],
+        )
+        self.assertNotIn("PaintMesh", classes)
         small, small_faces = box_mesh((0.01, 0.01, 0.01))
         opened = small_faces[:-1]
         capped, capped_faces = cap_holes(small, opened)
@@ -424,6 +439,7 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(record["meshModel"], "pixal3d")
         self.assertEqual(record["facing"], "schema-plus-y")
         self.assertEqual(record["meshRepair"], "cap-holes")
+        self.assertEqual(record["surface"], "vertex-color")
         np.testing.assert_allclose(
             face_schema_forward(np.array([[0.2, -0.5, 1.0]])),
             [[-0.2, 0.5, 1.0]],
@@ -437,6 +453,21 @@ class AssetTests(unittest.TestCase):
         record_path.write_text(json.dumps(record), encoding="utf-8")
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, calls + 1)
+        painted_vertices, painted_faces = box_mesh((1.0, 1.0, 1.0))
+        painted_colors = np.tile(
+            np.array([[0.2, 0.4, 0.8]], dtype=np.float64),
+            (len(painted_vertices), 1),
+        )
+        painted = self.library / "painted.glb"
+        write_schema_glb(painted, painted_vertices, painted_faces, painted_colors)
+        item.glb.unlink()
+        record_path.unlink()
+        painted_item = self._resolver(CountingGenerator(painted)).resolve_show(show)[
+            "character:ada"
+        ]
+        kept = read_vertex_colors(painted_item.glb)
+        assert kept is not None
+        np.testing.assert_allclose(kept, painted_colors)
         bare = self._show()
         bare["characters"] = {"ada": {"promptBlock": "Adult woman, black hair."}}
         with self.assertRaises(RuntimeError) as missing_wardrobe:

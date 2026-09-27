@@ -53,6 +53,8 @@ PIXAL3D_UNET = "diffusion_models/pixal3d_int8_convrot.safetensors"
 PIXAL3D_UNET_NAME = "pixal3d_int8_convrot.safetensors"
 PIXAL3D_DINO = "clip_vision/dino_v3_L_naf_fp32.safetensors"
 PIXAL3D_DINO_NAME = "dino_v3_L_naf_fp32.safetensors"
+PIXAL3D_TEXTURE_VAE = "vae/trellis_2_texture_vae_bf16.safetensors"
+PIXAL3D_TEXTURE_VAE_NAME = "trellis_2_texture_vae_bf16.safetensors"
 MOGE_REPO = "Comfy-Org/MoGe"
 MOGE_FILE = "geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
 MOGE_NAME = "moge_2_vitl_normal_fp16.safetensors"
@@ -165,6 +167,12 @@ def main() -> None:
     download(TRELLIS_REPO, TRELLIS_SHAPE_VAE, models / "vae" / TRELLIS_SHAPE_VAE_NAME, 1_000_000_000)
     download(PIXAL3D_REPO, PIXAL3D_UNET, models / "diffusion_models" / PIXAL3D_UNET_NAME, 5_000_000_000)
     download(PIXAL3D_REPO, PIXAL3D_DINO, models / "clip_vision" / PIXAL3D_DINO_NAME, 1_000_000_000)
+    download(
+        PIXAL3D_REPO,
+        PIXAL3D_TEXTURE_VAE,
+        models / "vae" / PIXAL3D_TEXTURE_VAE_NAME,
+        800_000_000,
+    )
     download(MOGE_REPO, MOGE_FILE, models / "geometry_estimation" / MOGE_NAME, 600_000_000)
     download(BIREFNET_REPO, BIREFNET_FILE, models / "background_removal" / BIREFNET_NAME, 400_000_000)
     download(

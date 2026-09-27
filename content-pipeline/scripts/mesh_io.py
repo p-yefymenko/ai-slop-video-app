@@ -1,4 +1,8 @@
-"""Triangle meshes stored as glTF Y-up GLB files, without textures."""
+"""Triangle meshes stored as glTF Y-up GLB files.
+
+Location meshes are geometry only. A character mesh can carry the plate color
+on COLOR_0, one RGB value per vertex.
+"""
 
 from __future__ import annotations
 
@@ -236,10 +240,34 @@ def proportions_match(
     return bool(np.all((ratio >= low) & (ratio <= high)))
 
 
-def write_schema_glb(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
-    """Write schema-space triangles as a Y-up GLB."""
+def write_schema_glb(
+    path: Path,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: np.ndarray | None = None,
+) -> None:
+    """Write schema-space triangles as a Y-up GLB. ``colors`` are RGB in 0..1."""
     gltf_vertices = schema_points_to_gltf(vertices)
-    _write_glb(path, gltf_vertices, faces)
+    _write_glb(path, gltf_vertices, faces, colors)
+
+
+def read_vertex_colors(path: Path) -> np.ndarray | None:
+    """RGB per vertex from COLOR_0, or None when the mesh has no plate color."""
+    raw = path.read_bytes()
+    if raw[:4] != b"glTF":
+        return None
+    document, blob = _parse_glb(raw)
+    primitive = document["meshes"][0]["primitives"][0]
+    color_index = primitive.get("attributes", {}).get("COLOR_0")
+    if color_index is None:
+        return None
+    accessor = document["accessors"][color_index]
+    width = {"VEC3": 3, "VEC4": 4}[accessor["type"]]
+    values = _read_accessor(blob, document["bufferViews"], accessor)
+    colors = values.reshape(-1, width)[:, :3]
+    if len(colors) == 0:
+        return None
+    return np.clip(colors, 0.0, 1.0)
 
 
 def read_schema_mesh(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -360,48 +388,83 @@ def _read_obj_as_y_up(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return np.array(vertices, dtype=np.float64), np.array(faces, dtype=np.int64)
 
 
-def _write_glb(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
+def _write_glb(
+    path: Path,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: np.ndarray | None = None,
+) -> None:
     vertex_data = np.ascontiguousarray(vertices, dtype=np.float32)
     index_data = np.ascontiguousarray(faces.reshape(-1), dtype=np.uint32)
-    blob = vertex_data.tobytes() + index_data.tobytes()
+    pieces = [vertex_data.tobytes(), index_data.tobytes()]
+    color_data = None
+    if colors is not None:
+        color_data = np.ascontiguousarray(np.clip(colors, 0.0, 1.0), dtype=np.float32)
+        if color_data.shape != (len(vertex_data), 3):
+            raise ValueError(
+                f"Vertex colors must be {(len(vertex_data), 3)}, got {color_data.shape}"
+            )
+        pieces.append(color_data.tobytes())
+    blob = b"".join(pieces)
     minimum = vertex_data.min(axis=0).tolist()
     maximum = vertex_data.max(axis=0).tolist()
+    attributes = {"POSITION": 0}
+    accessors = [
+        {
+            "bufferView": 0,
+            "componentType": 5126,
+            "count": int(len(vertex_data)),
+            "type": "VEC3",
+            "min": minimum,
+            "max": maximum,
+        },
+        {
+            "bufferView": 1,
+            "componentType": 5125,
+            "count": int(len(index_data)),
+            "type": "SCALAR",
+        },
+    ]
+    buffer_views = [
+        {
+            "buffer": 0,
+            "byteOffset": 0,
+            "byteLength": int(vertex_data.nbytes),
+            "target": 34962,
+        },
+        {
+            "buffer": 0,
+            "byteOffset": int(vertex_data.nbytes),
+            "byteLength": int(index_data.nbytes),
+            "target": 34963,
+        },
+    ]
+    if color_data is not None:
+        attributes["COLOR_0"] = 2
+        accessors.append(
+            {
+                "bufferView": 2,
+                "componentType": 5126,
+                "count": int(len(color_data)),
+                "type": "VEC3",
+            }
+        )
+        buffer_views.append(
+            {
+                "buffer": 0,
+                "byteOffset": int(vertex_data.nbytes + index_data.nbytes),
+                "byteLength": int(color_data.nbytes),
+                "target": 34962,
+            }
+        )
     document = {
         "asset": {"version": "2.0", "generator": GENERATOR},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0}],
-        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
-        "accessors": [
-            {
-                "bufferView": 0,
-                "componentType": 5126,
-                "count": int(len(vertex_data)),
-                "type": "VEC3",
-                "min": minimum,
-                "max": maximum,
-            },
-            {
-                "bufferView": 1,
-                "componentType": 5125,
-                "count": int(len(index_data)),
-                "type": "SCALAR",
-            },
-        ],
-        "bufferViews": [
-            {
-                "buffer": 0,
-                "byteOffset": 0,
-                "byteLength": int(vertex_data.nbytes),
-                "target": 34962,
-            },
-            {
-                "buffer": 0,
-                "byteOffset": int(vertex_data.nbytes),
-                "byteLength": int(index_data.nbytes),
-                "target": 34963,
-            },
-        ],
+        "meshes": [{"primitives": [{"attributes": attributes, "indices": 1}]}],
+        "accessors": accessors,
+        "bufferViews": buffer_views,
         "buffers": [{"byteLength": len(blob)}],
     }
     json_chunk = _pad(json.dumps(document, separators=(",", ":")).encode("utf-8"), b" ")
@@ -454,8 +517,14 @@ def _mesh_from_glb(document: dict, blob: bytes) -> tuple[np.ndarray, np.ndarray]
 def _read_accessor(blob: bytes, views: list[dict], accessor: dict) -> np.ndarray:
     view = views[accessor["bufferView"]]
     offset = int(view.get("byteOffset", 0)) + int(accessor.get("byteOffset", 0))
-    component = {5126: np.float32, 5125: np.uint32, 5123: np.uint16}[accessor["componentType"]]
-    width = {"SCALAR": 1, "VEC3": 3}[accessor["type"]]
+    component_type = accessor["componentType"]
+    component = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}[
+        component_type
+    ]
+    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
     count = int(accessor["count"]) * width
     data = blob[offset : offset + count * np.dtype(component).itemsize]
-    return np.frombuffer(data, dtype=component).astype(np.float64)
+    values = np.frombuffer(data, dtype=component).astype(np.float64)
+    if accessor.get("normalized") and component_type == 5121:
+        values = values / 255.0
+    return values

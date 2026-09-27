@@ -234,9 +234,11 @@ export class Stage {
           gltf.scene.traverse((node) => {
             if (node.isMesh) {
               node.geometry.computeVertexNormals();
+              const plateColor = Boolean(node.geometry.getAttribute("color"));
               node.material = new THREE.MeshStandardMaterial({
-                color: CLAY,
-                roughness: 0.82,
+                color: plateColor ? 0xffffff : CLAY,
+                vertexColors: plateColor,
+                roughness: plateColor ? 1 : 0.82,
                 metalness: 0.04,
                 side: THREE.DoubleSide,
               });

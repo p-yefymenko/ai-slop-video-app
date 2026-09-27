@@ -28,6 +28,7 @@ from mesh_io import (
     face_schema_forward,
     fit_to_size,
     read_schema_mesh,
+    read_vertex_colors,
     require_triangle_budget,
     write_schema_glb,
 )
@@ -40,6 +41,8 @@ CHARACTER_FACING = "schema-plus-y"
 CHARACTER_PAGE = "https://github.com/TencentARC/Pixal3D"
 # Character meshes cap small openings with new triangles. Locations keep theirs.
 CHARACTER_MESH_REPAIR = "cap-holes"
+# Plate color sampled by Pixal3D and stored on each vertex.
+CHARACTER_SURFACE = "vertex-color"
 
 
 @dataclass
@@ -143,6 +146,8 @@ class AssetResolver:
             return None
         if request.character_id and record.get("facing") != CHARACTER_FACING:
             return None
+        if request.character_id and record.get("surface") != CHARACTER_SURFACE:
+            return None
         size = record.get("sizeMeters") or list(request.size)
         return ResolvedLocation(
             location_id=request.location_id,
@@ -173,13 +178,16 @@ class AssetResolver:
             if plate_copy.is_file():
                 plate_copy.unlink()
         vertices, faces = read_schema_mesh(fetched)
+        colors = read_vertex_colors(fetched) if request.character_id else None
+        if colors is not None and len(colors) != len(vertices):
+            colors = None
         if request.character_id:
             vertices = face_schema_forward(vertices)
         fitted = fit_to_size(vertices, request.size)
         if request.character_id:
             fitted, faces = cap_holes(fitted, faces)
         source_id = appearance_source_id(request.appearance)
-        write_schema_glb(directory / "model.glb", fitted, faces)
+        write_schema_glb(directory / "model.glb", fitted, faces, colors)
         if fetched != directory / "model.glb" and fetched.is_file():
             fetched.unlink()
         if self.write_thumbs:
@@ -219,6 +227,7 @@ class AssetResolver:
             record["meshModel"] = CHARACTER_MESH_MODEL
             record["facing"] = CHARACTER_FACING
             record["meshRepair"] = CHARACTER_MESH_REPAIR
+            record["surface"] = CHARACTER_SURFACE
         elif request.landmark_id:
             record["landmarkId"] = request.landmark_id
             if request.position is not None:

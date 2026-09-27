@@ -22,6 +22,7 @@ TRELLIS_SHAPE_VAE = "trellis_2_shape_vae_bf16.safetensors"
 PIXAL3D_UNET = "pixal3d_int8_convrot.safetensors"
 # Same DINOv3 encoder, with the NAF upsampler bundled so features can be back-projected.
 PIXAL3D_DINO = "dino_v3_L_naf_fp32.safetensors"
+PIXAL3D_TEXTURE_VAE = "trellis_2_texture_vae_bf16.safetensors"
 MOGE_MODEL = "moge_2_vitl_normal_fp16.safetensors"
 BACKGROUND_MODEL = "birefnet.safetensors"
 PLATE_SIZE = 1024
@@ -49,13 +50,15 @@ def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = F
 
 
 def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
-    """Image to a shape mesh. Texture baking stays off; previs stores an untextured GLB."""
+    """Image to a shape mesh. Location meshes stay untextured."""
     return _shape_graph(image_name, seed, triangle_budget, pixel_aligned=False)
 
 
 def pixal3d_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
-    """Same cascade as TRELLIS.2, with MoGe field of view and pixel-aligned conditioning."""
-    return _shape_graph(image_name, seed, triangle_budget, pixel_aligned=True)
+    """Same cascade as TRELLIS.2, then the plate texture painted onto the mesh."""
+    graph = _shape_graph(image_name, seed, triangle_budget, pixel_aligned=True)
+    _paint_plate_texture(graph, seed)
+    return graph
 
 
 def _shape_graph(
@@ -240,6 +243,53 @@ def _shape_graph(
         "inputs": {"moge_geometry": ["31", 0], "axis": "horizontal", "unit": "degrees"},
     }
     return graph
+
+
+def _paint_plate_texture(graph: dict, seed: int) -> None:
+    """Sample the plate's texture and store it on the mesh vertices.
+
+    The full mesh is kept. Unwrapping it for an image atlas does not fit the GPU.
+    """
+    graph["33"] = {
+        "class_type": "VAELoader",
+        "inputs": {"vae_name": PIXAL3D_TEXTURE_VAE},
+    }
+    graph["34"] = {
+        "class_type": "Trellis2TextureStage",
+        "inputs": {
+            "positive": ["19", 0],
+            "negative": ["19", 1],
+            "shape_latent": ["20", 0],
+        },
+    }
+    graph["35"] = {
+        "class_type": "KSampler",
+        "inputs": {
+            "seed": seed,
+            "steps": 12,
+            "cfg": 1.0,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+            "model": ["7", 0],
+            "positive": ["34", 0],
+            "negative": ["34", 1],
+            "latent_image": ["34", 2],
+        },
+    }
+    graph["36"] = {
+        "class_type": "VaeDecodeTextureTrellis",
+        "inputs": {
+            "samples": ["35", 0],
+            "vae": ["33", 0],
+            "shape_subdivides": ["21", 1],
+        },
+    }
+    graph["37"] = {
+        "class_type": "PaintMesh",
+        "inputs": {"mesh": ["22", 0], "voxel_colors": ["36", 0]},
+    }
+    graph["23"]["inputs"]["mesh"] = ["37", 0]
 
 
 def plate_is_ready(path: Path) -> bool:
