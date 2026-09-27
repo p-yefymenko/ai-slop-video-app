@@ -277,10 +277,13 @@ class SpatialPipelineTests(unittest.TestCase):
         )
 
     def test_people_prompt_keeps_the_person_volume_in_the_depth(self) -> None:
-        text = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
+        text = pipeline.structure_pictures(["Depth", "Clothes", "Edges"])
         self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
         self.assertIn("person-shaped volume", text)
-        self.assertIn("Picture 2 is an OpenPose skeleton", text)
+        self.assertIn("Picture 2 is these same people from this exact camera, on black", text)
+        self.assertIn("clothing color", text)
+        pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
+        self.assertIn("Picture 2 is an OpenPose skeleton", pose)
 
     def test_empty_prompt_lets_the_depth_set_the_camera(self) -> None:
         text = pipeline.structure_pictures(["Depth", "Edges", "Normals"])

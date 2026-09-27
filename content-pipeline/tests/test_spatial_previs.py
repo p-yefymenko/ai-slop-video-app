@@ -368,6 +368,36 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertEqual(destination.parent.name, "1")
                 self.assertEqual(destination.parents[2].name, "previs")
 
+    def test_clothes_cutout_draws_the_vertex_color_on_black(self) -> None:
+        from clay_gpu import ClayBatch, raster_clay
+        from spatial_previs import NEAR_CLIP, _camera_basis
+
+        camera = {
+            "position": [0.0, -2.0, 0.0],
+            "lookAt": [0.0, 0.0, 0.0],
+            "verticalFovDegrees": 40.0,
+            "rollDegrees": 0.0,
+        }
+        vertices = np.array(
+            [[-0.4, 0.0, -0.4], [0.4, 0.0, -0.4], [0.0, 0.0, 0.4]],
+            dtype=np.float32,
+        )
+        faces = np.array([[0, 1, 2]], dtype=np.uint32)
+        colors = np.tile(np.array([[1.0, 0.0, 0.0]], dtype=np.float32), (3, 1))
+        image, _depth = raster_clay(
+            [ClayBatch(vertices, faces, 1, colors=colors)],
+            _camera_basis(camera, viewport_height=64),
+            width=64,
+            height=64,
+            near=NEAR_CLIP,
+            background=(0, 0, 0),
+            shading="albedo",
+        )
+        pixels = np.asarray(image)
+        self.assertGreater(int(pixels[:, :, 0].max()), 200)
+        self.assertLess(int(pixels[:, :, 1].max()), 40)
+        self.assertEqual(int(pixels[0, 0, 0]), 0)
+
     def test_scene_five_masks_faces_toward_the_camera(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 5)
         time_seconds = float(scene["timeRangeSeconds"][0])

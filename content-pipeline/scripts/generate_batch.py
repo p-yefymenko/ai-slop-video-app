@@ -888,10 +888,10 @@ def structure_pictures(pictures: list[str]) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
     On a people shot the depth is picture 1 and includes the person volumes, so
-    Qwen keeps their position and what they hide. The skeleton is the next
-    picture and only sets the joints.
+    Qwen keeps their position and what they hide. The clothes cutout is the next
+    picture and sets garment color.
     """
-    people = "Pose" in pictures
+    people = "Pose" in pictures or "Clothes" in pictures
     lines = []
     for index, title in enumerate(pictures, start=1):
         lines.append(_picture_sentence(title, index, people=people))
@@ -903,6 +903,12 @@ def _picture_sentence(title: str, index: int, *, people: bool) -> str:
         return (
             f"Picture {index} is an OpenPose skeleton of those same people, on black. "
             "Match each joint. Do not draw the skeleton, and do not move anyone off the person-shaped volume."
+        )
+    if title == "Clothes":
+        return (
+            f"Picture {index} is these same people from this exact camera, on black. "
+            "Copy each person's clothing color and material onto the matching body. "
+            "Do not copy the black background or invent a different garment."
         )
     if title == "Depth" and people:
         return (
@@ -1329,9 +1335,17 @@ def render_spatial_still(
             f"Missing previs guide {missing[0]}. Run `pnpm run content:previs` first."
         )
     characters = resolve_scene_characters(show, scene)
+    clothes_path = pose_path.with_name(pose_path.name.replace("_pose.png", "_clothes.png"))
+    use_clothes = bool(characters) and present(clothes_path) and not pose_image_is_blank(clothes_path)
     use_pose = bool(characters) and present(pose_path) and not pose_image_is_blank(pose_path)
     depth_name = stage_named_image(depth_path, "depth")
-    if use_pose:
+    if use_clothes:
+        pictures = [
+            (depth_name, "Depth"),
+            (stage_named_image(clothes_path, "clothes"), "Clothes"),
+            (stage_named_image(edge_path, "edges"), "Edges"),
+        ]
+    elif use_pose:
         pictures = [
             (depth_name, "Depth"),
             (stage_named_image(pose_path, "pose"), "Pose"),

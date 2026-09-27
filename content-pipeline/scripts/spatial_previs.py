@@ -781,6 +781,44 @@ def _edge_image(zbuf: np.ndarray) -> Image.Image:
     return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
 
 
+def render_clothes_cutout(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> Image.Image:
+    """These people from this camera, plate color, place cut away.
+
+    The pixels are the garment color. Lighting stays off so the still copies
+    the cloth and not a shade.
+    """
+    from clay_gpu import raster_clay
+
+    camera = camera_at(scene, time_seconds)
+    batches = []
+    for character_id in scene.get("characterIds") or []:
+        state = episode_character_state(episode, character_id, time_seconds)
+        batch = _character_mesh_batch(
+            show,
+            character_id,
+            state,
+            _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds),
+            colored=True,
+        )
+        if batch is not None:
+            batches.append(batch)
+    image, _depth = raster_clay(
+        batches,
+        _camera_basis(camera),
+        width=PROXY_WIDTH,
+        height=PROXY_HEIGHT,
+        near=NEAR_CLIP,
+        background=(0, 0, 0),
+        shading="albedo",
+    )
+    return image
+
+
 def _raster_normals(batches: list, camera: dict) -> Image.Image:
     from clay_gpu import raster_normals
 
@@ -848,12 +886,12 @@ def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[st
             )
 
 
-_MESH_CACHE: dict[str, tuple[int, np.ndarray, np.ndarray]] = {}
+_MESH_CACHE: dict[str, tuple[int, np.ndarray, np.ndarray, np.ndarray | None]] = {}
 
 
 def _cached_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, tuple]:
     """Schema-space vertices and faces. The GPU buffer key is the path and mtime."""
-    from mesh_io import read_schema_mesh
+    from mesh_io import read_schema_mesh, read_vertex_colors
 
     stamp = path.stat().st_mtime_ns
     key = (str(path), stamp)
@@ -863,8 +901,22 @@ def _cached_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, tuple]:
     vertices, faces = read_schema_mesh(path)
     vertices = np.ascontiguousarray(vertices, dtype=np.float32)
     faces = np.ascontiguousarray(faces, dtype=np.uint32)
-    _MESH_CACHE[str(path)] = (stamp, vertices, faces)
+    colors = read_vertex_colors(path)
+    if colors is None or len(colors) != len(vertices):
+        stored = None
+    else:
+        stored = np.ascontiguousarray(colors, dtype=np.float32)
+    _MESH_CACHE[str(path)] = (stamp, vertices, faces, stored)
     return vertices, faces, key
+
+
+def _cached_colors(path: Path) -> np.ndarray | None:
+    """Plate color per vertex, or None when this mesh was stored untextured."""
+    _cached_mesh(path)
+    cached = _MESH_CACHE.get(str(path))
+    if cached is None:
+        return None
+    return cached[3]
 
 
 def _location_set_mesh(show_id: str | None, location_id: str):
@@ -897,9 +949,18 @@ def _yaw_vertices(vertices: np.ndarray, yaw_degrees: float) -> np.ndarray:
 
 
 def _character_mesh_batch(
-    show: dict, character_id: str, state: dict, look_target: Vec3 | None = None
+    show: dict,
+    character_id: str,
+    state: dict,
+    look_target: Vec3 | None = None,
+    *,
+    colored: bool = False,
 ):
-    """The generated character, feet on their mark, front toward lookAtId."""
+    """The generated character, feet on their mark, front toward lookAtId.
+
+    ``colored`` keeps the plate color on each vertex. A mesh with no color is
+    left out of that cutout.
+    """
     from clay_gpu import ClayBatch
     from pipeline_paths import stage_dir
 
@@ -908,6 +969,9 @@ def _character_mesh_batch(
     if not path.is_file():
         return None
     vertices, faces, key = _cached_mesh(path)
+    colors = _cached_colors(path) if colored else None
+    if colored and colors is None:
+        return None
     yaw = facing_yaw_degrees(state, look_target) + CHARACTER_FRONT_YAW
     position = state.get("position")
     if position is None:
@@ -917,7 +981,8 @@ def _character_mesh_batch(
         faces,
         CHARACTER_MESH_BASE,
         offset=vec(position),
-        key=(*key, round(yaw, 2)),
+        key=(*key, round(yaw, 2), "clothes" if colored else "clay"),
+        colors=colors,
     )
 
 
@@ -1693,6 +1758,13 @@ def render_blocked_scene(
             label,
             "normal",
         )
+        clothes_path = guide_path(
+            show["id"],
+            episode["episodeNumber"],
+            scene["sceneNumber"],
+            label,
+            "clothes",
+        )
         blockout_path.parent.mkdir(parents=True, exist_ok=True)
         mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
@@ -1714,7 +1786,9 @@ def render_blocked_scene(
             edge_path,
             normal_path,
         )
-        written.extend((blockout_path, depth_path, pose_path, edge_path, normal_path))
+        clothes_path.parent.mkdir(parents=True, exist_ok=True)
+        render_clothes_cutout(show, episode, scene, time_seconds).save(clothes_path)
+        written.extend((blockout_path, depth_path, pose_path, edge_path, normal_path, clothes_path))
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )
