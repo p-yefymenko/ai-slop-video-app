@@ -368,6 +368,22 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertEqual(destination.parent.name, "1")
                 self.assertEqual(destination.parents[2].name, "previs")
 
+    def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
+        from spatial_previs import _flatten_figure_colors
+
+        image = np.zeros((80, 60, 3), dtype=np.uint8)
+        mask = np.zeros((80, 60), dtype=bool)
+        mask[10:70, 15:45] = True
+        image[mask] = (198, 178, 149)
+        image[10:28, 15:45] = (12, 12, 18)
+        image[40:44, 28:32] = (30, 20, 15)
+        image[50:66, 15:28] = (170, 130, 100)
+        flat = _flatten_figure_colors(image, mask)
+        self.assertLess(int(flat[16, 24, 0]), 40)
+        self.assertGreater(int(flat[36, 24, 0]), 160)
+        self.assertGreater(int(flat[41, 29, 0]), 160)
+        self.assertLess(int(flat[58, 20, 1]), 150)
+
     def test_clothes_cutout_draws_the_vertex_color_on_black(self) -> None:
         from clay_gpu import ClayBatch, raster_clay
         from spatial_previs import NEAR_CLIP, _camera_basis

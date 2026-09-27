@@ -907,8 +907,10 @@ def _picture_sentence(title: str, index: int, *, people: bool) -> str:
     if title == "Clothes":
         return (
             f"Picture {index} is these same people from this exact camera, on black. "
-            "Copy each person's clothing color and material onto the matching body. "
-            "Do not copy the black background or invent a different garment."
+            "Cloth, skin, and hair are each a flat color. "
+            "Copy each of those colors onto the matching part of the body. "
+            "Invent real texture and light. "
+            "Do not copy the flat fill or the black background, and do not invent a different garment."
         )
     if title == "Depth" and people:
         return (
@@ -1113,6 +1115,57 @@ def pose_image_is_blank(path: Path) -> bool:
     with Image.open(path) as image:
         extrema = image.convert("RGB").getextrema()
     return all(channel[1] == 0 for channel in extrema)
+
+
+# A wide shot's people cover under a tenth of the frame. A close view covers
+# about a third or more. Qwen keeps a same-camera picture that fills the frame,
+# so those shots must not be given the mesh render.
+CLOTHES_FRAME_LIMIT = 0.20
+
+
+def clothes_fills_frame(path: Path) -> bool:
+    with Image.open(path) as image:
+        small = image.convert("RGB").resize((96, 170), Image.Resampling.BOX)
+        red, green, blue = small.split()
+        peak = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+        covered = peak.point(lambda value: 255 if value > 8 else 0).histogram()[255]
+    return covered / (96 * 170) > CLOTHES_FRAME_LIMIT
+
+
+def spatial_still_pictures(
+    *,
+    has_characters: bool,
+    depth_path: Path,
+    clothes_path: Path,
+    pose_path: Path,
+    edge_path: Path,
+    normal_path: Path,
+) -> list[tuple[Path, str]]:
+    """Depth, then either the clothes cutout, the pose, or the empty-shot guides."""
+    use_clothes = (
+        has_characters
+        and present(clothes_path)
+        and not pose_image_is_blank(clothes_path)
+        and not clothes_fills_frame(clothes_path)
+    )
+    use_pose = has_characters and present(pose_path) and not pose_image_is_blank(pose_path)
+    if use_clothes:
+        return [
+            (depth_path, "Depth"),
+            (clothes_path, "Clothes"),
+            (edge_path, "Edges"),
+        ]
+    if use_pose:
+        return [
+            (depth_path, "Depth"),
+            (pose_path, "Pose"),
+            (edge_path, "Edges"),
+        ]
+    return [
+        (depth_path, "Depth"),
+        (edge_path, "Edges"),
+        (normal_path, "Normals"),
+    ]
 
 
 def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
@@ -1336,27 +1389,17 @@ def render_spatial_still(
         )
     characters = resolve_scene_characters(show, scene)
     clothes_path = pose_path.with_name(pose_path.name.replace("_pose.png", "_clothes.png"))
-    use_clothes = bool(characters) and present(clothes_path) and not pose_image_is_blank(clothes_path)
-    use_pose = bool(characters) and present(pose_path) and not pose_image_is_blank(pose_path)
-    depth_name = stage_named_image(depth_path, "depth")
-    if use_clothes:
-        pictures = [
-            (depth_name, "Depth"),
-            (stage_named_image(clothes_path, "clothes"), "Clothes"),
-            (stage_named_image(edge_path, "edges"), "Edges"),
-        ]
-    elif use_pose:
-        pictures = [
-            (depth_name, "Depth"),
-            (stage_named_image(pose_path, "pose"), "Pose"),
-            (stage_named_image(edge_path, "edges"), "Edges"),
-        ]
-    else:
-        pictures = [
-            (depth_name, "Depth"),
-            (stage_named_image(edge_path, "edges"), "Edges"),
-            (stage_named_image(normal_path, "normal"), "Normals"),
-        ]
+    chosen = spatial_still_pictures(
+        has_characters=bool(characters),
+        depth_path=depth_path,
+        clothes_path=clothes_path,
+        pose_path=pose_path,
+        edge_path=edge_path,
+        normal_path=normal_path,
+    )
+    pictures = [
+        (stage_named_image(path, title.lower()), title) for path, title in chosen
+    ]
     character_ids = scene["characterIds"]
     values = {
         "structurePictures": structure_pictures([title for _name, title in pictures]),

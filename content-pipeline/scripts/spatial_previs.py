@@ -31,6 +31,11 @@ VIEWPORT_GRAY = (148, 149, 152)
 IDENTITY_FACE_LIMIT = 2
 # cos of the angle between the face and the camera. Negative is the back of the head.
 FACE_TOWARD_CAMERA = 0.25
+# Plate color is banded across nearby shades. One bin is one flat area, so cloth,
+# skin, and hair stay apart while a shade of variation inside an area collapses.
+CLOTHES_COLOR_BIN = 32
+# A window this wide replaces speckle with the color around it. Larger areas stay.
+CLOTHES_FLATTEN_RADIUS = 3
 BLOCKOUT_FPS = 8
 
 Vec3 = tuple[float, float, float]
@@ -781,21 +786,99 @@ def _edge_image(zbuf: np.ndarray) -> Image.Image:
     return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
 
 
+def _plate_color_keys(pixels: np.ndarray) -> np.ndarray:
+    quantized = pixels.astype(np.uint16) // CLOTHES_COLOR_BIN
+    return (
+        quantized[..., 0].astype(np.int32) * 256
+        + quantized[..., 1].astype(np.int32) * 16
+        + quantized[..., 2].astype(np.int32)
+    )
+
+
+def _box_count(mask: np.ndarray, radius: int) -> np.ndarray:
+    values = np.pad(mask.astype(np.int32), radius)
+    integral = np.zeros((values.shape[0] + 1, values.shape[1] + 1), dtype=np.int32)
+    integral[1:, 1:] = values.cumsum(0).cumsum(1)
+    height, width = mask.shape
+    y = np.arange(height)
+    x = np.arange(width)
+    y1 = y
+    y2 = y + 2 * radius
+    x1 = x
+    x2 = x + 2 * radius
+    return (
+        integral[y2[:, None] + 1, x2[None, :] + 1]
+        - integral[y1[:, None], x2[None, :] + 1]
+        - integral[y2[:, None] + 1, x1[None, :]]
+        + integral[y1[:, None], x1[None, :]]
+    )
+
+
+def _absorb_small_regions(keys: np.ndarray, mask: np.ndarray, min_pixels: int) -> None:
+    """A small patch takes the color that touches it. Hair, cloth, and skin are larger."""
+    from scipy import ndimage
+
+    structure = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=int)
+    replacements: list[tuple[np.ndarray, int]] = []
+    for key in np.unique(keys[mask]):
+        labeled, count = ndimage.label(keys == key, structure=structure)
+        sizes = np.bincount(labeled.ravel())
+        for comp_id in range(1, count + 1):
+            if int(sizes[comp_id]) >= min_pixels:
+                continue
+            comp = labeled == comp_id
+            border = ndimage.binary_dilation(comp, structure=structure) & mask & ~comp
+            if not bool(border.any()):
+                continue
+            neighbor, freq = np.unique(keys[border], return_counts=True)
+            replacements.append((comp, int(neighbor[int(np.argmax(freq))])))
+    for comp, new_key in replacements:
+        keys[comp] = new_key
+
+
+def _flatten_figure_colors(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Flat color inside each area of one figure. A small stain takes the color around it."""
+    covered = int(mask.sum())
+    if covered == 0:
+        return image
+    keys = np.zeros(mask.shape, dtype=np.int32)
+    keys[mask] = _plate_color_keys(image[mask])
+    present = [int(key) for key in np.unique(keys[mask])]
+    medians = {
+        key: np.median(image[mask & (keys == key)], axis=0).astype(np.uint8) for key in present
+    }
+    counts = np.stack(
+        [_box_count((keys == key) & mask, CLOTHES_FLATTEN_RADIUS) for key in present],
+        axis=0,
+    )
+    winner = np.argmax(counts, axis=0)
+    flat_keys = np.zeros(mask.shape, dtype=np.int32)
+    for index, key in enumerate(present):
+        flat_keys[mask & (winner == index)] = key
+    _absorb_small_regions(flat_keys, mask, max(20, int(covered * 0.01)))
+    out = np.array(image, copy=True)
+    for key in np.unique(flat_keys[mask]):
+        out[mask & (flat_keys == int(key))] = medians[int(key)]
+    return out
+
+
 def render_clothes_cutout(
     show: dict,
     episode: dict,
     scene: dict,
     time_seconds: float,
 ) -> Image.Image:
-    """These people from this camera, plate color, place cut away.
+    """These people from this camera, place cut away, each area one flat plate color.
 
-    The pixels are the garment color. Lighting stays off so the still copies
-    the cloth and not a shade.
+    Cloth, skin, and hair keep their own color. A small stain takes the color
+    around it, so the still cannot copy a speck from the mesh.
     """
     from clay_gpu import raster_clay
 
     camera = camera_at(scene, time_seconds)
-    batches = []
+    basis = _camera_basis(camera)
+    canvas = np.zeros((PROXY_HEIGHT, PROXY_WIDTH, 3), dtype=np.uint8)
+    nearest = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
     for character_id in scene.get("characterIds") or []:
         state = episode_character_state(episode, character_id, time_seconds)
         batch = _character_mesh_batch(
@@ -805,18 +888,25 @@ def render_clothes_cutout(
             _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds),
             colored=True,
         )
-        if batch is not None:
-            batches.append(batch)
-    image, _depth = raster_clay(
-        batches,
-        _camera_basis(camera),
-        width=PROXY_WIDTH,
-        height=PROXY_HEIGHT,
-        near=NEAR_CLIP,
-        background=(0, 0, 0),
-        shading="albedo",
-    )
-    return image
+        if batch is None:
+            continue
+        image, depth = raster_clay(
+            [batch],
+            basis,
+            width=PROXY_WIDTH,
+            height=PROXY_HEIGHT,
+            near=NEAR_CLIP,
+            background=(0, 0, 0),
+            shading="albedo",
+        )
+        covered = np.isfinite(depth)
+        if not bool(covered.any()):
+            continue
+        flat = _flatten_figure_colors(np.asarray(image), covered)
+        closer = covered & (depth < nearest)
+        canvas[closer] = flat[closer]
+        nearest[closer] = depth[closer]
+    return Image.fromarray(canvas, "RGB")
 
 
 def _raster_normals(batches: list, camera: dict) -> Image.Image:

@@ -280,10 +280,70 @@ class SpatialPipelineTests(unittest.TestCase):
         text = pipeline.structure_pictures(["Depth", "Clothes", "Edges"])
         self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
         self.assertIn("person-shaped volume", text)
-        self.assertIn("Picture 2 is these same people from this exact camera, on black", text)
-        self.assertIn("clothing color", text)
+        self.assertIn("Cloth, skin, and hair are each a flat color", text)
+        self.assertIn("matching part of the body", text)
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
+
+    def test_close_clothes_cutout_falls_back_to_the_pose(self) -> None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            depth = root / "start_depth.png"
+            clothes = root / "start_clothes.png"
+            pose = root / "start_pose.png"
+            edges = root / "start_edges.png"
+            normal = root / "start_normal.png"
+            size = (96, 170)
+            import random
+
+            random.seed(1)
+            pose_image = Image.new("RGB", size)
+            pose_image.putdata(
+                [(random.randrange(256),) * 3 for _ in range(size[0] * size[1])]
+            )
+            pose_image.save(pose)
+            for path in (depth, edges, normal):
+                Image.new("RGB", size, (40, 40, 40)).save(path)
+            close_clothes = Image.new("RGB", size)
+            close_clothes.putdata(
+                [
+                    (
+                        200 + random.randrange(40),
+                        180 + random.randrange(40),
+                        150 + random.randrange(40),
+                    )
+                    for _ in range(size[0] * size[1])
+                ]
+            )
+            close_clothes.save(clothes)
+            close = pipeline.spatial_still_pictures(
+                has_characters=True,
+                depth_path=depth,
+                clothes_path=clothes,
+                pose_path=pose,
+                edge_path=edges,
+                normal_path=normal,
+            )
+            self.assertEqual([title for _path, title in close], ["Depth", "Pose", "Edges"])
+            wide = Image.new("RGB", size, (0, 0, 0))
+            for x in range(20):
+                for y in range(20):
+                    wide.putpixel(
+                        (x, y),
+                        (random.randrange(256), random.randrange(256), random.randrange(256)),
+                    )
+            wide.save(clothes)
+            held = pipeline.spatial_still_pictures(
+                has_characters=True,
+                depth_path=depth,
+                clothes_path=clothes,
+                pose_path=pose,
+                edge_path=edges,
+                normal_path=normal,
+            )
+            self.assertEqual([title for _path, title in held], ["Depth", "Clothes", "Edges"])
 
     def test_empty_prompt_lets_the_depth_set_the_camera(self) -> None:
         text = pipeline.structure_pictures(["Depth", "Edges", "Normals"])
