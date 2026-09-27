@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -269,17 +270,54 @@ def landmark_in_view(landmark: dict, camera: dict) -> bool:
     if not isinstance(position, list) or len(position) < 3:
         return False
     origin = vec(position)
-    samples = [origin, add(origin, (0.0, 0.0, 0.4))]
+    if point_in_view(origin, camera):
+        return True
     size = landmark.get("size")
-    if isinstance(size, list) and len(size) >= 3:
-        half_x, half_y, height = float(size[0]) / 2.0, float(size[1]) / 2.0, float(size[2])
-        for dx in (-half_x, 0.0, half_x):
-            for dy in (-half_y, 0.0, half_y):
-                samples.append(add(origin, (dx, dy, 0.0)))
-                samples.append(add(origin, (dx, dy, height)))
-    hits = sum(1 for sample in samples if point_in_view(sample, camera))
-    needed = 2 if isinstance(size, list) and len(size) >= 3 else 1
-    return hits >= needed
+    mid_z = float(size[2]) * 0.5 if isinstance(size, list) and len(size) >= 3 else 0.4
+    return point_in_view(add(origin, (0.0, 0.0, mid_z)), camera)
+
+
+def _landmark_aliases(landmark_id: str) -> list[str]:
+    slug = str(landmark_id)
+    aliases = [slug.replace("_", " "), slug.replace("_", "-")]
+    trimmed = re.sub(r"_(l|r|left|right)$", "", slug, flags=re.I)
+    if trimmed != slug:
+        aliases.append(trimmed.replace("_", " "))
+        aliases.append(trimmed.replace("_", "-"))
+    return list(dict.fromkeys(alias for alias in aliases if alias))
+
+
+def _drop_hidden_landmark_clauses(block: str, hidden_names: list[str]) -> str:
+    """Keep location materials; drop clauses that name objects this camera cannot see."""
+    text = block.strip()
+    if not text or not hidden_names:
+        return text
+    parts = [part.strip() for part in re.split(r",\s*", text) if part.strip()]
+    kept = [
+        part
+        for part in parts
+        if not any(name.lower() in part.lower() for name in hidden_names)
+    ]
+    if not kept:
+        return ""
+    joined = ", ".join(kept)
+    if text.endswith(".") and not joined.endswith("."):
+        joined += "."
+    return joined
+
+
+def _still_landmark_phrase(landmark_id: str, landmark: dict) -> str:
+    appearance = str(landmark.get("appearance") or "").strip()
+    if appearance:
+        phrase = re.split(
+            r",\s*(?:a single |no )\b",
+            appearance,
+            maxsplit=1,
+            flags=re.I,
+        )[0].strip(" .")
+        if phrase:
+            return phrase + "."
+    return f"The {str(landmark_id).replace('_', ' ')} is in frame."
 
 
 def visible_place_line(
@@ -287,20 +325,38 @@ def visible_place_line(
     camera: dict,
     backdrop_path: Path | None = None,
 ) -> str:
-    """Name only landmarks and empty-space regions this camera actually sees."""
-    seen: list[str] = []
+    """Location materials plus only the landmarks this camera actually sees."""
+    visible: list[tuple[str, dict]] = []
+    hidden_names: list[str] = []
     spatial = location.get("spatial") or {}
     for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
-        if isinstance(landmark, dict) and landmark_in_view(landmark, camera):
-            seen.append(str(landmark_id).replace("_", " "))
+        if not isinstance(landmark, dict):
+            continue
+        if landmark_in_view(landmark, camera):
+            visible.append((str(landmark_id), landmark))
+        else:
+            hidden_names.extend(_landmark_aliases(str(landmark_id)))
     bits: list[str] = []
-    if len(seen) == 1:
-        bits.append(f"This camera sees the {seen[0]}.")
-    elif len(seen) > 1:
-        bits.append(
-            "This camera sees the " + ", ".join(seen[:-1]) + f", and the {seen[-1]}."
-        )
-    bits.extend(_visible_backdrop_sentences(location.get("backdrop") or {}, backdrop_path))
+    place = _drop_hidden_landmark_clauses(
+        str(location.get("promptBlock") or ""),
+        hidden_names,
+    )
+    if place:
+        bits.append(place)
+    covered = " ".join(bits).lower()
+    for landmark_id, landmark in visible:
+        if any(alias.lower() in covered for alias in _landmark_aliases(landmark_id)):
+            continue
+        phrase = _still_landmark_phrase(landmark_id, landmark)
+        bits.append(phrase)
+        covered = " ".join(bits).lower()
+    for sentence in _visible_backdrop_sentences(
+        location.get("backdrop") or {},
+        backdrop_path,
+    ):
+        if sentence.lower().rstrip(".") not in covered:
+            bits.append(sentence)
+            covered = " ".join(bits).lower()
     return " ".join(bits)
 
 

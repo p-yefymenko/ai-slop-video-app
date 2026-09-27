@@ -613,8 +613,8 @@ class SpatialPipelineTests(unittest.TestCase):
             },
         )
         self.assertIn("Exactly 6 visible people", prompt)
-        self.assertNotIn(location["promptBlock"], prompt)
-        self.assertNotIn("sun-well of white-gold fire", prompt)
+        self.assertIn(location["promptBlock"], prompt)
+        self.assertIn("sun-well of white-gold fire", prompt)
         self.assertNotIn("sela", prompt.lower())
         self.assertNotIn("vardan", prompt.lower())
         self.assertNotIn(scene["imagePrompt"], prompt)
@@ -624,6 +624,26 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.still_scene_line(empty), empty["imagePrompt"])
         self.assertEqual(pipeline.still_people_line([]), "No people.")
 
+    def test_generation_log_copies_the_prompt_and_attached_images(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            dest = Path(temp) / "scene_02_start.png"
+            depth = Path(temp) / "start_depth.png"
+            depth.write_bytes(b"depth-bytes")
+            pipeline.begin_generation_log(dest)
+            pipeline.append_generation_log(
+                dest,
+                "blockout",
+                "An open basalt court around a sun-well of white-gold fire.",
+                [("Depth", depth)],
+            )
+            log = json.loads(pipeline.still_log_path(dest).read_text(encoding="utf-8"))
+            self.assertEqual(log["still"], "scene_02_start.png")
+            self.assertEqual(log["passes"][0]["prompt"], "An open basalt court around a sun-well of white-gold fire.")
+            copied = pipeline.still_inputs_dir(dest) / "blockout_depth.png"
+            self.assertTrue(copied.is_file())
+            self.assertEqual(copied.read_bytes(), b"depth-bytes")
+            self.assertEqual(log["passes"][0]["images"][0]["file"], "blockout_depth.png")
+
     def test_still_prompt_names_only_landmarks_this_camera_sees(self) -> None:
         location = self.show["locations"]["sun_well_court"]
         close = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15)
@@ -631,13 +651,15 @@ class SpatialPipelineTests(unittest.TestCase):
             location, camera_at(close, float(close["timeRangeSeconds"][0]))
         )
         self.assertNotIn("sun well", close_line.lower())
+        self.assertNotIn("sun-well", close_line.lower())
         self.assertNotIn(location["promptBlock"], close_line)
+        self.assertIn("iron floor", close_line.lower())
         well = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
         well_line = visible_place_line(
             location, camera_at(well, float(well["timeRangeSeconds"][0]))
         )
-        self.assertIn("sun well", well_line.lower())
-        self.assertNotIn(location["promptBlock"], well_line)
+        self.assertIn("sun-well", well_line.lower())
+        self.assertIn(location["promptBlock"], well_line)
 
     def test_face_prompt_names_identity_and_not_the_place(self) -> None:
         location = self.show["locations"]["sun_well_court"]

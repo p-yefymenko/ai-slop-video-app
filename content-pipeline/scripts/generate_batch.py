@@ -528,6 +528,55 @@ def kept_pass_path(dest: Path, label: str) -> Path:
     return dest.with_name(f"{dest.stem}_{label}{dest.suffix}")
 
 
+def still_log_path(dest: Path) -> Path:
+    return dest.with_name(f"{dest.stem}_log.json")
+
+
+def still_inputs_dir(dest: Path) -> Path:
+    return dest.with_name(f"{dest.stem}_inputs")
+
+
+def begin_generation_log(dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    still_log_path(dest).write_text(
+        json.dumps({"still": dest.name, "passes": []}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    inputs = still_inputs_dir(dest)
+    if inputs.is_dir():
+        shutil.rmtree(inputs)
+    inputs.mkdir(parents=True, exist_ok=True)
+    print(f"  Log {still_log_path(dest)}", flush=True)
+
+
+def append_generation_log(
+    dest: Path,
+    pass_name: str,
+    prompt: str,
+    images: list[tuple[str, Path | None]],
+) -> None:
+    log_path = still_log_path(dest)
+    if not log_path.is_file():
+        begin_generation_log(dest)
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    inputs = still_inputs_dir(dest)
+    inputs.mkdir(parents=True, exist_ok=True)
+    recorded: list[dict] = []
+    for role, source in images:
+        if source is not None and not isinstance(source, Path):
+            source = Path(source)
+        if source is None or not source.is_file():
+            recorded.append({"role": role, "missing": True})
+            continue
+        copied = inputs / f"{pass_name}_{re.sub(r'[^a-z0-9]+', '_', role.lower()).strip('_') or 'image'}{source.suffix.lower() or '.png'}"
+        shutil.copy2(source, copied)
+        recorded.append({"role": role, "source": str(source), "file": copied.name})
+    payload.setdefault("passes", []).append(
+        {"pass": pass_name, "prompt": prompt, "images": recorded}
+    )
+    log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def download_output(file_info: dict, dest: Path) -> None:
     filename = file_info["filename"]
     subfolder = file_info.get("subfolder", "")
@@ -1562,6 +1611,16 @@ def render_backdrop_followup(
         stage_named_image(backdrop_path, "backdrop"),
     )
     inject_qwen_prompt(graph, prompt, "Backdrop instruction")
+    append_generation_log(
+        dest,
+        "backdrop",
+        prompt,
+        [
+            ("People", still_path),
+            ("Empty mask", mask_path),
+            ("Backdrop", backdrop_path),
+        ],
+    )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=f"{mode} backdrop")
 
@@ -1582,9 +1641,16 @@ def render_identity_followup(
     inject_seed(graph, seed)
     still_name = stage_named_image(dest, "shot")
     mask_name = stage_combined_mask(group, "faces")
-    inject_qwen_prompt(graph, face_prompt_for(show, values, group), "Face instruction")
+    prompt = face_prompt_for(show, values, group)
+    inject_qwen_prompt(graph, prompt, "Face instruction")
     inject_qwen_spatial_refs(graph, group, still_name, mask_name)
     _face_pass_reads_loaded_shot(graph)
+    append_generation_log(
+        dest,
+        "faces",
+        prompt,
+        [("Shot", dest), *[(item["id"], item.get("image_path")) for item in group]],
+    )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
@@ -1669,6 +1735,14 @@ def render_spatial_still(
         lead_title=pictures[0][1],
         backdrop_name=stage_named_image(backdrop_path, "backdrop") if use_backdrop else None,
     )
+    begin_generation_log(dest)
+    append_generation_log(
+        dest,
+        "blockout",
+        blockout_prompt,
+        [(title, path) for path, title in chosen]
+        + ([("Backdrop", backdrop_path)] if use_backdrop else []),
+    )
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
@@ -1725,6 +1799,14 @@ def run_qwen_image(
     inject_qwen_prompt(graph, prompt)
     inject_seed(graph, seed)
     inject_images(graph)
+    begin_generation_log(dest)
+    blank = COMFY_INPUT_DIR / "blank-768x1360.png"
+    append_generation_log(
+        dest,
+        "character",
+        prompt,
+        [("Blank canvas", blank if blank.is_file() else None)],
+    )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
