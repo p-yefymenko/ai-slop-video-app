@@ -351,6 +351,42 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["17"]["inputs"]["positive"], ["27", 0])
         self.assertEqual(graph["17"]["inputs"]["negative"], ["27", 1])
 
+    def test_visible_faces_are_painted_in_pairs_not_script_order(self) -> None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mask = root / "start_faces.png"
+            Image.new("L", (4, 4), 0).save(mask)
+            ids = ["vardan", "nira", "kesh", "rhel"]
+            (root / "start_faces.json").write_text(json.dumps(ids), encoding="utf-8")
+            import random
+
+            random.seed(0)
+            spot_pixels = [random.randrange(1, 256) for _ in range(320 * 320)]
+            characters = []
+            for character_id in ["sela", "tomas", *ids]:
+                portrait = root / f"test_face_{character_id}.png"
+                Image.new("RGB", (4, 4), (255, 0, 0)).save(portrait)
+                spot = root / f"start_faces_{character_id}.png"
+                saved = Image.new("L", (320, 320))
+                saved.putdata(spot_pixels)
+                saved.save(spot)
+                characters.append({"id": character_id, "image_path": portrait})
+            groups = pipeline.identity_face_groups(mask, characters)
+            self.assertEqual(
+                [[item["id"] for item in group] for group in groups],
+                [["vardan", "nira"], ["kesh", "rhel"]],
+            )
+            graph = pipeline.clone_workflow(self.qwen_spatial)
+            pipeline.inject_qwen_spatial_refs(graph, groups[1], "shot.png", "faces.png")
+            pipeline._face_pass_reads_loaded_shot(graph)
+        face = pipeline._qwen_encoder(graph, "Face instruction")
+        assert face is not None
+        self.assertEqual(face["inputs"]["image1"], ["6", 0])
+        self.assertEqual(graph["22"]["inputs"]["pixels"], ["6", 0])
+        self.assertEqual(graph["6"]["inputs"]["image"], "shot.png")
+
 
 if __name__ == "__main__":
     unittest.main()

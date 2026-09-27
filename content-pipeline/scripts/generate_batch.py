@@ -19,7 +19,7 @@ import zlib
 from pathlib import Path
 
 from ffmpeg_tools import concat_videos
-from PIL import Image
+from PIL import Image, ImageChops
 from pipeline_paths import (
     OUTPUT_DIR,
     character_image_path,
@@ -49,6 +49,7 @@ PROMPT_KEYS = (
     "sceneVideo",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
+# Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
 MAX_QWEN_REFS = 2
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
@@ -1031,6 +1032,77 @@ def _sync_structure_encoder(graph: dict, positive: dict) -> None:
         slot += 1
 
 
+def identity_face_groups(mask_path: Path, characters: list[dict]) -> list[list[dict]]:
+    """Visible faces from previs, in paint order, split into the edit node's slots.
+
+    The manifest is written by previs. It lists people whose face points at the
+    camera, not the first names in the scene.
+    """
+    manifest = mask_path.with_suffix(".json")
+    if not manifest.is_file():
+        return []
+    ids = json.loads(manifest.read_text(encoding="utf-8"))
+    by_id = {item["id"]: item for item in characters}
+    groups: list[list[dict]] = []
+    batch: list[dict] = []
+    for character_id in ids:
+        character = by_id.get(character_id)
+        individual = mask_path.with_name(f"{mask_path.stem}_{character_id}.png")
+        if character is None or not present(individual) or pose_image_is_blank(individual):
+            continue
+        batch.append({**character, "mask_path": individual})
+        if len(batch) == MAX_QWEN_REFS:
+            groups.append(batch)
+            batch = []
+    if batch:
+        groups.append(batch)
+    return groups
+
+
+def stage_combined_mask(group: list[dict], label: str) -> str:
+    """One mask for this pass, so a portrait is painted only onto its own head."""
+    paths = [Path(item["mask_path"]) for item in group]
+    combined = Image.open(paths[0]).convert("RGB")
+    for path in paths[1:]:
+        combined = ImageChops.lighter(combined, Image.open(path).convert("RGB"))
+    destination = paths[0].with_name(f"{paths[0].stem}_pass.png")
+    combined.save(destination)
+    try:
+        return stage_named_image(destination, label)
+    finally:
+        destination.unlink(missing_ok=True)
+
+
+def face_prompt_for(
+    show: dict,
+    values: dict,
+    group: list[dict],
+) -> str:
+    return show_prompt(
+        show,
+        "spatialFaces",
+        {
+            "characterCount": values["characterCount"],
+            "characterIds": values["characterIds"],
+            "locationPromptBlock": values["locationPromptBlock"],
+            "imagePrompt": values["imagePrompt"],
+            "referenceMap": "; ".join(
+                f"Picture {index} = the face of {character['id']} only"
+                for index, character in enumerate(group, start=2)
+            ),
+        },
+    )
+
+
+def _face_pass_reads_loaded_shot(graph: dict) -> None:
+    """A later pass edits the still on disk. It does not run the blockout again."""
+    face = _qwen_encoder(graph, "Face instruction")
+    if face is None:
+        raise RuntimeError("Spatial Qwen workflow is missing the face instruction")
+    face.setdefault("inputs", {})["image1"] = ["6", 0]
+    graph["22"]["inputs"]["pixels"] = ["6", 0]
+
+
 def pose_image_is_blank(path: Path) -> bool:
     with Image.open(path) as image:
         extrema = image.convert("RGB").getextrema()
@@ -1210,6 +1282,29 @@ def execute_queued_graph(graph: dict, dest: Path, prefer: str, mode: str) -> Non
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
+def render_identity_followup(
+    show: dict,
+    values: dict,
+    dest: Path,
+    group: list[dict],
+    seed: int,
+    mode: str,
+) -> None:
+    """Paint the next faces onto the still. The blockout sampler is not an output."""
+    names = ", ".join(item["id"] for item in group)
+    print(f"  Face pass: {names}", flush=True)
+    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    graph = clone_workflow(workflow)
+    inject_seed(graph, seed)
+    still_name = stage_named_image(dest, "shot")
+    mask_name = stage_combined_mask(group, "faces")
+    inject_qwen_prompt(graph, face_prompt_for(show, values, group), "Face instruction")
+    inject_qwen_spatial_refs(graph, group, still_name, mask_name)
+    _face_pass_reads_loaded_shot(graph)
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+
+
 def render_spatial_still(
     show: dict,
     scene: dict,
@@ -1257,29 +1352,17 @@ def render_spatial_still(
         "imagePrompt": scene["imagePrompt"],
     }
     blockout_prompt = show_prompt(show, "spatialBlockout", values)
-    mask_name = None
-    face_prompt = None
-    if characters and present(mask_path) and not pose_image_is_blank(mask_path):
-        identity_ids = character_ids[:MAX_QWEN_REFS]
-        face_values = {
-            "characterCount": values["characterCount"],
-            "characterIds": values["characterIds"],
-            "locationPromptBlock": values["locationPromptBlock"],
-            "imagePrompt": values["imagePrompt"],
-            "referenceMap": "; ".join(
-                f"Picture {index} = the face of {character_id} only"
-                for index, character_id in enumerate(identity_ids, start=2)
-            ),
-        }
-        face_prompt = show_prompt(show, "spatialFaces", face_values)
-        mask_name = stage_named_image(mask_path, "faces")
+    groups = identity_face_groups(mask_path, characters) if characters else []
+    first = groups[0] if groups else []
+    mask_name = stage_combined_mask(first, "faces") if first else None
+    face_prompt = face_prompt_for(show, values, first) if first else None
     workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
     graph = clone_workflow(workflow)
     inject_seed(graph, seed)
     inject_qwen_prompt(graph, blockout_prompt, "Blockout instruction")
     inject_qwen_spatial_refs(
         graph,
-        characters,
+        first,
         pictures[0][0],
         mask_name,
         pictures[1:],
@@ -1287,8 +1370,21 @@ def render_spatial_still(
     )
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
+        print(
+            f"  Face pass 1: {', '.join(item['id'] for item in first)}",
+            flush=True,
+        )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
+    for index, group in enumerate(groups[1:], start=2):
+        render_identity_followup(
+            show,
+            values,
+            dest,
+            group,
+            seed + index - 1,
+            f"{mode} face pass {index}",
+        )
 
 
 def run_qwen_image(

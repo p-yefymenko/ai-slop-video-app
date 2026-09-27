@@ -26,7 +26,11 @@ PROXY_HEIGHT = 1360
 NEAR_CLIP = 0.05
 # Empty viewport, matching a clay playblast: gray where no surface exists.
 VIEWPORT_GRAY = (148, 149, 152)
+# The edit node has two identity slots. Previs still masks every face that
+# points at the camera; the still is painted in passes of this many.
 IDENTITY_FACE_LIMIT = 2
+# cos of the angle between the face and the camera. Negative is the back of the head.
+FACE_TOWARD_CAMERA = 0.25
 BLOCKOUT_FPS = 8
 
 Vec3 = tuple[float, float, float]
@@ -602,6 +606,7 @@ def character_pose_joints(
         "left_eye": add(add(nose, mul(right, -0.032 * scale)), (0.0, 0.0, 0.04 * scale)),
         "right_ear": add(add(nose, mul(right, 0.08 * scale)), add(mul(gaze, -0.04 * scale), (0.0, 0.0, -0.02 * scale))),
         "left_ear": add(add(nose, mul(right, -0.08 * scale)), add(mul(gaze, -0.04 * scale), (0.0, 0.0, -0.02 * scale))),
+        "facing": add(nose, gaze),
     }
 
 
@@ -1054,6 +1059,48 @@ def _scene_surfaces(
     return camera, batches, people
 
 
+def face_points_at_camera(camera: dict, joints: dict[str, Vec3]) -> bool:
+    """True when the face, not the back of the head, is presented to the lens."""
+    ahead = joints.get("facing")
+    if ahead is None:
+        return False
+    forward = normalize(sub(ahead, joints["nose"]))
+    to_camera = sub(vec(camera["position"]), joints["nose"])
+    if length(to_camera) < 1e-6 or length(forward) < 1e-6:
+        return False
+    return dot(forward, normalize(to_camera)) >= FACE_TOWARD_CAMERA
+
+
+def visible_face_ids(
+    camera: dict,
+    people: list[tuple[str, dict[str, Vec3]]],
+    zbuf: np.ndarray,
+) -> list[str]:
+    """People whose face the camera can see, largest on screen first.
+
+    Script order is not a criterion. A head turned away is omitted even when
+    its nose still projects onto the skull.
+    """
+    height, width = zbuf.shape
+    ranked: list[tuple[float, str]] = []
+    for character_id, joints in people:
+        if not face_points_at_camera(camera, joints):
+            continue
+        nose = project(joints["nose"], camera)
+        neck = project(joints["neck"], camera)
+        if nose is None or neck is None:
+            continue
+        x = int(round(nose[0]))
+        y = int(round(nose[1]))
+        if x < 0 or y < 0 or x >= width or y >= height:
+            continue
+        if np.isfinite(zbuf[y, x]) and zbuf[y, x] + 0.2 < nose[2]:
+            continue
+        ranked.append((math.hypot(nose[0] - neck[0], nose[1] - neck[1]), character_id))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [character_id for _, character_id in ranked]
+
+
 def _face_mask(
     camera: dict,
     people: list[tuple[str, dict[str, Vec3]]],
@@ -1064,7 +1111,7 @@ def _face_mask(
     draw = ImageDraw.Draw(mask)
     allowed = set(identity_ids)
     for character_id, joints in people:
-        if character_id not in allowed:
+        if character_id not in allowed or not face_points_at_camera(camera, joints):
             continue
         nose = project(joints["nose"], camera)
         neck = project(joints["neck"], camera)
@@ -1558,6 +1605,29 @@ def write_scene_description(show: dict, episode: dict, scene: dict) -> Path:
     return destination
 
 
+def _write_face_masks(
+    camera: dict,
+    people: list[tuple[str, dict[str, Vec3]]],
+    visible: list[str],
+    zbuf: np.ndarray,
+    mask_path: Path,
+) -> list[Path]:
+    """Union mask, one mask per visible face, and the id list in paint order."""
+    mask_path.parent.mkdir(parents=True, exist_ok=True)
+    for stale in mask_path.parent.glob(f"{mask_path.stem}_*.png"):
+        stale.unlink()
+    _face_mask(camera, people, visible, zbuf).save(mask_path)
+    written = [mask_path]
+    for character_id in visible:
+        path = mask_path.with_name(f"{mask_path.stem}_{character_id}.png")
+        _face_mask(camera, people, [character_id], zbuf).save(path)
+        written.append(path)
+    manifest = mask_path.with_suffix(".json")
+    manifest.write_text(json.dumps(visible), encoding="utf-8")
+    written.append(manifest)
+    return written
+
+
 def render_blocked_scene(
     show: dict,
     episode: dict,
@@ -1575,7 +1645,6 @@ def render_blocked_scene(
     times = blockout_sample_times(start, finish)
     frames: list[Image.Image] = []
     written: list[Path] = [write_scene_description(show, episode, scene)]
-    identity_ids = list(scene["characterIds"][:IDENTITY_FACE_LIMIT])
     guides = {times[0]: "start", times[-1]: "end"}
     for time_seconds in times:
         image, zbuf, people = render_blocked_frame(show, episode, scene, time_seconds)
@@ -1628,7 +1697,12 @@ def render_blocked_scene(
         mask_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(blockout_path)
         camera = camera_at(scene, time_seconds)
-        _face_mask(camera, people, identity_ids, zbuf).save(mask_path)
+        visible = visible_face_ids(camera, people, zbuf)
+        written.extend(_write_face_masks(camera, people, visible, zbuf, mask_path))
+        print(
+            f"  {label} faces toward camera: {', '.join(visible) or 'none'}",
+            flush=True,
+        )
         render_structure_maps(
             show,
             episode,
@@ -1640,7 +1714,7 @@ def render_blocked_scene(
             edge_path,
             normal_path,
         )
-        written.extend((blockout_path, mask_path, depth_path, pose_path, edge_path, normal_path))
+        written.extend((blockout_path, depth_path, pose_path, edge_path, normal_path))
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )

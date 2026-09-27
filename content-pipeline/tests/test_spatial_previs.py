@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -18,6 +20,7 @@ from spatial_previs import (  # noqa: E402
     camera_at,
     character_facing_direction,
     character_pose_joints,
+    face_points_at_camera,
     compile_spatial_video_prompt,
     episode_character_state,
     facing_yaw_degrees,
@@ -30,6 +33,7 @@ from spatial_previs import (  # noqa: E402
     timeline_state,
     _yaw_axes,
     validate_spatial_episode,
+    visible_face_ids,
     write_episode_blockout,
     _scene_surfaces,
 )
@@ -363,6 +367,23 @@ class SpatialPrevisTests(unittest.TestCase):
                 self.assertEqual(destination.name, "blockout.mp4")
                 self.assertEqual(destination.parent.name, "1")
                 self.assertEqual(destination.parents[2].name, "previs")
+
+    def test_scene_five_masks_faces_toward_the_camera(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 5)
+        time_seconds = float(scene["timeRangeSeconds"][0])
+        camera = camera_at(scene, time_seconds)
+        people = []
+        for character_id in scene["characterIds"]:
+            state = episode_character_state(self.episode, character_id, time_seconds)
+            joints = character_pose_joints(
+                self.show, self.episode, scene, state, time_seconds, character_id
+            )
+            people.append((character_id, joints))
+        zbuf = np.full((PROXY_HEIGHT, PROXY_WIDTH), 1.0e6, dtype=np.float32)
+        visible = visible_face_ids(camera, people, zbuf)
+        self.assertCountEqual(visible, ["vardan", "nira", "kesh", "rhel"])
+        turned_away = next(joints for character_id, joints in people if character_id == "sela")
+        self.assertFalse(face_points_at_camera(camera, turned_away))
 
 
 if __name__ == "__main__":
