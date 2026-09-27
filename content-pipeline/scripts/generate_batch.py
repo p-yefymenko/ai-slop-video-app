@@ -46,12 +46,13 @@ PROMPT_KEYS = (
     "characterImage",
     "spatialBlockout",
     "spatialFaces",
+    "spatialBackdrop",
     "sceneVideo",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 # Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
 MAX_QWEN_REFS = 2
-# Identity faces are off. Each still is one Qwen pass.
+# Identity faces are off. Clothes shots fill empty space in a second pass.
 FACE_PASS = False
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
@@ -960,6 +961,7 @@ def structure_pictures(
     pictures: list[str],
     backdrop: dict | None = None,
     people: bool | None = None,
+    start: int = 1,
 ) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
@@ -970,7 +972,7 @@ def structure_pictures(
     if people is None:
         people = "Pose" in pictures or "Clothes" in pictures
     lines = []
-    for index, title in enumerate(pictures, start=1):
+    for index, title in enumerate(pictures, start=start):
         lines.append(_picture_sentence(title, index, people=people, backdrop=backdrop))
     return " ".join(lines)
 
@@ -1215,6 +1217,31 @@ def pose_image_is_blank(path: Path) -> bool:
     return all(channel[1] == 0 for channel in extrema)
 
 
+def empty_space_mask(plate: Image.Image) -> Image.Image:
+    """White where the backdrop plate painted empty space."""
+    red, green, blue = plate.convert("RGB").split()
+    peak = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    return peak.point(lambda value: 255 if value > 8 else 0)
+
+
+def strip_invented_backdrop(still_path: Path, backdrop_path: Path, dest: Path) -> Path:
+    """Put the backdrop plate onto empty pixels so the invented place is gone."""
+    still = Image.open(still_path).convert("RGB")
+    plate = Image.open(backdrop_path).convert("RGB")
+    if plate.size != still.size:
+        plate = plate.resize(still.size, Image.Resampling.NEAREST)
+    mask = empty_space_mask(plate)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    Image.composite(plate, still, mask).save(dest)
+    return dest
+
+
+def write_empty_mask(backdrop_path: Path, dest: Path) -> Path:
+    plate = Image.open(backdrop_path).convert("RGB")
+    empty_space_mask(plate).convert("RGB").save(dest)
+    return dest
+
+
 def spatial_still_pictures(
     *,
     has_characters: bool,
@@ -1439,6 +1466,83 @@ def execute_queued_graph(
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
 
+def inject_backdrop_followup(graph: dict, still_name: str, mask_name: str, backdrop_name: str) -> None:
+    """Second pass: keep people from the still, fill only empty pixels from the plate."""
+    for node_id in ("7", "9", "10", "11", "24", "25", "40", "41", "42"):
+        graph.pop(node_id, None)
+    still = graph.get("6")
+    if not isinstance(still, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the still loader")
+    still.setdefault("inputs", {})["image"] = still_name
+    still["_meta"] = {"title": "Stripped still"}
+    mask = graph.get("20")
+    if not isinstance(mask, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the empty-space mask loader")
+    mask.setdefault("inputs", {})["image"] = mask_name
+    mask["_meta"] = {"title": "Empty space"}
+    encode = graph.get("22")
+    if not isinstance(encode, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the still encoder")
+    encode.setdefault("inputs", {})["pixels"] = ["6", 0]
+    encoder = graph.get("70")
+    if not isinstance(encoder, dict):
+        raise RuntimeError("Spatial Qwen workflow is missing the backdrop instruction")
+    encoder["class_type"] = "TextEncodeQwenBackdrop"
+    encoder["_meta"] = {"title": "Backdrop instruction"}
+    inputs = encoder.setdefault("inputs", {})
+    inputs["image1"] = ["6", 0]
+    for key in ("image2", "image3", "image4"):
+        inputs.pop(key, None)
+    graph["42"] = {
+        "inputs": {"image": backdrop_name},
+        "class_type": "LoadImage",
+        "_meta": {"title": "Backdrop"},
+    }
+    inputs["image2"] = ["42", 0]
+    sampler = graph.get("30")
+    if isinstance(sampler, dict):
+        sampler["_meta"] = {"title": "Empty space"}
+    save = graph.get("12")
+    if isinstance(save, dict):
+        save.setdefault("inputs", {})["images"] = ["31", 0]
+
+
+def render_backdrop_followup(
+    show: dict,
+    location: dict,
+    dest: Path,
+    still_path: Path,
+    mask_path: Path,
+    backdrop_path: Path,
+    seed: int,
+    mode: str,
+) -> None:
+    print("  Backdrop pass", flush=True)
+    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    graph = clone_workflow(workflow)
+    inject_seed(graph, seed)
+    prompt = show_prompt(
+        show,
+        "spatialBackdrop",
+        {
+            "structurePictures": structure_pictures(
+                ["Backdrop"],
+                backdrop=location["backdrop"],
+                start=2,
+            ),
+        },
+    )
+    inject_backdrop_followup(
+        graph,
+        stage_named_image(still_path, "shot"),
+        stage_named_image(mask_path, "empty"),
+        stage_named_image(backdrop_path, "backdrop"),
+    )
+    inject_qwen_prompt(graph, prompt, "Backdrop instruction")
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=f"{mode} backdrop")
+
+
 def render_identity_followup(
     show: dict,
     values: dict,
@@ -1495,7 +1599,7 @@ def render_spatial_still(
     ]
     titles = [title for _name, title in pictures]
     use_backdrop = "Clothes" not in titles
-    if use_backdrop and not present(backdrop_path):
+    if not present(backdrop_path):
         raise SystemExit(
             f"Missing previs guide {backdrop_path}. Run `pnpm run content:previs` first."
         )
@@ -1545,6 +1649,25 @@ def render_spatial_still(
         )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=mode, also=passes or None)
+    if not use_backdrop:
+        blockout = kept_pass_path(dest, "blockout")
+        shutil.copy2(dest, blockout)
+        print(f"  Kept {blockout}", flush=True)
+        stripped = kept_pass_path(dest, "stripped")
+        empty_mask = dest.with_name(f"{dest.stem}_empty.png")
+        strip_invented_backdrop(dest, backdrop_path, stripped)
+        write_empty_mask(backdrop_path, empty_mask)
+        print(f"  Kept {stripped}", flush=True)
+        render_backdrop_followup(
+            show,
+            location,
+            dest,
+            stripped,
+            empty_mask,
+            backdrop_path,
+            seed + 1,
+            mode,
+        )
     for index, group in enumerate(groups[1:], start=2):
         previous = kept_pass_path(dest, f"face{index - 1}")
         shutil.copy2(dest, previous)

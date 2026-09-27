@@ -196,6 +196,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("30", graph)
         self.assertIn("spatialBlockout", self.show["prompts"])
         self.assertIn("spatialFaces", self.show["prompts"])
+        self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
 
     def test_end_guides_follow_spatial_change(self) -> None:
@@ -508,6 +509,54 @@ class SpatialPipelineTests(unittest.TestCase):
 
     def test_face_pass_is_off(self) -> None:
         self.assertFalse(pipeline.FACE_PASS)
+
+    def test_backdrop_followup_fills_empty_space_from_the_plate(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline.inject_backdrop_followup(
+            graph, "shot.png", "empty.png", "scene_backdrop.png"
+        )
+        encoder = pipeline._qwen_encoder(graph, "Backdrop instruction")
+        assert encoder is not None
+        self.assertEqual(encoder["class_type"], "TextEncodeQwenBackdrop")
+        self.assertEqual(encoder["inputs"]["image1"], ["6", 0])
+        self.assertEqual(encoder["inputs"]["image2"], ["42", 0])
+        self.assertNotIn("image3", encoder["inputs"])
+        self.assertNotIn("image4", encoder["inputs"])
+        self.assertEqual(graph["6"]["inputs"]["image"], "shot.png")
+        self.assertEqual(graph["20"]["inputs"]["image"], "empty.png")
+        self.assertEqual(graph["42"]["inputs"]["image"], "scene_backdrop.png")
+        self.assertEqual(graph["22"]["inputs"]["pixels"], ["6", 0])
+        self.assertEqual(graph["12"]["inputs"]["images"], ["31", 0])
+        self.assertNotIn("10", graph)
+        self.assertNotIn("11", graph)
+        self.assertNotIn("24", graph)
+        self.assertNotIn("25", graph)
+
+    def test_invented_empty_space_is_replaced_with_the_backdrop_plate(self) -> None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            still = Image.new("RGB", (4, 2), (200, 180, 160))
+            still.save(root / "still.png")
+            plate = Image.new("RGB", (4, 2), (16, 42, 62))
+            plate.putpixel((3, 0), (0, 0, 0))
+            plate.putpixel((3, 1), (0, 0, 0))
+            plate.save(root / "plate.png")
+            dest = root / "stripped.png"
+            pipeline.strip_invented_backdrop(root / "still.png", root / "plate.png", dest)
+            out = Image.open(dest).convert("RGB")
+            self.assertEqual(out.getpixel((0, 0)), (16, 42, 62))
+            self.assertEqual(out.getpixel((3, 0)), (200, 180, 160))
+            mask = pipeline.empty_space_mask(plate)
+            self.assertEqual(mask.getpixel((0, 0)), 255)
+            self.assertEqual(mask.getpixel((3, 0)), 0)
+
+    def test_backdrop_pass_numbers_the_plate_as_picture_two(self) -> None:
+        court = self.show["locations"]["sun_well_court"]["backdrop"]
+        text = pipeline.structure_pictures(["Backdrop"], backdrop=court, start=2)
+        self.assertTrue(text.startswith("Picture 2 is the empty space"))
+        self.assertIn("spatialBackdrop", pipeline.PROMPT_KEYS)
 
     def test_blockout_pass_is_saved_beside_the_face_pass(self) -> None:
         dest = Path("scene_03_start.png")
