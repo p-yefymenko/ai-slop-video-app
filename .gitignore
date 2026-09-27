@@ -26,3 +26,4 @@ apps/mobile/ios
 *.log
 coverage
 packages/shared/src/reel-short-content-reference
+tmp
