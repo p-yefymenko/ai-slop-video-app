@@ -954,14 +954,19 @@ def _disable_face_pass(graph: dict) -> None:
         graph.pop(node_id, None)
 
 
-def structure_pictures(pictures: list[str], backdrop: dict | None = None) -> str:
+def structure_pictures(
+    pictures: list[str],
+    backdrop: dict | None = None,
+    people: bool | None = None,
+) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
     On a people shot the depth is picture 1 and includes the person volumes, so
     Qwen keeps their position and what they hide. The clothes cutout is the next
-    picture and sets garment color. The backdrop label names empty space.
+    picture and sets garment color. The empty-space plate is not sent with it.
     """
-    people = "Pose" in pictures or "Clothes" in pictures
+    if people is None:
+        people = "Pose" in pictures or "Clothes" in pictures
     lines = []
     for index, title in enumerate(pictures, start=1):
         lines.append(_picture_sentence(title, index, people=people, backdrop=backdrop))
@@ -1003,11 +1008,6 @@ def _picture_sentence(title: str, index: int, *, people: bool, backdrop: dict | 
         )
     if title == "Edges":
         return f"Picture {index} is the edges of the place only. Keep those edges. It contains no people."
-    if title == "Normals":
-        return (
-            f"Picture {index} is the surface direction of that same camera. "
-            "Use it for which faces catch the light. Do not copy its colors."
-        )
     if title == "Backdrop":
         if backdrop is None:
             raise KeyError("Backdrop")
@@ -1062,7 +1062,8 @@ def inject_qwen_spatial_refs(
             "class_type": "LoadImage",
             "_meta": {"title": "Backdrop"},
         }
-        blockout_inputs["image4"] = ["42", 0]
+        slot = "image3" if "image3" not in blockout_inputs else "image4"
+        blockout_inputs[slot] = ["42", 0]
     if not characters or mask_name is None:
         _disable_face_pass(graph)
         return
@@ -1234,9 +1235,8 @@ def spatial_still_pictures(
     clothes_path: Path,
     pose_path: Path,
     edge_path: Path,
-    normal_path: Path,
 ) -> list[tuple[Path, str]]:
-    """Depth, then either the clothes cutout, the pose, or the empty-shot guides."""
+    """Depth, then the clothes cutout, the pose on a close view, or the edges."""
     use_clothes = (
         has_characters
         and present(clothes_path)
@@ -1259,7 +1259,6 @@ def spatial_still_pictures(
     return [
         (depth_path, "Depth"),
         (edge_path, "Edges"),
-        (normal_path, "Normals"),
     ]
 
 
@@ -1486,17 +1485,12 @@ def render_spatial_still(
     mask_path: Path,
     pose_path: Path,
     edge_path: Path,
-    normal_path: Path,
     seed: int,
     mode: str,
 ) -> None:
     """Generate one still from the depth. People shots also pass the pose."""
     backdrop_path = depth_path.with_name(depth_path.name.replace("_depth.png", "_backdrop.png"))
-    missing = [
-        path
-        for path in (depth_path, edge_path, normal_path, backdrop_path)
-        if not present(path)
-    ]
+    missing = [path for path in (depth_path, edge_path) if not present(path)]
     if missing:
         raise SystemExit(
             f"Missing previs guide {missing[0]}. Run `pnpm run content:previs` first."
@@ -1509,16 +1503,22 @@ def render_spatial_still(
         clothes_path=clothes_path,
         pose_path=pose_path,
         edge_path=edge_path,
-        normal_path=normal_path,
     )
     pictures = [
         (stage_named_image(path, title.lower()), title) for path, title in chosen
     ]
+    titles = [title for _name, title in pictures]
+    use_backdrop = "Clothes" not in titles
+    if use_backdrop and not present(backdrop_path):
+        raise SystemExit(
+            f"Missing previs guide {backdrop_path}. Run `pnpm run content:previs` first."
+        )
     character_ids = scene["characterIds"]
     values = {
         "structurePictures": structure_pictures(
-            [title for _name, title in pictures] + ["Backdrop"],
-            backdrop=location["backdrop"],
+            titles + (["Backdrop"] if use_backdrop else []),
+            backdrop=location["backdrop"] if use_backdrop else None,
+            people=bool(characters),
         ),
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
@@ -1541,7 +1541,7 @@ def render_spatial_still(
         mask_name,
         pictures[1:],
         lead_title=pictures[0][1],
-        backdrop_name=stage_named_image(backdrop_path, "backdrop"),
+        backdrop_name=stage_named_image(backdrop_path, "backdrop") if use_backdrop else None,
     )
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
@@ -1697,7 +1697,6 @@ def generate_show(
                         guide_path(show_id, episode_number, scene_number, "start", "faces"),
                         guide_path(show_id, episode_number, scene_number, "start", "pose"),
                         guide_path(show_id, episode_number, scene_number, "start", "edges"),
-                        guide_path(show_id, episode_number, scene_number, "start", "normal"),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
                     )
@@ -1711,7 +1710,6 @@ def generate_show(
                         guide_path(show_id, episode_number, scene_number, "end", "faces"),
                         guide_path(show_id, episode_number, scene_number, "end", "pose"),
                         guide_path(show_id, episode_number, scene_number, "end", "edges"),
-                        guide_path(show_id, episode_number, scene_number, "end", "normal"),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
                     )

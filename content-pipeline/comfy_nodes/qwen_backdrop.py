@@ -1,7 +1,7 @@
 """Qwen edit encoder with a fourth picture for empty space.
 
-All four pictures are reference latents, so each color stays on the pixels
-where it was painted. Picture 4 is the sky, ground, and surroundings.
+Depth, edges, and backdrop are reference latents. A clothes cutout is shown
+to the text encoder only, so its flat colors are not copied as a cartoon.
 """
 
 from __future__ import annotations
@@ -55,6 +55,10 @@ class TextEncodeQwenBackdrop(io.ComfyNode):
                 io.Image.Input("image2", optional=True),
                 io.Image.Input("image3", optional=True),
                 io.Image.Input("image4", optional=True),
+                io.Int.Input("latent1", default=1, min=0, max=1, optional=True),
+                io.Int.Input("latent2", default=1, min=0, max=1, optional=True),
+                io.Int.Input("latent3", default=1, min=0, max=1, optional=True),
+                io.Int.Input("latent4", default=1, min=0, max=1, optional=True),
             ],
             outputs=[
                 io.Conditioning.Output(),
@@ -62,15 +66,28 @@ class TextEncodeQwenBackdrop(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, clip, prompt, vae=None, image1=None, image2=None, image3=None, image4=None) -> io.NodeOutput:
+    def execute(
+        cls,
+        clip,
+        prompt,
+        vae=None,
+        image1=None,
+        image2=None,
+        image3=None,
+        image4=None,
+        latent1=1,
+        latent2=1,
+        latent3=1,
+        latent4=1,
+    ) -> io.NodeOutput:
         ref_latents = []
         images_vl = []
         image_prompt = ""
         slots = (
-            (image1, True),
-            (image2, True),
-            (image3, True),
-            (image4, True),
+            (image1, bool(latent1)),
+            (image2, bool(latent2)),
+            (image3, bool(latent3)),
+            (image4, bool(latent4)),
         )
         for index, (image, as_latent) in enumerate(slots, start=1):
             if image is None:

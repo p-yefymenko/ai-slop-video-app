@@ -176,21 +176,21 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("spatialGroupEndStill", self.show["prompts"])
         self.assertNotIn("characterProfile", self.show["prompts"])
 
-    def test_environment_shot_uses_depth_edges_and_normals(self) -> None:
+    def test_environment_shot_uses_depth_and_edges(self) -> None:
         graph = pipeline.clone_workflow(self.qwen_spatial)
         pipeline.inject_qwen_spatial_refs(
             graph,
             [],
             "scene_depth.png",
             None,
-            [("scene_edges.png", "Edges"), ("scene_normal.png", "Normals")],
+            [("scene_edges.png", "Edges")],
         )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(
             [node["inputs"]["image"] for node in loaders],
-            ["scene_depth.png", "scene_edges.png", "scene_normal.png"],
+            ["scene_depth.png", "scene_edges.png"],
         )
         self.assertEqual(graph["12"]["inputs"]["images"], ["11", 0])
         self.assertNotIn("30", graph)
@@ -266,14 +266,14 @@ class SpatialPipelineTests(unittest.TestCase):
             [],
             "scene_depth.png",
             None,
-            [("scene_edges.png", "Edges"), ("scene_normal.png", "Normals")],
+            [("scene_edges.png", "Edges")],
         )
         loaders = [
             node for node in graph.values() if node.get("class_type") == "LoadImage"
         ]
         self.assertEqual(
             [node["inputs"]["image"] for node in loaders],
-            ["scene_depth.png", "scene_edges.png", "scene_normal.png"],
+            ["scene_depth.png", "scene_edges.png"],
         )
 
     def test_people_prompt_keeps_the_person_volume_in_the_depth(self) -> None:
@@ -284,8 +284,10 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("matching part of the body", text)
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
+        wide = pipeline.structure_pictures(["Depth", "Edges"], people=True)
+        self.assertIn("person-shaped volume", wide)
         backdrop = pipeline.structure_pictures(
-            ["Depth", "Edges", "Normals", "Backdrop"],
+            ["Depth", "Edges", "Backdrop"],
             backdrop={
                 "sky": "storm sky",
                 "skyColor": [36, 42, 58],
@@ -295,7 +297,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 "surroundColor": [16, 42, 62],
             },
         )
-        self.assertIn("Picture 4 is the empty space from this exact camera", backdrop)
+        self.assertIn("Picture 3 is the empty space from this exact camera", backdrop)
         self.assertIn("36 42 58 is the sky: storm sky", backdrop)
         self.assertIn("16 42 62 is the surroundings beyond the set: open ocean", backdrop)
 
@@ -338,7 +340,6 @@ class SpatialPipelineTests(unittest.TestCase):
                 clothes_path=clothes,
                 pose_path=pose,
                 edge_path=edges,
-                normal_path=normal,
             )
             self.assertEqual([title for _path, title in close], ["Depth", "Pose", "Edges"])
             wide = Image.new("RGB", size, (0, 0, 0))
@@ -355,12 +356,19 @@ class SpatialPipelineTests(unittest.TestCase):
                 clothes_path=clothes,
                 pose_path=pose,
                 edge_path=edges,
-                normal_path=normal,
             )
             self.assertEqual([title for _path, title in held], ["Depth", "Clothes", "Edges"])
+            empty = pipeline.spatial_still_pictures(
+                has_characters=False,
+                depth_path=depth,
+                clothes_path=clothes,
+                pose_path=pose,
+                edge_path=edges,
+            )
+            self.assertEqual([title for _path, title in empty], ["Depth", "Edges"])
 
     def test_empty_prompt_lets_the_depth_set_the_camera(self) -> None:
-        text = pipeline.structure_pictures(["Depth", "Edges", "Normals"])
+        text = pipeline.structure_pictures(["Depth", "Edges"])
         self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
         self.assertNotIn("OpenPose", text)
 
@@ -471,16 +479,32 @@ class SpatialPipelineTests(unittest.TestCase):
             [],
             "scene_depth.png",
             None,
-            [("scene_edges.png", "Edges"), ("scene_normal.png", "Normals")],
+            [("scene_edges.png", "Edges")],
             backdrop_name="scene_backdrop.png",
         )
         blockout = pipeline._qwen_encoder(graph, "Blockout instruction")
         assert blockout is not None
         self.assertEqual(blockout["class_type"], "TextEncodeQwenBackdrop")
-        self.assertEqual(blockout["inputs"]["image4"], ["42", 0])
+        self.assertEqual(blockout["inputs"]["image3"], ["42", 0])
+        self.assertNotIn("image4", blockout["inputs"])
         self.assertEqual(graph["42"]["inputs"]["image"], "scene_backdrop.png")
         self.assertNotIn("70", graph)
         self.assertNotIn("32", graph)
+
+    def test_clothes_shot_does_not_attach_the_backdrop(self) -> None:
+        graph = pipeline.clone_workflow(self.qwen_spatial)
+        pipeline.inject_qwen_spatial_refs(
+            graph,
+            [],
+            "scene_depth.png",
+            None,
+            [("scene_clothes.png", "Clothes"), ("scene_edges.png", "Edges")],
+        )
+        blockout = pipeline._qwen_encoder(graph, "Blockout instruction")
+        assert blockout is not None
+        self.assertEqual(blockout["class_type"], "TextEncodeQwenImageEditPlus")
+        self.assertNotIn("42", graph)
+        self.assertNotIn("image4", blockout["inputs"])
 
     def test_blockout_pass_is_saved_beside_the_face_pass(self) -> None:
         dest = Path("scene_03_start.png")
