@@ -104,6 +104,123 @@ def fit_to_size(
     return shifted * scale
 
 
+def face_schema_forward(vertices: np.ndarray) -> np.ndarray:
+    """Turn the photographed side from schema -Y to +Y.
+
+    Pixal3D writes the front toward schema -Y. A stored character faces +Y,
+    which is body yaw 0.
+    """
+    turned = np.array(vertices, dtype=np.float64, copy=True)
+    turned[:, 0] *= -1.0
+    turned[:, 1] *= -1.0
+    return turned
+
+
+def cap_holes(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    *,
+    max_perimeter: float = 0.04,
+    max_vertices: int = 24,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cover a small opening with new triangles. Existing vertices stay where they are.
+
+    The cap is a fan to one vertex already on that opening. An opening wider than
+    ``max_perimeter`` meters, such as the gap under an arm, is left alone.
+    """
+    points = np.asarray(vertices, dtype=np.float64)
+    triangles = np.asarray(faces, dtype=np.int64)
+    if len(triangles) == 0:
+        return points, triangles
+    directed = _boundary_edges(triangles)
+    if not directed:
+        return points, triangles
+    added: list[tuple[int, int, int]] = []
+    occupied = {tuple(sorted(int(index) for index in face[:3])) for face in triangles}
+    for edges in _boundary_components(directed):
+        loop = sorted({vertex for edge in edges for vertex in edge})
+        if len(loop) < 3 or len(loop) > max_vertices:
+            continue
+        perimeter = 0.0
+        for src, tgt in edges:
+            perimeter += float(np.linalg.norm(points[tgt] - points[src]))
+        if perimeter >= max_perimeter:
+            continue
+        if len(loop) == 3:
+            src, tgt = edges[0]
+            other = next(vertex for vertex in loop if vertex != src and vertex != tgt)
+            _add_cap(points, occupied, added, (tgt, src, other))
+            continue
+        degree: dict[int, int] = {}
+        for src, tgt in edges:
+            degree[src] = degree.get(src, 0) + 1
+            degree[tgt] = degree.get(tgt, 0) + 1
+        endpoints = [vertex for vertex in loop if degree.get(vertex) == 1]
+        apex = endpoints[0] if endpoints else loop[0]
+        for src, tgt in edges:
+            if src == apex or tgt == apex:
+                continue
+            _add_cap(points, occupied, added, (tgt, src, apex))
+    if not added:
+        return points, triangles
+    return points, np.vstack((triangles, np.asarray(added, dtype=np.int64)))
+
+
+def _add_cap(
+    points: np.ndarray,
+    occupied: set[tuple[int, int, int]],
+    added: list[tuple[int, int, int]],
+    face: tuple[int, int, int],
+) -> None:
+    if len(set(face)) < 3:
+        return
+    key = tuple(sorted(face))
+    if key in occupied:
+        return
+    apex, src, tgt = face[2], face[1], face[0]
+    span = np.cross(points[src] - points[apex], points[tgt] - points[apex])
+    if float(np.dot(span, span)) < 1e-16:
+        return
+    occupied.add(key)
+    added.append(face)
+
+
+def _boundary_edges(faces: np.ndarray) -> list[tuple[int, int]]:
+    counts: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for face in faces:
+        a, b, c = (int(index) for index in face[:3])
+        for src, tgt in ((a, b), (b, c), (c, a)):
+            key = (src, tgt) if src < tgt else (tgt, src)
+            counts.setdefault(key, []).append((src, tgt))
+    return [directed[0] for directed in counts.values() if len(directed) == 1]
+
+
+def _boundary_components(edges: list[tuple[int, int]]) -> list[list[tuple[int, int]]]:
+    parent: dict[int, int] = {}
+
+    def find(node: int) -> int:
+        root = node
+        while parent.get(root, root) != root:
+            root = parent.get(root, root)
+        while node != root:
+            nxt = parent.get(node, node)
+            parent[node] = root
+            node = nxt
+        return root
+
+    def union(left: int, right: int) -> None:
+        left, right = find(left), find(right)
+        if left != right:
+            parent[right] = left
+
+    for src, tgt in edges:
+        union(src, tgt)
+    groups: dict[int, list[tuple[int, int]]] = {}
+    for src, tgt in edges:
+        groups.setdefault(find(src), []).append((src, tgt))
+    return list(groups.values())
+
+
 def proportions_match(
     extent: np.ndarray,
     size: tuple[float, float, float],

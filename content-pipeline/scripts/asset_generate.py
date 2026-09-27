@@ -1,4 +1,8 @@
-"""Draw one place with Qwen, or turn a reviewed picture into a mesh with TRELLIS.2."""
+"""Draw one place with Qwen, or turn a reviewed picture into a mesh.
+
+A place or a landmark uses TRELLIS.2. A character uses Pixal3D, which shares
+that shape VAE and adds pixel-aligned features so the front matches the plate.
+"""
 
 from __future__ import annotations
 
@@ -15,10 +19,16 @@ PLATE_WORKFLOW = ROOT / "workflows" / "qwen_asset_plate.json"
 TRELLIS_UNET = "trellis_2_int8_convrot.safetensors"
 TRELLIS_DINO = "dino_v3_vit_l.safetensors"
 TRELLIS_SHAPE_VAE = "trellis_2_shape_vae_bf16.safetensors"
+PIXAL3D_UNET = "pixal3d_int8_convrot.safetensors"
+# Same DINOv3 encoder, with the NAF upsampler bundled so features can be back-projected.
+PIXAL3D_DINO = "dino_v3_L_naf_fp32.safetensors"
+MOGE_MODEL = "moge_2_vitl_normal_fp16.safetensors"
 BACKGROUND_MODEL = "birefnet.safetensors"
 PLATE_SIZE = 1024
 # Second shape pass. 1024 is the node default and fits a 16GB card with the int8 weights.
 UPSAMPLE_RESOLUTION = 1024
+# Pixal3D leaves a margin so the projected features line up with the photo.
+PIXAL3D_PAD = 1.1
 
 
 def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = False) -> str:
@@ -40,7 +50,18 @@ def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = F
 
 def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
     """Image to a shape mesh. Texture baking stays off; previs stores an untextured GLB."""
-    return {
+    return _shape_graph(image_name, seed, triangle_budget, pixel_aligned=False)
+
+
+def pixal3d_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
+    """Same cascade as TRELLIS.2, with MoGe field of view and pixel-aligned conditioning."""
+    return _shape_graph(image_name, seed, triangle_budget, pixel_aligned=True)
+
+
+def _shape_graph(
+    image_name: str, seed: int, triangle_budget: int, *, pixel_aligned: bool
+) -> dict:
+    graph = {
         "1": {
             "class_type": "LoadImage",
             "inputs": {"image": image_name},
@@ -185,6 +206,40 @@ def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BU
             "inputs": {"mesh": ["22", 0], "filename_prefix": "reelshort_asset"},
         },
     }
+    if not pixel_aligned:
+        return graph
+    graph["4"]["inputs"]["pad_factor"] = PIXAL3D_PAD
+    graph["5"]["inputs"]["clip_name"] = PIXAL3D_DINO
+    graph["6"] = {
+        "class_type": "Pixal3DConditioning",
+        "inputs": {
+            "clip_vision_model": ["5", 0],
+            "image": ["4", 0],
+            "camera_angle_x": ["32", 0],
+        },
+    }
+    graph["7"]["inputs"]["unet_name"] = PIXAL3D_UNET
+    graph["30"] = {
+        "class_type": "LoadMoGeModel",
+        "inputs": {"model_name": MOGE_MODEL},
+    }
+    graph["31"] = {
+        "class_type": "MoGeInference",
+        "inputs": {
+            "moge_model": ["30", 0],
+            "image": ["4", 0],
+            "resolution_level": 9,
+            "fov_x_degrees": 0.0,
+            "batch_size": 1,
+            "force_projection": True,
+            "apply_mask": True,
+        },
+    }
+    graph["32"] = {
+        "class_type": "MoGeGeometryToFOV",
+        "inputs": {"moge_geometry": ["31", 0], "axis": "horizontal", "unit": "degrees"},
+    }
+    return graph
 
 
 def plate_is_ready(path: Path) -> bool:
@@ -235,7 +290,11 @@ def generate_asset_plate(
 
 
 def generate_asset_mesh(
-    appearance: str, raw_dir: Path, triangle_budget: int = TRIANGLE_BUDGET
+    appearance: str,
+    raw_dir: Path,
+    triangle_budget: int = TRIANGLE_BUDGET,
+    *,
+    character: bool = False,
 ) -> Path:
     """Turn an existing ``plate.png`` into ``model.glb``. ComfyUI must already be running."""
     from generate_batch import (
@@ -253,13 +312,19 @@ def generate_asset_mesh(
         )
     mesh_path = raw_dir / "model.glb"
     seed = stable_seed("asset", " ".join(appearance.split()))
+    staged = stage_named_image(plate_path, "asset_plate")
+    graph = (
+        pixal3d_graph(staged, seed, triangle_budget)
+        if character
+        else trellis_graph(staged, seed, triangle_budget)
+    )
     try:
         free_comfy_models()
         execute_queued_graph(
-            trellis_graph(stage_named_image(plate_path, "asset_plate"), seed, triangle_budget),
+            graph,
             mesh_path,
             prefer="mesh",
-            mode="TRELLIS.2 mesh",
+            mode="Pixal3D mesh" if character else "TRELLIS.2 mesh",
         )
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc

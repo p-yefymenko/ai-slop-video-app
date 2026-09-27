@@ -4,26 +4,32 @@
   "characters": {
     "sela": {
       "promptBlock": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair.",
+      "wardrobe": "a soot-stained ivory wrap and a plain iron bridal collar",
       "proxy": { "heightMeters": 1.68, "build": "slim" }
     },
     "tomas": {
       "promptBlock": "Adult man, 22, lean build, fair skin, gray irises, a copper birthmark under the right eye, copper-red hair.",
+      "wardrobe": "a torn sky-blue court coat",
       "proxy": { "heightMeters": 1.78, "build": "slim" }
     },
     "vardan": {
       "promptBlock": "Adult man, 52, tall narrow build, pale skin, ice-blue irises, a gold ring tattoo encircling the throat, silver-white cropped hair.",
+      "wardrobe": "black sun-priest plate and a gold gorget",
       "proxy": { "heightMeters": 1.9, "build": "slim" }
     },
     "nira": {
       "promptBlock": "Adult woman, 45, broad-shouldered build, dark umber skin, gold-flecked brown irises, shaved sides with a copper-brown crest of hair.",
+      "wardrobe": "black sun-priest plate and a gold gorget",
       "proxy": { "heightMeters": 1.73, "build": "broad" }
     },
     "kesh": {
       "promptBlock": "Adult man, 38, heavy build, weathered tan skin, black irises, a split-lip scar, salt-and-pepper stubble, shaved scalp.",
+      "wardrobe": "black sun-priest plate and a gold gorget",
       "proxy": { "heightMeters": 1.82, "build": "broad" }
     },
     "rhel": {
       "promptBlock": "Adult man, 30, thin build, sallow skin, dark brown irises, a branded sun-disk on the forehead, black hair bound at the nape.",
+      "wardrobe": "black sun-priest plate and a gold gorget",
       "proxy": { "heightMeters": 1.76, "build": "slim" }
     }
   },

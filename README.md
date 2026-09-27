@@ -94,7 +94,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view -- --show <show-id>` lists that show’s locations and scenes. Deep links: `/location/<locationId>`, `/scene/<episode>/<scene>`.
 
-`content:plates` has Qwen draw and stop, so the picture can be reviewed. An empty location is one picture of the place. A location with people is one picture per landmark. The same appearance and size are drawn once. `content:assets` then has TRELLIS.2 build one mesh from each reviewed picture, fitted uniformly into the size in the script. The same appearance and size are meshed once. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. `content:landmarks` writes positions only for an empty location's mesh. A location with people already has those positions. It is not part of `content:render`. A position already in the script is kept unless `--force` is set.
+`content:plates` has Qwen draw and stop, so the picture can be reviewed. An empty location is one picture of the place. A location with people is one picture per landmark. The same appearance and size are drawn once. `content:assets` then meshes each reviewed picture, fitted uniformly into the size in the script. A place or a landmark uses TRELLIS.2. A character uses Pixal3D so the front matches the plate. The same appearance and size are meshed once. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit. `content:landmarks` writes positions only for an empty location's mesh. A location with people already has those positions. It is not part of `content:render`. A position already in the script is kept unless `--force` is set.
 
 God camera (OrbitControls):
 
@@ -114,6 +114,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 5. In that UI, Load `qwen_image_edit.json`, `qwen_image_edit_spatial.json`, and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into that same Python. trimesh reads glTF and OBJ files. moderngl draws the clay previs on the GPU. transformers, timm, and einops load Florence-2 for `content:landmarks`. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2 weights from `pnpm run content:models`. `content:landmarks` does not need ComfyUI running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
+`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into that same Python. trimesh reads glTF and OBJ files. moderngl draws the clay previs on the GPU. transformers, timm, and einops load Florence-2 for `content:landmarks`. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`. `content:landmarks` does not need ComfyUI running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

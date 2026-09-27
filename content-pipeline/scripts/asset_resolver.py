@@ -5,7 +5,8 @@ A location with people is one plate and one mesh per landmark, fitted to the
 size written on that landmark. Landmarks with the same appearance and size
 share that picture and mesh, then each one is placed at its own position.
 Characters stay out of those meshes. Each character is their own plate and
-mesh, fitted to their standing height, the same way a landmark is built.
+mesh, wearing the costume in `wardrobe`, fitted to their standing height.
+Character meshes use Pixal3D. Location and landmark meshes use TRELLIS.2.
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ from coords import schema_to_gltf
 from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
+    cap_holes,
+    face_schema_forward,
     fit_to_size,
     read_schema_mesh,
     require_triangle_budget,
@@ -31,6 +34,12 @@ from mesh_io import (
 from pipeline_paths import OUTPUT_DIR
 
 GENERATED_SOURCE = "trellis2"
+# Character meshes are pixel-aligned. Locations and landmarks stay on TRELLIS.2.
+CHARACTER_MESH_MODEL = "pixal3d"
+CHARACTER_FACING = "schema-plus-y"
+CHARACTER_PAGE = "https://github.com/TencentARC/Pixal3D"
+# Character meshes cap small openings with new triangles. Locations keep theirs.
+CHARACTER_MESH_REPAIR = "cap-holes"
 
 
 @dataclass
@@ -128,6 +137,12 @@ class AssetResolver:
             return None
         if record.get("decimator") != DECIMATOR or record.get("fit") != "uniform":
             return None
+        if request.character_id and record.get("meshRepair") != CHARACTER_MESH_REPAIR:
+            return None
+        if request.character_id and record.get("meshModel") != CHARACTER_MESH_MODEL:
+            return None
+        if request.character_id and record.get("facing") != CHARACTER_FACING:
+            return None
         size = record.get("sizeMeters") or list(request.size)
         return ResolvedLocation(
             location_id=request.location_id,
@@ -149,6 +164,7 @@ class AssetResolver:
                     request.appearance,
                     directory,
                     triangle_budget=self.triangle_budget,
+                    character=bool(request.character_id),
                 )
             )
         except Exception as exc:
@@ -157,7 +173,11 @@ class AssetResolver:
             if plate_copy.is_file():
                 plate_copy.unlink()
         vertices, faces = read_schema_mesh(fetched)
+        if request.character_id:
+            vertices = face_schema_forward(vertices)
         fitted = fit_to_size(vertices, request.size)
+        if request.character_id:
+            fitted, faces = cap_holes(fitted, faces)
         source_id = appearance_source_id(request.appearance)
         write_schema_glb(directory / "model.glb", fitted, faces)
         if fetched != directory / "model.glb" and fetched.is_file():
@@ -166,6 +186,7 @@ class AssetResolver:
             from spatial_previs import render_mesh_thumbnail
 
             render_mesh_thumbnail(fitted, faces, directory / "thumb.png")
+        source = CHARACTER_MESH_MODEL if request.character_id else GENERATED_SOURCE
         record = {
             "showId": self.show_id,
             "locationId": request.location_id,
@@ -173,11 +194,19 @@ class AssetResolver:
             "sizeMeters": list(request.size),
             "descriptionHash": digest,
             "title": request.appearance,
-            "source": GENERATED_SOURCE,
+            "source": source,
             "sourceId": source_id,
-            "author": "Qwen-Image-Edit-2511, TRELLIS.2",
+            "author": (
+                "Qwen-Image-Edit-2511, Pixal3D"
+                if request.character_id
+                else "Qwen-Image-Edit-2511, TRELLIS.2"
+            ),
             "license": "MIT",
-            "pageUrl": "https://github.com/microsoft/TRELLIS.2",
+            "pageUrl": (
+                CHARACTER_PAGE
+                if request.character_id
+                else "https://github.com/microsoft/TRELLIS.2"
+            ),
             "retrieved": date.today().isoformat(),
             "triangleCount": int(len(faces)),
             "triangleBudget": self.triangle_budget,
@@ -187,6 +216,9 @@ class AssetResolver:
         }
         if request.character_id:
             record["characterId"] = request.character_id
+            record["meshModel"] = CHARACTER_MESH_MODEL
+            record["facing"] = CHARACTER_FACING
+            record["meshRepair"] = CHARACTER_MESH_REPAIR
         elif request.landmark_id:
             record["landmarkId"] = request.landmark_id
             if request.position is not None:
@@ -198,7 +230,7 @@ class AssetResolver:
         return ResolvedLocation(
             location_id=request.location_id,
             glb=directory / "model.glb",
-            source=GENERATED_SOURCE,
+            source=source,
             source_id=source_id,
             title=request.appearance,
             size=request.size,
@@ -436,14 +468,23 @@ def _landmark_requests(location_id: str, spatial: dict) -> list[AssetRequest]:
 
 
 def collect_character_requests(show: dict) -> list[AssetRequest]:
-    """One standing mesh per character, fitted to their height the way a landmark is."""
+    """One standing mesh per character, fitted to their height the way a landmark is.
+
+    The plate is the identity wearing the episode costume, so the mesh the
+    still traces is already dressed.
+    """
     requests: list[AssetRequest] = []
     for character_id, character in (show.get("characters") or {}).items():
         if not isinstance(character, dict):
             continue
-        appearance = _appearance(character.get("promptBlock"))
-        if not appearance:
-            continue
+        identity = _appearance(character.get("promptBlock"))
+        wardrobe = _appearance(character.get("wardrobe"))
+        if not identity or not wardrobe:
+            raise RuntimeError(
+                f"character:{character_id} needs promptBlock and wardrobe. "
+                "Wardrobe is the costume the standing mesh is generated wearing."
+            )
+        appearance = f"{identity} Wearing {wardrobe}."
         height = 1.72
         proxy = character.get("proxy") or {}
         try:
@@ -500,8 +541,9 @@ def export_credits(output_dir: Path, destination: Path) -> None:
         "",
         "Location meshes are generated for one show. An empty location is one mesh of the",
         "place. A location with people is one mesh per landmark, fitted to the size in",
-        "the script. Qwen-Image-Edit-2511 draws the picture and TRELLIS.2 meshes it.",
-        "Both models are used under their published licenses (Qwen Apache-2.0, TRELLIS.2 MIT).",
+        "the script. Qwen-Image-Edit-2511 draws the picture. TRELLIS.2 meshes a place or",
+        "a landmark. Pixal3D meshes a character so the front matches the plate.",
+        "Qwen is Apache-2.0. TRELLIS.2 and Pixal3D are MIT.",
         "",
     ]
     roots = []
@@ -509,6 +551,7 @@ def export_credits(output_dir: Path, destination: Path) -> None:
     if assets.is_dir():
         roots.extend(assets.glob("*/*/location.json"))
         roots.extend(assets.glob("*/*/*/landmark.json"))
+        roots.extend(assets.glob("*/*/*/character.json"))
     records = sorted(roots)
     if not records:
         lines.append("No generated meshes have been recorded.")
@@ -516,6 +559,16 @@ def export_credits(output_dir: Path, destination: Path) -> None:
         for path in records:
             record = json.loads(path.read_text(encoding="utf-8"))
             landmark_id = record.get("landmarkId")
+            character_id = record.get("characterId")
+            if character_id or path.name == "character.json":
+                show_id = record.get("showId") or path.parents[2].name
+                character_id = character_id or path.parent.name
+                name = f"{show_id}/characters/{character_id}"
+                lines.append(
+                    f"- {name} by Qwen-Image-Edit-2511, Pixal3D (MIT). "
+                    f"Source: pixal3d. {CHARACTER_PAGE}"
+                )
+                continue
             if landmark_id:
                 show_id = record.get("showId") or path.parents[2].name
                 location_id = record.get("locationId") or path.parents[1].name

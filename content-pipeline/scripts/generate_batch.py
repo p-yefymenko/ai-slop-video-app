@@ -594,6 +594,7 @@ def load_show(path: Path) -> dict:
         cleaned_chars[str(cid)] = {
             "id": str(cid),
             "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
+            "wardrobe": require_text(character, "wardrobe", f"characters[{cid!r}]"),
         }
         if isinstance(character.get("proxy"), dict):
             cleaned_chars[str(cid)]["proxy"] = character["proxy"]

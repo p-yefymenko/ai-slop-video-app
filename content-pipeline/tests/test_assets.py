@@ -12,7 +12,7 @@ import numpy as np
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from asset_generate import generate_asset_mesh, plate_prompt, trellis_graph  # noqa: E402
+from asset_generate import generate_asset_mesh, pixal3d_graph, plate_prompt, trellis_graph  # noqa: E402
 from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
@@ -27,6 +27,8 @@ from mesh_io import (  # noqa: E402
     DECIMATOR,
     TRIANGLE_BUDGET,
     box_mesh,
+    cap_holes,
+    face_schema_forward,
     fit_to_size,
     primitive_mesh,
     proportions_match,
@@ -40,8 +42,14 @@ class CountingGenerator:
         self.cube = cube
         self.calls = 0
 
-    def __call__(self, appearance: str, raw_dir: Path, triangle_budget: int = TRIANGLE_BUDGET) -> Path:
-        del appearance
+    def __call__(
+        self,
+        appearance: str,
+        raw_dir: Path,
+        triangle_budget: int = TRIANGLE_BUDGET,
+        character: bool = False,
+    ) -> Path:
+        del appearance, character
         self.calls += 1
         self.triangle_budget = triangle_budget
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -129,7 +137,48 @@ class AssetTests(unittest.TestCase):
         person = plate_prompt("black hair", character=True)
         self.assertIn("full-body", person)
         self.assertIn("black hair", person)
+        self.assertIn("no holes", person)
         self.assertNotIn("movie set", person.lower())
+        self.assertNotIn("FillHoles", classes)
+        self.assertNotIn("RemeshMesh", classes)
+        aligned = pixal3d_graph("plate.png", 7)
+        aligned_classes = [node["class_type"] for node in aligned.values()]
+        self.assertIn("Pixal3DConditioning", aligned_classes)
+        self.assertNotIn("Trellis2Conditioning", aligned_classes)
+        self.assertNotIn("FillHoles", aligned_classes)
+        self.assertNotIn("RemeshMesh", aligned_classes)
+        aligned_unet = next(node for node in aligned.values() if node["class_type"] == "UNETLoader")
+        self.assertEqual(aligned_unet["inputs"]["unet_name"], "pixal3d_int8_convrot.safetensors")
+        aligned_crop = next(node for node in aligned.values() if node["class_type"] == "ImageCropToMask")
+        self.assertEqual(aligned_crop["inputs"]["pad_factor"], 1.1)
+        aligned_dino = next(node for node in aligned.values() if node["class_type"] == "CLIPVisionLoader")
+        self.assertEqual(aligned_dino["inputs"]["clip_name"], "dino_v3_L_naf_fp32.safetensors")
+        aligned_vae = next(node for node in aligned.values() if node["class_type"] == "VAELoader")
+        self.assertEqual(aligned_vae["inputs"]["vae_name"], "trellis_2_shape_vae_bf16.safetensors")
+        fov = next(node for node in aligned.values() if node["class_type"] == "MoGeGeometryToFOV")
+        self.assertEqual(fov["inputs"]["axis"], "horizontal")
+        self.assertEqual(fov["inputs"]["unit"], "degrees")
+        conditioning = next(node for node in aligned.values() if node["class_type"] == "Pixal3DConditioning")
+        self.assertEqual(conditioning["inputs"]["camera_angle_x"], ["32", 0])
+        self.assertEqual(conditioning["inputs"]["image"], ["4", 0])
+        structure = next(node for node in aligned.values() if node["class_type"] == "VaeDecodeStructureTrellis2")
+        self.assertEqual(structure["inputs"]["resolution"], "32")
+        small, small_faces = box_mesh((0.01, 0.01, 0.01))
+        opened = small_faces[:-1]
+        capped, capped_faces = cap_holes(small, opened)
+        np.testing.assert_array_equal(capped, small)
+        self.assertEqual(len(capped_faces), len(small_faces))
+        wide, wide_faces = box_mesh((1.0, 1.0, 1.0))
+        _kept, kept_faces = cap_holes(wide, wide_faces[:-1])
+        self.assertEqual(len(kept_faces), len(wide_faces) - 1)
+        slit_points = np.array(
+            [[0.0, 0.0, 0.0], [0.008, 0.0, 0.0], [0.016, 0.0, 0.0], [0.008, 0.004, 0.0]],
+            dtype=np.float64,
+        )
+        slit_faces = np.array([[0, 1, 3], [1, 2, 3]], dtype=np.int64)
+        sealed, sealed_faces = cap_holes(slit_points, slit_faces)
+        np.testing.assert_array_equal(sealed, slit_points)
+        self.assertGreater(len(sealed_faces), len(slit_faces))
 
     def test_triangle_limit_is_recorded_on_the_location(self) -> None:
         generator = CountingGenerator(self.cube)
@@ -343,6 +392,7 @@ class AssetTests(unittest.TestCase):
         show["characters"] = {
             "ada": {
                 "promptBlock": "Adult woman, black hair.",
+                "wardrobe": "a soot-stained ivory wrap and a plain iron bridal collar",
                 "proxy": {"heightMeters": 1.6, "build": "slim"},
             }
         }
@@ -360,14 +410,38 @@ class AssetTests(unittest.TestCase):
         character_plates = [plate for character, plate in drawn if character]
         self.assertEqual(len(character_plates), 1)
         self.assertEqual(character_plates[0].parent.name, "ada")
-        resolved = self._resolver(CountingGenerator(self.cube)).resolve_show(show)
+        generator = CountingGenerator(self.cube)
+        resolved = self._resolver(generator).resolve_show(show)
         item = resolved["character:ada"]
+        self.assertEqual(item.source, "pixal3d")
         vertices, _faces = read_schema_mesh(item.glb)
         extent = vertices.max(axis=0) - vertices.min(axis=0)
         np.testing.assert_allclose(extent, [1.6, 1.6, 1.6], atol=1e-3)
-        record = json.loads((item.glb.parent / "character.json").read_text(encoding="utf-8"))
+        record_path = item.glb.parent / "character.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(record["characterId"], "ada")
         self.assertEqual(record["fit"], "uniform")
+        self.assertEqual(record["meshModel"], "pixal3d")
+        self.assertEqual(record["facing"], "schema-plus-y")
+        self.assertEqual(record["meshRepair"], "cap-holes")
+        np.testing.assert_allclose(
+            face_schema_forward(np.array([[0.2, -0.5, 1.0]])),
+            [[-0.2, 0.5, 1.0]],
+        )
+        self.assertEqual(record["source"], "pixal3d")
+        self.assertIn("ivory wrap", record["title"])
+        calls = generator.calls
+        self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, calls)
+        record["meshModel"] = "trellis2"
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+        self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, calls + 1)
+        bare = self._show()
+        bare["characters"] = {"ada": {"promptBlock": "Adult woman, black hair."}}
+        with self.assertRaises(RuntimeError) as missing_wardrobe:
+            self._resolver(CountingGenerator(self.cube)).resolve_show(bare)
+        self.assertIn("wardrobe", str(missing_wardrobe.exception))
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)

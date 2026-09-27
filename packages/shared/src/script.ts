@@ -24,6 +24,11 @@ export type ShowCharacter = {
    * feature, hair. No wardrobe, pose, expression, action, location, or camera.
    */
   promptBlock: string;
+  /**
+   * Clothes the standing mesh is generated wearing. One costume for the episode.
+   * Scene `imagePrompt` still says what that shot does with those clothes.
+   */
+  wardrobe: string;
   /** Clay mannequin proportions. Identity is still the portrait PNG. */
   proxy?: CharacterProxy;
 };

@@ -17,7 +17,10 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     id: "demo-show",
     title: "Demo",
     characters: {
-      ada: { promptBlock: "Adult woman, 30, average build, brown eyes, black hair." },
+      ada: {
+        promptBlock: "Adult woman, 30, average build, brown eyes, black hair.",
+        wardrobe: "a plain fitted dress",
+      },
     },
     locations: {
       room: {
