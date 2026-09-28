@@ -41,6 +41,8 @@ CLOTHES_FLATTEN_RADIUS = 3
 BACKDROP_SKY = (255, 0, 255)
 BACKDROP_GROUND = (0, 255, 0)
 BACKDROP_SURROUND = (255, 255, 0)
+# The open floor is not an asset. Landmarks, props, and people use other ids.
+FLOOR_BASE = 156
 BLOCKOUT_FPS = 8
 
 Vec3 = tuple[float, float, float]
@@ -879,6 +881,15 @@ def _camera_inside_stage(camera: dict, spatial: dict) -> bool:
     return abs(x) <= width / 2.0 + 0.05 and abs(y) <= depth / 2.0 + 0.05 and -0.05 <= z <= height + 0.05
 
 
+def backdrop_depth(batches: list, camera: dict) -> np.ndarray:
+    """Depth of landmarks, props, and people. The open floor stays empty."""
+    assets = [batch for batch in batches if batch.base != FLOOR_BASE]
+    if not assets:
+        return np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
+    _image, zbuf = _raster_clay(assets, camera)
+    return zbuf
+
+
 def _raster_clay(batches: list, camera: dict) -> tuple[Image.Image, np.ndarray]:
     """One GPU draw of the clay batches. The depth buffer is camera-forward meters."""
     from clay_gpu import raster_clay
@@ -916,10 +927,11 @@ def render_mesh_thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: 
 
 
 def render_backdrop(camera: dict, zbuf: np.ndarray, spatial: dict, colors: dict) -> Image.Image:
-    """Paint empty pixels with that place's flat color. An asset stays black.
+    """Paint empty pixels with that place's flat color.
 
-    Sky, ground inside the location, and the horizon each keep their own color,
-    so the still knows what belongs there.
+    Black is a landmark, prop, character, or whole-location mesh. The open floor
+    is not one of those: the caller passes a depth buffer that leaves it empty,
+    so the floor keeps the ground color and the still can name it.
     """
     height, width = zbuf.shape
     position, right, up, forward, focal = _camera_basis(camera, viewport_height=float(height))
@@ -1364,14 +1376,14 @@ def _scene_surfaces(
     batches: list[ClayBatch] = []
     if location_has_people(show, scene["locationId"]):
         if _camera_inside_stage(camera, spatial):
-            floor = _batch_from_triangles(_floor_triangles(spatial), 156)
+            floor = _batch_from_triangles(_floor_triangles(spatial), FLOOR_BASE)
             if floor is not None:
                 batches.append(floor)
         batches.extend(_landmark_batches(show, scene["locationId"]))
     else:
         set_mesh = _location_set_mesh(show.get("id"), scene["locationId"])
         if set_mesh is None and _camera_inside_stage(camera, spatial):
-            floor = _batch_from_triangles(_floor_triangles(spatial), 156)
+            floor = _batch_from_triangles(_floor_triangles(spatial), FLOOR_BASE)
             if floor is not None:
                 batches.append(floor)
         if set_mesh is not None:
@@ -2073,6 +2085,7 @@ def render_blocked_scene(
         label = guides.get(time_seconds)
         if label is None:
             continue
+        _camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
         blockout_path = clay_frame_path(
             show["id"],
             episode["episodeNumber"],
@@ -2154,7 +2167,7 @@ def render_blocked_scene(
         location = show["locations"][scene["locationId"]]
         render_backdrop(
             camera,
-            zbuf,
+            backdrop_depth(batches, camera),
             location["spatial"],
             {
                 "sky": location["backdrop"]["skyColor"],

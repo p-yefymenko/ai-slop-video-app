@@ -407,6 +407,23 @@ class SpatialPrevisTests(unittest.TestCase):
         sealed = render_backdrop(looking_down, holed, {"sizeMeters": [100.0, 100.0, 10.0]}, colors)
         self.assertEqual(sealed.getpixel((21, 31)), (0, 0, 0))
 
+    def test_backdrop_depth_leaves_the_open_floor_empty(self) -> None:
+        from clay_gpu import ClayBatch
+        from spatial_previs import FLOOR_BASE, backdrop_depth
+
+        floor = ClayBatch(
+            np.zeros((3, 3), dtype=np.float32),
+            np.zeros((1, 3), dtype=np.uint32),
+            FLOOR_BASE,
+        )
+        camera = {
+            "position": [0.0, -5.0, 1.5],
+            "lookAt": [0.0, 0.0, 1.5],
+            "verticalFovDegrees": 40.0,
+        }
+        depth = backdrop_depth([floor], camera)
+        self.assertTrue(np.isinf(depth).all())
+
     def test_place_line_names_only_landmarks_in_this_camera(self) -> None:
         location = self.show["locations"]["sun_well_court"]
         well = location["spatial"]["landmarks"]["sun_well"]
