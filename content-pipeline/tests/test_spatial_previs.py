@@ -419,7 +419,7 @@ class SpatialPrevisTests(unittest.TestCase):
         wide = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
         wide_camera = camera_at(wide, float(wide["timeRangeSeconds"][0]))
         self.assertTrue(landmark_in_view(well, wide_camera))
-        self.assertIn("sun-well", visible_place_line(location, wide_camera).lower())
+        self.assertIn("white-gold", visible_place_line(location, wide_camera).lower())
 
     def test_place_line_mentions_backdrop_regions_in_the_guide(self) -> None:
         from PIL import Image
@@ -436,6 +436,18 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertIn("Storm sky", line)
         self.assertNotIn("sun well", line.lower())
         self.assertNotIn("sun-well", line.lower())
+
+    def test_place_line_omits_landmarks_hidden_by_a_person(self) -> None:
+        from PIL import Image
+
+        location = self.show["locations"]["sun_well_court"]
+        wide = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        camera = camera_at(wide, float(wide["timeRangeSeconds"][0]))
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "clothes.png"
+            Image.new("RGB", (PROXY_WIDTH, PROXY_HEIGHT), (200, 180, 160)).save(path)
+            line = visible_place_line(location, camera, people_path=path)
+        self.assertNotIn("white-gold", line.lower())
 
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors

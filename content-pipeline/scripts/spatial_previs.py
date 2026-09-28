@@ -264,17 +264,43 @@ def point_in_view(point: Vec3, camera: dict) -> bool:
     return 0.0 <= x < PROXY_WIDTH and 0.0 <= y < PROXY_HEIGHT
 
 
-def landmark_in_view(landmark: dict, camera: dict) -> bool:
-    """True when this camera can see the landmark's box, not only its name."""
+def _landmark_probes(landmark: dict, camera: dict) -> list[Vec3]:
     position = landmark.get("position")
     if not isinstance(position, list) or len(position) < 3:
-        return False
+        return []
     origin = vec(position)
-    if point_in_view(origin, camera):
-        return True
     size = landmark.get("size")
-    mid_z = float(size[2]) * 0.5 if isinstance(size, list) and len(size) >= 3 else 0.4
-    return point_in_view(add(origin, (0.0, 0.0, mid_z)), camera)
+    height = float(size[2]) if isinstance(size, list) and len(size) >= 3 else 0.4
+    probes = []
+    for amount in (0.0, 0.5, 1.0):
+        sample = add(origin, (0.0, 0.0, height * amount))
+        if point_in_view(sample, camera):
+            probes.append(sample)
+    return probes
+
+
+def landmark_in_view(landmark: dict, camera: dict) -> bool:
+    """True when this camera can see the landmark's box, not only its name."""
+    return bool(_landmark_probes(landmark, camera))
+
+
+def _people_cover(point: Vec3, camera: dict, people_path: Path | None) -> bool:
+    """True when a clothes cutout already occupies this projected point."""
+    if people_path is None or not people_path.is_file():
+        return False
+    projected = project(point, camera)
+    if projected is None:
+        return False
+    x, y, _depth = projected
+    with Image.open(people_path) as image:
+        rgb = image.convert("RGB")
+        width, height = rgb.size
+        pixel_x = int(x * width / PROXY_WIDTH)
+        pixel_y = int(y * height / PROXY_HEIGHT)
+        if not (0 <= pixel_x < width and 0 <= pixel_y < height):
+            return False
+        sample = rgb.getpixel((pixel_x, pixel_y))
+    return max(int(channel) for channel in sample[:3]) > 8
 
 
 def _landmark_aliases(landmark_id: str) -> list[str]:
@@ -285,25 +311,6 @@ def _landmark_aliases(landmark_id: str) -> list[str]:
         aliases.append(trimmed.replace("_", " "))
         aliases.append(trimmed.replace("_", "-"))
     return list(dict.fromkeys(alias for alias in aliases if alias))
-
-
-def _drop_hidden_landmark_clauses(block: str, hidden_names: list[str]) -> str:
-    """Keep location materials; drop clauses that name objects this camera cannot see."""
-    text = block.strip()
-    if not text or not hidden_names:
-        return text
-    parts = [part.strip() for part in re.split(r",\s*", text) if part.strip()]
-    kept = [
-        part
-        for part in parts
-        if not any(name.lower() in part.lower() for name in hidden_names)
-    ]
-    if not kept:
-        return ""
-    joined = ", ".join(kept)
-    if text.endswith(".") and not joined.endswith("."):
-        joined += "."
-    return joined
 
 
 def _still_landmark_phrase(landmark_id: str, landmark: dict) -> str:
@@ -324,59 +331,74 @@ def visible_place_line(
     location: dict,
     camera: dict,
     backdrop_path: Path | None = None,
+    people_path: Path | None = None,
 ) -> str:
-    """Location materials plus only the landmarks this camera actually sees."""
-    visible: list[tuple[str, dict]] = []
-    hidden_names: list[str] = []
+    """Name only landmarks and empty-space regions this camera's previs actually shows."""
+    bits: list[str] = []
+    covered = ""
     spatial = location.get("spatial") or {}
     for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
         if not isinstance(landmark, dict):
             continue
-        if landmark_in_view(landmark, camera):
-            visible.append((str(landmark_id), landmark))
-        else:
-            hidden_names.extend(_landmark_aliases(str(landmark_id)))
-    bits: list[str] = []
-    place = _drop_hidden_landmark_clauses(
-        str(location.get("promptBlock") or ""),
-        hidden_names,
-    )
-    if place:
-        bits.append(place)
-    covered = " ".join(bits).lower()
-    for landmark_id, landmark in visible:
-        if any(alias.lower() in covered for alias in _landmark_aliases(landmark_id)):
+        probes = _landmark_probes(landmark, camera)
+        if not probes:
             continue
-        phrase = _still_landmark_phrase(landmark_id, landmark)
+        if all(_people_cover(sample, camera, people_path) for sample in probes):
+            continue
+        if any(alias.lower() in covered for alias in _landmark_aliases(str(landmark_id))):
+            continue
+        phrase = _still_landmark_phrase(str(landmark_id), landmark)
         bits.append(phrase)
         covered = " ".join(bits).lower()
-    for sentence in _visible_backdrop_sentences(
-        location.get("backdrop") or {},
-        backdrop_path,
-    ):
+    for spec in visible_backdrop_specs(location.get("backdrop") or {}, backdrop_path):
+        sentence = spec["text"][0].upper() + spec["text"][1:] + "."
         if sentence.lower().rstrip(".") not in covered:
             bits.append(sentence)
             covered = " ".join(bits).lower()
     return " ".join(bits)
 
 
-def _visible_backdrop_sentences(backdrop: dict, path: Path | None) -> list[str]:
+def visible_backdrop_specs(backdrop: dict, path: Path | None) -> list[dict]:
+    """Sky, ground, and surround that actually occupy this camera's empty-space plate."""
     if path is None or not path.is_file() or not backdrop:
         return []
     image = np.asarray(Image.open(path).convert("RGB"))
     total = max(int(image.shape[0] * image.shape[1]), 1)
-    minimum = max(1, int(total * 0.004))
-    sentences: list[str] = []
-    for field, swatch in (
-        ("sky", BACKDROP_SKY),
-        ("ground", BACKDROP_GROUND),
-        ("surround", BACKDROP_SURROUND),
+    minimum = max(1, int(total * 0.02))
+    specs: list[dict] = []
+    for field, color_key, label in (
+        ("sky", "skyColor", BACKDROP_SKY),
+        ("ground", "groundColor", BACKDROP_GROUND),
+        ("surround", "surroundColor", BACKDROP_SURROUND),
     ):
         text = str(backdrop.get(field) or "").strip()
         if not text:
             continue
-        if int(np.all(image == swatch, axis=2).sum()) >= minimum:
-            sentences.append(text[0].upper() + text[1:] + ".")
+        authored = backdrop.get(color_key)
+        swatches = [label]
+        color = None
+        if isinstance(authored, list) and len(authored) >= 3:
+            color = (int(authored[0]), int(authored[1]), int(authored[2]))
+            swatches.append(color)
+        count = 0
+        for swatch in swatches:
+            count += int(np.all(image == swatch, axis=2).sum())
+        if count >= minimum:
+            specs.append(
+                {
+                    "field": field,
+                    "color": list(color or label),
+                    "text": text,
+                }
+            )
+    return specs
+
+
+def _visible_backdrop_sentences(backdrop: dict, path: Path | None) -> list[str]:
+    sentences: list[str] = []
+    for spec in visible_backdrop_specs(backdrop, path):
+        text = spec["text"]
+        sentences.append(text[0].upper() + text[1:] + ".")
     return sentences
 
 

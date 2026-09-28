@@ -501,7 +501,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("70", graph)
         self.assertNotIn("32", graph)
 
-    def test_clothes_shot_does_not_attach_the_backdrop(self) -> None:
+    def test_clothes_shot_keeps_the_cutout_and_drops_the_backdrop(self) -> None:
         graph = pipeline.clone_workflow(self.qwen_spatial)
         pipeline.inject_qwen_spatial_refs(
             graph,
@@ -509,12 +509,15 @@ class SpatialPipelineTests(unittest.TestCase):
             "scene_depth.png",
             None,
             [("scene_clothes.png", "Clothes"), ("scene_edges.png", "Edges")],
+            backdrop_name="scene_backdrop.png",
         )
         blockout = pipeline._qwen_encoder(graph, "Blockout instruction")
         assert blockout is not None
         self.assertEqual(blockout["class_type"], "TextEncodeQwenImageEditPlus")
+        self.assertEqual(blockout["inputs"]["image2"], ["40", 0])
         self.assertNotIn("42", graph)
         self.assertNotIn("image4", blockout["inputs"])
+        self.assertNotIn("latent2", blockout["inputs"])
 
     def test_face_pass_is_off(self) -> None:
         self.assertFalse(pipeline.FACE_PASS)
@@ -567,6 +570,22 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertTrue(text.startswith("Picture 2 is the empty space"))
         self.assertIn("spatialBackdrop", pipeline.PROMPT_KEYS)
 
+    def test_backdrop_sentence_omits_regions_this_camera_does_not_show(self) -> None:
+        from PIL import Image
+
+        court = self.show["locations"]["sun_well_court"]["backdrop"]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "backdrop.png"
+            Image.new("RGB", (64, 64), tuple(court["skyColor"])).save(path)
+            text = pipeline.structure_pictures(
+                ["Backdrop"],
+                backdrop=court,
+                backdrop_path=path,
+            )
+        self.assertIn("storm sky", text.lower())
+        self.assertNotIn("iron floor", text.lower())
+        self.assertNotIn("open ocean", text.lower())
+
     def test_blockout_pass_is_saved_beside_the_face_pass(self) -> None:
         dest = Path("scene_03_start.png")
         self.assertEqual(
@@ -613,8 +632,8 @@ class SpatialPipelineTests(unittest.TestCase):
             },
         )
         self.assertIn("Exactly 6 visible people", prompt)
-        self.assertIn(location["promptBlock"], prompt)
-        self.assertIn("sun-well of white-gold fire", prompt)
+        self.assertNotIn(location["promptBlock"], prompt)
+        self.assertIn("white-gold", prompt)
         self.assertNotIn("sela", prompt.lower())
         self.assertNotIn("vardan", prompt.lower())
         self.assertNotIn(scene["imagePrompt"], prompt)
@@ -657,14 +676,14 @@ class SpatialPipelineTests(unittest.TestCase):
         )
         self.assertNotIn("sun well", close_line.lower())
         self.assertNotIn("sun-well", close_line.lower())
+        self.assertNotIn("iron floor", close_line.lower())
         self.assertNotIn(location["promptBlock"], close_line)
-        self.assertIn("iron floor", close_line.lower())
         well = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
         well_line = visible_place_line(
             location, camera_at(well, float(well["timeRangeSeconds"][0]))
         )
-        self.assertIn("sun-well", well_line.lower())
-        self.assertIn(location["promptBlock"], well_line)
+        self.assertIn("white-gold", well_line.lower())
+        self.assertNotIn(location["promptBlock"], well_line)
 
     def test_face_prompt_names_identity_and_not_the_place(self) -> None:
         location = self.show["locations"]["sun_well_court"]

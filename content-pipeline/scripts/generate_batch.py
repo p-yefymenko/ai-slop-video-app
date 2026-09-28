@@ -40,6 +40,7 @@ from spatial_previs import (
     generate_episode_previs,
     scene_has_spatial_change,
     validate_spatial_episode,
+    visible_backdrop_specs,
     visible_place_line,
 )
 
@@ -54,7 +55,7 @@ PROMPT_KEYS = (
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 # Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
 MAX_QWEN_REFS = 2
-# Identity faces are off. Clothes shots fill empty space in a second pass.
+# Identity faces are off. A clothes shot does not also attach the empty-space plate.
 FACE_PASS = False
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
 QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
@@ -1017,18 +1018,27 @@ def structure_pictures(
     backdrop: dict | None = None,
     people: bool | None = None,
     start: int = 1,
+    backdrop_path: Path | None = None,
 ) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
     On a people shot the depth is picture 1 and includes the person volumes, so
-    Qwen keeps their position and what they hide. The clothes cutout is the next
-    picture and sets garment color. The empty-space plate is not sent with it.
+    Qwen keeps their position and what they hide. The clothes cutout is a
+    reference latent and sets garment color. It is not sent with the empty-space plate.
     """
     if people is None:
         people = "Pose" in pictures or "Clothes" in pictures
     lines = []
     for index, title in enumerate(pictures, start=start):
-        lines.append(_picture_sentence(title, index, people=people, backdrop=backdrop))
+        lines.append(
+            _picture_sentence(
+                title,
+                index,
+                people=people,
+                backdrop=backdrop,
+                backdrop_path=backdrop_path,
+            )
+        )
     return " ".join(lines)
 
 
@@ -1036,7 +1046,14 @@ def _color_word(color: list[int]) -> str:
     return f"{color[0]} {color[1]} {color[2]}"
 
 
-def _picture_sentence(title: str, index: int, *, people: bool, backdrop: dict | None = None) -> str:
+def _picture_sentence(
+    title: str,
+    index: int,
+    *,
+    people: bool,
+    backdrop: dict | None = None,
+    backdrop_path: Path | None = None,
+) -> str:
     if title == "Pose":
         return (
             f"Picture {index} is an OpenPose skeleton of those same people, on black. "
@@ -1075,14 +1092,31 @@ def _picture_sentence(title: str, index: int, *, people: bool, backdrop: dict | 
     if title == "Backdrop":
         if backdrop is None:
             raise KeyError("Backdrop")
-        return (
-            f"Picture {index} is the empty space from this exact camera, in flat color, not a finished photograph. "
-            f"Flat color {_color_word(backdrop['skyColor'])} is the sky: {backdrop['sky']}. "
-            f"Flat color {_color_word(backdrop['groundColor'])} is the ground: {backdrop['ground']}. "
-            f"Flat color {_color_word(backdrop['surroundColor'])} is the surroundings beyond the set: {backdrop['surround']}. "
-            "Black is an asset. Develop each flat color into that place. "
-            "Do not invent walls, windows, or a white void, and do not leave the color flat."
+        specs = visible_backdrop_specs(backdrop, backdrop_path)
+        if not specs:
+            specs = [
+                {"field": field, "color": backdrop[f"{field}Color"], "text": backdrop[field]}
+                for field in ("sky", "ground", "surround")
+                if backdrop.get(field) and backdrop.get(f"{field}Color")
+            ]
+        labels = {
+            "sky": "the sky",
+            "ground": "the ground",
+            "surround": "the surroundings beyond the set",
+        }
+        parts = [
+            f"Picture {index} is the empty space from this exact camera, in flat color, not a finished photograph."
+        ]
+        for spec in specs:
+            parts.append(
+                f"Flat color {_color_word(spec['color'])} is {labels[spec['field']]}: {spec['text']}."
+            )
+        parts.append(
+            "Black is an asset. Develop each listed flat color into that place. "
+            "Do not invent walls, windows, a floor that is not listed, or a white void, "
+            "and do not leave the color flat."
         )
+        return " ".join(parts)
     raise KeyError(title)
 
 
@@ -1119,6 +1153,13 @@ def inject_qwen_spatial_refs(
             "_meta": {"title": title},
         }
         blockout_inputs[image_key] = [node_id, 0]
+    slot_titles = {"image1": lead_title}
+    for (node_id, image_key), (_image_name, title) in zip(_GUIDE_NODES, guides or []):
+        slot_titles[image_key] = title
+    # The empty-space plate is black on the person. As a reference latent it copies
+    # that black over the garment. Clothes shots keep the cutout as the color latent.
+    if "Clothes" in slot_titles.values():
+        backdrop_name = None
     if backdrop_name is not None:
         blockout_encoder["class_type"] = "TextEncodeQwenBackdrop"
         graph["42"] = {
@@ -1128,6 +1169,7 @@ def inject_qwen_spatial_refs(
         }
         slot = "image3" if "image3" not in blockout_inputs else "image4"
         blockout_inputs[slot] = ["42", 0]
+        slot_titles[slot] = "Backdrop"
     if not characters or mask_name is None:
         _disable_face_pass(graph)
         return
@@ -1691,7 +1733,7 @@ def render_spatial_still(
         (stage_named_image(path, title.lower()), title) for path, title in chosen
     ]
     titles = [title for _name, title in pictures]
-    use_backdrop = "Clothes" not in titles
+    attach_backdrop = "Clothes" not in titles
     if not present(backdrop_path):
         raise SystemExit(
             f"Missing previs guide {backdrop_path}. Run `pnpm run content:previs` first."
@@ -1700,15 +1742,17 @@ def render_spatial_still(
     time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
     values = {
         "structurePictures": structure_pictures(
-            titles + (["Backdrop"] if use_backdrop else []),
-            backdrop=location["backdrop"] if use_backdrop else None,
+            titles + (["Backdrop"] if attach_backdrop else []),
+            backdrop=location["backdrop"] if attach_backdrop else None,
             people=bool(characters),
+            backdrop_path=backdrop_path if attach_backdrop else None,
         ),
         "peopleLine": still_people_line(character_ids),
         "locationPromptBlock": visible_place_line(
             location,
             camera_at(scene, time_seconds),
-            backdrop_path if present(backdrop_path) else None,
+            backdrop_path,
+            clothes_path if present(clothes_path) else None,
         ),
         "sceneLine": still_scene_line(scene),
     }
@@ -1737,16 +1781,13 @@ def render_spatial_still(
         mask_name,
         pictures[1:],
         lead_title=pictures[0][1],
-        backdrop_name=stage_named_image(backdrop_path, "backdrop") if use_backdrop else None,
+        backdrop_name=stage_named_image(backdrop_path, "backdrop") if attach_backdrop else None,
     )
     begin_generation_log(dest)
-    append_generation_log(
-        dest,
-        "blockout",
-        blockout_prompt,
-        [(title, path) for path, title in chosen]
-        + ([("Backdrop", backdrop_path)] if use_backdrop else []),
-    )
+    logged = [(title, path) for path, title in chosen]
+    if attach_backdrop:
+        logged.append(("Backdrop", backdrop_path))
+    append_generation_log(dest, "blockout", blockout_prompt, logged)
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
@@ -1758,25 +1799,6 @@ def render_spatial_still(
         )
     print(f"  Graph seed {seed}", flush=True)
     execute_queued_graph(graph, dest, prefer="image", mode=mode, also=passes or None)
-    if not use_backdrop:
-        blockout = kept_pass_path(dest, "blockout")
-        shutil.copy2(dest, blockout)
-        print(f"  Kept {blockout}", flush=True)
-        stripped = kept_pass_path(dest, "stripped")
-        empty_mask = kept_pass_path(dest, "empty")
-        strip_invented_backdrop(dest, backdrop_path, stripped)
-        write_empty_mask(backdrop_path, empty_mask)
-        print(f"  Kept {stripped}", flush=True)
-        render_backdrop_followup(
-            show,
-            location,
-            dest,
-            stripped,
-            empty_mask,
-            backdrop_path,
-            seed + 1,
-            mode,
-        )
     for index, group in enumerate(groups[1:], start=2):
         previous = kept_pass_path(dest, f"face{index - 1}")
         shutil.copy2(dest, previous)
