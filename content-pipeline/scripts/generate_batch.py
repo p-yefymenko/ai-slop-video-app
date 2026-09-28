@@ -1019,6 +1019,7 @@ def structure_pictures(
     people: bool | None = None,
     start: int = 1,
     backdrop_path: Path | None = None,
+    people_count: int | None = None,
 ) -> str:
     """How Qwen should read the previs guides. The shaded clay frame is not one of them.
 
@@ -1037,6 +1038,7 @@ def structure_pictures(
                 people=people,
                 backdrop=backdrop,
                 backdrop_path=backdrop_path,
+                people_count=people_count,
             )
         )
     return " ".join(lines)
@@ -1053,6 +1055,7 @@ def _picture_sentence(
     people: bool,
     backdrop: dict | None = None,
     backdrop_path: Path | None = None,
+    people_count: int | None = None,
 ) -> str:
     if title == "Pose":
         return (
@@ -1061,20 +1064,11 @@ def _picture_sentence(
         )
     if title == "Clothes":
         return (
-            f"Picture {index} is these same people from this exact camera, on black. "
-            "Cloth, skin, and hair are each a flat color. "
-            "Copy each of those colors onto the matching part of the body. "
-            "Invent real texture and light. "
-            "Do not copy the flat fill or the black background, and do not invent a different garment."
+            f"Picture {index} is {'the person' if people_count == 1 else 'these people'} with flat color fills."
         )
     if title == "Depth" and people:
         return (
-            f"Picture {index} is a depth map of this exact camera, not a photograph. "
-            "Brighter surfaces are closer. Black is empty space. "
-            "Each person-shaped volume is where one real adult stands and what they hide. "
-            "Draw a real human inside it, with a normal head, torso, arms, and legs, "
-            "and match that volume's position, size, and occlusion. "
-            "Do not copy the volume as clay, a cylinder, or blocks."
+            f"Picture {index} is depth: brighter is closer, black is empty space."
         )
     if title == "Depth":
         return (
@@ -1084,8 +1078,7 @@ def _picture_sentence(
         )
     if title == "Edges" and people:
         return (
-            f"Picture {index} is the outlines of this exact camera, including the people. "
-            "Keep those outlines."
+            f"Picture {index} is outlines."
         )
     if title == "Edges":
         return f"Picture {index} is the edges of the place only. Keep those edges. It contains no people."
@@ -1285,17 +1278,220 @@ def stage_combined_mask(group: list[dict], label: str) -> str:
         destination.unlink(missing_ok=True)
 
 
-def still_people_line(character_ids: list[str]) -> str:
+_COLOR_WORDS = (
+    "sky-blue",
+    "ivory",
+    "charcoal",
+    "black",
+    "white",
+    "blue",
+    "gold",
+    "brown",
+    "tan",
+    "sand",
+    "gray",
+    "grey",
+    "red",
+    "green",
+    "silver",
+    "navy",
+)
+_HEAD_WORDS = ("collar", "gorget", "necklace", "crown", "hood", "circlet", "helm")
+
+
+def _adult_kind(prompt_block: str) -> str:
+    lowered = prompt_block.lower()
+    if lowered.startswith("adult woman"):
+        return "an adult woman"
+    if lowered.startswith("adult man"):
+        return "an adult man"
+    return "an adult"
+
+
+def _color_name(rgb: tuple[int, int, int]) -> str:
+    """A coarse garment name. The cutout's own pixels, not the script's color word."""
+    red, green, blue = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+    peak = max(red, green, blue)
+    floor = min(red, green, blue)
+    if peak < 48:
+        return "black"
+    if peak - floor < 22:
+        if peak > 200:
+            return "white"
+        if peak > 140:
+            return "gray"
+        return "charcoal"
+    if blue > red and blue > green:
+        return "blue" if peak > 120 else "navy"
+    if red >= green >= blue and red - blue > 20:
+        if peak > 185:
+            return "sand"
+        if peak > 140:
+            return "tan"
+        return "brown"
+    if red > green and red - green > 40:
+        return "red"
+    return "sand"
+
+
+def cutout_color_names(path: Path | None) -> tuple[str, str]:
+    """Garment and skin names from the cutout. Skin is a darker warm region, not a stain."""
+    if path is None or not path.is_file():
+        return "", ""
+    import numpy as np
+
+    image = np.asarray(Image.open(path).convert("RGB"))
+    covered = image.max(axis=-1) > 8
+    total = int(covered.sum())
+    if total < 20:
+        return "", ""
+    keys = (
+        image[..., 0].astype(np.int32) // 16 * 256
+        + image[..., 1].astype(np.int32) // 16 * 16
+        + image[..., 2].astype(np.int32) // 16
+    )
+    values, counts = np.unique(keys[covered], return_counts=True)
+    order = np.argsort(counts)[::-1]
+    regions: list[tuple[int, int, int]] = []
+    for index in order:
+        if int(counts[index]) < total * 0.02:
+            break
+        key = int(values[index])
+        median = np.median(image[covered & (keys == key)], axis=0)
+        regions.append((int(median[0]), int(median[1]), int(median[2])))
+    if not regions:
+        return "", ""
+    garment = _color_name(regions[0])
+    garment_peak = max(regions[0])
+    skin = ""
+    for red, green, blue in regions[1:]:
+        peak = max(red, green, blue)
+        if not (red >= green >= blue and red - blue > 25):
+            continue
+        if peak > garment_peak - 30:
+            continue
+        skin = "warm brown"
+        break
+    return garment, skin
+
+
+def cutout_color_name(path: Path | None) -> str:
+    """Largest flat color in the clothes cutout, ignoring the black background."""
+    return cutout_color_names(path)[0]
+
+
+def _head_item(item: str) -> bool:
+    lowered = item.lower()
+    return any(word in lowered for word in _HEAD_WORDS)
+
+
+def _garment_clause(item: str, color_name: str) -> str:
+    text = re.sub(r"^(?:a|an)\s+", "", item.strip(), flags=re.IGNORECASE)
+    stained = re.search(r"\bstained\b", text, flags=re.IGNORECASE) is not None
+    torn = re.search(r"\btorn\b", text, flags=re.IGNORECASE) is not None
+    text = re.sub(r"\bsoot-stained\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bstained\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\btorn\b", " ", text, flags=re.IGNORECASE)
+    for word in _COLOR_WORDS:
+        text = re.sub(rf"\b{re.escape(word)}\b", " ", text, flags=re.IGNORECASE)
+    noun = re.sub(r"\s+", " ", text).strip(" ,-")
+    if stained and color_name:
+        noun_bits = [f"{color_name}-colored"]
+        if torn:
+            noun_bits.append("torn")
+        if noun:
+            noun_bits.append(noun)
+        return f"{' '.join(noun_bits)} with darker {color_name} stains"
+    bits = [f"{color_name}-colored"] if color_name else []
+    if torn:
+        bits.append("torn")
+    if noun:
+        bits.append(noun)
+    return " ".join(bits)
+
+
+def visible_wardrobe(wardrobe: str, color_name: str, *, head_visible: bool) -> str:
+    """The garment in frame. Neck pieces drop when the head is out. Color comes from the cutout."""
+    items = [item.strip() for item in re.split(r"\s+and\s+", wardrobe.strip().rstrip(".")) if item.strip()]
+    kept: list[str] = []
+    recolored = False
+    for item in items:
+        if not head_visible and _head_item(item):
+            continue
+        if not recolored and not _head_item(item):
+            kept.append(_garment_clause(item, color_name))
+            recolored = True
+            continue
+        kept.append(re.sub(r"^(?:a|an)\s+", "", item, flags=re.IGNORECASE))
+    if not kept:
+        return f"a {color_name}-colored garment" if color_name else ""
+    phrase = kept[0]
+    for extra in kept[1:]:
+        phrase = f"{phrase} and a {extra}"
+    return f"a {phrase}"
+
+
+def head_in_view(show: dict, episode: dict, scene: dict, character_id: str, time_seconds: float) -> bool:
+    """True when this camera can see the top of that person."""
+    from spatial_previs import camera_at, episode_character_state, point_in_view
+
+    state = episode_character_state(episode, character_id, time_seconds)
+    position = state.get("position")
+    if not isinstance(position, list) or len(position) < 2:
+        return True
+    character = (show.get("characters") or {}).get(character_id) or {}
+    proxy = character.get("proxy") if isinstance(character, dict) else None
+    height = 1.72
+    if isinstance(proxy, dict) and proxy.get("heightMeters"):
+        height = float(proxy["heightMeters"])
+    head = (float(position[0]), float(position[1]), height * 0.9)
+    return point_in_view(head, camera_at(scene, time_seconds))
+
+
+def _people_count(count: int) -> str:
+    if count == 1:
+        return "Exactly one person is visible."
+    return f"Exactly {count} people are visible."
+
+
+def still_people_line(
+    character_ids: list[str],
+    characters: dict | None = None,
+    *,
+    clothes: bool = False,
+    clothes_path: Path | None = None,
+    head_visible: bool = True,
+) -> str:
+    """Count the people. One person names the garment in frame, colored from the cutout."""
     if not character_ids:
         return "No people."
+    count = _people_count(len(character_ids))
+    if len(character_ids) != 1 or not characters:
+        if clothes and character_ids:
+            return f"{count} Match the colors in picture 2, with real cloth and skin texture."
+        return count
+    character = characters.get(character_ids[0])
+    if not isinstance(character, dict):
+        return count
+    kind = _adult_kind(str(character.get("promptBlock") or ""))
+    if not clothes:
+        return f"{count[:-1]}: {kind}."
+    color_name, skin_name = cutout_color_names(clothes_path)
+    garment = visible_wardrobe(
+        str(character.get("wardrobe") or ""),
+        color_name,
+        head_visible=head_visible,
+    )
+    worn = f" in {garment}" if garment else ""
+    skin = f" and {skin_name} skin" if skin_name else ""
     return (
-        f"Exactly {len(character_ids)} visible people. "
-        "Each person appears once. No extra people, duplicates, wireframes, grids, or readable text."
+        f"{count[:-1]}: {kind}{worn}{skin}, "
+        "matching the colors in picture 2, with real cloth and skin texture."
     )
 
 
 def still_scene_line(scene: dict) -> str:
-    """Atmosphere for empty shots. People shots get wardrobe from the clothes picture."""
+    """Atmosphere for empty shots. A people shot does not send imagePrompt."""
     if scene["characterIds"]:
         return ""
     return str(scene.get("imagePrompt") or "").strip()
@@ -1712,6 +1908,7 @@ def render_spatial_still(
     edge_path: Path,
     seed: int,
     mode: str,
+    episode: dict | None = None,
 ) -> None:
     """Generate one still from the depth. People shots also pass the pose."""
     backdrop_path = depth_path.with_name(depth_path.name.replace("_depth.png", "_backdrop.png"))
@@ -1740,20 +1937,43 @@ def render_spatial_still(
         )
     character_ids = scene["characterIds"]
     time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
+    place = visible_place_line(
+        location,
+        camera_at(scene, time_seconds),
+        backdrop_path,
+        clothes_path if present(clothes_path) else None,
+    )
+    if place:
+        if len(character_ids) == 1:
+            kind = _adult_kind(
+                str((show["characters"].get(character_ids[0]) or {}).get("promptBlock") or "")
+            )
+            who = "her" if kind == "an adult woman" else "him" if kind == "an adult man" else "them"
+        elif character_ids:
+            who = "them"
+        else:
+            who = ""
+        place = f"Behind and around {who}: {place}" if who else f"Setting: {place}"
     values = {
         "structurePictures": structure_pictures(
             titles + (["Backdrop"] if attach_backdrop else []),
             backdrop=location["backdrop"] if attach_backdrop else None,
             people=bool(characters),
             backdrop_path=backdrop_path if attach_backdrop else None,
+            people_count=len(character_ids),
         ),
-        "peopleLine": still_people_line(character_ids),
-        "locationPromptBlock": visible_place_line(
-            location,
-            camera_at(scene, time_seconds),
-            backdrop_path,
-            clothes_path if present(clothes_path) else None,
+        "peopleLine": still_people_line(
+            character_ids,
+            show["characters"],
+            clothes="Clothes" in titles,
+            clothes_path=clothes_path if present(clothes_path) else None,
+            head_visible=(
+                head_in_view(show, episode, scene, character_ids[0], time_seconds)
+                if episode is not None and len(character_ids) == 1
+                else True
+            ),
         ),
+        "locationPromptBlock": place,
         "sceneLine": still_scene_line(scene),
     }
     face_values = {
@@ -1952,6 +2172,7 @@ def generate_show(
                         guide_path(show_id, episode_number, scene_number, "start", "edges"),
                         seed,
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
+                        episode,
                     )
                 if needs_end_guide and (not present(end_path) or force):
                     render_spatial_still(
@@ -1965,6 +2186,7 @@ def generate_show(
                         guide_path(show_id, episode_number, scene_number, "end", "edges"),
                         seed,
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
+                        episode,
                     )
             else:
                 prompt = show_prompt(

@@ -282,12 +282,13 @@ class SpatialPipelineTests(unittest.TestCase):
         )
 
     def test_people_prompt_keeps_the_person_volume_in_the_depth(self) -> None:
-        text = pipeline.structure_pictures(["Depth", "Clothes", "Edges"])
-        self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
-        self.assertIn("person-shaped volume", text)
-        self.assertIn("Cloth, skin, and hair are each a flat color", text)
-        self.assertIn("matching part of the body", text)
-        self.assertIn("Picture 3 is the outlines of this exact camera, including the people", text)
+        text = pipeline.structure_pictures(["Depth", "Clothes", "Edges"], people_count=1)
+        self.assertTrue(text.startswith("Picture 1 is depth:"))
+        self.assertIn("black is empty space", text)
+        self.assertIn("Picture 2 is the person with flat color fills", text)
+        self.assertIn("Picture 3 is outlines", text)
+        self.assertNotIn("Keep those outlines", text)
+        self.assertNotIn("Copy those colors", text)
         self.assertNotIn("It contains no people", text)
         empty_edges = pipeline.structure_pictures(["Depth", "Edges"], people=False)
         self.assertIn("edges of the place only", empty_edges)
@@ -295,7 +296,7 @@ class SpatialPipelineTests(unittest.TestCase):
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
         wide = pipeline.structure_pictures(["Depth", "Edges"], people=True)
-        self.assertIn("person-shaped volume", wide)
+        self.assertIn("black is empty space", wide)
         backdrop = pipeline.structure_pictures(
             ["Depth", "Edges", "Backdrop"],
             backdrop={
@@ -631,7 +632,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 "sceneLine": pipeline.still_scene_line(scene),
             },
         )
-        self.assertIn("Exactly 6 visible people", prompt)
+        self.assertIn("Exactly 6 people are visible", prompt)
         self.assertNotIn(location["promptBlock"], prompt)
         self.assertIn("white-gold", prompt)
         self.assertNotIn("sela", prompt.lower())
@@ -642,6 +643,52 @@ class SpatialPipelineTests(unittest.TestCase):
         empty = next(item for item in self.episode["scenes"] if not item["characterIds"])
         self.assertEqual(pipeline.still_scene_line(empty), empty["imagePrompt"])
         self.assertEqual(pipeline.still_people_line([]), "No people.")
+        solo = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 11)
+        self.assertFalse(
+            pipeline.head_in_view(
+                self.show,
+                self.episode,
+                solo,
+                "sela",
+                float(solo["timeRangeSeconds"][0]),
+            )
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            from PIL import Image
+
+            clothes = Path(temp) / "clothes.png"
+            image = Image.new("RGB", (30, 30), (0, 0, 0))
+            for y in range(30):
+                for x in range(20):
+                    image.putpixel((x, y), (220, 196, 160))
+                for x in range(20, 26):
+                    image.putpixel((x, y), (112, 72, 55))
+            image.save(clothes)
+            solo_line = pipeline.still_people_line(
+                solo["characterIds"],
+                self.show["characters"],
+                clothes=True,
+                clothes_path=clothes,
+                head_visible=False,
+            )
+        self.assertIn("Exactly one person is visible", solo_line)
+        self.assertIn("adult woman", solo_line)
+        self.assertIn("sand-colored wrap with darker sand stains", solo_line)
+        self.assertIn("warm brown skin", solo_line)
+        self.assertIn("picture 2", solo_line)
+        self.assertNotIn("ivory", solo_line.lower())
+        self.assertNotIn("olive", solo_line.lower())
+        self.assertNotIn("collar", solo_line.lower())
+        self.assertNotIn("soot", solo_line.lower())
+        self.assertNotIn("sela", solo_line.lower())
+        self.assertNotIn(
+            "sun-priest plate",
+            pipeline.still_people_line(
+                scene["characterIds"],
+                self.show["characters"],
+                clothes=True,
+            ),
+        )
 
     def test_generation_log_copies_the_prompt_and_attached_images(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
