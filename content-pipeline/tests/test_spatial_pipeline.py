@@ -575,7 +575,7 @@ class SpatialPipelineTests(unittest.TestCase):
         )
         self.assertEqual(
             pipeline.kept_pass_path(dest, "face1"),
-            Path("scene_03_start_face1.png"),
+            Path("inputs") / "scene_03_start" / "face1.png",
         )
         files = [
             {"filename": "reelshort_blockout_00001_.png"},
@@ -643,6 +643,11 @@ class SpatialPipelineTests(unittest.TestCase):
             self.assertTrue(copied.is_file())
             self.assertEqual(copied.read_bytes(), b"depth-bytes")
             self.assertEqual(log["passes"][0]["images"][0]["file"], "blockout_depth.png")
+            self.assertEqual(
+                pipeline.still_log_path(dest),
+                Path(temp) / "inputs" / "scene_02_start" / "log.json",
+            )
+            self.assertFalse((Path(temp) / "scene_02_start_log.json").exists())
 
     def test_still_prompt_names_only_landmarks_this_camera_sees(self) -> None:
         location = self.show["locations"]["sun_well_court"]

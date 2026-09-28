@@ -524,28 +524,32 @@ def output_named(files: list[dict], prefix: str) -> dict:
 
 
 def kept_pass_path(dest: Path, label: str) -> Path:
-    """An earlier Qwen pass, kept beside the still that later passes replace."""
-    return dest.with_name(f"{dest.stem}_{label}{dest.suffix}")
+    """Blockouts stay beside the still. Other passes go in inputs/<stem>/."""
+    if label == "blockout":
+        return dest.with_name(f"{dest.stem}_{label}{dest.suffix}")
+    path = still_inputs_dir(dest) / f"{label}{dest.suffix}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def still_log_path(dest: Path) -> Path:
-    return dest.with_name(f"{dest.stem}_log.json")
+    return still_inputs_dir(dest) / "log.json"
 
 
 def still_inputs_dir(dest: Path) -> Path:
-    return dest.with_name(f"{dest.stem}_inputs")
+    return dest.parent / "inputs" / dest.stem
 
 
 def begin_generation_log(dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    still_log_path(dest).write_text(
-        json.dumps({"still": dest.name, "passes": []}, indent=2) + "\n",
-        encoding="utf-8",
-    )
     inputs = still_inputs_dir(dest)
     if inputs.is_dir():
         shutil.rmtree(inputs)
     inputs.mkdir(parents=True, exist_ok=True)
+    still_log_path(dest).write_text(
+        json.dumps({"still": dest.name, "passes": []}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     print(f"  Log {still_log_path(dest)}", flush=True)
 
 
@@ -1759,7 +1763,7 @@ def render_spatial_still(
         shutil.copy2(dest, blockout)
         print(f"  Kept {blockout}", flush=True)
         stripped = kept_pass_path(dest, "stripped")
-        empty_mask = dest.with_name(f"{dest.stem}_empty.png")
+        empty_mask = kept_pass_path(dest, "empty")
         strip_invented_backdrop(dest, backdrop_path, stripped)
         write_empty_mask(backdrop_path, empty_mask)
         print(f"  Kept {stripped}", flush=True)
