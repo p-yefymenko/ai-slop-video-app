@@ -477,7 +477,7 @@ class SpatialPrevisTests(unittest.TestCase):
             camera,
             shown={
                 "sun_well": 0.9,
-                "throne_dais": 0.1,
+                "throne_dais": 0.57,
                 "anvil_altar": 0.0,
                 "gate_column_l": 0.0,
                 "gate_column_r": 0.0,

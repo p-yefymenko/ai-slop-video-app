@@ -1317,7 +1317,7 @@ def _character_mesh_batch(
 
 
 # Name a landmark when at least this much of its on-screen surface is in front.
-LANDMARK_SHOWN_MIN = 0.4
+LANDMARK_SHOWN_MIN = 0.7
 
 
 def _named_landmark_batches(show: dict, location_id: str):
