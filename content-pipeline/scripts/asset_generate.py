@@ -41,12 +41,13 @@ def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = F
     else:
         key = "locationPlate"
     template = prompts.get(key)
-    if not isinstance(template, str) or "{appearance}" not in template:
-        raise RuntimeError(f"{PROMPTS_PATH} is missing a {key} template with {{appearance}}")
+    token = "{description}" if character else "{appearance}"
+    if not isinstance(template, str) or token not in template:
+        raise RuntimeError(f"{PROMPTS_PATH} is missing a {key} template with {token}")
     text = " ".join(appearance.split())
     if not text:
         raise RuntimeError("appearance is empty")
-    return template.replace("{appearance}", text)
+    return template.replace(token, text)
 
 
 def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:

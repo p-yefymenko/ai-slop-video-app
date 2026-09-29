@@ -14,7 +14,7 @@ Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipelin
 
 | Path | Role |
 | --- | --- |
-| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. |
+| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `description` (body, face, and the one costume) and `stillDescription` (a short still line, about 6 to 14 words, true from every camera: garment starting with "in", neck piece only if it wraps the neck, footwear or "barefoot", skin, hair). |
 | `content-pipeline/prompts.json` | Shared Qwen and LTX prompt templates. Renderer config, not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
@@ -43,7 +43,7 @@ Existing outputs are skipped. One scene is rebuilt with `--force`. After a struc
 
 `content:plates` draws and stops. ComfyUI must be running.
 
-An empty location is one 1024×1024 picture of the place, prompted as a movie set (`output/plates/<show>/<locationId>/plate.png`). A location with people is one isolated object per landmark. A character is one full-body plate in the costume from `wardrobe`. Landmarks that share appearance and size are drawn once.
+An empty location is one 1024×1024 picture of the place, prompted as a movie set (`output/plates/<show>/<locationId>/plate.png`). A location with people is one isolated object per landmark. A character is one full-body plate from `description`. Landmarks that share appearance and size are drawn once.
 
 Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The attached image is a blank canvas the prompt tells the model to ignore.
 
@@ -90,17 +90,23 @@ Guides written for the start frame, and for the end frame when blocking or the c
 
 `content:frames` talks only to the ComfyUI HTTP API. It generates character portraits first, then each scene still.
 
-Portraits use `workflows/qwen_image_edit.json`: same Lightning settings, 768×1360, from `promptBlock` on a blank canvas. They land in `output/frames/<show>/characters/<id>.png`.
+Portraits use `workflows/qwen_image_edit.json`: same Lightning settings, 768×1360, from `description` on a blank canvas. The template keeps a plain shirt and no costume. They land in `output/frames/<show>/characters/<id>.png`.
 
-Scene stills use `workflows/qwen_image_edit_spatial.json` at 768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The shaded clay frame is not an input.
+Scene stills use `workflows/qwen_image_edit_spatial.json` at 768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The shaded clay frame is not an input. CFG 1 has no negative channel, so the still prompt does not use “do not” sentences. ControlNet is not used. Surface normals are written for review and are not sent to Qwen. Clothes and the empty-space plate are never reference latents in the same pass.
 
 Picture order:
 
-- **Shot with a clothes cutout.** Depth, then the clothes cutout, then edges. All three are reference latents on `TextEncodeQwenImageEditPlus`, so garment color is copied and the outlines are kept. The empty-space plate is not attached: it is black where the person stands, and a reference latent would paint that black over the cloth. Wardrobe text is not sent. Qwen cannot bind a name to a body, and color comes from the cutout.
+- **Shot with a clothes cutout.** Depth, then the clothes cutout, then edges. All three are reference latents on `TextEncodeQwenImageEditPlus`, so garment color is copied and the outlines are kept. The empty-space plate is not attached: it is black where the person stands, and a reference latent would paint that black over the cloth.
 - **Shot with people and no clothes cutout.** Depth, pose, edges.
-- **Empty shot.** Depth and edges, plus the empty-space plate. The encoder switches to the local `TextEncodeQwenBackdrop` node so the plate is a fourth picture. The prompt names only the sky, ground, and surround colors actually visible in that plate, and only landmarks whose mark is on screen and not hidden by a person.
+- **Empty shot.** Depth and edges, plus the empty-space plate. The encoder switches to the local `TextEncodeQwenBackdrop` node so the plate is a fourth picture.
 
-The still prompt is `spatialBlockout` in `prompts.json`, filled by `generate_batch.py`. Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/`. The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
+Every shot uses one prompt skeleton, filled by `still_prompt` in `generate_batch.py` and the people builder in `still_people.py`. `spatialBlockout` in `prompts.json` is `{stillPrompt}`. Order: the film-frame line, a legend for each attached picture, one keep sentence (“Keep the shape, position, and occlusion from the pictures, and each person's flat colors, lit by the scene's light.”), the people sentence when someone is visible, the visible landmark appearances, then “Behind and around:” and the sky, ground, and surround this camera shows. An empty slot is left out, including “No people.” The still does not read `scene.imagePrompt`. Character names and ids are not sent to Qwen. The log may keep `characterId`.
+
+The people sentence is built from `stillDescription` and blocking geometry: depth order, screen side, and occlusion. Visible people are counted in a number word. Each visible person is `{position}: {stillDescription}`. Figures behind the nearest person by a depth gap stand in a row, left to right, each with their own line. Each other person is named by screen side; the nearest by camera depth is also in the foreground. A figure whose visible fraction is below the cutoff is partly hidden. `stillDescription` is a short comma-separated phrase, about 6 to 14 words, true from every camera: garment color and clothes type starting with "in", a neck piece only if it wraps the whole neck, footwear or "barefoot", skin tone, hair color and length or style. Damage, eye color, scars, tattoos, birthmarks, and front-only details stay off that line.
+
+A landmark mesh is named when at least 70% of its on-screen surface is the surface this camera sees. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
+
+Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/` (and `_end` when that frame exists). The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
 
 Identity face painting exists in the spatial graph and is off (`FACE_PASS = False`). LTX never receives a character portrait.
 

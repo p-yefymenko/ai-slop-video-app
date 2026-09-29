@@ -11,18 +11,19 @@ alwaysApply: false
 
 export type ShowCharacter = {
   /**
-   * One adult's stable face: age, build, skin, eyes, hair, one distinctive mark.
-   * Rank and role must still read in a packed group and in an eye-filling ECU.
-   * Scene stills attach the PNG and never receive this text.
-   * No wardrobe, pose, expression, action, location, or camera.
+   * One adult for the episode: body, face, and the one costume they wear.
+   * Plates and portraits receive this text. Scene stills do not.
    */
-  promptBlock: string;
+  description: string;
   /**
-   * The one costume this person wears in the episode. The standing mesh is
-   * generated in these clothes. A shot still says what those clothes do
-   * (a hand on the collar, a hem in frame, a glow) in `imagePrompt`.
+   * Short comma-separated still line, about 6 to 14 words, true from every camera.
+   * No leading article and no verb. The still writes "{position}: {stillDescription}".
+   * Include garment color and clothes type starting with "in", a neck piece only if
+   * it wraps the whole neck, footwear or "barefoot", skin tone, hair color and
+   * length or style. Leave out eye color, scars, tattoos, birthmarks, damage,
+   * and anything hair or pose can hide.
    */
-  wardrobe: string;
+  stillDescription: string;
   /**
    * Standing height in meters, and slim / average / broad. The mesh is fitted to this height.
    * Omit to use 1.72m average. This is not the identity portrait.

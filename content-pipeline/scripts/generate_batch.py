@@ -20,6 +20,11 @@ from pathlib import Path
 
 from ffmpeg_tools import concat_videos
 from PIL import Image, ImageChops
+from still_people import (
+    describe_people,
+    gather_visible_people,
+    still_people_line,
+)
 from pipeline_paths import (
     OUTPUT_DIR,
     character_image_path,
@@ -560,6 +565,7 @@ def append_generation_log(
     pass_name: str,
     prompt: str,
     images: list[tuple[str, Path | None]],
+    people: list[dict] | None = None,
 ) -> None:
     log_path = still_log_path(dest)
     if not log_path.is_file():
@@ -577,9 +583,10 @@ def append_generation_log(
         copied = inputs / f"{pass_name}_{re.sub(r'[^a-z0-9]+', '_', role.lower()).strip('_') or 'image'}{source.suffix.lower() or '.png'}"
         shutil.copy2(source, copied)
         recorded.append({"role": role, "source": str(source), "file": copied.name})
-    payload.setdefault("passes", []).append(
-        {"pass": pass_name, "prompt": prompt, "images": recorded}
-    )
+    entry = {"pass": pass_name, "prompt": prompt, "images": recorded}
+    if people:
+        entry["people"] = people
+    payload.setdefault("passes", []).append(entry)
     log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -700,8 +707,10 @@ def load_show(path: Path) -> dict:
             raise SystemExit(f"characters[{cid!r}] must be an object")
         cleaned_chars[str(cid)] = {
             "id": str(cid),
-            "promptBlock": require_text(character, "promptBlock", f"characters[{cid!r}]"),
-            "wardrobe": require_text(character, "wardrobe", f"characters[{cid!r}]"),
+            "description": require_text(character, "description", f"characters[{cid!r}]"),
+            "stillDescription": require_text(
+                character, "stillDescription", f"characters[{cid!r}]"
+            ),
         }
         if isinstance(character.get("proxy"), dict):
             cleaned_chars[str(cid)]["proxy"] = character["proxy"]
@@ -1208,159 +1217,6 @@ def stage_combined_mask(group: list[dict], label: str) -> str:
         destination.unlink(missing_ok=True)
 
 
-_COLOR_WORDS = (
-    "sky-blue",
-    "ivory",
-    "charcoal",
-    "black",
-    "white",
-    "blue",
-    "gold",
-    "brown",
-    "tan",
-    "sand",
-    "gray",
-    "grey",
-    "red",
-    "green",
-    "silver",
-    "navy",
-)
-_HEAD_WORDS = ("collar", "gorget", "necklace", "crown", "hood", "circlet", "helm")
-
-
-def _adult_kind(prompt_block: str) -> str:
-    lowered = prompt_block.lower()
-    if lowered.startswith("adult woman"):
-        return "an adult woman"
-    if lowered.startswith("adult man"):
-        return "an adult man"
-    return "an adult"
-
-
-def _color_name(rgb: tuple[int, int, int]) -> str:
-    """A coarse garment name. The cutout's own pixels, not the script's color word."""
-    red, green, blue = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
-    peak = max(red, green, blue)
-    floor = min(red, green, blue)
-    if peak < 48:
-        return "black"
-    if peak - floor < 22:
-        if peak > 200:
-            return "white"
-        if peak > 140:
-            return "gray"
-        return "charcoal"
-    if blue > red and blue > green:
-        return "blue" if peak > 120 else "navy"
-    if red >= green >= blue and red - blue > 20:
-        if peak > 185:
-            return "sand"
-        if peak > 140:
-            return "tan"
-        return "brown"
-    if red > green and red - green > 40:
-        return "red"
-    return "sand"
-
-
-def cutout_color_names(path: Path | None) -> tuple[str, str]:
-    """Garment and skin names from the cutout. Skin is a darker warm region, not a stain."""
-    if path is None or not path.is_file():
-        return "", ""
-    import numpy as np
-
-    image = np.asarray(Image.open(path).convert("RGB"))
-    covered = image.max(axis=-1) > 8
-    total = int(covered.sum())
-    if total < 20:
-        return "", ""
-    keys = (
-        image[..., 0].astype(np.int32) // 16 * 256
-        + image[..., 1].astype(np.int32) // 16 * 16
-        + image[..., 2].astype(np.int32) // 16
-    )
-    values, counts = np.unique(keys[covered], return_counts=True)
-    order = np.argsort(counts)[::-1]
-    regions: list[tuple[int, int, int]] = []
-    for index in order:
-        if int(counts[index]) < total * 0.02:
-            break
-        key = int(values[index])
-        median = np.median(image[covered & (keys == key)], axis=0)
-        regions.append((int(median[0]), int(median[1]), int(median[2])))
-    if not regions:
-        return "", ""
-    garment = _color_name(regions[0])
-    garment_peak = max(regions[0])
-    skin = ""
-    for red, green, blue in regions[1:]:
-        peak = max(red, green, blue)
-        if not (red >= green >= blue and red - blue > 25):
-            continue
-        if peak > garment_peak - 30:
-            continue
-        skin = "warm brown"
-        break
-    return garment, skin
-
-
-def cutout_color_name(path: Path | None) -> str:
-    """Largest flat color in the clothes cutout, ignoring the black background."""
-    return cutout_color_names(path)[0]
-
-
-def _head_item(item: str) -> bool:
-    lowered = item.lower()
-    return any(word in lowered for word in _HEAD_WORDS)
-
-
-def _garment_clause(item: str, color_name: str) -> str:
-    text = re.sub(r"^(?:a|an)\s+", "", item.strip(), flags=re.IGNORECASE)
-    stained = re.search(r"\bstained\b", text, flags=re.IGNORECASE) is not None
-    torn = re.search(r"\btorn\b", text, flags=re.IGNORECASE) is not None
-    text = re.sub(r"\bsoot-stained\b", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bstained\b", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\btorn\b", " ", text, flags=re.IGNORECASE)
-    for word in _COLOR_WORDS:
-        text = re.sub(rf"\b{re.escape(word)}\b", " ", text, flags=re.IGNORECASE)
-    noun = re.sub(r"\s+", " ", text).strip(" ,-")
-    if stained and color_name:
-        noun_bits = [f"{color_name}-colored"]
-        if torn:
-            noun_bits.append("torn")
-        if noun:
-            noun_bits.append(noun)
-        return f"{' '.join(noun_bits)} with darker {color_name} stains"
-    bits = [f"{color_name}-colored"] if color_name else []
-    if torn:
-        bits.append("torn")
-    if noun:
-        bits.append(noun)
-    return " ".join(bits)
-
-
-def visible_wardrobe(wardrobe: str, color_name: str, *, head_visible: bool) -> str:
-    """The garment in frame. Neck pieces drop when the head is out. Color comes from the cutout."""
-    items = [item.strip() for item in re.split(r"\s+and\s+", wardrobe.strip().rstrip(".")) if item.strip()]
-    kept: list[str] = []
-    recolored = False
-    for item in items:
-        if not head_visible and _head_item(item):
-            continue
-        if not recolored and not _head_item(item):
-            kept.append(_garment_clause(item, color_name))
-            recolored = True
-            continue
-        kept.append(re.sub(r"^(?:a|an)\s+", "", item, flags=re.IGNORECASE))
-    if not kept:
-        return f"a {color_name}-colored garment" if color_name else ""
-    phrase = kept[0]
-    for extra in kept[1:]:
-        phrase = f"{phrase} and a {extra}"
-    return f"a {phrase}"
-
-
 def head_in_view(show: dict, episode: dict, scene: dict, character_id: str, time_seconds: float) -> bool:
     """True when this camera can see the top of that person."""
     from spatial_previs import camera_at, episode_character_state, point_in_view
@@ -1376,46 +1232,6 @@ def head_in_view(show: dict, episode: dict, scene: dict, character_id: str, time
         height = float(proxy["heightMeters"])
     head = (float(position[0]), float(position[1]), height * 0.9)
     return point_in_view(head, camera_at(scene, time_seconds))
-
-
-def _people_count(count: int) -> str:
-    if count == 1:
-        return "Exactly one person is visible."
-    return f"Exactly {count} people are visible."
-
-
-def still_people_line(
-    character_ids: list[str],
-    characters: dict | None = None,
-    *,
-    clothes: bool = False,
-    clothes_path: Path | None = None,
-    head_visible: bool = True,
-) -> str:
-    """Count the people. None omits the slot. One person names the garment from the cutout."""
-    if not character_ids:
-        return ""
-    count = _people_count(len(character_ids))
-    if len(character_ids) != 1 or not characters:
-        return count
-    character = characters.get(character_ids[0])
-    if not isinstance(character, dict):
-        return count
-    kind = _adult_kind(str(character.get("promptBlock") or ""))
-    if not clothes:
-        return f"{count[:-1]}: {kind}."
-    color_name, skin_name = cutout_color_names(clothes_path)
-    garment = visible_wardrobe(
-        str(character.get("wardrobe") or ""),
-        color_name,
-        head_visible=head_visible,
-    )
-    worn = f" in {garment}" if garment else ""
-    skin = f" and {skin_name} skin" if skin_name else ""
-    return (
-        f"{count[:-1]}: {kind}{worn}{skin}, "
-        "matching the colors in picture 2, with real cloth and skin texture."
-    )
 
 
 def still_prompt(
@@ -1434,7 +1250,7 @@ def still_prompt(
     parts = [
         "Photorealistic vertical 9:16 film frame.",
         structure_pictures(pictures, people_count=people_count),
-        "Keep the shape, position, and occlusion from the pictures.",
+        "Keep the shape, position, and occlusion from the pictures, and each person's flat colors, lit by the scene's light.",
     ]
     if people:
         parts.append(people.rstrip())
@@ -1889,26 +1705,22 @@ def render_spatial_still(
     landmarks = visible_landmark_line(location, camera, people_path, shown)
     setting = visible_setting_line(location, backdrop_path, landmarks.lower())
     legend = titles + (["Backdrop"] if attach_backdrop else [])
+    people_entries = (
+        gather_visible_people(show, episode, scene, time_seconds)
+        if episode is not None and "Clothes" in titles
+        else []
+    )
+    people_sentence, people_log = describe_people(people_entries)
     blockout_prompt = show_prompt(
         show,
         "spatialBlockout",
         {
             "stillPrompt": still_prompt(
                 legend,
-                people=still_people_line(
-                    character_ids,
-                    show["characters"],
-                    clothes="Clothes" in titles,
-                    clothes_path=people_path,
-                    head_visible=(
-                        head_in_view(show, episode, scene, character_ids[0], time_seconds)
-                        if episode is not None and len(character_ids) == 1
-                        else True
-                    ),
-                ),
+                people=people_sentence,
                 landmarks=landmarks,
                 setting=setting,
-                people_count=len(character_ids),
+                people_count=len(people_entries) if "Clothes" in titles else None,
             ),
         },
     )
@@ -1942,7 +1754,7 @@ def render_spatial_still(
     logged = [(title, path) for path, title in chosen]
     if attach_backdrop:
         logged.append(("Backdrop", backdrop_path))
-    append_generation_log(dest, "blockout", blockout_prompt, logged)
+    append_generation_log(dest, "blockout", blockout_prompt, logged, people_log)
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")
@@ -2017,7 +1829,7 @@ def generate_show(
                 show,
                 "characterImage",
                 {
-                    "characterPromptBlock": character["promptBlock"],
+                    "description": character["description"],
                 },
             )
             run_qwen_image(

@@ -19,16 +19,18 @@ export type CharacterProxy = {
 
 export type ShowCharacter = {
   /**
-   * Qwen identity source only; scene stills attach its PNG and never receive this text.
-   * One adult's stable physical identity: age, build, skin, face, eyes, distinctive
-   * feature, hair. No wardrobe, pose, expression, action, location, or camera.
+   * One adult for the episode: body, face, and the one costume they wear.
+   * Plates and portraits receive this text. Scene stills do not.
    */
-  promptBlock: string;
+  description: string;
   /**
-   * Clothes the standing mesh is generated wearing. One costume for the episode.
-   * Scene `imagePrompt` still says what that shot does with those clothes.
+   * Short comma-separated still line, about 6 to 14 words, true from every
+   * camera. No leading article and no verb. Garment color and clothes type
+   * starting with "in", a neck piece only if it wraps the whole neck, footwear
+   * or "barefoot", skin tone, hair color and length or style. No eye color,
+   * scars, tattoos, birthmarks, damage, or front-only details.
    */
-  wardrobe: string;
+  stillDescription: string;
   /** Clay mannequin proportions. Identity is still the portrait PNG. */
   proxy?: CharacterProxy;
 };

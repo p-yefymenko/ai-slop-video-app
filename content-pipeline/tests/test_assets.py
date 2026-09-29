@@ -460,8 +460,8 @@ class AssetTests(unittest.TestCase):
         show = self._show()
         show["characters"] = {
             "ada": {
-                "promptBlock": "Adult woman, black hair.",
-                "wardrobe": "a soot-stained ivory wrap and a plain iron bridal collar",
+                "description": "Adult woman, black hair. a soot-stained ivory wrap and a plain iron bridal collar",
+                "stillDescription": "in a sand wrap, olive skin, long black hair, barefoot",
                 "proxy": {"heightMeters": 1.6, "build": "slim"},
             }
         }
@@ -529,10 +529,10 @@ class AssetTests(unittest.TestCase):
         assert kept is not None
         np.testing.assert_allclose(kept, painted_colors)
         bare = self._show()
-        bare["characters"] = {"ada": {"promptBlock": "Adult woman, black hair."}}
-        with self.assertRaises(RuntimeError) as missing_wardrobe:
+        bare["characters"] = {"ada": {"stillDescription": "in a wrap, olive skin, black hair, barefoot"}}
+        with self.assertRaises(RuntimeError) as missing_description:
             self._resolver(CountingGenerator(self.cube)).resolve_show(bare)
-        self.assertIn("wardrobe", str(missing_wardrobe.exception))
+        self.assertIn("description", str(missing_description.exception))
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)

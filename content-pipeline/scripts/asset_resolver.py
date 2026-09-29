@@ -5,7 +5,7 @@ A location with people is one plate and one mesh per landmark, fitted to the
 size written on that landmark. Landmarks with the same appearance and size
 share that picture and mesh, then each one is placed at its own position.
 Characters stay out of those meshes. Each character is their own plate and
-mesh, wearing the costume in `wardrobe`, fitted to their standing height.
+mesh, wearing the costume in `description`, fitted to their standing height.
 Character meshes use Pixal3D. Location and landmark meshes use TRELLIS.2.
 """
 
@@ -500,14 +500,12 @@ def collect_character_requests(show: dict) -> list[AssetRequest]:
     for character_id, character in (show.get("characters") or {}).items():
         if not isinstance(character, dict):
             continue
-        identity = _appearance(character.get("promptBlock"))
-        wardrobe = _appearance(character.get("wardrobe"))
-        if not identity or not wardrobe:
+        appearance = _appearance(character.get("description"))
+        if not appearance:
             raise RuntimeError(
-                f"character:{character_id} needs promptBlock and wardrobe. "
-                "Wardrobe is the costume the standing mesh is generated wearing."
+                f"character:{character_id} needs description. "
+                "That text is the body and the costume the standing mesh is generated wearing."
             )
-        appearance = f"{identity} Wearing {wardrobe}."
         height = 1.72
         proxy = character.get("proxy") or {}
         try:

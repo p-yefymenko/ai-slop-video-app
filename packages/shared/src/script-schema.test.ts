@@ -18,8 +18,9 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     title: "Demo",
     characters: {
       ada: {
-        promptBlock: "Adult woman, 30, average build, brown eyes, black hair.",
-        wardrobe: "a plain fitted dress",
+        description:
+          "Adult woman, 30, average build, brown eyes, black hair. a plain fitted dress",
+        stillDescription: "in a plain dress, brown skin, black hair, barefoot",
       },
     },
     locations: {
@@ -205,6 +206,17 @@ test("rejects a prefab id on a landmark", () => {
   (show.locations.room.spatial.landmarks.bench as { prefabId?: string }).prefabId = "blocks/chair";
   const report = messages(show);
   assert.match(report, /prefabId/);
+});
+
+test("rejects a character missing description or stillDescription", () => {
+  const show = minimalShow();
+  delete (show.characters.ada as { description?: string }).description;
+  const missingDescription = messages(show);
+  assert.match(missingDescription, /description is required/);
+  const again = minimalShow();
+  delete (again.characters.ada as { stillDescription?: string }).stillDescription;
+  const missingStill = messages(again);
+  assert.match(missingStill, /stillDescription is required/);
 });
 
 test("rejects a show id that does not match the file", () => {

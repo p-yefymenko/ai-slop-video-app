@@ -315,15 +315,15 @@ def _landmark_aliases(landmark_id: str) -> list[str]:
     return list(dict.fromkeys(alias for alias in aliases if alias))
 
 
+def plate_clause(text: str) -> str:
+    """Drop a trailing plate instruction such as 'a single object' or 'no walls'."""
+    return re.split(r",\s*(?:a single |no )\b", text.strip(), maxsplit=1, flags=re.I)[0].strip(" .")
+
+
 def _still_landmark_phrase(landmark_id: str, landmark: dict) -> str:
     appearance = str(landmark.get("appearance") or "").strip()
     if appearance:
-        phrase = re.split(
-            r",\s*(?:a single |no )\b",
-            appearance,
-            maxsplit=1,
-            flags=re.I,
-        )[0].strip(" .")
+        phrase = plate_clause(appearance)
         if phrase:
             return phrase + "."
     return f"The {str(landmark_id).replace('_', ' ')} is in frame."
@@ -412,7 +412,7 @@ def visible_backdrop_specs(backdrop: dict, path: Path | None) -> list[dict]:
         ("ground", "groundColor", BACKDROP_GROUND),
         ("surround", "surroundColor", BACKDROP_SURROUND),
     ):
-        text = str(backdrop.get(field) or "").strip()
+        text = plate_clause(str(backdrop.get(field) or ""))
         if not text:
             continue
         authored = backdrop.get(color_key)
