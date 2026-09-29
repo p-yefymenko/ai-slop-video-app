@@ -466,6 +466,50 @@ class SpatialPrevisTests(unittest.TestCase):
             line = visible_place_line(location, camera, people_path=path)
         self.assertNotIn("white-gold", line.lower())
 
+    def test_place_line_omits_a_landmark_that_is_mostly_hidden(self) -> None:
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 5)
+        camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
+        probes = visible_place_line(location, camera)
+        self.assertIn("worn steps", probes.lower())
+        shown = visible_place_line(
+            location,
+            camera,
+            shown={
+                "sun_well": 0.9,
+                "throne_dais": 0.1,
+                "anvil_altar": 0.0,
+                "gate_column_l": 0.0,
+                "gate_column_r": 0.0,
+            },
+        )
+        self.assertIn("white-gold", shown.lower())
+        self.assertNotIn("worn steps", shown.lower())
+        self.assertNotIn("dais", shown.lower())
+
+    def test_shown_fraction_is_the_front_surface_of_that_object(self) -> None:
+        from spatial_previs import _batch_from_triangles, _quad, _raster_clay, shown_fraction
+
+        camera = {
+            "position": [0.0, -4.0, 1.2],
+            "lookAt": [0.0, 2.0, 0.5],
+            "verticalFovDegrees": 40.0,
+        }
+        front = _batch_from_triangles(
+            _quad((-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 0.0, 1.6), (-1.0, 0.0, 1.6)),
+            176,
+        )
+        back = _batch_from_triangles(
+            _quad((-0.6, 2.0, 0.2), (0.6, 2.0, 0.2), (0.6, 2.0, 1.2), (-0.6, 2.0, 1.2)),
+            180,
+        )
+        assert front is not None and back is not None
+        _image, scene_z = _raster_clay([front, back], camera)
+        _image, front_z = _raster_clay([front], camera)
+        _image, back_z = _raster_clay([back], camera)
+        self.assertGreater(shown_fraction(front_z, scene_z), 0.9)
+        self.assertLess(shown_fraction(back_z, scene_z), 0.15)
+
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors
 

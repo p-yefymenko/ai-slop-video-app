@@ -38,6 +38,7 @@ from spatial_previs import (
     camera_at,
     compile_spatial_video_prompt,
     generate_episode_previs,
+    landmark_shown_fractions,
     scene_has_spatial_change,
     validate_spatial_episode,
     visible_backdrop_specs,
@@ -1942,6 +1943,7 @@ def render_spatial_still(
         camera_at(scene, time_seconds),
         backdrop_path,
         clothes_path if present(clothes_path) else None,
+        landmark_shown_fractions(show, episode, scene, time_seconds) if episode is not None else None,
     )
     if place:
         if len(character_ids) == 1:

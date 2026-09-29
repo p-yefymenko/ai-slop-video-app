@@ -334,19 +334,30 @@ def visible_place_line(
     camera: dict,
     backdrop_path: Path | None = None,
     people_path: Path | None = None,
+    shown: dict[str, float] | None = None,
 ) -> str:
-    """Name only landmarks and empty-space regions this camera's previs actually shows."""
+    """Name only landmarks and empty-space regions this camera's previs actually shows.
+
+    ``shown`` is the share of each landmark mesh that is the front surface.
+    A mesh mostly hidden behind a person or another object is left out. A
+    landmark with no mesh still uses its on-screen mark.
+    """
     bits: list[str] = []
     covered = ""
     spatial = location.get("spatial") or {}
     for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
         if not isinstance(landmark, dict):
             continue
-        probes = _landmark_probes(landmark, camera)
-        if not probes:
-            continue
-        if all(_people_cover(sample, camera, people_path) for sample in probes):
-            continue
+        fraction = None if shown is None else shown.get(str(landmark_id))
+        if fraction is not None:
+            if fraction < LANDMARK_SHOWN_MIN:
+                continue
+        else:
+            probes = _landmark_probes(landmark, camera)
+            if not probes:
+                continue
+            if all(_people_cover(sample, camera, people_path) for sample in probes):
+                continue
         if any(alias.lower() in covered for alias in _landmark_aliases(str(landmark_id))):
             continue
         phrase = _still_landmark_phrase(str(landmark_id), landmark)
@@ -1277,7 +1288,11 @@ def _character_mesh_batch(
     )
 
 
-def _landmark_batches(show: dict, location_id: str):
+# Name a landmark when at least this much of its on-screen surface is in front.
+LANDMARK_SHOWN_MIN = 0.4
+
+
+def _named_landmark_batches(show: dict, location_id: str):
     """Landmark meshes placed at their script positions. Missing files are skipped."""
     from clay_gpu import ClayBatch
     from pipeline_paths import location_dir
@@ -1293,9 +1308,48 @@ def _landmark_batches(show: dict, location_id: str):
             continue
         vertices, faces, key = _cached_mesh(glb)
         batches.append(
-            ClayBatch(vertices, faces, 176, offset=vec(landmark["position"]), key=key)
+            (
+                str(landmark_id),
+                ClayBatch(vertices, faces, 176, offset=vec(landmark["position"]), key=key),
+            )
         )
     return batches
+
+
+def _landmark_batches(show: dict, location_id: str):
+    return [batch for _landmark_id, batch in _named_landmark_batches(show, location_id)]
+
+
+def shown_fraction(own: np.ndarray, scene: np.ndarray) -> float:
+    """Share of this object's on-screen surface that is the front surface."""
+    covered = np.isfinite(own)
+    total = int(covered.sum())
+    if total == 0:
+        return 0.0
+    front = scene[covered]
+    surface = own[covered]
+    slack = np.maximum(np.float32(0.05), np.abs(surface) * np.float32(0.02))
+    visible = np.isfinite(front) & (np.abs(front - surface) <= slack)
+    return float(np.count_nonzero(visible)) / float(total)
+
+
+def landmark_shown_fractions(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> dict[str, float]:
+    """How much of each landmark mesh this camera actually sees."""
+    camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
+    named = _named_landmark_batches(show, scene["locationId"])
+    if not named:
+        return {}
+    _image, scene_z = _raster_clay(batches, camera)
+    fractions: dict[str, float] = {}
+    for landmark_id, batch in named:
+        _image, own_z = _raster_clay([batch], camera)
+        fractions[landmark_id] = shown_fraction(own_z, scene_z)
+    return fractions
 
 
 def _batch_from_triangles(triangles: list[tuple[Vec3, Vec3, Vec3]], base: int):
