@@ -249,10 +249,9 @@ def set_landmark_position(
     landmarks = data["locations"][location_id]["spatial"]["landmarks"]
     if landmark_id not in landmarks or not isinstance(landmarks[landmark_id], dict):
         raise KeyError(f"{location_id}.{landmark_id}")
-    literal = json.dumps(
-        {"position": [round(float(value), 2) for value in position]},
-        separators=(", ", ": "),
-    )
+    landmark = dict(landmarks[landmark_id])
+    landmark["position"] = [round(float(value), 2) for value in position]
+    literal = json.dumps(landmark, separators=(", ", ": "))
     start = _landmark_value_start(text, location_id, landmark_id)
     _value, end = json.JSONDecoder().raw_decode(text, start)
     return text[:start] + literal + text[end:]

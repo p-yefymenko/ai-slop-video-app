@@ -47,8 +47,14 @@
       "spatial": {
         "sizeMeters": [200, 240, 140],
         "landmarks": {
-          "citadel_core": {"position": [2.52, 1.74, 87.35]},
-          "chain_pylon": {"position": [42.5, 46.17, 9.57]}
+          "citadel_core": {
+            "position": [2.52, 1.74, 87.35],
+            "appearance": "A hanging citadel of black iron."
+          },
+          "chain_pylon": {
+            "position": [42.5, 46.17, 9.57],
+            "appearance": "A chain pylon of black iron."
+          }
         }
       }
     },
@@ -313,7 +319,7 @@
           "locationId": "sky_forge_exterior",
           "storyBeat": "The hanging citadel and burning sky establish a kingdom that can be dropped.",
           "characterIds": [],
-          "imagePrompt": "No people. The citadel hangs small inside a vast storm of ash and molten rivers.",
+          "imagePrompt": "The citadel hangs in a storm of ash and molten rivers.",
           "timeRangeSeconds": [0, 2],
           "camera": {
             "keyframes": [

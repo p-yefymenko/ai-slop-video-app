@@ -48,9 +48,11 @@ export type LocationLandmark = {
    */
   size?: Vec3;
   /**
-   * What this one object looks like. Qwen draws it. TRELLIS.2 turns that picture
+   * What this one object looks like.
+   * On a location with people, Qwen draws it and TRELLIS.2 turns that picture
    * into the mesh. No people, camera, or surrounding place.
-   * Required on a location that has people. Omitted on an empty location.
+   * On an empty location it is only words for the still. That landmark stays a
+   * point in the one location mesh.
    */
   appearance?: string;
 };

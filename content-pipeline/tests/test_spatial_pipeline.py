@@ -14,7 +14,9 @@ import generate_batch as pipeline  # noqa: E402
 from spatial_previs import (  # noqa: E402
     camera_at,
     spatial_target_screen_position,
+    visible_landmark_line,
     visible_place_line,
+    visible_setting_line,
 )
 
 SHOW_JSON = (
@@ -290,27 +292,23 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("Keep those outlines", text)
         self.assertNotIn("Copy those colors", text)
         self.assertNotIn("It contains no people", text)
-        empty_edges = pipeline.structure_pictures(["Depth", "Edges"], people=False)
-        self.assertIn("edges of the place only", empty_edges)
-        self.assertIn("It contains no people", empty_edges)
+        empty_edges = pipeline.structure_pictures(["Depth", "Edges"])
+        self.assertEqual(empty_edges, pipeline.structure_pictures(["Depth", "Edges"]))
+        self.assertIn("Picture 2 is outlines", empty_edges)
+        self.assertNotIn("It contains no people", empty_edges)
+        self.assertNotIn("Black is an asset", empty_edges)
+        self.assertNotIn("Do not", empty_edges)
         pose = pipeline.structure_pictures(["Depth", "Pose", "Edges"])
         self.assertIn("Picture 2 is an OpenPose skeleton", pose)
-        wide = pipeline.structure_pictures(["Depth", "Edges"], people=True)
-        self.assertIn("black is empty space", wide)
-        backdrop = pipeline.structure_pictures(
-            ["Depth", "Edges", "Backdrop"],
-            backdrop={
-                "sky": "storm sky",
-                "skyColor": [36, 42, 58],
-                "ground": "iron floor",
-                "groundColor": [48, 44, 40],
-                "surround": "open ocean",
-                "surroundColor": [16, 42, 62],
-            },
+        self.assertNotIn("Do not", pose)
+        backdrop = pipeline.structure_pictures(["Depth", "Edges", "Backdrop"])
+        self.assertIn(
+            "Picture 3 is flat sky, ground, and surround colors; the black shapes are the structures.",
+            backdrop,
         )
-        self.assertIn("Picture 3 is the empty space from this exact camera", backdrop)
-        self.assertIn("36 42 58 is the sky: storm sky", backdrop)
-        self.assertIn("16 42 62 is the surroundings beyond the set: open ocean", backdrop)
+        self.assertNotIn("36 42 58", backdrop)
+        self.assertNotIn("Black is an asset", backdrop)
+        self.assertNotIn("Do not", backdrop)
 
     def test_people_shots_pass_clothes_even_when_they_fill_the_frame(self) -> None:
         from PIL import Image
@@ -380,8 +378,10 @@ class SpatialPipelineTests(unittest.TestCase):
 
     def test_empty_prompt_lets_the_depth_set_the_camera(self) -> None:
         text = pipeline.structure_pictures(["Depth", "Edges"])
-        self.assertTrue(text.startswith("Picture 1 is a depth map of this exact camera"))
+        self.assertTrue(text.startswith("Picture 1 is depth: brighter is closer, black is empty space."))
+        self.assertIn("Picture 2 is outlines", text)
         self.assertNotIn("OpenPose", text)
+        self.assertNotIn("Do not", text)
 
     def test_spatial_still_generates_from_the_depth(self) -> None:
         graph = pipeline.clone_workflow(self.qwen_spatial)
@@ -566,9 +566,13 @@ class SpatialPipelineTests(unittest.TestCase):
             self.assertEqual(mask.getpixel((3, 0)), 0)
 
     def test_backdrop_pass_numbers_the_plate_as_picture_two(self) -> None:
-        court = self.show["locations"]["sun_well_court"]["backdrop"]
-        text = pipeline.structure_pictures(["Backdrop"], backdrop=court, start=2)
-        self.assertTrue(text.startswith("Picture 2 is the empty space"))
+        text = pipeline.structure_pictures(["Backdrop"], start=2)
+        self.assertTrue(
+            text.startswith(
+                "Picture 2 is flat sky, ground, and surround colors; the black shapes are the structures."
+            )
+        )
+        self.assertNotIn("Do not", text)
         self.assertIn("spatialBackdrop", pipeline.PROMPT_KEYS)
 
     def test_backdrop_sentence_omits_regions_this_camera_does_not_show(self) -> None:
@@ -578,10 +582,11 @@ class SpatialPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "backdrop.png"
             Image.new("RGB", (64, 64), tuple(court["skyColor"])).save(path)
-            text = pipeline.structure_pictures(
-                ["Backdrop"],
-                backdrop=court,
-                backdrop_path=path,
+            close = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15)
+            text = visible_place_line(
+                self.show["locations"]["sun_well_court"],
+                camera_at(close, float(close["timeRangeSeconds"][0])),
+                path,
             )
         self.assertIn("storm sky", text.lower())
         self.assertNotIn("iron floor", text.lower())
@@ -617,20 +622,14 @@ class SpatialPipelineTests(unittest.TestCase):
     def test_people_blockout_does_not_name_anyone_or_their_clothes(self) -> None:
         location = self.show["locations"]["sun_well_court"]
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 6)
-        prompt = pipeline.show_prompt(
-            self.show,
-            "spatialBlockout",
-            {
-                "structurePictures": pipeline.structure_pictures(
-                    ["Depth", "Clothes", "Edges"]
-                ),
-                "peopleLine": pipeline.still_people_line(scene["characterIds"]),
-                "locationPromptBlock": visible_place_line(
-                    location,
-                    camera_at(scene, float(scene["timeRangeSeconds"][0])),
-                ),
-                "sceneLine": pipeline.still_scene_line(scene),
-            },
+        prompt = pipeline.still_prompt(
+            ["Depth", "Clothes", "Edges"],
+            people=pipeline.still_people_line(scene["characterIds"]),
+            landmarks=visible_place_line(
+                location,
+                camera_at(scene, float(scene["timeRangeSeconds"][0])),
+            ),
+            people_count=len(scene["characterIds"]),
         )
         self.assertIn("Exactly 6 people are visible", prompt)
         self.assertNotIn(location["promptBlock"], prompt)
@@ -641,8 +640,9 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("sun-priest plate", prompt)
         self.assertNotIn("It contains no people", prompt)
         empty = next(item for item in self.episode["scenes"] if not item["characterIds"])
-        self.assertEqual(pipeline.still_scene_line(empty), empty["imagePrompt"])
-        self.assertEqual(pipeline.still_people_line([]), "No people.")
+        self.assertEqual(pipeline.still_people_line([]), "")
+        self.assertNotIn("No people", prompt)
+        self.assertNotIn(empty["imagePrompt"], prompt)
         solo = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 11)
         self.assertFalse(
             pipeline.head_in_view(
@@ -689,6 +689,67 @@ class SpatialPipelineTests(unittest.TestCase):
                 clothes=True,
             ),
         )
+
+    def test_every_shot_uses_the_same_prompt_skeleton(self) -> None:
+        from PIL import Image
+
+        keep = "Keep the shape, position, and occlusion from the pictures."
+        prompts = []
+        cases = (
+            (1, ["Depth", "Edges", "Backdrop"]),
+            (5, ["Depth", "Clothes", "Edges"]),
+            (11, ["Depth", "Clothes", "Edges"]),
+        )
+        for number, pictures in cases:
+            scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == number)
+            location = self.show["locations"][scene["locationId"]]
+            camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
+            with tempfile.TemporaryDirectory() as temp:
+                plate = Path(temp) / "backdrop.png"
+                image = Image.new("RGB", (90, 90), tuple(location["backdrop"]["skyColor"]))
+                ground = tuple(location["backdrop"]["groundColor"])
+                surround = tuple(location["backdrop"]["surroundColor"])
+                for y in range(30, 60):
+                    for x in range(90):
+                        image.putpixel((x, y), ground)
+                for y in range(60, 90):
+                    for x in range(90):
+                        image.putpixel((x, y), surround)
+                image.save(plate)
+                landmarks = visible_landmark_line(location, camera)
+                setting = visible_setting_line(location, plate, landmarks.lower())
+            prompt = pipeline.still_prompt(
+                pictures,
+                people=pipeline.still_people_line(
+                    scene["characterIds"],
+                    self.show["characters"],
+                    clothes="Clothes" in pictures,
+                ),
+                landmarks=landmarks,
+                setting=setting,
+                people_count=len(scene["characterIds"]),
+            )
+            prompts.append(prompt)
+            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame. Picture 1 is depth:"))
+            self.assertEqual(prompt.count("Picture "), len(pictures))
+            self.assertIn(keep, prompt)
+            self.assertNotIn("Do not", prompt)
+            self.assertNotIn("No people", prompt)
+            self.assertNotIn("Setting:", prompt)
+            self.assertNotIn(scene.get("imagePrompt") or "___missing___", prompt)
+            if setting:
+                self.assertLess(prompt.index(keep), prompt.index("Behind and around:"))
+            if landmarks:
+                self.assertLess(prompt.index(keep), prompt.index(landmarks[:24]))
+        empty, wide, solo = prompts
+        self.assertIn("black shapes are the structures", empty)
+        self.assertNotIn("Exactly", empty)
+        self.assertIn("Exactly 6 people are visible", wide)
+        self.assertNotIn("black shapes are the structures", wide)
+        self.assertIn("Picture 2 is these people with flat color fills", wide)
+        self.assertIn("Exactly one person is visible", solo)
+        self.assertIn("Picture 2 is the person with flat color fills", solo)
+        self.assertNotIn("black shapes are the structures", solo)
 
     def test_generation_log_copies_the_prompt_and_attached_images(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

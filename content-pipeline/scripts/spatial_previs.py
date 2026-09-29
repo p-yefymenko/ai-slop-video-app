@@ -329,6 +329,63 @@ def _still_landmark_phrase(landmark_id: str, landmark: dict) -> str:
     return f"The {str(landmark_id).replace('_', ' ')} is in frame."
 
 
+def _landmark_is_shown(
+    landmark_id: str,
+    landmark: dict,
+    camera: dict,
+    people_path: Path | None,
+    shown: dict[str, float] | None,
+    covered: str,
+) -> bool:
+    fraction = None if shown is None else shown.get(str(landmark_id))
+    if fraction is not None:
+        if fraction < LANDMARK_SHOWN_MIN:
+            return False
+    else:
+        probes = _landmark_probes(landmark, camera)
+        if not probes:
+            return False
+        if all(_people_cover(sample, camera, people_path) for sample in probes):
+            return False
+    return not any(alias.lower() in covered for alias in _landmark_aliases(str(landmark_id)))
+
+
+def visible_landmark_line(
+    location: dict,
+    camera: dict,
+    people_path: Path | None = None,
+    shown: dict[str, float] | None = None,
+) -> str:
+    """Appearances of landmarks this camera can see. The same rule for every shot."""
+    bits: list[str] = []
+    covered = ""
+    spatial = location.get("spatial") or {}
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if not isinstance(landmark, dict):
+            continue
+        if not _landmark_is_shown(str(landmark_id), landmark, camera, people_path, shown, covered):
+            continue
+        bits.append(_still_landmark_phrase(str(landmark_id), landmark))
+        covered = " ".join(bits).lower()
+    return " ".join(bits)
+
+
+def visible_setting_line(
+    location: dict,
+    backdrop_path: Path | None = None,
+    covered: str = "",
+) -> str:
+    """Sky, ground, and surround that this camera's empty-space plate actually shows."""
+    bits: list[str] = []
+    for spec in visible_backdrop_specs(location.get("backdrop") or {}, backdrop_path):
+        sentence = spec["text"][0].upper() + spec["text"][1:] + "."
+        if sentence.lower().rstrip(".") in covered:
+            continue
+        bits.append(sentence)
+        covered = f"{covered} {sentence}".lower()
+    return " ".join(bits)
+
+
 def visible_place_line(
     location: dict,
     camera: dict,
@@ -336,39 +393,10 @@ def visible_place_line(
     people_path: Path | None = None,
     shown: dict[str, float] | None = None,
 ) -> str:
-    """Name only landmarks and empty-space regions this camera's previs actually shows.
-
-    ``shown`` is the share of each landmark mesh that is the front surface.
-    A mesh mostly hidden behind a person or another object is left out. A
-    landmark with no mesh still uses its on-screen mark.
-    """
-    bits: list[str] = []
-    covered = ""
-    spatial = location.get("spatial") or {}
-    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
-        if not isinstance(landmark, dict):
-            continue
-        fraction = None if shown is None else shown.get(str(landmark_id))
-        if fraction is not None:
-            if fraction < LANDMARK_SHOWN_MIN:
-                continue
-        else:
-            probes = _landmark_probes(landmark, camera)
-            if not probes:
-                continue
-            if all(_people_cover(sample, camera, people_path) for sample in probes):
-                continue
-        if any(alias.lower() in covered for alias in _landmark_aliases(str(landmark_id))):
-            continue
-        phrase = _still_landmark_phrase(str(landmark_id), landmark)
-        bits.append(phrase)
-        covered = " ".join(bits).lower()
-    for spec in visible_backdrop_specs(location.get("backdrop") or {}, backdrop_path):
-        sentence = spec["text"][0].upper() + spec["text"][1:] + "."
-        if sentence.lower().rstrip(".") not in covered:
-            bits.append(sentence)
-            covered = " ".join(bits).lower()
-    return " ".join(bits)
+    """Landmarks, then the empty-space regions. The still prompt places them in separate slots."""
+    landmarks = visible_landmark_line(location, camera, people_path, shown)
+    setting = visible_setting_line(location, backdrop_path, landmarks.lower())
+    return " ".join(part for part in (landmarks, setting) if part)
 
 
 def visible_backdrop_specs(backdrop: dict, path: Path | None) -> list[dict]:

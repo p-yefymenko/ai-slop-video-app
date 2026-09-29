@@ -487,6 +487,14 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertNotIn("worn steps", shown.lower())
         self.assertNotIn("dais", shown.lower())
 
+    def test_empty_location_landmark_names_its_appearance(self) -> None:
+        location = self.show["locations"]["sky_forge_exterior"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 1)
+        line = visible_place_line(location, camera_at(scene, float(scene["timeRangeSeconds"][0])))
+        self.assertIn("hanging citadel of black iron", line.lower())
+        self.assertIn("chain pylon of black iron", line.lower())
+        self.assertNotIn("is in frame", line.lower())
+
     def test_shown_fraction_is_the_front_surface_of_that_object(self) -> None:
         from spatial_previs import _batch_from_triangles, _quad, _raster_clay, shown_fraction
 

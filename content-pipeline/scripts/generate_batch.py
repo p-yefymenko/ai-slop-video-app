@@ -41,8 +41,8 @@ from spatial_previs import (
     landmark_shown_fractions,
     scene_has_spatial_change,
     validate_spatial_episode,
-    visible_backdrop_specs,
-    visible_place_line,
+    visible_landmark_line,
+    visible_setting_line,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1016,102 +1016,31 @@ def _disable_face_pass(graph: dict) -> None:
 
 def structure_pictures(
     pictures: list[str],
-    backdrop: dict | None = None,
-    people: bool | None = None,
     start: int = 1,
-    backdrop_path: Path | None = None,
     people_count: int | None = None,
 ) -> str:
-    """How Qwen should read the previs guides. The shaded clay frame is not one of them.
-
-    On a people shot the depth is picture 1 and includes the person volumes, so
-    Qwen keeps their position and what they hide. The clothes cutout is a
-    reference latent and sets garment color. It is not sent with the empty-space plate.
-    """
-    if people is None:
-        people = "Pose" in pictures or "Clothes" in pictures
+    """One sentence per guide. The same words for every scene."""
     lines = []
     for index, title in enumerate(pictures, start=start):
-        lines.append(
-            _picture_sentence(
-                title,
-                index,
-                people=people,
-                backdrop=backdrop,
-                backdrop_path=backdrop_path,
-                people_count=people_count,
+        if title == "Clothes":
+            who = "the person" if people_count == 1 else "these people"
+            lines.append(f"Picture {index} is {who} with flat color fills.")
+        elif title == "Depth":
+            lines.append(f"Picture {index} is depth: brighter is closer, black is empty space.")
+        elif title == "Edges":
+            lines.append(f"Picture {index} is outlines.")
+        elif title == "Pose":
+            lines.append(
+                f"Picture {index} is an OpenPose skeleton of those same people, on black. Match each joint."
             )
-        )
+        elif title == "Backdrop":
+            lines.append(
+                f"Picture {index} is flat sky, ground, and surround colors; "
+                "the black shapes are the structures."
+            )
+        else:
+            raise KeyError(title)
     return " ".join(lines)
-
-
-def _color_word(color: list[int]) -> str:
-    return f"{color[0]} {color[1]} {color[2]}"
-
-
-def _picture_sentence(
-    title: str,
-    index: int,
-    *,
-    people: bool,
-    backdrop: dict | None = None,
-    backdrop_path: Path | None = None,
-    people_count: int | None = None,
-) -> str:
-    if title == "Pose":
-        return (
-            f"Picture {index} is an OpenPose skeleton of those same people, on black. "
-            "Match each joint. Do not draw the skeleton, and do not move anyone off the person-shaped volume."
-        )
-    if title == "Clothes":
-        return (
-            f"Picture {index} is {'the person' if people_count == 1 else 'these people'} with flat color fills."
-        )
-    if title == "Depth" and people:
-        return (
-            f"Picture {index} is depth: brighter is closer, black is empty space."
-        )
-    if title == "Depth":
-        return (
-            f"Picture {index} is a depth map of this exact camera, not a photograph. "
-            "Brighter surfaces are closer. Black is empty space. "
-            "Match that camera, scale, occlusion, and object placement."
-        )
-    if title == "Edges" and people:
-        return (
-            f"Picture {index} is outlines."
-        )
-    if title == "Edges":
-        return f"Picture {index} is the edges of the place only. Keep those edges. It contains no people."
-    if title == "Backdrop":
-        if backdrop is None:
-            raise KeyError("Backdrop")
-        specs = visible_backdrop_specs(backdrop, backdrop_path)
-        if not specs:
-            specs = [
-                {"field": field, "color": backdrop[f"{field}Color"], "text": backdrop[field]}
-                for field in ("sky", "ground", "surround")
-                if backdrop.get(field) and backdrop.get(f"{field}Color")
-            ]
-        labels = {
-            "sky": "the sky",
-            "ground": "the ground",
-            "surround": "the surroundings beyond the set",
-        }
-        parts = [
-            f"Picture {index} is the empty space from this exact camera, in flat color, not a finished photograph."
-        ]
-        for spec in specs:
-            parts.append(
-                f"Flat color {_color_word(spec['color'])} is {labels[spec['field']]}: {spec['text']}."
-            )
-        parts.append(
-            "Black is an asset. Develop each listed flat color into that place. "
-            "Do not invent walls, windows, a floor that is not listed, or a white void, "
-            "and do not leave the color flat."
-        )
-        return " ".join(parts)
-    raise KeyError(title)
 
 
 _GUIDE_NODES = (("40", "image2"), ("41", "image3"))
@@ -1463,13 +1392,11 @@ def still_people_line(
     clothes_path: Path | None = None,
     head_visible: bool = True,
 ) -> str:
-    """Count the people. One person names the garment in frame, colored from the cutout."""
+    """Count the people. None omits the slot. One person names the garment from the cutout."""
     if not character_ids:
-        return "No people."
+        return ""
     count = _people_count(len(character_ids))
     if len(character_ids) != 1 or not characters:
-        if clothes and character_ids:
-            return f"{count} Match the colors in picture 2, with real cloth and skin texture."
         return count
     character = characters.get(character_ids[0])
     if not isinstance(character, dict):
@@ -1491,11 +1418,31 @@ def still_people_line(
     )
 
 
-def still_scene_line(scene: dict) -> str:
-    """Atmosphere for empty shots. A people shot does not send imagePrompt."""
-    if scene["characterIds"]:
-        return ""
-    return str(scene.get("imagePrompt") or "").strip()
+def still_prompt(
+    pictures: list[str],
+    *,
+    people: str = "",
+    landmarks: str = "",
+    setting: str = "",
+    people_count: int | None = None,
+) -> str:
+    """One still prompt for every shot. A slot is omitted when it is empty.
+
+    Order: opening, picture legend, keep, people, landmarks, setting.
+    The legend is the only part that follows which pictures are attached.
+    """
+    parts = [
+        "Photorealistic vertical 9:16 film frame.",
+        structure_pictures(pictures, people_count=people_count),
+        "Keep the shape, position, and occlusion from the pictures.",
+    ]
+    if people:
+        parts.append(people.rstrip())
+    if landmarks:
+        parts.append(landmarks.rstrip())
+    if setting:
+        parts.append(f"Behind and around: {setting.rstrip()}")
+    return " ".join(parts)
 
 
 def face_prompt_for(
@@ -1840,11 +1787,7 @@ def render_backdrop_followup(
         show,
         "spatialBackdrop",
         {
-            "structurePictures": structure_pictures(
-                ["Backdrop"],
-                backdrop=location["backdrop"],
-                start=2,
-            ),
+            "structurePictures": structure_pictures(["Backdrop"], start=2),
         },
     )
     inject_backdrop_followup(
@@ -1938,51 +1881,41 @@ def render_spatial_still(
         )
     character_ids = scene["characterIds"]
     time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
-    place = visible_place_line(
-        location,
-        camera_at(scene, time_seconds),
-        backdrop_path,
-        clothes_path if present(clothes_path) else None,
-        landmark_shown_fractions(show, episode, scene, time_seconds) if episode is not None else None,
+    shown = (
+        landmark_shown_fractions(show, episode, scene, time_seconds) if episode is not None else None
     )
-    if place:
-        if len(character_ids) == 1:
-            kind = _adult_kind(
-                str((show["characters"].get(character_ids[0]) or {}).get("promptBlock") or "")
-            )
-            who = "her" if kind == "an adult woman" else "him" if kind == "an adult man" else "them"
-        elif character_ids:
-            who = "them"
-        else:
-            who = ""
-        place = f"Behind and around {who}: {place}" if who else f"Setting: {place}"
-    values = {
-        "structurePictures": structure_pictures(
-            titles + (["Backdrop"] if attach_backdrop else []),
-            backdrop=location["backdrop"] if attach_backdrop else None,
-            people=bool(characters),
-            backdrop_path=backdrop_path if attach_backdrop else None,
-            people_count=len(character_ids),
-        ),
-        "peopleLine": still_people_line(
-            character_ids,
-            show["characters"],
-            clothes="Clothes" in titles,
-            clothes_path=clothes_path if present(clothes_path) else None,
-            head_visible=(
-                head_in_view(show, episode, scene, character_ids[0], time_seconds)
-                if episode is not None and len(character_ids) == 1
-                else True
+    people_path = clothes_path if present(clothes_path) else None
+    camera = camera_at(scene, time_seconds)
+    landmarks = visible_landmark_line(location, camera, people_path, shown)
+    setting = visible_setting_line(location, backdrop_path, landmarks.lower())
+    legend = titles + (["Backdrop"] if attach_backdrop else [])
+    blockout_prompt = show_prompt(
+        show,
+        "spatialBlockout",
+        {
+            "stillPrompt": still_prompt(
+                legend,
+                people=still_people_line(
+                    character_ids,
+                    show["characters"],
+                    clothes="Clothes" in titles,
+                    clothes_path=people_path,
+                    head_visible=(
+                        head_in_view(show, episode, scene, character_ids[0], time_seconds)
+                        if episode is not None and len(character_ids) == 1
+                        else True
+                    ),
+                ),
+                landmarks=landmarks,
+                setting=setting,
+                people_count=len(character_ids),
             ),
-        ),
-        "locationPromptBlock": place,
-        "sceneLine": still_scene_line(scene),
-    }
+        },
+    )
     face_values = {
         "characterCount": str(len(character_ids)),
         "characterIds": ", ".join(character_ids) or "none",
     }
-    blockout_prompt = show_prompt(show, "spatialBlockout", values)
     groups: list[list[dict]] = []
     first: list[dict] = []
     mask_name = None
