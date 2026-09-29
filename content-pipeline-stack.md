@@ -56,7 +56,7 @@ Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, Aura
 | Empty location, landmark | TRELLIS.2 int8 | Untextured. Fitted uniformly into `sizeMeters` or the landmark `size`. |
 | Character | Pixal3D int8 | Front matches the plate. Plate color is stored on each vertex. Fitted to standing height. Front faces schema +Y (body yaw 0). |
 
-Both remove the background with BiRefNet, condition with DINOv3, and run a shape cascade at 1024 through the TRELLIS.2 shape VAE. Pixal3D adds a texture VAE and MoGe so the projected features line up with the photo. ComfyUI’s DecimateMesh caps the mesh. The default limit is 300,000 triangles. A character mesh already under that limit is left as generated. Small openings on character meshes are covered with new triangles on the vertices already around the hole.
+Both remove the background with BiRefNet, condition with DINOv3, and run a shape cascade at 1024 through the TRELLIS.2 shape VAE. Pixal3D adds a texture VAE and MoGe so the projected features line up with the photo. ComfyUI’s DecimateMesh caps the mesh. The default limit is 10,000,000 triangles. A character mesh already under that limit is left as generated. Small openings on character meshes are covered with new triangles on the vertices already around the hole.
 
 A missing character mesh falls back to a volume in previs. That volume is left out of the edge guide.
 

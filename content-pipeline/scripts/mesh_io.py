@@ -16,7 +16,7 @@ from coords import gltf_points_to_schema, schema_points_to_gltf
 
 GENERATOR = "reelshort-content-pipeline"
 # Default polygon limit. Override with `pnpm run content:assets -- --triangles <count>`.
-TRIANGLE_BUDGET = 300_000
+TRIANGLE_BUDGET = 10_000_000
 # ComfyUI DecimateMesh rejects a target above this.
 TRIANGLE_BUDGET_MAX = 50_000_000
 DECIMATOR = "comfy-decimate-mesh"
@@ -168,6 +168,166 @@ def cap_holes(
     if not added:
         return points, triangles
     return points, np.vstack((triangles, np.asarray(added, dtype=np.int64)))
+
+
+# A standing person is not as wide as they are tall. Capes that stay wide
+# across many slices are left alone; this only flags a mesh the fit could
+# not make into a person.
+STANDING_WIDTH_RATIO = 0.7
+
+
+def drop_thin_side_protrusions(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, int, int]:
+    """Drop a thin sideways sheet that is welded to the body.
+
+    Width is measured per height slice in the mesh's own axes (schema X
+    across, Z up). A slice is a sheet when it is much wider than the slices
+    around it and that excess is only a few slices tall. Vertices in that
+    slice that sit outside the neighboring body are removed, and so are the
+    triangles that use them. A cape or pauldron that is wide for a long
+    stretch of the body stays.
+    """
+    points = np.asarray(vertices, dtype=np.float64)
+    triangles = np.asarray(faces, dtype=np.int64)
+    kept_colors = None if colors is None else np.asarray(colors)
+    before_vertices = len(points)
+    before_triangles = len(triangles)
+    if before_vertices == 0 or before_triangles == 0:
+        return points, triangles, kept_colors, 0, 0
+    height_axis = points[:, 2]
+    height = float(height_axis.max() - height_axis.min())
+    if height < 1e-4:
+        return points, triangles, kept_colors, 0, 0
+    slice_count = 80
+    edges = np.linspace(float(height_axis.min()), float(height_axis.max()), slice_count + 1)
+    bucket = np.clip(np.digitize(height_axis, edges) - 1, 0, slice_count - 1)
+    widths = np.zeros(slice_count)
+    occupied = np.zeros(slice_count, dtype=bool)
+    for index in range(slice_count):
+        sample = points[bucket == index, 0]
+        if len(sample) < 8:
+            continue
+        occupied[index] = True
+        widths[index] = float(sample.max() - sample.min())
+    spike = np.zeros(slice_count, dtype=bool)
+    for index in range(slice_count):
+        if not occupied[index]:
+            continue
+        nearby = [
+            widths[other]
+            for other in range(max(0, index - 10), min(slice_count, index + 11))
+            if abs(other - index) >= 2 and occupied[other]
+        ]
+        if len(nearby) < 4:
+            continue
+        local_width = float(np.median(nearby))
+        if local_width > 0 and widths[index] > local_width * 1.4:
+            spike[index] = True
+    start = 0
+    while start < slice_count:
+        if not spike[start]:
+            start += 1
+            continue
+        end = start
+        while end < slice_count and spike[end]:
+            end += 1
+        if (end - start) / slice_count > 0.08:
+            spike[start:end] = False
+        start = end
+    if not spike.any():
+        return points, triangles, kept_colors, 0, 0
+    remove = np.zeros(before_vertices, dtype=bool)
+    for index in np.flatnonzero(spike):
+        neighbors = _neighbor_indices(occupied, spike, index, slice_count)
+        if not neighbors:
+            continue
+        chosen = bucket == index
+        remove[chosen] = ~_on_neighbor_surface(points, bucket, chosen, neighbors)
+    if not remove.any():
+        return points, triangles, kept_colors, 0, 0
+    keep = ~remove
+    remap = np.full(before_vertices, -1, dtype=np.int64)
+    remap[keep] = np.arange(int(keep.sum()), dtype=np.int64)
+    surviving = keep[triangles].all(axis=1)
+    points = points[keep]
+    triangles = remap[triangles[surviving]]
+    if kept_colors is not None and len(kept_colors) == before_vertices:
+        kept_colors = kept_colors[keep]
+    return (
+        points,
+        triangles,
+        kept_colors,
+        before_vertices - len(points),
+        before_triangles - len(triangles),
+    )
+
+
+def _neighbor_indices(
+    occupied: np.ndarray,
+    spike: np.ndarray,
+    index: int,
+    slice_count: int,
+) -> list[int]:
+    chosen: list[int] = []
+    for delta in range(1, 12):
+        for other in (index - delta, index + delta):
+            if 0 <= other < slice_count and occupied[other] and not spike[other]:
+                chosen.append(other)
+        if len(chosen) >= 2:
+            break
+    return chosen
+
+
+def _on_neighbor_surface(
+    points: np.ndarray,
+    bucket: np.ndarray,
+    chosen: np.ndarray,
+    neighbors: list[int],
+) -> np.ndarray:
+    """True where a spike-slice vertex sits on the body surface around it.
+
+    The sheet through the shoulders has no matching surface in the slices
+    above and below, so those vertices fall through. A shoulder that simply
+    continues the torso stays.
+    """
+    sample = points[np.isin(bucket, neighbors)]
+    here = points[chosen]
+    reach = 0.08 * float(max(sample[:, 0].max() - sample[:, 0].min(), 1e-4))
+    origin = sample[:, :2].min(axis=0)
+    keys = np.floor((sample[:, :2] - origin) / reach).astype(np.int32)
+    occupied_cells = set(zip(keys[:, 0].tolist(), keys[:, 1].tolist()))
+    here_keys = np.floor((here[:, :2] - origin) / reach).astype(np.int32)
+    keep = np.zeros(len(here), dtype=bool)
+    for row, (x_cell, y_cell) in enumerate(zip(here_keys[:, 0].tolist(), here_keys[:, 1].tolist())):
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if (x_cell + dx, y_cell + dy) in occupied_cells:
+                    keep[row] = True
+                    break
+            if keep[row]:
+                break
+    return keep
+
+
+def standing_proportion_warning(character_id: str, vertices: np.ndarray) -> str | None:
+    """Warn when a fitted character is too wide to be a standing person."""
+    points = np.asarray(vertices, dtype=np.float64)
+    if len(points) == 0:
+        return None
+    extent = points.max(axis=0) - points.min(axis=0)
+    height = float(extent[2])
+    if height < 1e-4:
+        return None
+    width = float(max(extent[0], extent[1]))
+    if width / height <= STANDING_WIDTH_RATIO:
+        return None
+    return (
+        f"{character_id}: mesh is {width:.2f} m wide and {height:.2f} m tall, "
+        f"which is too wide for a standing person"
+    )
 
 
 def _add_cap(

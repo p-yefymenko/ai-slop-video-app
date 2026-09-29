@@ -25,11 +25,13 @@ from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
     cap_holes,
+    drop_thin_side_protrusions,
     face_schema_forward,
     fit_to_size,
     read_schema_mesh,
     read_vertex_colors,
     require_triangle_budget,
+    standing_proportion_warning,
     write_schema_glb,
 )
 from pipeline_paths import OUTPUT_DIR
@@ -183,9 +185,21 @@ class AssetResolver:
             colors = None
         if request.character_id:
             vertices = face_schema_forward(vertices)
+            write_schema_glb(directory / "model.precleanup.glb", vertices, faces, colors)
+            vertices, faces, colors, lost_vertices, lost_triangles = drop_thin_side_protrusions(
+                vertices, faces, colors
+            )
+            print(
+                f"  {request.character_id}: removed {lost_vertices} vertices "
+                f"and {lost_triangles} triangles",
+                flush=True,
+            )
         fitted = fit_to_size(vertices, request.size)
         if request.character_id:
             fitted, faces = cap_holes(fitted, faces)
+            warning = standing_proportion_warning(request.character_id, fitted)
+            if warning:
+                self.warnings.append(warning)
         source_id = appearance_source_id(request.appearance)
         write_schema_glb(directory / "model.glb", fitted, faces, colors)
         if fetched != directory / "model.glb" and fetched.is_file():

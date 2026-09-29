@@ -10,7 +10,7 @@ ComfyUI has to be running at `http://127.0.0.1:8188`. `pnpm run content:models` 
 
 `--offline` does not generate. A missing plate or mesh fails the build. `pnpm run content:assets -- --credits` rewrites `docs/CREDITS.md` from the `location.json` and `landmark.json` files under `output/assets/`.
 
-The plate is a 1024 square. TRELLIS.2 uses the int8 checkpoint, removes the background, and runs the shape cascade at 1024. The stored mesh is untextured. ComfyUI's DecimateMesh node then caps the mesh before it is saved. The default polygon limit is 300,000. `pnpm run content:assets -- --triangles 300000` sets another limit, up to 50,000,000. A mesh saved under a different limit is rebuilt. The mesh is scaled uniformly so it fits inside its box without changing its proportions. An empty location uses `sizeMeters`. A landmark uses its `size`.
+The plate is a 1024 square. TRELLIS.2 uses the int8 checkpoint, removes the background, and runs the shape cascade at 1024. The stored mesh is untextured. ComfyUI's DecimateMesh node then caps the mesh before it is saved. The default polygon limit is 10,000,000. `pnpm run content:assets -- --triangles 300000` sets another limit, up to 50,000,000. A mesh saved under a different limit is rebuilt. The mesh is scaled uniformly so it fits inside its box without changing its proportions. An empty location uses `sizeMeters`. A landmark uses its `size`.
 
 Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `content-pipeline/scripts/coords.py` is the only converter. The viewer reads Y-up files and does not convert them.
 
