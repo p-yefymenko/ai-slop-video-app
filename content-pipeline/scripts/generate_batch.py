@@ -53,6 +53,7 @@ from spatial_previs import (
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT_KEYS = (
     "characterImage",
+    "stillOpening",
     "spatialBlockout",
     "spatialFaces",
     "spatialBackdrop",
@@ -1246,8 +1247,13 @@ def still_prompt(
     Order: opening, picture legend, keep, people, landmarks, setting.
     The legend is the only part that follows which pictures are attached.
     """
+    opening = require_text(
+        json.loads(PROMPTS_PATH.read_text(encoding="utf-8")),
+        "stillOpening",
+        "prompts",
+    )
     parts = [
-        "Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light.",
+        opening.rstrip(),
         structure_pictures(pictures, people_count=people_count),
         "Keep the shape, position, and occlusion from the pictures.",
     ]

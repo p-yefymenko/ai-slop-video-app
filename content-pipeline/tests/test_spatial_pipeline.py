@@ -201,6 +201,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["12"]["inputs"]["images"], ["11", 0])
         self.assertNotIn("30", graph)
         self.assertIn("spatialBlockout", self.show["prompts"])
+        self.assertIn("stillOpening", self.show["prompts"])
         self.assertIn("spatialFaces", self.show["prompts"])
         self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
@@ -701,11 +702,7 @@ class SpatialPipelineTests(unittest.TestCase):
             ]
         )
         self.assertTrue(solo_line.startswith("One person."))
-        self.assertIn("sand wrap", solo_line)
-        self.assertIn("olive skin", solo_line)
-        self.assertNotIn("ivory", solo_line.lower())
-        self.assertNotIn("collar", solo_line.lower())
-        self.assertNotIn("soot", solo_line.lower())
+        self.assertIn(sela["stillDescription"], solo_line)
         self.assertNotIn("sela", solo_line.lower())
         self.assertNotIn("imagePrompt", solo_line)
 

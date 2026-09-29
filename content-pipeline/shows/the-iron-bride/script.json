@@ -4,7 +4,7 @@
   "characters": {
     "sela": {
       "description": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair. a soot-stained ivory wrap and a plain iron bridal collar",
-      "stillDescription": "in a sand wrap, olive skin, long black hair, barefoot",
+      "stillDescription": "in a tan linen wrap, olive skin, long black hair, barefoot",
       "proxy": { "heightMeters": 1.68, "build": "slim" }
     },
     "tomas": {
