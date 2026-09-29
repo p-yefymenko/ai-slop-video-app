@@ -100,8 +100,8 @@ const characterProxySchema = z
 
 const showCharacterSchema = z
   .object({
-    description: text("description"),
-    stillDescription: text("stillDescription"),
+    generalDescription: text("generalDescription"),
+    frontalDescription: text("frontalDescription").optional(),
     proxy: characterProxySchema.optional(),
   })
   .strict();

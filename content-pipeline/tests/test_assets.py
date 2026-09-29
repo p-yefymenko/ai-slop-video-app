@@ -460,8 +460,8 @@ class AssetTests(unittest.TestCase):
         show = self._show()
         show["characters"] = {
             "ada": {
-                "description": "Adult woman, black hair. a soot-stained ivory wrap and a plain iron bridal collar",
-                "stillDescription": "in a sand wrap, olive skin, long black hair, barefoot",
+                "generalDescription": "Adult woman, black hair. a soot-stained ivory wrap and a plain iron bridal collar",
+                "frontalDescription": "amber irises and a thin pale burn scar",
                 "proxy": {"heightMeters": 1.6, "build": "slim"},
             }
         }
@@ -506,6 +506,7 @@ class AssetTests(unittest.TestCase):
         )
         self.assertEqual(record["source"], "pixal3d")
         self.assertIn("ivory wrap", record["title"])
+        self.assertIn("amber irises", record["title"])
         calls = generator.calls
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, calls)
@@ -529,10 +530,10 @@ class AssetTests(unittest.TestCase):
         assert kept is not None
         np.testing.assert_allclose(kept, painted_colors)
         bare = self._show()
-        bare["characters"] = {"ada": {"stillDescription": "in a wrap, olive skin, black hair, barefoot"}}
+        bare["characters"] = {"ada": {"proxy": {"heightMeters": 1.6, "build": "slim"}}}
         with self.assertRaises(RuntimeError) as missing_description:
             self._resolver(CountingGenerator(self.cube)).resolve_show(bare)
-        self.assertIn("description", str(missing_description.exception))
+        self.assertIn("generalDescription", str(missing_description.exception))
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)

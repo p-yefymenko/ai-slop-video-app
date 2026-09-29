@@ -202,6 +202,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("30", graph)
         self.assertIn("spatialBlockout", self.show["prompts"])
         self.assertIn("stillOpening", self.show["prompts"])
+        self.assertEqual(self.show["frontalMinPixelHeight"], 400)
         self.assertIn("spatialFaces", self.show["prompts"])
         self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
@@ -635,7 +636,7 @@ class SpatialPipelineTests(unittest.TestCase):
                     "x0": 40 + index * 90,
                     "x1": 100 + index * 90,
                     "pixel_height": 420,
-                    "still_description": character["stillDescription"],
+                    "general_description": character["generalDescription"],
                 }
             )
         sentence, records = pipeline.describe_people(entries)
@@ -697,16 +698,16 @@ class SpatialPipelineTests(unittest.TestCase):
                     "x0": 100,
                     "x1": 300,
                     "pixel_height": 500,
-                    "still_description": sela["stillDescription"],
+                    "general_description": sela["generalDescription"],
                 }
             ]
         )
         self.assertTrue(solo_line.startswith("One person."))
-        self.assertIn(sela["stillDescription"], solo_line)
+        self.assertIn(sela["generalDescription"], solo_line)
         self.assertNotIn("sela", solo_line.lower())
         self.assertNotIn("imagePrompt", solo_line)
 
-    def test_people_sentence_uses_still_description_and_geometry(self) -> None:
+    def test_people_sentence_uses_general_description_and_geometry(self) -> None:
         def person(**extra: object) -> dict:
             base = {
                 "screen_x": 120,
@@ -714,7 +715,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 "x0": 40,
                 "x1": 200,
                 "pixel_height": 320,
-                "still_description": "in a navy cloak, olive skin, braided copper hair",
+                "general_description": "in a navy cloak, olive skin, braided copper hair",
                 "character_id": "mio",
             }
             base.update(extra)
@@ -726,7 +727,7 @@ class SpatialPipelineTests(unittest.TestCase):
             depth=6.0,
             x0=340,
             x1=500,
-            still_description="in a gold tunic, tan skin, short black hair",
+            general_description="in a gold tunic, tan skin, short black hair",
             character_id="jun",
         )
         sentence, records = pipeline.describe_people([navy, other])
@@ -739,12 +740,12 @@ class SpatialPipelineTests(unittest.TestCase):
         near = person(
             screen_x=140,
             depth=2.0,
-            still_description="in a red coat",
+            general_description="in a red coat",
         )
         far = person(
             screen_x=180,
             depth=9.0,
-            still_description="in a green coat",
+            general_description="in a green coat",
             visible_fraction=0.2,
         )
         overlapped, _overlap_records = pipeline.describe_people([far, near])
@@ -754,12 +755,12 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("green", overlapped)
         self.assertIn("depth", records[0])
         small, _small_records = pipeline.describe_people(
-            [person(pixel_height=40, still_description="in a navy cloak, olive skin")]
+            [person(pixel_height=40, general_description="in a navy cloak, olive skin")]
         )
         self.assertIn("cloak", small)
         self.assertIn("olive skin", small)
 
-    def test_row_figures_each_keep_their_still_description(self) -> None:
+    def test_row_figures_each_keep_their_general_description(self) -> None:
         def row_person(index: int, **extra: object) -> dict:
             skins = (
                 "sallow skin, bound black hair",
@@ -773,7 +774,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 "x0": 160 + index * 40,
                 "x1": 200 + index * 40,
                 "pixel_height": 130,
-                "still_description": (
+                "general_description": (
                     f"in black plate armor with a gold gorget, {skins[index]}, barefoot"
                 ),
                 "frame_width": 768,
@@ -789,7 +790,7 @@ class SpatialPipelineTests(unittest.TestCase):
             "x0": 30,
             "x1": 180,
             "pixel_height": 280,
-            "still_description": "in a sky-blue coat, fair skin, copper-red hair, barefoot",
+            "general_description": "in a sky-blue coat, fair skin, copper-red hair, barefoot",
             "frame_width": 768,
             "visible_fraction": 1.0,
         }
@@ -808,10 +809,95 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertTrue(any(record["depth"] for record in records))
         self.assertTrue(all("sources" not in record for record in records))
 
+    def test_frontal_description_appends_only_when_all_conditions_pass(self) -> None:
+        def person(**extra: object) -> dict:
+            base = {
+                "screen_x": 200,
+                "depth": 2.0,
+                "x0": 100,
+                "x1": 300,
+                "pixel_height": 500,
+                "general_description": "in a tan wrap, olive skin, long black hair",
+                "frontal_description": "amber irises and a burn scar",
+                "character_id": "sela",
+                "facing_camera": True,
+                "head_mask_pixels": True,
+            }
+            base.update(extra)
+            return base
+
+        sent, sent_records = pipeline.describe_people([person()], frontal_min_pixel_height=400)
+        self.assertIn("in a tan wrap, olive skin, long black hair amber irises and a burn scar", sent)
+        self.assertTrue(sent_records[0]["frontalDescriptionSent"])
+        self.assertNotIn("frontalSkipReason", sent_records[0])
+
+        turned, turned_records = pipeline.describe_people(
+            [person(facing_camera=False)], frontal_min_pixel_height=400
+        )
+        self.assertIn("in a tan wrap, olive skin, long black hair", turned)
+        self.assertNotIn("amber irises", turned)
+        self.assertFalse(turned_records[0]["frontalDescriptionSent"])
+        self.assertEqual(turned_records[0]["frontalSkipReason"], "not in facing-camera list")
+
+        unmasked, unmasked_records = pipeline.describe_people(
+            [person(head_mask_pixels=False)], frontal_min_pixel_height=400
+        )
+        self.assertNotIn("amber irises", unmasked)
+        self.assertEqual(unmasked_records[0]["frontalSkipReason"], "no head-mask pixels")
+
+        small, small_records = pipeline.describe_people(
+            [person(pixel_height=130)], frontal_min_pixel_height=400
+        )
+        self.assertNotIn("amber irises", small)
+        self.assertEqual(small_records[0]["frontalSkipReason"], "pixel height 130 < 400")
+
+        none, none_records = pipeline.describe_people(
+            [person(frontal_description="")], frontal_min_pixel_height=400
+        )
+        self.assertNotIn("amber irises", none)
+        self.assertEqual(none_records[0]["frontalSkipReason"], "no frontalDescription")
+
+    def test_missing_general_description_omits_that_person_text(self) -> None:
+        sentence, records = pipeline.describe_people(
+            [
+                {
+                    "screen_x": 200,
+                    "depth": 2.0,
+                    "pixel_height": 500,
+                    "character_id": "sela",
+                    "frontal_description": "amber irises",
+                    "facing_camera": True,
+                    "head_mask_pixels": True,
+                }
+            ],
+            frontal_min_pixel_height=400,
+        )
+        self.assertIn("One person.", sentence)
+        self.assertNotIn("amber irises", sentence)
+        self.assertTrue(records[0]["omittedText"])
+        self.assertEqual(records[0]["omitReason"], "missing generalDescription")
+        self.assertFalse(records[0]["frontalDescriptionSent"])
+
+    def test_plates_join_general_and_frontal_description(self) -> None:
+        self.assertEqual(
+            pipeline.character_appearance_text(
+                {
+                    "generalDescription": "in a tan wrap, olive skin",
+                    "frontalDescription": "amber irises",
+                }
+            ),
+            "in a tan wrap, olive skin amber irises",
+        )
+        self.assertEqual(
+            pipeline.character_appearance_text({"generalDescription": "in a tan wrap, olive skin"}),
+            "in a tan wrap, olive skin",
+        )
+
     def test_every_shot_uses_the_same_prompt_skeleton(self) -> None:
         from PIL import Image
 
         keep = "Keep the shape, position, and occlusion from the pictures."
+        opening = self.show["prompts"]["stillOpening"]
         prompts = []
         cases = (
             (1, ["Depth", "Edges", "Backdrop"]),
@@ -847,7 +933,7 @@ class SpatialPipelineTests(unittest.TestCase):
                         "pixel_height": 40 if number == 5 else 500,
                         "head_visible": number != 11,
                         "feet_visible": number != 11,
-                        "still_description": self.show["characters"][character_id]["stillDescription"],
+                        "general_description": self.show["characters"][character_id]["generalDescription"],
                     }
                     for index, character_id in enumerate(scene["characterIds"])
                 ]
@@ -859,7 +945,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 people_count=len(people_entries) if "Clothes" in pictures else None,
             )
             prompts.append(prompt)
-            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light. Picture 1 is depth:"))
+            self.assertTrue(prompt.startswith(f"{opening} Picture 1 is depth:"))
             self.assertEqual(prompt.count("Picture "), len(pictures))
             self.assertIn(keep, prompt)
             self.assertNotIn("Do not", prompt)
@@ -883,10 +969,9 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("no walls", solo.lower())
         self.assertIn("Picture 2 shows each person's colors", solo)
         self.assertNotIn("black shapes are the structures", solo)
-        self.assertNotIn("with real cloth and skin texture, natural storm light", empty)
         keep = "Keep the shape, position, and occlusion from the pictures."
         for prompt in prompts:
-            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light. "))
+            self.assertTrue(prompt.startswith(f"{opening} "))
             self.assertIn(keep, prompt)
             self.assertLess(prompt.index("Picture 1"), prompt.index(keep))
 

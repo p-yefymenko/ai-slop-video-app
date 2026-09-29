@@ -19,18 +19,16 @@ export type CharacterProxy = {
 
 export type ShowCharacter = {
   /**
-   * One adult for the episode: body, face, and the one costume they wear.
-   * Plates and portraits receive this text. Scene stills do not.
+   * Visible from all sides. Plates, portraits, and every still receive this
+   * text. No eye color, scars, tattoos, birthmarks, or other front-only details.
    */
-  description: string;
+  generalDescription: string;
   /**
-   * Short comma-separated still line, about 6 to 14 words, true from every
-   * camera. No leading article and no verb. Garment color and clothes type
-   * starting with "in", a neck piece only if it wraps the whole neck, footwear
-   * or "barefoot", skin tone, hair color and length or style. No eye color,
-   * scars, tattoos, birthmarks, damage, or front-only details.
+   * Front-only details. Plates and portraits always append this. A still
+   * appends it only when that person faces the camera, has head-mask pixels,
+   * and is at least `frontalMinPixelHeight` tall.
    */
-  stillDescription: string;
+  frontalDescription?: string;
   /** Clay mannequin proportions. Identity is still the portrait PNG. */
   proxy?: CharacterProxy;
 };

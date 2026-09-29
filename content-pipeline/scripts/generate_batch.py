@@ -21,8 +21,10 @@ from pathlib import Path
 from ffmpeg_tools import concat_videos
 from PIL import Image, ImageChops
 from still_people import (
+    character_appearance_text,
     describe_people,
     gather_visible_people,
+    load_frontal_min_pixel_height,
     still_people_line,
 )
 from pipeline_paths import (
@@ -708,11 +710,14 @@ def load_show(path: Path) -> dict:
             raise SystemExit(f"characters[{cid!r}] must be an object")
         cleaned_chars[str(cid)] = {
             "id": str(cid),
-            "description": require_text(character, "description", f"characters[{cid!r}]"),
-            "stillDescription": require_text(
-                character, "stillDescription", f"characters[{cid!r}]"
+            "generalDescription": require_text(
+                character, "generalDescription", f"characters[{cid!r}]"
             ),
         }
+        if character.get("frontalDescription") is not None:
+            cleaned_chars[str(cid)]["frontalDescription"] = require_text(
+                character, "frontalDescription", f"characters[{cid!r}]"
+            )
         if isinstance(character.get("proxy"), dict):
             cleaned_chars[str(cid)]["proxy"] = character["proxy"]
     show["characters"] = cleaned_chars
@@ -750,6 +755,7 @@ def load_show(path: Path) -> dict:
     if not isinstance(prompts, dict):
         raise SystemExit(f"{PROMPTS_PATH} must contain a JSON object")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
+    show["frontalMinPixelHeight"] = load_frontal_min_pixel_height(prompts)
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
         raise SystemExit(f"{path.name} is missing episodes")
@@ -1711,11 +1717,20 @@ def render_spatial_still(
     setting = visible_setting_line(location, backdrop_path, landmarks.lower())
     legend = titles + (["Backdrop"] if attach_backdrop else [])
     people_entries = (
-        gather_visible_people(show, episode, scene, time_seconds)
+        gather_visible_people(
+            show,
+            episode,
+            scene,
+            time_seconds,
+            shot_label="end" if dest.stem.endswith("_end") else "start",
+        )
         if episode is not None and "Clothes" in titles
         else []
     )
-    people_sentence, people_log = describe_people(people_entries)
+    people_sentence, people_log = describe_people(
+        people_entries,
+        frontal_min_pixel_height=show["frontalMinPixelHeight"],
+    )
     blockout_prompt = show_prompt(
         show,
         "spatialBlockout",
@@ -1834,7 +1849,7 @@ def generate_show(
                 show,
                 "characterImage",
                 {
-                    "description": character["description"],
+                    "description": character_appearance_text(character),
                 },
             )
             run_qwen_image(

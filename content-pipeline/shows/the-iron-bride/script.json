@@ -3,33 +3,33 @@
   "title": "The Iron Bride",
   "characters": {
     "sela": {
-      "description": "Adult woman, 24, athletic compact build, olive skin, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, long black hair. a soot-stained ivory wrap and a plain iron bridal collar",
-      "stillDescription": "in a tan linen wrap, olive skin, long black hair, barefoot",
+      "generalDescription": "adult woman, athletic compact build, olive skin, long black hair, in a tan linen wrap, barefoot",
+      "frontalDescription": "24 years old, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, a plain iron bridal collar",
       "proxy": { "heightMeters": 1.68, "build": "slim" }
     },
     "tomas": {
-      "description": "Adult man, 22, lean build, fair skin, gray irises, a copper birthmark under the right eye, copper-red hair. a torn sky-blue court coat",
-      "stillDescription": "in a sky-blue coat, fair skin, copper-red hair, barefoot",
+      "generalDescription": "adult man, lean build, fair skin, copper-red hair, in a sky-blue coat, barefoot",
+      "frontalDescription": "22 years old, gray irises, a copper birthmark under the right eye",
       "proxy": { "heightMeters": 1.78, "build": "slim" }
     },
     "vardan": {
-      "description": "Adult man, 52, tall narrow build, pale skin, ice-blue irises, a gold ring tattoo encircling the throat, silver-white cropped hair. black sun-priest plate and a gold gorget",
-      "stillDescription": "in black plate armor with a gold gorget, pale skin, silver-white cropped hair, barefoot",
+      "generalDescription": "adult man, tall narrow build, pale skin, silver-white cropped hair, in black plate armor with a gold gorget, black shoes",
+      "frontalDescription": "52 years old, ice-blue irises, a gold ring tattoo encircling the throat",
       "proxy": { "heightMeters": 1.9, "build": "slim" }
     },
     "nira": {
-      "description": "Adult woman, 45, broad-shouldered build, dark umber skin, gold-flecked brown irises, shaved sides with a copper-brown crest of hair. black sun-priest plate and a gold gorget",
-      "stillDescription": "in black plate armor with a gold gorget, dark umber skin, crested hair, barefoot",
+      "generalDescription": "adult woman, broad-shouldered build, dark umber skin, shaved sides with a copper-brown crest of hair, in black plate armor with a gold gorget, barefoot",
+      "frontalDescription": "45 years old, gold-flecked brown irises",
       "proxy": { "heightMeters": 1.73, "build": "broad" }
     },
     "kesh": {
-      "description": "Adult man, 38, heavy build, weathered tan skin, black irises, a split-lip scar, salt-and-pepper stubble, shaved scalp. black sun-priest plate and a gold gorget",
-      "stillDescription": "in black plate armor with a gold gorget, weathered tan skin, shaved head, barefoot",
+      "generalDescription": "adult man, heavy build, weathered tan skin, shaved head, in black plate armor with a gold gorget, barefoot",
+      "frontalDescription": "38 years old, black irises, a split-lip scar, salt-and-pepper stubble",
       "proxy": { "heightMeters": 1.82, "build": "broad" }
     },
     "rhel": {
-      "description": "Adult man, 30, thin build, sallow skin, dark brown irises, a branded sun-disk on the forehead, black hair bound at the nape. black sun-priest plate and a gold gorget",
-      "stillDescription": "in black plate armor with a gold gorget, sallow skin, bound black hair, barefoot",
+      "generalDescription": "adult man, thin build, sallow skin, black hair bound at the nape, in black plate armor with a gold gorget, barefoot",
+      "frontalDescription": "30 years old, dark brown irises, a branded sun-disk on the forehead",
       "proxy": { "heightMeters": 1.76, "build": "slim" }
     }
   },

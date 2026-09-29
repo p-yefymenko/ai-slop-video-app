@@ -18,9 +18,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     title: "Demo",
     characters: {
       ada: {
-        description:
-          "Adult woman, 30, average build, brown eyes, black hair. a plain fitted dress",
-        stillDescription: "in a plain dress, brown skin, black hair, barefoot",
+        generalDescription: "in a plain dress, brown skin, black hair, barefoot",
       },
     },
     locations: {
@@ -208,15 +206,30 @@ test("rejects a prefab id on a landmark", () => {
   assert.match(report, /prefabId/);
 });
 
-test("rejects a character missing description or stillDescription", () => {
+test("rejects a character missing generalDescription", () => {
   const show = minimalShow();
-  delete (show.characters.ada as { description?: string }).description;
-  const missingDescription = messages(show);
-  assert.match(missingDescription, /description is required/);
+  delete (show.characters.ada as { generalDescription?: string }).generalDescription;
+  const missing = messages(show);
+  assert.match(missing, /generalDescription is required/);
+});
+
+test("rejects leftover description or stillDescription on a character", () => {
+  const show = minimalShow();
+  (show.characters.ada as { description?: string }).description = "leftover";
+  const leftoverDescription = messages(show);
+  assert.match(leftoverDescription, /description/);
   const again = minimalShow();
-  delete (again.characters.ada as { stillDescription?: string }).stillDescription;
-  const missingStill = messages(again);
-  assert.match(missingStill, /stillDescription is required/);
+  (again.characters.ada as { stillDescription?: string }).stillDescription = "leftover";
+  const leftoverStill = messages(again);
+  assert.match(leftoverStill, /stillDescription/);
+});
+
+test("accepts a character that omits frontalDescription", () => {
+  const result = parseShowScript(minimalShow(), {
+    showId: "demo-show",
+    showIdLabel: "the filename stem",
+  });
+  assert.equal(result.ok, true);
 });
 
 test("rejects a show id that does not match the file", () => {
