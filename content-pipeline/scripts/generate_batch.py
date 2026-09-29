@@ -1032,8 +1032,7 @@ def structure_pictures(
     lines = []
     for index, title in enumerate(pictures, start=start):
         if title == "Clothes":
-            who = "the person" if people_count == 1 else "these people"
-            lines.append(f"Picture {index} is {who} with flat color fills.")
+            lines.append(f"Picture {index} shows each person's colors.")
         elif title == "Depth":
             lines.append(f"Picture {index} is depth: brighter is closer, black is empty space.")
         elif title == "Edges":
@@ -1248,9 +1247,9 @@ def still_prompt(
     The legend is the only part that follows which pictures are attached.
     """
     parts = [
-        "Photorealistic vertical 9:16 film frame.",
+        "Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light.",
         structure_pictures(pictures, people_count=people_count),
-        "Keep the shape, position, and occlusion from the pictures, and each person's flat colors, lit by the scene's light.",
+        "Keep the shape, position, and occlusion from the pictures.",
     ]
     if people:
         parts.append(people.rstrip())

@@ -287,7 +287,7 @@ class SpatialPipelineTests(unittest.TestCase):
         text = pipeline.structure_pictures(["Depth", "Clothes", "Edges"], people_count=1)
         self.assertTrue(text.startswith("Picture 1 is depth:"))
         self.assertIn("black is empty space", text)
-        self.assertIn("Picture 2 is the person with flat color fills", text)
+        self.assertIn("Picture 2 shows each person's colors", text)
         self.assertIn("Picture 3 is outlines", text)
         self.assertNotIn("Keep those outlines", text)
         self.assertNotIn("Copy those colors", text)
@@ -814,7 +814,7 @@ class SpatialPipelineTests(unittest.TestCase):
     def test_every_shot_uses_the_same_prompt_skeleton(self) -> None:
         from PIL import Image
 
-        keep = "Keep the shape, position, and occlusion from the pictures, and each person's flat colors, lit by the scene's light."
+        keep = "Keep the shape, position, and occlusion from the pictures."
         prompts = []
         cases = (
             (1, ["Depth", "Edges", "Backdrop"]),
@@ -862,7 +862,7 @@ class SpatialPipelineTests(unittest.TestCase):
                 people_count=len(people_entries) if "Clothes" in pictures else None,
             )
             prompts.append(prompt)
-            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame. Picture 1 is depth:"))
+            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light. Picture 1 is depth:"))
             self.assertEqual(prompt.count("Picture "), len(pictures))
             self.assertIn(keep, prompt)
             self.assertNotIn("Do not", prompt)
@@ -880,15 +880,16 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("no walls", empty.lower())
         self.assertIn("Six people.", wide)
         self.assertNotIn("black shapes are the structures", wide)
-        self.assertIn("Picture 2 is these people with flat color fills", wide)
+        self.assertIn("Picture 2 shows each person's colors", wide)
         self.assertNotIn("no walls", wide.lower())
         self.assertIn("One person.", solo)
         self.assertNotIn("no walls", solo.lower())
-        self.assertIn("Picture 2 is the person with flat color fills", solo)
+        self.assertIn("Picture 2 shows each person's colors", solo)
         self.assertNotIn("black shapes are the structures", solo)
-        keep = "Keep the shape, position, and occlusion from the pictures, and each person's flat colors, lit by the scene's light."
+        self.assertNotIn("with real cloth and skin texture, natural storm light", empty)
+        keep = "Keep the shape, position, and occlusion from the pictures."
         for prompt in prompts:
-            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame. "))
+            self.assertTrue(prompt.startswith("Photorealistic vertical 9:16 film frame with real cloth, skin, and stone texture, natural storm light. "))
             self.assertIn(keep, prompt)
             self.assertLess(prompt.index("Picture 1"), prompt.index(keep))
 
