@@ -79,7 +79,7 @@ Guides written for the start frame, and for the end frame when blocking or the c
 | Guide | What it is |
 | --- | --- |
 | `depth` | Camera-forward depth. Near surfaces are bright. Empty space is black. Character meshes stay in this map, so position and occlusion are fixed. |
-| `clothes` | Those character meshes from this camera, the place cut away. Cloth, skin, and hair are each one flat color taken from the plate. A small stain takes the color around it. |
+| `clothes` | Those character meshes from this camera, the place cut away. Cloth, skin, and hair are each one flat color taken from the plate. A small stain takes the color around it. A landmark or prop in front of a person leaves that pixel black, so the cutout matches depth occlusion. |
 | `edges` | Outlines where depth jumps or a surface meets empty space. People are included when they are in frame. |
 | `pose` | OpenPose skeleton, used only when the clothes cutout is missing. |
 | `backdrop` | Empty space from this camera in flat sky, ground, and surround color. Landmarks, props, and people are black. The open floor keeps the ground color. |

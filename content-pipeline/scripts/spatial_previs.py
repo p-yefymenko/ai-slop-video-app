@@ -1102,6 +1102,14 @@ def _flatten_figure_colors(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
+def _place_hides_person(person_depth: np.ndarray, place_depth: np.ndarray) -> np.ndarray:
+    """True where a landmark, prop, or floor is in front of this person."""
+    person = np.isfinite(person_depth)
+    place = np.isfinite(place_depth)
+    slack = np.maximum(np.float32(0.05), np.abs(person_depth) * np.float32(0.02))
+    return person & place & ((place_depth + slack) < person_depth)
+
+
 def render_clothes_cutout(
     show: dict,
     episode: dict,
@@ -1111,12 +1119,22 @@ def render_clothes_cutout(
     """These people from this camera, place cut away, each area one flat plate color.
 
     Cloth, skin, and hair keep their own color. A small stain takes the color
-    around it, so the still cannot copy a speck from the mesh.
+    around it, so the still cannot copy a speck from the mesh. A landmark or
+    prop in front of a person leaves that pixel black, matching depth occlusion.
     """
     from clay_gpu import raster_clay
 
-    camera = camera_at(scene, time_seconds)
+    camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
     basis = _camera_basis(camera)
+    place = [
+        batch
+        for batch in batches
+        if batch.base not in (CHARACTER_MESH_BASE, CAPSULE_BASE)
+    ]
+    if place:
+        _image, place_z = _raster_clay(place, camera)
+    else:
+        place_z = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
     canvas = np.zeros((PROXY_HEIGHT, PROXY_WIDTH, 3), dtype=np.uint8)
     nearest = np.full((PROXY_HEIGHT, PROXY_WIDTH), np.inf, dtype=np.float32)
     for character_id in scene.get("characterIds") or []:
@@ -1144,8 +1162,9 @@ def render_clothes_cutout(
             continue
         flat = _flatten_figure_colors(np.asarray(image), covered)
         closer = covered & (depth < nearest)
-        canvas[closer] = flat[closer]
         nearest[closer] = depth[closer]
+        keep = closer & ~_place_hides_person(depth, place_z)
+        canvas[keep] = flat[keep]
     return Image.fromarray(canvas, "RGB")
 
 
@@ -1264,6 +1283,7 @@ def _location_set_mesh(show_id: str | None, location_id: str):
 # A stored character mesh already faces schema +Y, which is body yaw 0.
 CHARACTER_FRONT_YAW = 0.0
 CHARACTER_MESH_BASE = 208
+CAPSULE_BASE = 214
 
 
 def _yaw_vertices(vertices: np.ndarray, yaw_degrees: float) -> np.ndarray:

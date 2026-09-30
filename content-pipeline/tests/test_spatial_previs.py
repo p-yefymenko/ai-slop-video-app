@@ -534,6 +534,18 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertGreater(int(flat[41, 29, 0]), 160)
         self.assertLess(int(flat[58, 20, 1]), 150)
 
+    def test_place_in_front_of_a_person_hides_those_clothes_pixels(self) -> None:
+        from spatial_previs import _place_hides_person
+
+        person = np.full((8, 8), 4.0, dtype=np.float32)
+        place = np.full((8, 8), np.inf, dtype=np.float32)
+        place[2:6, 2:6] = 1.0
+        hidden = _place_hides_person(person, place)
+        self.assertTrue(bool(hidden[4, 4]))
+        self.assertFalse(bool(hidden[0, 0]))
+        behind = np.full((8, 8), 6.0, dtype=np.float32)
+        self.assertFalse(bool(_place_hides_person(person, behind)[4, 4]))
+
     def test_clothes_cutout_draws_the_vertex_color_on_black(self) -> None:
         from clay_gpu import ClayBatch, raster_clay
         from spatial_previs import NEAR_CLIP, _camera_basis
