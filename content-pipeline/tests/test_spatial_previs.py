@@ -574,6 +574,70 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertEqual(by_id["throne_dais"]["skipReason"], "screen fraction 0.010 < 0.02")
         self.assertEqual(by_id["anvil_altar"]["skipReason"], "no visible pixels")
 
+    def test_end_frame_inherits_start_landmark_sent_when_both_visible(self) -> None:
+        from spatial_previs import describe_landmarks
+
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 4)
+        camera = camera_at(scene, float(scene["timeRangeSeconds"][1]))
+        start_records = [
+            {"landmarkId": "sun_well", "sent": True, "screenFraction": 0.0294},
+            {"landmarkId": "anvil_altar", "sent": False, "screenFraction": 0.0},
+            {"landmarkId": "throne_dais", "sent": False, "screenFraction": 0.0041},
+            {"landmarkId": "gate_column_l", "sent": False, "screenFraction": 0.0},
+            {"landmarkId": "gate_column_r", "sent": False, "screenFraction": 0.0},
+        ]
+        sentence, records = describe_landmarks(
+            location,
+            camera,
+            shown={
+                "sun_well": 0.0048,
+                "throne_dais": 0.0103,
+                "anvil_altar": 0.0,
+                "gate_column_l": 0.0,
+                "gate_column_r": 0.0,
+            },
+            min_screen_fraction=0.01,
+            start_records=start_records,
+        )
+        by_id = {record["landmarkId"]: record for record in records}
+        self.assertIn("white-gold", sentence.lower())
+        self.assertIn("fire ring", sentence.lower())
+        self.assertNotIn("worn steps", sentence.lower())
+        self.assertNotIn("dais", sentence.lower())
+        self.assertTrue(by_id["sun_well"]["sent"])
+        self.assertEqual(by_id["sun_well"]["reason"], "inherited from start")
+        self.assertFalse(by_id["throne_dais"]["sent"])
+        self.assertEqual(by_id["throne_dais"]["skipReason"], "inherited from start")
+        self.assertEqual(by_id["throne_dais"]["reason"], "inherited from start")
+        self.assertEqual(by_id["anvil_altar"]["skipReason"], "no visible pixels")
+
+    def test_end_frame_uses_fraction_rule_when_start_log_is_missing(self) -> None:
+        from spatial_previs import describe_landmarks
+
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 4)
+        camera = camera_at(scene, float(scene["timeRangeSeconds"][1]))
+        sentence, records = describe_landmarks(
+            location,
+            camera,
+            shown={
+                "sun_well": 0.0048,
+                "throne_dais": 0.0103,
+                "anvil_altar": 0.0,
+                "gate_column_l": 0.0,
+                "gate_column_r": 0.0,
+            },
+            min_screen_fraction=0.01,
+        )
+        by_id = {record["landmarkId"]: record for record in records}
+        self.assertNotIn("white-gold", sentence.lower())
+        self.assertIn("worn steps", sentence.lower())
+        self.assertFalse(by_id["sun_well"]["sent"])
+        self.assertTrue(by_id["throne_dais"]["sent"])
+        self.assertNotIn("reason", by_id["sun_well"])
+        self.assertNotIn("reason", by_id["throne_dais"])
+
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors
 

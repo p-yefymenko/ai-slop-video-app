@@ -344,6 +344,15 @@ def load_landmark_min_screen_fraction(prompts: dict | None = None) -> float:
     return fraction
 
 
+def _start_record_visible(start_record: dict | None, end_fraction: float | None) -> bool:
+    if start_record is None or end_fraction is None or end_fraction <= 0:
+        return False
+    start_fraction = start_record.get("screenFraction")
+    if isinstance(start_fraction, bool) or not isinstance(start_fraction, (int, float)):
+        return False
+    return float(start_fraction) > 0
+
+
 def _landmark_is_shown(
     landmark_id: str,
     landmark: dict,
@@ -352,17 +361,24 @@ def _landmark_is_shown(
     shown: dict[str, float] | None,
     covered: str,
     min_screen_fraction: float,
+    start_record: dict | None = None,
 ) -> tuple[bool, dict]:
     """Whether this landmark is named, and the log record."""
     landmark_id = str(landmark_id)
     record: dict = {"landmarkId": landmark_id, "sent": False}
     fraction = None if shown is None else shown.get(landmark_id)
+    inherited = _start_record_visible(start_record, fraction)
     if fraction is not None:
         record["screenFraction"] = round(float(fraction), 4)
-        if fraction <= 0:
+        if inherited:
+            record["reason"] = "inherited from start"
+            if not (start_record or {}).get("sent"):
+                record["skipReason"] = "inherited from start"
+                return False, record
+        elif fraction <= 0:
             record["skipReason"] = "no visible pixels"
             return False, record
-        if fraction < min_screen_fraction:
+        elif fraction < min_screen_fraction:
             record["skipReason"] = (
                 f"screen fraction {fraction:.3f} < {min_screen_fraction:g}"
             )
@@ -394,6 +410,7 @@ def describe_landmarks(
     shown: dict[str, float] | None = None,
     *,
     min_screen_fraction: float | None = None,
+    start_records: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
     """Appearances of landmarks this camera can see, plus a log of every landmark."""
     minimum = (
@@ -401,6 +418,11 @@ def describe_landmarks(
         if min_screen_fraction is not None
         else load_landmark_min_screen_fraction()
     )
+    prior = {
+        str(item["landmarkId"]): item
+        for item in (start_records or [])
+        if isinstance(item, dict) and item.get("landmarkId")
+    }
     bits: list[str] = []
     records: list[dict] = []
     covered = ""
@@ -416,6 +438,7 @@ def describe_landmarks(
             shown,
             covered,
             minimum,
+            prior.get(str(landmark_id)),
         )
         if record.get("landmarkId"):
             if sent:

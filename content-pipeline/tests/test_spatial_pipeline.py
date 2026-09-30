@@ -1032,6 +1032,40 @@ class SpatialPipelineTests(unittest.TestCase):
             )
             self.assertFalse((Path(temp) / "scene_02_start_log.json").exists())
 
+    def test_end_still_reads_start_landmark_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            start = Path(temp) / "scene_04_start.png"
+            end = Path(temp) / "scene_04_end.png"
+            pipeline.begin_generation_log(start)
+            pipeline.append_generation_log(
+                start,
+                "blockout",
+                "start prompt",
+                [],
+                None,
+                [
+                    {
+                        "landmarkId": "sun_well",
+                        "sent": True,
+                        "screenFraction": 0.0294,
+                    },
+                    {
+                        "landmarkId": "throne_dais",
+                        "sent": False,
+                        "screenFraction": 0.0041,
+                        "skipReason": "screen fraction 0.004 < 0.01",
+                    },
+                ],
+            )
+            records = pipeline.load_start_landmark_records(end)
+            assert records is not None
+            by_id = {item["landmarkId"]: item for item in records}
+            self.assertTrue(by_id["sun_well"]["sent"])
+            self.assertFalse(by_id["throne_dais"]["sent"])
+            self.assertIsNone(pipeline.load_start_landmark_records(start))
+            missing = Path(temp) / "scene_99_end.png"
+            self.assertIsNone(pipeline.load_start_landmark_records(missing))
+
     def test_still_prompt_names_only_landmarks_this_camera_sees(self) -> None:
         location = self.show["locations"]["sun_well_court"]
         close = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 15)

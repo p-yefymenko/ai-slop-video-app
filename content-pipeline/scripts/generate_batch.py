@@ -551,6 +551,27 @@ def still_inputs_dir(dest: Path) -> Path:
     return dest.parent / "inputs" / dest.stem
 
 
+def load_start_landmark_records(dest: Path) -> list[dict] | None:
+    """End frames copy start landmark sent flags. Missing start log means None."""
+    if not dest.stem.endswith("_end"):
+        return None
+    start_dest = dest.with_name(dest.name.replace("_end", "_start", 1))
+    log_path = still_log_path(start_dest)
+    if not log_path.is_file():
+        return None
+    try:
+        payload = json.loads(log_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    for item in payload.get("passes") or []:
+        if not isinstance(item, dict):
+            continue
+        landmarks = item.get("landmarks")
+        if isinstance(landmarks, list):
+            return landmarks
+    return None
+
+
 def begin_generation_log(dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     inputs = still_inputs_dir(dest)
@@ -1726,6 +1747,7 @@ def render_spatial_still(
         people_path,
         shown,
         min_screen_fraction=show["landmarkMinScreenFraction"],
+        start_records=load_start_landmark_records(dest),
     )
     setting = visible_setting_line(location, backdrop_path, landmarks.lower())
     legend = titles + (["Backdrop"] if attach_backdrop else [])
