@@ -8,6 +8,8 @@ import { z } from "zod";
 import type {
   CharacterSpatialKeyframe,
   PropSpatialKeyframe,
+  ScriptScene,
+  ShowEpisode,
   ShowLocation,
   ShowScript,
   SpatialCameraKeyframe,
@@ -487,6 +489,182 @@ function checkCameraFrame(
   }
 }
 
+const CAMERA_MESH_MIN_METERS = 0.8;
+const DEFAULT_STANDING_HEIGHT = 1.72;
+
+function lerp(start: number, finish: number, amount: number): number {
+  return start + (finish - start) * amount;
+}
+
+function lerpVec(start: [number, number, number], finish: [number, number, number], amount: number): [number, number, number] {
+  return [lerp(start[0], finish[0], amount), lerp(start[1], finish[1], amount), lerp(start[2], finish[2], amount)];
+}
+
+function distanceToAabb(
+  point: [number, number, number],
+  low: [number, number, number],
+  high: [number, number, number],
+): number {
+  const dx = Math.max(low[0] - point[0], 0, point[0] - high[0]);
+  const dy = Math.max(low[1] - point[1], 0, point[1] - high[1]);
+  const dz = Math.max(low[2] - point[2], 0, point[2] - high[2]);
+  return Math.hypot(dx, dy, dz);
+}
+
+function sampleKeyedVec(
+  frames: Array<{ timeSeconds: number }>,
+  timeSeconds: number,
+  read: (frame: { timeSeconds: number }) => [number, number, number],
+): [number, number, number] {
+  const ordered = [...frames].sort((left, right) => left.timeSeconds - right.timeSeconds);
+  if (timeSeconds <= ordered[0].timeSeconds) {
+    return read(ordered[0]);
+  }
+  const last = ordered[ordered.length - 1];
+  if (timeSeconds >= last.timeSeconds) {
+    return read(last);
+  }
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const before = ordered[index];
+    const after = ordered[index + 1];
+    if (timeSeconds < before.timeSeconds || timeSeconds > after.timeSeconds) {
+      continue;
+    }
+    const span = after.timeSeconds - before.timeSeconds;
+    const amount = span <= 1e-6 ? 0 : (timeSeconds - before.timeSeconds) / span;
+    return lerpVec(read(before), read(after), amount);
+  }
+  return read(last);
+}
+
+function sampleCharacter(
+  track: CharacterSpatialKeyframe[],
+  timeSeconds: number,
+): { position: [number, number, number]; stance: string; locationId: string } {
+  const ordered = [...track].sort((left, right) => left.timeSeconds - right.timeSeconds);
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  if (timeSeconds <= first.timeSeconds) {
+    return { position: first.position, stance: first.stance, locationId: first.locationId };
+  }
+  if (timeSeconds >= last.timeSeconds) {
+    return { position: last.position, stance: last.stance, locationId: last.locationId };
+  }
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const before = ordered[index];
+    const after = ordered[index + 1];
+    if (timeSeconds < before.timeSeconds || timeSeconds > after.timeSeconds) {
+      continue;
+    }
+    if (before.locationId !== after.locationId) {
+      const pick = timeSeconds < after.timeSeconds ? before : after;
+      return { position: pick.position, stance: pick.stance, locationId: pick.locationId };
+    }
+    const span = after.timeSeconds - before.timeSeconds;
+    const amount = span <= 1e-6 ? 0 : (timeSeconds - before.timeSeconds) / span;
+    return {
+      position: lerpVec(before.position, after.position, amount),
+      stance: before.stance,
+      locationId: before.locationId,
+    };
+  }
+  return { position: last.position, stance: last.stance, locationId: last.locationId };
+}
+
+function characterHeightMeters(show: ShowScript, characterId: string, stance: string): number {
+  const standing = show.characters[characterId]?.proxy?.heightMeters ?? DEFAULT_STANDING_HEIGHT;
+  if (stance === "sitting") {
+    return standing * (1.35 / DEFAULT_STANDING_HEIGHT);
+  }
+  if (stance === "kneeling") {
+    return standing * (1.18 / DEFAULT_STANDING_HEIGHT);
+  }
+  return standing;
+}
+
+function characterRadiusMeters(show: ShowScript, characterId: string): number {
+  const build = show.characters[characterId]?.proxy?.build ?? "average";
+  const factor = build === "slim" ? 0.85 : build === "broad" ? 1.15 : 1;
+  return 0.22 * factor;
+}
+
+function checkCameraMeshClearance(
+  issues: ScriptIssue[],
+  show: ShowScript,
+  episode: ShowEpisode,
+  scene: ScriptScene,
+  scenePath: string,
+) {
+  const [start, finish] = scene.timeRangeSeconds;
+  const times = new Set<number>([start, finish]);
+  for (const frame of scene.camera.keyframes) {
+    if (frame.timeSeconds >= start - 1e-6 && frame.timeSeconds <= finish + 1e-6) {
+      times.add(frame.timeSeconds);
+    }
+  }
+  const tracks = episode.spatialTimeline.characterTracks;
+  for (const characterId of scene.characterIds) {
+    for (const frame of tracks[characterId] ?? []) {
+      if (frame.timeSeconds >= start - 1e-6 && frame.timeSeconds <= finish + 1e-6) {
+        times.add(frame.timeSeconds);
+      }
+    }
+  }
+  const location = show.locations[scene.locationId];
+  const landmarks = location?.spatial.landmarks ?? {};
+  for (const moment of [...times].sort((left, right) => left - right)) {
+    const camera = sampleKeyedVec(scene.camera.keyframes, moment, (frame) => {
+      const pose = frame as SpatialCameraKeyframe;
+      return pose.position;
+    });
+    for (const characterId of scene.characterIds) {
+      const track = tracks[characterId];
+      if (!track?.length) {
+        continue;
+      }
+      const state = sampleCharacter(track, moment);
+      if (state.locationId !== scene.locationId) {
+        continue;
+      }
+      const radius = characterRadiusMeters(show, characterId);
+      const height = characterHeightMeters(show, characterId, state.stance);
+      const [px, py, pz] = state.position;
+      const distance = distanceToAabb(
+        camera,
+        [px - radius, py - radius, pz],
+        [px + radius, py + radius, pz + height],
+      );
+      if (distance < CAMERA_MESH_MIN_METERS) {
+        issues.push({
+          path: `${scenePath}.camera`,
+          message: `scene ${scene.sceneNumber}: camera is ${distance.toFixed(2)}m from ${characterId} at ${moment}s; keep at least ${CAMERA_MESH_MIN_METERS}m from every mesh`,
+        });
+      }
+    }
+    if (!locationHasPeople(show, scene.locationId)) {
+      continue;
+    }
+    for (const [landmarkId, landmark] of Object.entries(landmarks)) {
+      if (!landmark.position || !landmark.size) {
+        continue;
+      }
+      const [px, py, pz] = landmark.position;
+      const [width, depth, height] = landmark.size;
+      const distance = distanceToAabb(
+        camera,
+        [px - width / 2, py - depth / 2, pz],
+        [px + width / 2, py + depth / 2, pz + height],
+      );
+      if (distance < CAMERA_MESH_MIN_METERS) {
+        issues.push({
+          path: `${scenePath}.camera`,
+          message: `scene ${scene.sceneNumber}: camera is ${distance.toFixed(2)}m from ${landmarkId} at ${moment}s; keep at least ${CAMERA_MESH_MIN_METERS}m from every mesh`,
+        });
+      }
+    }
+  }
+}
+
 function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   const issues: ScriptIssue[] = [];
   if (source && show.id !== source.showId) {
@@ -617,6 +795,7 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
             finish,
           );
         });
+        checkCameraMeshClearance(issues, show, episode, scene, scenePath);
       }
     });
   });

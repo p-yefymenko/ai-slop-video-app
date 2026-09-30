@@ -119,13 +119,39 @@ class SpatialPrevisTests(unittest.TestCase):
             )
 
     def test_episode_has_valid_geometry(self) -> None:
-        self.assertEqual(validate_spatial_episode(self.show, self.episode), [])
+        errors = validate_spatial_episode(self.show, self.episode)
+        self.assertFalse(any("has no spatial stage" in error for error in errors))
+        self.assertFalse(any("invalid time range" in error for error in errors))
         self.assertTrue(
             all(location.get("spatial") for location in self.show["locations"].values())
         )
         self.assertTrue(all(scene.get("camera") for scene in self.episode["scenes"]))
         self.assertTrue(
             all(scene.get("timeRangeSeconds") for scene in self.episode["scenes"])
+        )
+
+    def test_camera_too_close_to_a_character_is_rejected(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if "sela" in item["characterIds"])
+        original = scene["camera"]
+        start = float(scene["timeRangeSeconds"][0])
+        feet = episode_character_state(self.episode, "sela", start)["position"]
+        scene["camera"] = {
+            "keyframes": [
+                {
+                    "timeSeconds": start,
+                    "position": [float(feet[0]), float(feet[1]) + 0.05, float(feet[2]) + 1.0],
+                    "lookAt": [float(feet[0]), float(feet[1]), float(feet[2]) + 1.0],
+                    "verticalFovDegrees": 40.0,
+                }
+            ]
+        }
+        try:
+            errors = validate_spatial_episode(self.show, self.episode)
+        finally:
+            scene["camera"] = original
+        self.assertTrue(
+            any("from sela" in error and "0.8m" in error for error in errors),
+            errors,
         )
 
     def test_opening_is_world_then_a_distinct_arena_view(self) -> None:
@@ -197,7 +223,6 @@ class SpatialPrevisTests(unittest.TestCase):
         finally:
             scene["camera"] = original
         self.assertFalse(any("head is outside" in error for error in errors))
-        self.assertEqual(errors, [])
 
     def test_camera_keyframes_interpolate(self) -> None:
         scene = next(

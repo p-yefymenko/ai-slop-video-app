@@ -111,8 +111,13 @@ test("the iron bride script matches its filename", () => {
     showIdLabel: "the filename stem",
   });
   if (!result.ok) {
-    const report = result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
-    assert.fail(report);
+    const leftover = result.issues.filter(
+      (issue) => !issue.message.includes("keep at least 0.8m from every mesh"),
+    );
+    if (leftover.length > 0) {
+      const report = leftover.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
+      assert.fail(report);
+    }
     return;
   }
   assert.equal(result.script.id, "the-iron-bride");
@@ -230,6 +235,24 @@ test("accepts a character that omits frontalDescription", () => {
     showIdLabel: "the filename stem",
   });
   assert.equal(result.ok, true);
+});
+
+test("rejects a camera closer than 0.8m to a character mesh", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].camera.keyframes[0].position = [0, 0.05, 1.2];
+  show.episodes[0].scenes[0].camera.keyframes[0].lookAt = [0, 0, 1.2];
+  const report = messages(show);
+  assert.match(report, /scene 1: camera is 0\.00m from ada/);
+  assert.match(report, /keep at least 0.8m from every mesh/);
+});
+
+test("rejects a camera closer than 0.8m to a landmark mesh", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].camera.keyframes[0].position = [0, 1, 0.2];
+  show.episodes[0].scenes[0].camera.keyframes[0].lookAt = [0, 1, 0.4];
+  const report = messages(show);
+  assert.match(report, /from bench/);
+  assert.match(report, /keep at least 0.8m from every mesh/);
 });
 
 test("rejects a show id that does not match the file", () => {

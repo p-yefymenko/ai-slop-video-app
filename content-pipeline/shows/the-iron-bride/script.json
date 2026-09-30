@@ -453,9 +453,9 @@
             "keyframes": [
               {
                 "timeSeconds": 15,
-                "position": [1.75, -5.4, 1.58],
-                "lookAt": [0.15, 5.8, 1.52],
-                "verticalFovDegrees": 32
+                "position": [2.4, -6.0, 1.58],
+                "lookAt": [0.75, 0.4, 1.48],
+                "verticalFovDegrees": 42
               }
             ]
           }
@@ -491,7 +491,7 @@
             "keyframes": [
               {
                 "timeSeconds": 22,
-                "position": [1.9, 5.3, 1.12],
+                "position": [2.2, 5.3, 1.12],
                 "lookAt": [1.9, 6.6, 1.08],
                 "verticalFovDegrees": 22
               }
@@ -553,8 +553,14 @@
             "keyframes": [
               {
                 "timeSeconds": 31,
-                "position": [-0.3, 1.85, 1.56],
+                "position": [-0.4, 2.05, 1.56],
                 "lookAt": [-0.4, 1.0, 1.55],
+                "verticalFovDegrees": 16
+              },
+              {
+                "timeSeconds": 33,
+                "position": [-0.29, 2.45, 1.56],
+                "lookAt": [-0.29, 1.4, 1.55],
                 "verticalFovDegrees": 16
               }
             ]
@@ -591,9 +597,9 @@
             "keyframes": [
               {
                 "timeSeconds": 38,
-                "position": [1.1, 2.55, 0.28],
-                "lookAt": [0.0, 3.2, 0.12],
-                "verticalFovDegrees": 30
+                "position": [1.0, 1.0, 0.34],
+                "lookAt": [0.0, 2.8, 0.25],
+                "verticalFovDegrees": 48
               }
             ]
           }
@@ -611,8 +617,8 @@
             "keyframes": [
               {
                 "timeSeconds": 40,
-                "position": [0.0, 5.05, 1.62],
-                "lookAt": [0.0, 6.0, 1.58],
+                "position": [1.95, 4.9, 1.62],
+                "lookAt": [0.0, 6.0, 1.62],
                 "verticalFovDegrees": 15
               }
             ]
@@ -649,8 +655,8 @@
             "keyframes": [
               {
                 "timeSeconds": 47,
-                "position": [0.0, 4.64, 1.58],
-                "lookAt": [0.0, 2.4, 1.46],
+                "position": [0.0, 4.64, 2.15],
+                "lookAt": [0.0, 2.4, 1.5],
                 "verticalFovDegrees": 26
               }
             ]

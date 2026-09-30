@@ -25,6 +25,8 @@ from pipeline_paths import (
 PROXY_WIDTH = 768
 PROXY_HEIGHT = 1360
 NEAR_CLIP = 0.05
+# Cameras closer than this to a character or landmark volume clip the mesh.
+CAMERA_MESH_MIN_METERS = 0.8
 # Empty viewport, matching a clay playblast: gray where no surface exists.
 VIEWPORT_GRAY = (148, 149, 152)
 # The edit node has two identity slots. Previs still masks every face that
@@ -1888,6 +1890,99 @@ def render_scene_proxy(
     image.save(destination)
 
 
+def _distance_to_aabb(point: Vec3, low: Vec3, high: Vec3) -> float:
+    dx = max(low[0] - point[0], 0.0, point[0] - high[0])
+    dy = max(low[1] - point[1], 0.0, point[1] - high[1])
+    dz = max(low[2] - point[2], 0.0, point[2] - high[2])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def _character_aabb(
+    show: dict,
+    character_id: str,
+    position: Vec3,
+    stance: str,
+) -> tuple[Vec3, Vec3]:
+    scale = _height_scale(show, character_id)
+    _hip, _shoulder, head = _stance_heights(stance, scale)
+    radius = 0.22 * _build_factor(show, character_id)
+    px, py, pz = vec(position)
+    return (px - radius, py - radius, pz), (px + radius, py + radius, pz + head)
+
+
+def _landmark_aabb(position: Vec3, size: Vec3) -> tuple[Vec3, Vec3]:
+    half_x, half_y = size[0] / 2.0, size[1] / 2.0
+    return (
+        (position[0] - half_x, position[1] - half_y, position[2]),
+        (position[0] + half_x, position[1] + half_y, position[2] + size[2]),
+    )
+
+
+def _scene_clearance_times(episode: dict, scene: dict) -> list[float]:
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    times = {start, finish}
+    for frame in camera_keyframes(scene):
+        moment = float(frame["timeSeconds"])
+        if start <= moment <= finish:
+            times.add(moment)
+    tracks = (episode.get("spatialTimeline") or {}).get("characterTracks") or {}
+    for character_id in scene.get("characterIds") or []:
+        for frame in tracks.get(character_id) or []:
+            moment = float(frame["timeSeconds"])
+            if start <= moment <= finish:
+                times.add(moment)
+    return sorted(times)
+
+
+def _camera_mesh_clearance_errors(
+    show: dict,
+    episode: dict,
+    scene: dict,
+) -> list[str]:
+    errors: list[str] = []
+    location = show["locations"].get(scene["locationId"]) or {}
+    landmarks = (location.get("spatial") or {}).get("landmarks") or {}
+    number = scene["sceneNumber"]
+    for moment in _scene_clearance_times(episode, scene):
+        camera = vec(camera_at(scene, moment)["position"])
+        for character_id in scene.get("characterIds") or []:
+            try:
+                state = episode_character_state(episode, character_id, moment)
+            except ValueError:
+                continue
+            if state.get("locationId") != scene["locationId"]:
+                continue
+            low, high = _character_aabb(
+                show,
+                character_id,
+                vec(state["position"]),
+                str(state.get("stance") or "standing"),
+            )
+            distance = _distance_to_aabb(camera, low, high)
+            if distance < CAMERA_MESH_MIN_METERS:
+                errors.append(
+                    f"scene {number} at {moment:g}s: camera is {distance:.2f}m from "
+                    f"{character_id}; keep at least {CAMERA_MESH_MIN_METERS:g}m from every mesh"
+                )
+        for landmark_id, landmark in landmarks.items():
+            if not isinstance(landmark, dict):
+                continue
+            position = landmark.get("position")
+            size = landmark.get("size")
+            if not isinstance(position, list) or not isinstance(size, list):
+                continue
+            if len(position) < 3 or len(size) < 3:
+                continue
+            low, high = _landmark_aabb(vec(position), vec(size))
+            distance = _distance_to_aabb(camera, low, high)
+            if distance < CAMERA_MESH_MIN_METERS:
+                errors.append(
+                    f"scene {number} at {moment:g}s: camera is {distance:.2f}m from "
+                    f"{landmark_id}; keep at least {CAMERA_MESH_MIN_METERS:g}m from every mesh"
+                )
+    return errors
+
+
 def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
     errors: list[str] = []
     timeline = episode.get("spatialTimeline")
@@ -1953,7 +2048,6 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
                 break
         if not pose_ok:
             continue
-        camera = camera_at(scene, start)
         for character_id in scene["characterIds"]:
             try:
                 state = episode_character_state(episode, character_id, start)
@@ -1966,8 +2060,7 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
                     f"{state['locationId']}, not {scene['locationId']}"
                 )
                 continue
-            if length(sub(vec(state["position"]), vec(camera["position"]))) < 0.3:
-                errors.append(f"scene {scene['sceneNumber']}: camera intersects {character_id}")
+        errors.extend(_camera_mesh_clearance_errors(show, episode, scene))
     return errors
 
 
