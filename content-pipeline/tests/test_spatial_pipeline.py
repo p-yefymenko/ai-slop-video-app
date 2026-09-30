@@ -203,6 +203,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("spatialBlockout", self.show["prompts"])
         self.assertIn("stillOpening", self.show["prompts"])
         self.assertEqual(self.show["frontalMinPixelHeight"], 400)
+        self.assertEqual(self.show["landmarkMinScreenFraction"], 0.02)
         self.assertIn("spatialFaces", self.show["prompts"])
         self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
@@ -996,6 +997,14 @@ class SpatialPipelineTests(unittest.TestCase):
                         "characterId": "mio",
                     }
                 ],
+                [
+                    {
+                        "landmarkId": "throne_dais",
+                        "sent": False,
+                        "screenFraction": 0.01,
+                        "skipReason": "screen fraction 0.010 < 0.02",
+                    }
+                ],
             )
             log = json.loads(pipeline.still_log_path(dest).read_text(encoding="utf-8"))
             self.assertEqual(log["still"], "scene_02_start.png")
@@ -1007,6 +1016,12 @@ class SpatialPipelineTests(unittest.TestCase):
             self.assertEqual(log["passes"][0]["people"][0]["place"], "far left")
             self.assertEqual(log["passes"][0]["people"][0]["phrase"], "in a red coat")
             self.assertEqual(log["passes"][0]["people"][0]["characterId"], "mio")
+            self.assertEqual(log["passes"][0]["landmarks"][0]["landmarkId"], "throne_dais")
+            self.assertFalse(log["passes"][0]["landmarks"][0]["sent"])
+            self.assertEqual(
+                log["passes"][0]["landmarks"][0]["skipReason"],
+                "screen fraction 0.010 < 0.02",
+            )
             self.assertNotIn("sources", log["passes"][0]["people"][0])
             self.assertNotIn("override", log["passes"][0]["people"][0])
             self.assertNotIn("colorScores", log["passes"][0])

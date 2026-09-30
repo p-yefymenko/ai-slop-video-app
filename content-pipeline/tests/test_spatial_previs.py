@@ -476,8 +476,8 @@ class SpatialPrevisTests(unittest.TestCase):
             location,
             camera,
             shown={
-                "sun_well": 0.9,
-                "throne_dais": 0.57,
+                "sun_well": 0.05,
+                "throne_dais": 0.01,
                 "anvil_altar": 0.0,
                 "gate_column_l": 0.0,
                 "gate_column_r": 0.0,
@@ -517,6 +517,37 @@ class SpatialPrevisTests(unittest.TestCase):
         _image, back_z = _raster_clay([back], camera)
         self.assertGreater(shown_fraction(front_z, scene_z), 0.9)
         self.assertLess(shown_fraction(back_z, scene_z), 0.15)
+        from spatial_previs import screen_coverage
+
+        self.assertGreater(screen_coverage(front_z, scene_z), 0.02)
+        self.assertLess(screen_coverage(back_z, scene_z), screen_coverage(front_z, scene_z))
+
+    def test_landmark_prompt_uses_screen_fraction_and_logs_skips(self) -> None:
+        from spatial_previs import describe_landmarks
+
+        location = self.show["locations"]["sun_well_court"]
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 8)
+        camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
+        sentence, records = describe_landmarks(
+            location,
+            camera,
+            shown={
+                "sun_well": 0.08,
+                "throne_dais": 0.01,
+                "anvil_altar": 0.0,
+                "gate_column_l": 0.004,
+                "gate_column_r": 0.004,
+            },
+            min_screen_fraction=0.02,
+        )
+        self.assertIn("white-gold", sentence.lower())
+        self.assertNotIn("worn steps", sentence.lower())
+        by_id = {record["landmarkId"]: record for record in records}
+        self.assertTrue(by_id["sun_well"]["sent"])
+        self.assertEqual(by_id["sun_well"]["screenFraction"], 0.08)
+        self.assertFalse(by_id["throne_dais"]["sent"])
+        self.assertEqual(by_id["throne_dais"]["skipReason"], "screen fraction 0.010 < 0.02")
+        self.assertEqual(by_id["anvil_altar"]["skipReason"], "no visible pixels")
 
     def test_flat_clothes_keep_hair_and_skin_and_drop_a_small_stain(self) -> None:
         from spatial_previs import _flatten_figure_colors

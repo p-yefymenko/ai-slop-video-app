@@ -15,7 +15,7 @@ Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipelin
 | Path | Role |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `generalDescription` (visible from all sides) and optional `frontalDescription` (front-only details). |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening` and `frontalMinPixelHeight`. Not show content. |
+| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `frontalMinPixelHeight`, and `landmarkMinScreenFraction`. Not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
 `spatialTimeline` is the physical source of truth: measured locations, character and prop keyframes, and a camera path per shot. Scene length is `timeRangeSeconds`. Prompt-only scenes are invalid.
@@ -104,9 +104,9 @@ Every shot uses one prompt skeleton, filled by `still_prompt` in `generate_batch
 
 The people sentence is built from `generalDescription` and blocking geometry: depth order, screen side, and occlusion. Visible people are counted in a number word. Each visible person is `{position}: {generalDescription}`. `frontalDescription` is appended to that phrase only when the faces guide lists them as facing the camera, their head mask has pixels, and their pixel height is at least `frontalMinPixelHeight` in `prompts.json`. If `generalDescription` is missing for a visible character, that person's text is left out and the log warns with their id. The log records per person whether `frontalDescription` was sent, and if not, which condition failed. Figures behind the nearest person by a depth gap stand in a row, left to right, each with their own line. Each other person is named by screen side; the nearest by camera depth is also in the foreground. A figure whose visible fraction is below the cutoff is partly hidden. Character names and ids are not sent.
 
-A landmark mesh is named when at least 70% of its on-screen surface is the surface this camera sees. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
+A landmark mesh is named when its visible front surface covers at least `landmarkMinScreenFraction` of the frame (`prompts.json`, start 0.02). The log records each landmark, whether it was sent, its screen fraction, and the skip reason if it was left out. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
 
-Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/` (and `_end` when that frame exists). The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
+Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/` (and `_end` when that frame exists). The blockout pass in `log.json` records `people` and `landmarks` the same way: each entry says whether it was sent, and the skip reason if it was left out. The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
 
 Identity face painting exists in the spatial graph and is off (`FACE_PASS = False`). LTX never receives a character portrait.
 

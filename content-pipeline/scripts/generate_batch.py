@@ -44,11 +44,12 @@ from spatial_previs import (
     PROXY_WIDTH,
     camera_at,
     compile_spatial_video_prompt,
+    describe_landmarks,
     generate_episode_previs,
-    landmark_shown_fractions,
+    landmark_screen_fractions,
+    load_landmark_min_screen_fraction,
     scene_has_spatial_change,
     validate_spatial_episode,
-    visible_landmark_line,
     visible_setting_line,
 )
 
@@ -569,6 +570,7 @@ def append_generation_log(
     prompt: str,
     images: list[tuple[str, Path | None]],
     people: list[dict] | None = None,
+    landmarks: list[dict] | None = None,
 ) -> None:
     log_path = still_log_path(dest)
     if not log_path.is_file():
@@ -589,6 +591,8 @@ def append_generation_log(
     entry = {"pass": pass_name, "prompt": prompt, "images": recorded}
     if people:
         entry["people"] = people
+    if landmarks:
+        entry["landmarks"] = landmarks
     payload.setdefault("passes", []).append(entry)
     log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -756,6 +760,7 @@ def load_show(path: Path) -> dict:
         raise SystemExit(f"{PROMPTS_PATH} must contain a JSON object")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
     show["frontalMinPixelHeight"] = load_frontal_min_pixel_height(prompts)
+    show["landmarkMinScreenFraction"] = load_landmark_min_screen_fraction(prompts)
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
         raise SystemExit(f"{path.name} is missing episodes")
@@ -1709,11 +1714,19 @@ def render_spatial_still(
     character_ids = scene["characterIds"]
     time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
     shown = (
-        landmark_shown_fractions(show, episode, scene, time_seconds) if episode is not None else None
+        landmark_screen_fractions(show, episode, scene, time_seconds)
+        if episode is not None
+        else None
     )
     people_path = clothes_path if present(clothes_path) else None
     camera = camera_at(scene, time_seconds)
-    landmarks = visible_landmark_line(location, camera, people_path, shown)
+    landmarks, landmark_log = describe_landmarks(
+        location,
+        camera,
+        people_path,
+        shown,
+        min_screen_fraction=show["landmarkMinScreenFraction"],
+    )
     setting = visible_setting_line(location, backdrop_path, landmarks.lower())
     legend = titles + (["Backdrop"] if attach_backdrop else [])
     people_entries = (
@@ -1774,7 +1787,9 @@ def render_spatial_still(
     logged = [(title, path) for path, title in chosen]
     if attach_backdrop:
         logged.append(("Backdrop", backdrop_path))
-    append_generation_log(dest, "blockout", blockout_prompt, logged, people_log)
+    append_generation_log(
+        dest, "blockout", blockout_prompt, logged, people_log, landmark_log
+    )
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:
         inject_qwen_prompt(graph, face_prompt, "Face instruction")

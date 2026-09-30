@@ -329,6 +329,19 @@ def _still_landmark_phrase(landmark_id: str, landmark: dict) -> str:
     return f"The {str(landmark_id).replace('_', ' ')} is in frame."
 
 
+def load_landmark_min_screen_fraction(prompts: dict | None = None) -> float:
+    data = prompts if isinstance(prompts, dict) else json.loads(
+        Path(__file__).resolve().parents[1].joinpath("prompts.json").read_text(encoding="utf-8")
+    )
+    value = data.get("landmarkMinScreenFraction") if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError("prompts.landmarkMinScreenFraction must be a number")
+    fraction = float(value)
+    if not 0 < fraction <= 1:
+        raise RuntimeError("prompts.landmarkMinScreenFraction must be between 0 and 1")
+    return fraction
+
+
 def _landmark_is_shown(
     landmark_id: str,
     landmark: dict,
@@ -336,18 +349,86 @@ def _landmark_is_shown(
     people_path: Path | None,
     shown: dict[str, float] | None,
     covered: str,
-) -> bool:
-    fraction = None if shown is None else shown.get(str(landmark_id))
+    min_screen_fraction: float,
+) -> tuple[bool, dict]:
+    """Whether this landmark is named, and the log record."""
+    landmark_id = str(landmark_id)
+    record: dict = {"landmarkId": landmark_id, "sent": False}
+    fraction = None if shown is None else shown.get(landmark_id)
     if fraction is not None:
-        if fraction < LANDMARK_SHOWN_MIN:
-            return False
+        record["screenFraction"] = round(float(fraction), 4)
+        if fraction <= 0:
+            record["skipReason"] = "no visible pixels"
+            return False, record
+        if fraction < min_screen_fraction:
+            record["skipReason"] = (
+                f"screen fraction {fraction:.3f} < {min_screen_fraction:g}"
+            )
+            return False, record
     else:
+        record["screenFraction"] = None
         probes = _landmark_probes(landmark, camera)
         if not probes:
-            return False
+            record["skipReason"] = "off screen"
+            return False, record
         if all(_people_cover(sample, camera, people_path) for sample in probes):
-            return False
-    return not any(alias.lower() in covered for alias in _landmark_aliases(str(landmark_id)))
+            record["skipReason"] = "covered by people"
+            return False, record
+        record["coverage"] = "probe"
+    phrase = _still_landmark_phrase(landmark_id, landmark)
+    if any(alias.lower() in covered for alias in _landmark_aliases(landmark_id)):
+        record["skipReason"] = "name already in prompt"
+        record["phrase"] = phrase
+        return False, record
+    record["sent"] = True
+    record["phrase"] = phrase
+    return True, record
+
+
+def describe_landmarks(
+    location: dict,
+    camera: dict,
+    people_path: Path | None = None,
+    shown: dict[str, float] | None = None,
+    *,
+    min_screen_fraction: float | None = None,
+) -> tuple[str, list[dict]]:
+    """Appearances of landmarks this camera can see, plus a log of every landmark."""
+    minimum = (
+        min_screen_fraction
+        if min_screen_fraction is not None
+        else load_landmark_min_screen_fraction()
+    )
+    bits: list[str] = []
+    records: list[dict] = []
+    covered = ""
+    spatial = location.get("spatial") or {}
+    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
+        if not isinstance(landmark, dict):
+            continue
+        sent, record = _landmark_is_shown(
+            str(landmark_id),
+            landmark,
+            camera,
+            people_path,
+            shown,
+            covered,
+            minimum,
+        )
+        if record.get("landmarkId"):
+            if sent:
+                print(f"  {record['landmarkId']} landmark sent", flush=True)
+            else:
+                print(
+                    f"  {record['landmarkId']} landmark skipped: {record.get('skipReason')}",
+                    flush=True,
+                )
+        records.append(record)
+        if not sent:
+            continue
+        bits.append(record["phrase"])
+        covered = " ".join(bits).lower()
+    return " ".join(bits), records
 
 
 def visible_landmark_line(
@@ -355,19 +436,18 @@ def visible_landmark_line(
     camera: dict,
     people_path: Path | None = None,
     shown: dict[str, float] | None = None,
+    *,
+    min_screen_fraction: float | None = None,
 ) -> str:
     """Appearances of landmarks this camera can see. The same rule for every shot."""
-    bits: list[str] = []
-    covered = ""
-    spatial = location.get("spatial") or {}
-    for landmark_id, landmark in (spatial.get("landmarks") or {}).items():
-        if not isinstance(landmark, dict):
-            continue
-        if not _landmark_is_shown(str(landmark_id), landmark, camera, people_path, shown, covered):
-            continue
-        bits.append(_still_landmark_phrase(str(landmark_id), landmark))
-        covered = " ".join(bits).lower()
-    return " ".join(bits)
+    sentence, _records = describe_landmarks(
+        location,
+        camera,
+        people_path,
+        shown,
+        min_screen_fraction=min_screen_fraction,
+    )
+    return sentence
 
 
 def visible_setting_line(
@@ -1336,8 +1416,9 @@ def _character_mesh_batch(
     )
 
 
-# Name a landmark when at least this much of its on-screen surface is in front.
-LANDMARK_SHOWN_MIN = 0.7
+# Name a landmark when it covers at least this much of the frame. Overridden by
+# prompts.json landmarkMinScreenFraction when that file is loaded.
+LANDMARK_MIN_SCREEN_FRACTION = 0.02
 
 
 def _named_landmark_batches(show: dict, location_id: str):
@@ -1381,13 +1462,28 @@ def shown_fraction(own: np.ndarray, scene: np.ndarray) -> float:
     return float(np.count_nonzero(visible)) / float(total)
 
 
-def landmark_shown_fractions(
+def screen_coverage(own: np.ndarray, scene: np.ndarray) -> float:
+    """Share of the frame whose front surface is this object."""
+    total = int(own.size)
+    if total <= 0:
+        return 0.0
+    covered = np.isfinite(own)
+    if not bool(covered.any()):
+        return 0.0
+    front = scene[covered]
+    surface = own[covered]
+    slack = np.maximum(np.float32(0.05), np.abs(surface) * np.float32(0.02))
+    visible = np.isfinite(front) & (np.abs(front - surface) <= slack)
+    return float(np.count_nonzero(visible)) / float(total)
+
+
+def landmark_screen_fractions(
     show: dict,
     episode: dict,
     scene: dict,
     time_seconds: float,
 ) -> dict[str, float]:
-    """How much of each landmark mesh this camera actually sees."""
+    """How much of the frame each landmark mesh actually occupies."""
     camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
     named = _named_landmark_batches(show, scene["locationId"])
     if not named:
@@ -1396,8 +1492,18 @@ def landmark_shown_fractions(
     fractions: dict[str, float] = {}
     for landmark_id, batch in named:
         _image, own_z = _raster_clay([batch], camera)
-        fractions[landmark_id] = shown_fraction(own_z, scene_z)
+        fractions[landmark_id] = screen_coverage(own_z, scene_z)
     return fractions
+
+
+def landmark_shown_fractions(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> dict[str, float]:
+    """Back-compat name. Screen coverage of each landmark mesh."""
+    return landmark_screen_fractions(show, episode, scene, time_seconds)
 
 
 def _batch_from_triangles(triangles: list[tuple[Vec3, Vec3, Vec3]], base: int):
