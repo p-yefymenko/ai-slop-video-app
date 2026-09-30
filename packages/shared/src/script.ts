@@ -167,7 +167,7 @@ export type ScriptScene = {
   timeRangeSeconds: [number, number];
   /**
    * Physical camera that projects the timeline into the proxy guide.
-   * Stay at least 0.8m from every character and landmark volume.
+   * Stay at least 1.5m from every character and landmark volume.
    */
   camera: SpatialCamera;
   /**

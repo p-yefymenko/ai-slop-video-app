@@ -150,7 +150,7 @@ class SpatialPrevisTests(unittest.TestCase):
         finally:
             scene["camera"] = original
         self.assertTrue(
-            any("from sela" in error and "0.8m" in error for error in errors),
+            any("from sela" in error and "1.5m" in error for error in errors),
             errors,
         )
 

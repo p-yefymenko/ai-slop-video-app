@@ -367,7 +367,7 @@
             "keyframes": [
               {
                 "timeSeconds": 4,
-                "position": [-1.11, -0.33, 1.48],
+                "position": [-1.1, -0.25, 1.49],
                 "lookAt": [-1.4, -2.0, 1.32],
                 "verticalFovDegrees": 24
               }
@@ -491,7 +491,7 @@
             "keyframes": [
               {
                 "timeSeconds": 22,
-                "position": [2.2, 5.3, 1.12],
+                "position": [2.65, 3.35, 1.18],
                 "lookAt": [1.9, 6.6, 1.08],
                 "verticalFovDegrees": 22
               }
@@ -529,13 +529,13 @@
             "keyframes": [
               {
                 "timeSeconds": 29,
-                "position": [-1.25, -0.35, 0.32],
+                "position": [-1.24, -0.19, 0.3],
                 "lookAt": [-1.4, -2.0, 0.48],
                 "verticalFovDegrees": 36
               },
               {
                 "timeSeconds": 31,
-                "position": [-0.55, 2.15, 0.34],
+                "position": [-2.15, 2.05, 0.36],
                 "lookAt": [-0.4, 1.0, 0.5],
                 "verticalFovDegrees": 34
               }
@@ -553,15 +553,15 @@
             "keyframes": [
               {
                 "timeSeconds": 31,
-                "position": [-0.4, 2.05, 1.56],
+                "position": [1.85, 1.85, 1.56],
                 "lookAt": [-0.4, 1.0, 1.55],
-                "verticalFovDegrees": 16
+                "verticalFovDegrees": 14
               },
               {
                 "timeSeconds": 33,
-                "position": [-0.29, 2.45, 1.56],
+                "position": [2.15, 2.05, 1.56],
                 "lookAt": [-0.29, 1.4, 1.55],
-                "verticalFovDegrees": 16
+                "verticalFovDegrees": 14
               }
             ]
           }
@@ -597,7 +597,7 @@
             "keyframes": [
               {
                 "timeSeconds": 38,
-                "position": [1.0, 1.0, 0.34],
+                "position": [1.05, 0.91, 0.34],
                 "lookAt": [0.0, 2.8, 0.25],
                 "verticalFovDegrees": 48
               }
@@ -617,7 +617,7 @@
             "keyframes": [
               {
                 "timeSeconds": 40,
-                "position": [1.95, 4.9, 1.62],
+                "position": [2.63, 4.52, 1.62],
                 "lookAt": [0.0, 6.0, 1.62],
                 "verticalFovDegrees": 15
               }
@@ -655,7 +655,7 @@
             "keyframes": [
               {
                 "timeSeconds": 47,
-                "position": [0.0, 4.64, 2.15],
+                "position": [0.0, 6.32, 2.64],
                 "lookAt": [0.0, 2.4, 1.5],
                 "verticalFovDegrees": 26
               }
@@ -673,7 +673,7 @@
             "keyframes": [
               {
                 "timeSeconds": 52,
-                "position": [1.1, -0.71, 1.6],
+                "position": [1.06, -0.41, 1.62],
                 "lookAt": [1.3, -2.2, 1.5],
                 "verticalFovDegrees": 22
               }

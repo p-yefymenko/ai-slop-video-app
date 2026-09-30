@@ -25,8 +25,9 @@ from pipeline_paths import (
 PROXY_WIDTH = 768
 PROXY_HEIGHT = 1360
 NEAR_CLIP = 0.05
-# Cameras closer than this to a character or landmark volume clip the mesh.
-CAMERA_MESH_MIN_METERS = 0.8
+# Cameras closer than this to a character or landmark volume clip the mesh
+# and leave Qwen with an unreadable crop.
+CAMERA_MESH_MIN_METERS = 1.5
 # Empty viewport, matching a clay playblast: gray where no surface exists.
 VIEWPORT_GRAY = (148, 149, 152)
 # The edit node has two identity slots. Previs still masks every face that

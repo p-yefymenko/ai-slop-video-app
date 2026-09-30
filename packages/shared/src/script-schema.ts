@@ -489,7 +489,7 @@ function checkCameraFrame(
   }
 }
 
-const CAMERA_MESH_MIN_METERS = 0.8;
+const CAMERA_MESH_MIN_METERS = 1.5;
 const DEFAULT_STANDING_HEIGHT = 1.72;
 
 function lerp(start: number, finish: number, amount: number): number {
