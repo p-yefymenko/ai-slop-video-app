@@ -25,6 +25,7 @@ from still_people import (
     describe_people,
     gather_visible_people,
     load_part_min_pixel_height,
+    load_part_min_screen_fraction,
     load_row_depth_ratio,
     still_people_line,
 )
@@ -788,6 +789,7 @@ def load_show(path: Path) -> dict:
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
     show["landmarkMinScreenFraction"] = load_landmark_min_screen_fraction(prompts)
     show["partMinPixelHeight"] = load_part_min_pixel_height(prompts)
+    show["partMinScreenFraction"] = load_part_min_screen_fraction(prompts)
     show["rowDepthRatio"] = load_row_depth_ratio(prompts)
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
@@ -1774,6 +1776,7 @@ def render_spatial_still(
         people_entries,
         min_part_height=show["partMinPixelHeight"],
         row_depth_ratio=show["rowDepthRatio"],
+        min_part_screen_fraction=show["partMinScreenFraction"],
     )
     blockout_prompt = show_prompt(
         show,

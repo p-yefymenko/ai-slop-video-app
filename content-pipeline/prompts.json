@@ -7,6 +7,7 @@
   "rowDepthRatio": 1.5,
   "landmarkMinScreenFraction": 0.008,
   "partMinPixelHeight": 25,
+  "partMinScreenFraction": 0.00025,
   "spatialBlockout": "{stillPrompt}",
   "spatialFaces": "Picture 1 is the finished shot of real people. Keep its camera, bodies, hands, set, and light. The later pictures are identity faces only: {referenceMap}. Replace only the masked faces with those identities. Do not describe or redraw the place. Do not turn the body into a mannequin or blocks. Do not move anyone or add people. Exactly {characterCount} visible people: {characterIds}.",
   "spatialBackdrop": "Picture 1 is the people and assets from this shot. Keep them. Empty space in picture 1 is flat color, not a finished place. {structurePictures} Replace only the masked empty pixels with that place. Do not change faces, clothes, or assets. Do not invent walls, windows, or a palace.",

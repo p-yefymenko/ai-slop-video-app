@@ -144,7 +144,6 @@ def part_ids_for_vertices(vertices: np.ndarray, height_meters: float | None = No
     span = float(np.max(np.abs(points[:, 0]))) if len(points) else 0.0
     span = max(span, 1e-6)
     abs_x = np.abs(points[:, 0]) / span
-    front = points[:, 1] > 0.0
     ids = np.full(len(points), BODY_PART_INDEX["torso"], dtype=np.int16)
     ids[t < _FEET] = BODY_PART_INDEX["feet"]
     legs = (t >= _FEET) & (t < _LEGS)
@@ -157,8 +156,12 @@ def part_ids_for_vertices(vertices: np.ndarray, height_meters: float | None = No
     ids[(t >= _TORSO) & (t < _NECK)] = BODY_PART_INDEX["neck"]
     head = t >= _NECK
     ids[head] = BODY_PART_INDEX["hair"]
-    ids[head & front & (t < _FACE)] = BODY_PART_INDEX["face"]
-    ids[head & front & (t >= _EYES_LO) & (t < _EYES_HI)] = BODY_PART_INDEX["eyes"]
+    if np.any(head):
+        head_forward = points[head, 1]
+        center = 0.5 * (float(head_forward.min()) + float(head_forward.max()))
+        front = head & (points[:, 1] >= center)
+        ids[front & (t < _FACE)] = BODY_PART_INDEX["face"]
+        ids[front & (t >= _EYES_LO) & (t < _EYES_HI)] = BODY_PART_INDEX["eyes"]
     return ids
 
 

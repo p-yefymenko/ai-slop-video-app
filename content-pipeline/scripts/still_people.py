@@ -22,6 +22,8 @@ COUNT_WORDS = (
     "Ten",
 )
 PROMPTS_PATH = Path(__file__).resolve().parents[1] / "prompts.json"
+DEFAULT_FRAME_WIDTH = 768
+DEFAULT_FRAME_HEIGHT = 1360
 
 
 def _count_word(count: int) -> str:
@@ -120,6 +122,51 @@ def load_part_min_pixel_height(prompts: dict | None = None) -> int:
     return value
 
 
+def load_part_min_screen_fraction(prompts: dict | None = None) -> float:
+    data = prompts if isinstance(prompts, dict) else json.loads(
+        PROMPTS_PATH.read_text(encoding="utf-8")
+    )
+    value = data.get("partMinScreenFraction") if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError("prompts.partMinScreenFraction must be a number")
+    fraction = float(value)
+    if not 0 < fraction <= 1:
+        raise RuntimeError("prompts.partMinScreenFraction must be greater than 0 and at most 1")
+    return fraction
+
+
+def _frame_area(person: dict | None = None) -> float:
+    frame = person or {}
+    width = float(frame.get("frame_width") or DEFAULT_FRAME_WIDTH)
+    height = float(frame.get("frame_height") or DEFAULT_FRAME_HEIGHT)
+    return width * height
+
+
+def _part_share(stat: dict, frame_area: float) -> float:
+    if frame_area <= 0:
+        return 0.0
+    return int(stat.get("pixels") or 0) / float(frame_area)
+
+
+def _share_skip_reason(part: str, pixels: int, share: float, min_share: float) -> str:
+    return f"{part} {pixels} px ({share:.5f}) < {min_share:.5f}"
+
+
+def _parts_log(
+    stats: dict[str, dict[str, int]],
+    frame_area: float,
+) -> dict[str, dict[str, float | int]]:
+    logged: dict[str, dict[str, float | int]] = {}
+    for name, stat in stats.items():
+        logged[name] = {
+            "pixels": int(stat.get("pixels") or 0),
+            "width": int(stat.get("width") or 0),
+            "height": int(stat.get("height") or 0),
+            "screenFraction": round(_part_share(stat, frame_area), 5),
+        }
+    return logged
+
+
 def _coerce_part_stat(raw: object) -> dict[str, int]:
     if isinstance(raw, dict):
         try:
@@ -153,8 +200,22 @@ def _part_stats(person: dict) -> dict[str, dict[str, int]]:
     return stats
 
 
-def _part_size_line(stats: dict[str, dict[str, int]]) -> str:
-    return " ".join(f"{name} {stats[name]['height']}px" for name in BODY_PARTS)
+def _part_size_line(stats: dict[str, dict[str, int]], frame_area: float) -> str:
+    return " ".join(
+        f"{name} {stats[name]['height']}px {stats[name]['pixels']}px "
+        f"({_part_share(stats[name], frame_area):.5f})"
+        for name in BODY_PARTS
+    )
+
+
+def _part_carries(
+    stat: dict[str, int],
+    min_height: int,
+    min_share: float,
+    frame_area: float,
+) -> bool:
+    height = int(stat.get("height") or 0)
+    return height >= min_height and _part_share(stat, frame_area) >= min_share
 
 
 def _attribute_clause(
@@ -162,46 +223,67 @@ def _attribute_clause(
     stats: dict[str, dict[str, int]],
     min_height: int,
     character_id: str | None,
+    min_share: float,
+    frame_area: float,
 ) -> dict:
     text = _collapse(attribute.get("text"))
     parts = [str(part) for part in (attribute.get("parts") or [])]
-    tall = [part for part in parts if stats.get(part, {}).get("height", 0) >= min_height]
-    record: dict = {"text": text, "parts": parts, "sent": bool(tall)}
-    if tall:
-        part = tall[0]
+    carried = [
+        part
+        for part in parts
+        if _part_carries(stats.get(part, {}), min_height, min_share, frame_area)
+    ]
+    record: dict = {"text": text, "parts": parts, "sent": bool(carried)}
+    if carried:
+        part = carried[0]
+        share = _part_share(stats[part], frame_area)
         record["part"] = part
         record["partHeight"] = int(stats[part]["height"])
+        record["partScreenFraction"] = round(share, 5)
         if character_id:
             print(
-                f"  {character_id} attribute {text!r} sent ({part} {stats[part]['height']}px)",
+                f"  {character_id} attribute {text!r} sent "
+                f"({part} {int(stats[part]['pixels'])} px ({share:.5f}))",
                 flush=True,
             )
         return record
     reasons: list[str] = []
     for part in parts:
-        height = int(stats.get(part, {}).get("height") or 0)
+        stat = stats.get(part, {})
+        height = int(stat.get("height") or 0)
+        pixels = int(stat.get("pixels") or 0)
+        share = _part_share(stat, frame_area)
         if height <= 0:
             reasons.append(f"{part} not visible")
-        else:
+            continue
+        if height < min_height:
             reasons.append(f"{part} {height}px < {min_height}")
+        elif share < min_share:
+            reasons.append(_share_skip_reason(part, pixels, share, min_share))
     record["skipReason"] = ", ".join(reasons) if reasons else "parts not visible"
     if character_id:
         print(f"  {character_id} attribute {text!r} dropped: {record['skipReason']}", flush=True)
     return record
 
 
-def _person_text(person: dict, min_height: int) -> tuple[str, dict]:
+def _person_text(
+    person: dict,
+    min_height: int,
+    min_share: float,
+    frame_area: float,
+) -> tuple[str, dict]:
     character_id = person.get("character_id")
     body = _collapse(person.get("body"))
     attributes = person.get("attributes") if isinstance(person.get("attributes"), list) else []
     stats = _part_stats(person)
     extra: dict = {
         "bodySent": bool(body),
-        "parts": stats,
+        "parts": _parts_log(stats, frame_area),
         "partMinPixelHeight": min_height,
+        "partMinScreenFraction": min_share,
     }
     if character_id:
-        print(f"  {character_id} parts: {_part_size_line(stats)}", flush=True)
+        print(f"  {character_id} parts: {_part_size_line(stats, frame_area)}", flush=True)
     if not body:
         if character_id:
             print(
@@ -218,7 +300,12 @@ def _person_text(person: dict, min_height: int) -> tuple[str, dict]:
         if not isinstance(attribute, dict):
             continue
         record = _attribute_clause(
-            attribute, stats, min_height, str(character_id) if character_id else None
+            attribute,
+            stats,
+            min_height,
+            str(character_id) if character_id else None,
+            min_share,
+            frame_area,
         )
         attribute_log.append(record)
         if record["sent"]:
@@ -231,14 +318,21 @@ def describe_people(
     entries: list[dict] | None,
     min_part_height: int | None = None,
     row_depth_ratio: float | None = None,
+    min_part_screen_fraction: float | None = None,
 ) -> tuple[str, list[dict]]:
     """Count, a back row by depth, then each other person by side. No names."""
     floor = load_part_min_pixel_height() if min_part_height is None else int(min_part_height)
+    share_floor = (
+        load_part_min_screen_fraction()
+        if min_part_screen_fraction is None
+        else float(min_part_screen_fraction)
+    )
     ratio = load_row_depth_ratio() if row_depth_ratio is None else float(row_depth_ratio)
     people = [dict(entry) for entry in (entries or []) if isinstance(entry, dict)]
     if not people:
         return "", []
-    width = float(people[0].get("frame_width") or 768)
+    width = float(people[0].get("frame_width") or DEFAULT_FRAME_WIDTH)
+    frame_area = _frame_area(people[0])
     for person in people:
         person["side"] = _side(float(person.get("screen_x") or 0), width)
         person.setdefault("visible_fraction", 1.0)
@@ -264,7 +358,7 @@ def describe_people(
     def labeled(place: str, person: dict) -> str:
         hidden = hidden_phrase(person)
         head = f"{place}, {hidden}" if hidden else place
-        text, extra = _person_text(person, floor)
+        text, extra = _person_text(person, floor, share_floor, frame_area)
         phrase = f"{head}: {text}" if text else head
         record = {
             "place": place,
@@ -416,6 +510,7 @@ def gather_visible_people(
                 "attributes": _load_attributes(character),
                 "part_stats": part_stats.get(str(character_id), empty_part_stats()),
                 "frame_width": float(PROXY_WIDTH),
+                "frame_height": float(PROXY_HEIGHT),
                 "_covered": covered,
                 "_depth": depth,
             }

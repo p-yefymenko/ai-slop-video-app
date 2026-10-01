@@ -329,10 +329,10 @@ function colorFor(origin) {
   return ORIGIN_COLOR[origin] || "#d5d8dc";
 }
 
-function partNameForVertex(x, y, z, minY, height, maxAbsX) {
+function partNameForVertex(x, y, z, minY, height, maxAbsX, headCenterZ) {
   const t = (y - minY) / Math.max(height, 1e-6);
   const absX = Math.abs(x) / Math.max(maxAbsX, 1e-6);
-  const front = -z > 0;
+  const front = z <= headCenterZ;
   if (t < 0.07) return "feet";
   if (t < 0.48) {
     if (t >= 0.42 && t < 0.52 && absX >= 0.5) return "hands";
@@ -355,9 +355,18 @@ function colorMeshByParts(root) {
     const minY = box.min.y;
     const pos = child.geometry.attributes.position;
     let maxAbsX = 0;
+    let headMinZ = Infinity;
+    let headMaxZ = -Infinity;
     for (let index = 0; index < pos.count; index += 1) {
       maxAbsX = Math.max(maxAbsX, Math.abs(pos.getX(index)));
+      const t = (pos.getY(index) - minY) / Math.max(height, 1e-6);
+      if (t >= 0.82) {
+        const z = pos.getZ(index);
+        headMinZ = Math.min(headMinZ, z);
+        headMaxZ = Math.max(headMaxZ, z);
+      }
     }
+    const headCenterZ = Number.isFinite(headMinZ) ? (headMinZ + headMaxZ) / 2 : 0;
     const colors = new Float32Array(pos.count * 3);
     for (let index = 0; index < pos.count; index += 1) {
       const name = partNameForVertex(
@@ -367,6 +376,7 @@ function colorMeshByParts(root) {
         minY,
         height,
         maxAbsX,
+        headCenterZ,
       );
       const rgb = PART_COLORS[name];
       colors[index * 3] = rgb[0];

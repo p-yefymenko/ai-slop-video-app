@@ -771,6 +771,22 @@ class SpatialPrevisTests(unittest.TestCase):
             ["feet", "legs", "torso", "arms", "neck", "eyes", "hair", "hair"],
         )
 
+    def test_face_and_eyes_use_the_head_center_not_mesh_origin(self) -> None:
+        from body_parts import BODY_PARTS, part_ids_for_vertices
+
+        height = 1.68
+        points = np.array(
+            [
+                [0.0, 0.12, 1.48],
+                [0.0, 0.04, 1.48],
+                [0.0, 0.12, 1.40],
+                [0.0, 0.04, 1.40],
+            ],
+            dtype=np.float64,
+        )
+        names = [BODY_PARTS[int(index)] for index in part_ids_for_vertices(points, height)]
+        self.assertEqual(names, ["eyes", "hair", "face", "hair"])
+
     def test_required_parts_fail_with_scene_frame_character_and_pixels(self) -> None:
         from spatial_previs import required_part_errors
 

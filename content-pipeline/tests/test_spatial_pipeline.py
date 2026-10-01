@@ -26,8 +26,10 @@ SHOW_JSON = (
 
 
 def _all_parts(height: int = 400) -> dict[str, dict[str, int]]:
+    tall = max(height, 1)
+    width = 20
     return {
-        name: {"pixels": max(height, 1), "width": 20, "height": height} for name in BODY_PARTS
+        name: {"pixels": width * tall, "width": width, "height": height} for name in BODY_PARTS
     }
 
 
@@ -222,6 +224,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("spatialBlockout", self.show["prompts"])
         self.assertIn("stillOpening", self.show["prompts"])
         self.assertEqual(self.show["partMinPixelHeight"], 25)
+        self.assertEqual(self.show["partMinScreenFraction"], 0.00025)
         self.assertEqual(self.show["rowDepthRatio"], 1.5)
         self.assertEqual(self.show["landmarkMinScreenFraction"], 0.008)
         self.assertIn("spatialFaces", self.show["prompts"])
@@ -758,11 +761,11 @@ class SpatialPipelineTests(unittest.TestCase):
         close = _all_parts(0)
         close.update(
             {
-                "hair": {"pixels": 80, "width": 40, "height": 400},
-                "face": {"pixels": 200, "width": 80, "height": 350},
-                "eyes": {"pixels": 40, "width": 30, "height": 120},
-                "neck": {"pixels": 30, "width": 40, "height": 180},
-                "torso": {"pixels": 12, "width": 40, "height": 80},
+                "hair": {"pixels": 4800, "width": 40, "height": 400},
+                "face": {"pixels": 8400, "width": 80, "height": 350},
+                "eyes": {"pixels": 1080, "width": 30, "height": 120},
+                "neck": {"pixels": 2160, "width": 40, "height": 180},
+                "torso": {"pixels": 960, "width": 40, "height": 80},
             }
         )
         sentence, records = pipeline.describe_people(
@@ -977,8 +980,8 @@ class SpatialPipelineTests(unittest.TestCase):
                     {"text": "amber irises", "parts": ["eyes"]},
                 ],
                 "part_stats": {
-                    "torso": {"pixels": 40, "width": 20, "height": floor + 20},
-                    "legs": {"pixels": 10, "width": 12, "height": floor + 10},
+                    "torso": {"pixels": 900, "width": 20, "height": floor + 20},
+                    "legs": {"pixels": 420, "width": 12, "height": floor + 10},
                     "eyes": {"pixels": 0, "width": 0, "height": 0},
                     "hair": {"pixels": 0, "width": 0, "height": 0},
                     "face": {"pixels": 0, "width": 0, "height": 0},
@@ -1007,7 +1010,7 @@ class SpatialPipelineTests(unittest.TestCase):
                     part_stats={
                         "torso": {"pixels": 0, "width": 0, "height": 0},
                         "legs": {"pixels": 0, "width": 0, "height": 0},
-                        "eyes": {"pixels": 12, "width": 8, "height": floor + 5},
+                        "eyes": {"pixels": 400, "width": 8, "height": floor + 5},
                         "hair": {"pixels": 0, "width": 0, "height": 0},
                         "face": {"pixels": 0, "width": 0, "height": 0},
                         "neck": {"pixels": 0, "width": 0, "height": 0},
@@ -1100,6 +1103,43 @@ class SpatialPipelineTests(unittest.TestCase):
         )
         self.assertEqual(back_records[0]["parts"]["face"]["height"], face_h)
         self.assertEqual(back_records[0]["parts"]["eyes"]["height"], eyes_h)
+
+    def test_sparse_face_specks_fail_the_screen_fraction_gate(self) -> None:
+        floor = self.show["partMinPixelHeight"]
+        share_floor = self.show["partMinScreenFraction"]
+        sela = self.show["characters"]["sela"]
+        stats = _all_parts(floor + 40)
+        stats["face"] = {"pixels": 26, "width": 69, "height": 35}
+        stats["eyes"] = {"pixels": 120, "width": 44, "height": 33}
+        _, records = pipeline.describe_people(
+            [
+                _from_character(
+                    sela,
+                    character_id="sela",
+                    screen_x=200,
+                    depth=2.0,
+                    pixel_height=354,
+                    part_stats=stats,
+                )
+            ]
+        )
+        by_text = {item["text"]: item for item in records[0]["attributes"]}
+        self.assertFalse(by_text["24 years old"]["sent"])
+        self.assertFalse(by_text["sharp cheekbones"]["sent"])
+        self.assertFalse(by_text["amber irises"]["sent"])
+        self.assertFalse(by_text["a thin pale burn scar cutting the left eyebrow"]["sent"])
+        self.assertEqual(
+            by_text["24 years old"]["skipReason"],
+            "face 26 px (0.00002) < 0.00025",
+        )
+        self.assertEqual(
+            by_text["amber irises"]["skipReason"],
+            "eyes 120 px (0.00011) < 0.00025",
+        )
+        self.assertEqual(records[0]["parts"]["face"]["screenFraction"], 0.00002)
+        self.assertEqual(records[0]["partMinScreenFraction"], share_floor)
+        self.assertTrue(by_text["long black hair"]["sent"])
+        self.assertTrue(by_text["in a tan linen wrap"]["sent"])
 
     def test_missing_body_omits_that_person_text(self) -> None:
         sentence, records = pipeline.describe_people(
