@@ -18,7 +18,12 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     title: "Demo",
     characters: {
       ada: {
-        generalDescription: "in a plain dress, brown skin, black hair, barefoot",
+        body: "brown skin",
+        attributes: [
+          { text: "in a plain dress", parts: ["torso", "legs"] },
+          { text: "black hair", parts: ["hair"] },
+          { text: "barefoot", parts: ["feet"] },
+        ],
       },
     },
     locations: {
@@ -112,7 +117,9 @@ test("the iron bride script matches its filename", () => {
   });
   if (!result.ok) {
     const leftover = result.issues.filter(
-      (issue) => !issue.message.includes("keep at least 1.5m from every mesh"),
+      (issue) =>
+        !issue.message.includes("keep at least 1.5m from every mesh") &&
+        !issue.message.includes("size and appearance belong on a location that has people"),
     );
     if (leftover.length > 0) {
       const report = leftover.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
@@ -211,11 +218,12 @@ test("rejects a prefab id on a landmark", () => {
   assert.match(report, /prefabId/);
 });
 
-test("rejects a character missing generalDescription", () => {
+test("rejects a character missing body", () => {
   const show = minimalShow();
-  delete (show.characters.ada as { generalDescription?: string }).generalDescription;
+  delete (show.characters.ada as { body?: string }).body;
   const missing = messages(show);
-  assert.match(missing, /generalDescription is required/);
+  assert.match(missing, /characters\.ada\.body/);
+  assert.match(missing, /body is required/);
 });
 
 test("rejects leftover description or stillDescription on a character", () => {
@@ -229,12 +237,35 @@ test("rejects leftover description or stillDescription on a character", () => {
   assert.match(leftoverStill, /stillDescription/);
 });
 
-test("accepts a character that omits frontalDescription", () => {
-  const result = parseShowScript(minimalShow(), {
-    showId: "demo-show",
-    showIdLabel: "the filename stem",
-  });
-  assert.equal(result.ok, true);
+test("rejects leftover generalDescription on a character", () => {
+  const show = minimalShow();
+  (show.characters.ada as { generalDescription?: string }).generalDescription = "leftover";
+  const leftover = messages(show);
+  assert.match(leftover, /generalDescription/);
+});
+
+test("rejects an attribute with empty parts", () => {
+  const show = minimalShow();
+  show.characters.ada.attributes[0].parts = [];
+  const report = messages(show);
+  assert.match(report, /characters\.ada\.attributes\[0\]\.parts/);
+  assert.match(report, /empty parts/);
+});
+
+test("rejects an unknown part id on a character attribute", () => {
+  const show = minimalShow();
+  (show.characters.ada.attributes[0].parts as string[]) = ["toes"];
+  const report = messages(show);
+  assert.match(report, /characters\.ada\.attributes\[0\]\.parts/);
+  assert.match(report, /unknown part id "toes"/);
+});
+
+test("rejects an unknown part id on requiresParts", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].requiresParts = [{ characterId: "ada", part: "toes" as "feet" }];
+  const report = messages(show);
+  assert.match(report, /requiresParts\[0\]\.part/);
+  assert.match(report, /unknown part id "toes"/);
 });
 
 test("rejects a camera closer than 1.5m to a character mesh", () => {

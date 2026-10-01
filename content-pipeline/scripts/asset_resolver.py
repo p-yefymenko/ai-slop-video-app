@@ -5,7 +5,7 @@ A location with people is one plate and one mesh per landmark, fitted to the
 size written on that landmark. Landmarks with the same appearance and size
 share that picture and mesh, then each one is placed at its own position.
 Characters stay out of those meshes. Each character is their own plate and
-mesh, wearing the costume in `generalDescription`, fitted to their standing height.
+mesh, wearing the costume in `body` plus `attributes`, fitted to their standing height.
 Character meshes use Pixal3D. Location and landmark meshes use TRELLIS.2.
 """
 
@@ -504,7 +504,7 @@ def collect_character_requests(show: dict) -> list[AssetRequest]:
         appearance = _appearance(character_appearance_text(character))
         if not appearance:
             raise RuntimeError(
-                f"character:{character_id} needs generalDescription. "
+                f"character:{character_id} needs body. "
                 "That text is the body and the costume the standing mesh is generated wearing."
             )
         height = 1.72

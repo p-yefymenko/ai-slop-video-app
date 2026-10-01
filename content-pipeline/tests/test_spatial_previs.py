@@ -748,6 +748,92 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertLess(wide_box[1], wide_eye[1])
         self.assertGreater(wide_box[3], wide_eye[1])
 
+    def test_height_bands_label_feet_and_front_eyes(self) -> None:
+        from body_parts import BODY_PARTS, part_ids_for_vertices
+
+        height = 1.68
+        points = np.array(
+            [
+                [0.0, 0.0, 0.02],
+                [0.0, 0.0, 0.3],
+                [0.05, 0.0, 1.05],
+                [0.22, 0.0, 1.05],
+                [0.0, 0.05, 1.32],
+                [0.0, 0.08, 1.48],
+                [0.0, -0.08, 1.48],
+                [0.0, 0.0, 1.62],
+            ],
+            dtype=np.float64,
+        )
+        names = [BODY_PARTS[int(index)] for index in part_ids_for_vertices(points, height)]
+        self.assertEqual(
+            names,
+            ["feet", "legs", "torso", "arms", "neck", "eyes", "hair", "hair"],
+        )
+
+    def test_required_parts_fail_with_scene_frame_character_and_pixels(self) -> None:
+        from spatial_previs import required_part_errors
+
+        scene = {
+            "sceneNumber": 12,
+            "requiresParts": [{"characterId": "sela", "part": "feet"}],
+        }
+        stats = {"sela": {"feet": {"pixels": 0, "width": 0}}}
+        errors = required_part_errors(scene, "start", stats)
+        self.assertEqual(
+            errors,
+            ["scene 12 frame start character sela part feet visible pixels 0"],
+        )
+        stats = {"sela": {"feet": {"pixels": 20, "width": 4}}}
+        thin = required_part_errors(scene, "start", stats)
+        self.assertTrue(thin[0].startswith("scene 12 frame start character sela part feet visible pixels 20"))
+        self.assertIn("448", thin[0])
+
+    def test_part_id_draw_keeps_depth_and_flat_ids(self) -> None:
+        from body_parts import decode_part_buffer, part_id_colors
+        from clay_gpu import ClayBatch, raster_clay
+        from spatial_previs import NEAR_CLIP, _camera_basis
+
+        camera = {
+            "position": [0.0, -2.0, 0.8],
+            "lookAt": [0.0, 0.0, 0.8],
+            "verticalFovDegrees": 40.0,
+            "rollDegrees": 0.0,
+        }
+        vertices = np.array(
+            [[-0.3, 0.0, 0.5], [0.3, 0.0, 0.5], [0.0, 0.0, 1.1]],
+            dtype=np.float32,
+        )
+        faces = np.array([[0, 1, 2]], dtype=np.uint32)
+        part_ids = np.array([4, 4, 4], dtype=np.int16)
+        image, depth = raster_clay(
+            [ClayBatch(vertices, faces, 1, colors=part_id_colors(part_ids, 0))],
+            _camera_basis(camera, viewport_height=64),
+            width=64,
+            height=64,
+            near=NEAR_CLIP,
+            background=(0, 0, 0),
+            shading="flat",
+        )
+        pixels = np.asarray(image)
+        stats = decode_part_buffer(pixels, ["sela"])
+        self.assertGreater(stats["sela"]["torso"]["pixels"], 10)
+        self.assertGreater(stats["sela"]["torso"]["height"], 0)
+        self.assertEqual(int(pixels[0, 0, 0]), 0)
+        self.assertTrue(np.isfinite(depth).any())
+
+    def test_decode_part_buffer_records_bounding_height(self) -> None:
+        from body_parts import decode_part_buffer
+
+        pixels = np.zeros((10, 8, 3), dtype=np.uint8)
+        pixels[2:7, 1:4, 0] = 1
+        pixels[2:7, 1:4, 1] = 2
+        stats = decode_part_buffer(pixels, ["sela"])
+        self.assertEqual(stats["sela"]["face"]["pixels"], 15)
+        self.assertEqual(stats["sela"]["face"]["width"], 3)
+        self.assertEqual(stats["sela"]["face"]["height"], 5)
+        self.assertEqual(stats["sela"]["eyes"]["height"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

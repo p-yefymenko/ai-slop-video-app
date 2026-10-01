@@ -64,7 +64,11 @@ export const COIN_PACKAGES: CoinPackage[] = [
   { productId: "coins_1200", coins: 1200, label: "1,200 coins" },
 ];
 
+export { BODY_PARTS } from "./script";
 export type {
+  BodyPart,
+  CharacterAttribute,
+  CharacterPartRequirement,
   CharacterProxy,
   LocationBackdrop,
   ScriptScene,
@@ -77,6 +81,5 @@ export type {
   SpatialCameraKeyframe,
   SpatialTimeline,
   StageGeometry,
-  StageLandmark,
   Vec3,
 } from "./script";

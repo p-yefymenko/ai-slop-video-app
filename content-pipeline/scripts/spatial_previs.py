@@ -103,7 +103,11 @@ def lerp_angle(a: float, b: float, amount: float) -> float:
 
 
 def load_show(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    show = json.loads(path.read_text(encoding="utf-8"))
+    from body_parts import validate_show_parts
+
+    validate_show_parts(show)
+    return show
 
 
 def timeline_state(track: list[dict], time_seconds: float) -> dict:
@@ -1411,11 +1415,13 @@ def _character_mesh_batch(
     look_target: Vec3 | None = None,
     *,
     colored: bool = False,
+    part_character_index: int | None = None,
 ):
     """The generated character, feet on their mark, front toward lookAtId.
 
     ``colored`` keeps the plate color on each vertex. A mesh with no color is
-    left out of that cutout.
+    left out of that cutout. ``part_character_index`` paints the part-ID buffer
+    instead, labeled on the standing mesh before yaw.
     """
     from clay_gpu import ClayBatch
     from pipeline_paths import stage_dir
@@ -1425,9 +1431,24 @@ def _character_mesh_batch(
     if not path.is_file():
         return None
     vertices, faces, key = _cached_mesh(path)
-    colors = _cached_colors(path) if colored else None
-    if colored and colors is None:
-        return None
+    colors = None
+    tag = "clay"
+    if part_character_index is not None:
+        from body_parts import part_id_colors, part_ids_for_vertices
+
+        proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy") or {}
+        try:
+            height = float(proxy.get("heightMeters") or 0)
+        except (TypeError, ValueError):
+            height = 0.0
+        part_ids = part_ids_for_vertices(vertices, height or None)
+        colors = part_id_colors(part_ids, part_character_index)
+        tag = "parts"
+    elif colored:
+        colors = _cached_colors(path)
+        if colors is None:
+            return None
+        tag = "clothes"
     yaw = facing_yaw_degrees(state, look_target) + CHARACTER_FRONT_YAW
     position = state.get("position")
     if position is None:
@@ -1437,9 +1458,152 @@ def _character_mesh_batch(
         faces,
         CHARACTER_MESH_BASE,
         offset=vec(position),
-        key=(*key, round(yaw, 2), "clothes" if colored else "clay"),
+        key=(*key, round(yaw, 2), tag, part_character_index),
         colors=colors,
     )
+
+
+def _occluder_batch(batch):
+    """Same mesh, black albedo, so landmarks and the floor win the depth test."""
+    from clay_gpu import ClayBatch
+
+    colors = np.zeros((len(batch.vertices), 3), dtype=np.float32)
+    key = (*batch.key, "occluder") if batch.key is not None else None
+    return ClayBatch(
+        batch.vertices,
+        batch.faces,
+        batch.base,
+        offset=batch.offset,
+        key=key,
+        colors=colors,
+    )
+
+
+def _character_capsule_parts_batch(
+    show: dict,
+    character_id: str,
+    state: dict,
+    joints: dict[str, Vec3],
+    look_target: Vec3 | None,
+    character_index: int,
+):
+    from body_parts import part_id_colors, part_ids_for_vertices
+    from clay_gpu import ClayBatch
+
+    thickness = _height_scale(show, character_id) * _build_factor(show, character_id)
+    triangles = _character_triangles(joints, thickness)
+    if not triangles:
+        return None
+    points = np.asarray(triangles, dtype=np.float32).reshape(-1, 3)
+    faces = np.arange(points.shape[0], dtype=np.uint32).reshape(-1, 3)
+    position = state.get("position")
+    if position is None:
+        return None
+    origin = vec(position)
+    local = np.array(points, dtype=np.float32, copy=True)
+    local[:, 0] -= origin[0]
+    local[:, 1] -= origin[1]
+    local[:, 2] -= origin[2]
+    yaw = facing_yaw_degrees(state, look_target) + CHARACTER_FRONT_YAW
+    local = _yaw_vertices(local, -yaw)
+    proxy = ((show.get("characters") or {}).get(character_id) or {}).get("proxy") or {}
+    try:
+        height = float(proxy.get("heightMeters") or 0)
+    except (TypeError, ValueError):
+        height = 0.0
+    part_ids = part_ids_for_vertices(local, height or None)
+    return ClayBatch(
+        points,
+        faces,
+        CAPSULE_BASE,
+        key=("capsule-parts", character_id, round(yaw, 2), character_index),
+        colors=part_id_colors(part_ids, character_index),
+    )
+
+
+def render_part_visibility(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> dict[str, dict[str, dict[str, int]]]:
+    """One GPU draw: part-ID colors on people, place meshes as depth occluders."""
+    from body_parts import decode_part_buffer, empty_part_stats
+    from clay_gpu import raster_clay
+
+    camera, batches, people = _scene_surfaces(show, episode, scene, time_seconds)
+    character_ids = [str(character_id) for character_id in (scene.get("characterIds") or [])]
+    empty = {character_id: empty_part_stats() for character_id in character_ids}
+    if not character_ids:
+        return empty
+    place = [
+        batch
+        for batch in batches
+        if batch.base not in (CHARACTER_MESH_BASE, CAPSULE_BASE)
+    ]
+    draws = [_occluder_batch(batch) for batch in place]
+    joints_by_id = {character_id: joints for character_id, joints in people}
+    for index, character_id in enumerate(character_ids):
+        state = episode_character_state(episode, character_id, time_seconds)
+        look_target = _anchor_point(show, episode, scene, state.get("lookAtId"), time_seconds)
+        mesh = _character_mesh_batch(
+            show,
+            character_id,
+            state,
+            look_target,
+            part_character_index=index,
+        )
+        if mesh is not None:
+            draws.append(mesh)
+            continue
+        joints = joints_by_id.get(character_id)
+        if not joints:
+            continue
+        capsule = _character_capsule_parts_batch(
+            show, character_id, state, joints, look_target, index
+        )
+        if capsule is not None:
+            draws.append(capsule)
+    if not draws:
+        return empty
+    image, _depth = raster_clay(
+        draws,
+        _camera_basis(camera),
+        width=PROXY_WIDTH,
+        height=PROXY_HEIGHT,
+        near=NEAR_CLIP,
+        background=(0, 0, 0),
+        shading="flat",
+    )
+    return decode_part_buffer(np.asarray(image), character_ids)
+
+
+def required_part_errors(
+    scene: dict,
+    frame_label: str,
+    stats: dict[str, dict[str, dict[str, int]]],
+) -> list[str]:
+    from body_parts import LTX_MIN_PART_WIDTH, LTX_WIDTH, ltx_part_width
+
+    errors: list[str] = []
+    number = scene.get("sceneNumber")
+    for requirement in scene.get("requiresParts") or []:
+        if not isinstance(requirement, dict):
+            continue
+        character_id = str(requirement.get("characterId") or "")
+        part = str(requirement.get("part") or "")
+        info = ((stats.get(character_id) or {}).get(part)) or {"pixels": 0, "width": 0}
+        pixels = int(info.get("pixels") or 0)
+        width = ltx_part_width(int(info.get("width") or 0), PROXY_WIDTH)
+        message = (
+            f"scene {number} frame {frame_label} character {character_id} "
+            f"part {part} visible pixels {pixels}"
+        )
+        if pixels <= 0:
+            errors.append(message)
+        elif width < LTX_MIN_PART_WIDTH:
+            errors.append(f"{message} ({width:.0f}px wide at {LTX_WIDTH})")
+    return errors
 
 
 # Name a landmark when it covers at least this much of the frame. Overridden by
@@ -2404,10 +2568,16 @@ def render_blocked_scene(
     frames: list[Image.Image] = []
     written: list[Path] = [write_scene_description(show, episode, scene)]
     guides = {times[0]: "start", times[-1]: "end"}
+    part_errors: list[str] = []
+    needs_required = bool(scene.get("requiresParts"))
     for time_seconds in times:
         image, zbuf, people = render_blocked_frame(show, episode, scene, time_seconds)
         frames.append(image)
         label = guides.get(time_seconds)
+        frame_label = label if label is not None else f"{time_seconds:g}"
+        if label is not None or needs_required:
+            stats = render_part_visibility(show, episode, scene, time_seconds)
+            part_errors.extend(required_part_errors(scene, frame_label, stats))
         if label is None:
             continue
         _camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
@@ -2489,6 +2659,13 @@ def render_blocked_scene(
         )
         clothes_path.parent.mkdir(parents=True, exist_ok=True)
         render_clothes_cutout(show, episode, scene, time_seconds).save(clothes_path)
+        from body_parts import part_stats_json
+
+        parts_path = clothes_path.with_name(f"{label}_parts.json")
+        parts_path.write_text(
+            json.dumps(part_stats_json(stats), indent=2) + "\n",
+            encoding="utf-8",
+        )
         location = show["locations"][scene["locationId"]]
         render_backdrop(
             camera,
@@ -2501,8 +2678,19 @@ def render_blocked_scene(
             },
         ).save(backdrop_path)
         written.extend(
-            (blockout_path, depth_path, pose_path, edge_path, normal_path, clothes_path, backdrop_path)
+            (
+                blockout_path,
+                depth_path,
+                pose_path,
+                edge_path,
+                normal_path,
+                clothes_path,
+                backdrop_path,
+                parts_path,
+            )
         )
+    if part_errors:
+        raise SystemExit("Part visibility failed:\n- " + "\n- ".join(part_errors))
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )

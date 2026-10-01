@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import generate_batch as pipeline  # noqa: E402
+from body_parts import BODY_PARTS, validate_show_parts  # noqa: E402
 from spatial_previs import (  # noqa: E402
     camera_at,
     spatial_target_screen_position,
@@ -22,6 +23,24 @@ from spatial_previs import (  # noqa: E402
 SHOW_JSON = (
     Path(__file__).resolve().parents[1] / "shows" / "the-iron-bride" / "script.json"
 )
+
+
+def _all_parts(height: int = 400) -> dict[str, dict[str, int]]:
+    return {
+        name: {"pixels": max(height, 1), "width": 20, "height": height} for name in BODY_PARTS
+    }
+
+
+def _from_character(character: dict, **extra: object) -> dict:
+    person = {
+        "body": character["body"],
+        "attributes": character["attributes"],
+        "part_stats": _all_parts(),
+        "frame_width": 768,
+        "visible_fraction": 1.0,
+    }
+    person.update(extra)
+    return person
 
 
 class SpatialPipelineTests(unittest.TestCase):
@@ -202,8 +221,9 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertNotIn("30", graph)
         self.assertIn("spatialBlockout", self.show["prompts"])
         self.assertIn("stillOpening", self.show["prompts"])
-        self.assertEqual(self.show["frontalMinPixelHeight"], 400)
-        self.assertEqual(self.show["landmarkMinScreenFraction"], 0.02)
+        self.assertEqual(self.show["partMinPixelHeight"], 25)
+        self.assertEqual(self.show["rowDepthRatio"], 1.5)
+        self.assertEqual(self.show["landmarkMinScreenFraction"], 0.008)
         self.assertIn("spatialFaces", self.show["prompts"])
         self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
@@ -637,7 +657,9 @@ class SpatialPipelineTests(unittest.TestCase):
                     "x0": 40 + index * 90,
                     "x1": 100 + index * 90,
                     "pixel_height": 420,
-                    "general_description": character["generalDescription"],
+                    "body": character["body"],
+                    "attributes": character["attributes"],
+                    "part_stats": _all_parts(),
                 }
             )
         sentence, records = pipeline.describe_people(entries)
@@ -679,6 +701,7 @@ class SpatialPipelineTests(unittest.TestCase):
             self.assertNotIn("override", record)
             self.assertNotIn("colorScores", record)
             self.assertNotIn("imagePrompt", json.dumps(record))
+            self.assertTrue(all(item["sent"] for item in record["attributes"]))
         self.assertEqual(pipeline.still_people_line([]), "")
         solo = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 11)
         self.assertFalse(
@@ -693,22 +716,79 @@ class SpatialPipelineTests(unittest.TestCase):
         sela = characters["sela"]
         solo_line = pipeline.still_people_line(
             [
-                {
-                    "screen_x": 200,
-                    "depth": 2.0,
-                    "x0": 100,
-                    "x1": 300,
-                    "pixel_height": 500,
-                    "general_description": sela["generalDescription"],
-                }
+                _from_character(
+                    sela,
+                    screen_x=200,
+                    depth=2.0,
+                    x0=100,
+                    x1=300,
+                    pixel_height=500,
+                )
             ]
         )
         self.assertTrue(solo_line.startswith("One person."))
-        self.assertIn(sela["generalDescription"], solo_line)
+        self.assertIn(sela["body"], solo_line)
         self.assertNotIn("sela", solo_line.lower())
         self.assertNotIn("imagePrompt", solo_line)
 
-    def test_people_sentence_uses_general_description_and_geometry(self) -> None:
+    def test_scene_06_keeps_every_attribute_when_all_parts_are_visible(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 6)
+        entries = [
+            _from_character(
+                self.show["characters"][character_id],
+                character_id=character_id,
+                screen_x=80 + index * 90,
+                depth=8.0,
+                pixel_height=420,
+            )
+            for index, character_id in enumerate(scene["characterIds"])
+        ]
+        sentence, records = pipeline.describe_people(entries)
+        self.assertEqual(len(records), 6)
+        for character_id, record in zip(scene["characterIds"], records):
+            character = self.show["characters"][character_id]
+            self.assertIn(character["body"], record["phrase"])
+            for attribute in character["attributes"]:
+                self.assertIn(attribute["text"], sentence)
+            self.assertTrue(all(item["sent"] for item in record["attributes"]))
+            self.assertEqual(len(record["attributes"]), len(character["attributes"]))
+
+    def test_scene_12_closeup_drops_barefoot_because_feet_are_not_visible(self) -> None:
+        sela = self.show["characters"]["sela"]
+        close = _all_parts(0)
+        close.update(
+            {
+                "hair": {"pixels": 80, "width": 40, "height": 400},
+                "face": {"pixels": 200, "width": 80, "height": 350},
+                "eyes": {"pixels": 40, "width": 30, "height": 120},
+                "neck": {"pixels": 30, "width": 40, "height": 180},
+                "torso": {"pixels": 12, "width": 40, "height": 80},
+            }
+        )
+        sentence, records = pipeline.describe_people(
+            [
+                _from_character(
+                    sela,
+                    character_id="sela",
+                    screen_x=200,
+                    depth=2.0,
+                    pixel_height=900,
+                    part_stats=close,
+                )
+            ]
+        )
+        self.assertIn(sela["body"], sentence)
+        self.assertIn("24 years old", sentence)
+        self.assertIn("amber irises", sentence)
+        self.assertIn("a plain iron bridal collar", sentence)
+        self.assertNotIn("barefoot", sentence)
+        dropped = next(item for item in records[0]["attributes"] if item["text"] == "barefoot")
+        self.assertFalse(dropped["sent"])
+        self.assertEqual(dropped["skipReason"], "feet not visible")
+        self.assertEqual(records[0]["parts"]["face"]["height"], 350)
+        self.assertEqual(records[0]["parts"]["eyes"]["height"], 120)
+
+    def test_people_sentence_uses_body_and_visible_attributes(self) -> None:
         def person(**extra: object) -> dict:
             base = {
                 "screen_x": 120,
@@ -716,7 +796,12 @@ class SpatialPipelineTests(unittest.TestCase):
                 "x0": 40,
                 "x1": 200,
                 "pixel_height": 320,
-                "general_description": "in a navy cloak, olive skin, braided copper hair",
+                "body": "olive skin",
+                "attributes": [
+                    {"text": "in a navy cloak", "parts": ["torso"]},
+                    {"text": "braided copper hair", "parts": ["hair"]},
+                ],
+                "part_stats": _all_parts(),
                 "character_id": "mio",
             }
             base.update(extra)
@@ -728,7 +813,11 @@ class SpatialPipelineTests(unittest.TestCase):
             depth=6.0,
             x0=340,
             x1=500,
-            general_description="in a gold tunic, tan skin, short black hair",
+            body="tan skin",
+            attributes=[
+                {"text": "in a gold tunic", "parts": ["torso"]},
+                {"text": "short black hair", "parts": ["hair"]},
+            ],
             character_id="jun",
         )
         sentence, records = pipeline.describe_people([navy, other])
@@ -741,33 +830,42 @@ class SpatialPipelineTests(unittest.TestCase):
         near = person(
             screen_x=140,
             depth=2.0,
-            general_description="in a red coat",
+            body="adult",
+            attributes=[{"text": "in a red coat", "parts": ["torso"]}],
         )
         far = person(
             screen_x=180,
             depth=9.0,
-            general_description="in a green coat",
+            body="adult",
+            attributes=[{"text": "in a green coat", "parts": ["torso"]}],
             visible_fraction=0.2,
         )
         overlapped, _overlap_records = pipeline.describe_people([far, near])
-        self.assertIn("in the foreground", overlapped)
+        self.assertNotIn("in the foreground", overlapped)
+        self.assertNotIn("standing in a row behind", overlapped)
         self.assertIn("partly hidden", overlapped)
         self.assertIn("red", overlapped)
         self.assertIn("green", overlapped)
         self.assertIn("depth", records[0])
         small, _small_records = pipeline.describe_people(
-            [person(pixel_height=40, general_description="in a navy cloak, olive skin")]
+            [person(pixel_height=40, body="olive skin", attributes=[{"text": "in a navy cloak", "parts": ["torso"]}])]
         )
         self.assertIn("cloak", small)
         self.assertIn("olive skin", small)
 
-    def test_row_figures_each_keep_their_general_description(self) -> None:
+    def test_row_figures_each_keep_their_visible_attributes(self) -> None:
         def row_person(index: int, **extra: object) -> dict:
             skins = (
-                "sallow skin, bound black hair",
-                "dark umber skin, crested hair",
-                "pale skin, silver-white cropped hair",
-                "weathered tan skin, shaved head",
+                "sallow skin",
+                "dark umber skin",
+                "pale skin",
+                "weathered tan skin",
+            )
+            hairs = (
+                "bound black hair",
+                "crested hair",
+                "silver-white cropped hair",
+                "shaved head",
             )
             base = {
                 "screen_x": 180 + index * 40,
@@ -775,9 +873,13 @@ class SpatialPipelineTests(unittest.TestCase):
                 "x0": 160 + index * 40,
                 "x1": 200 + index * 40,
                 "pixel_height": 130,
-                "general_description": (
-                    f"in black plate armor with a gold gorget, {skins[index]}, barefoot"
-                ),
+                "body": skins[index],
+                "attributes": [
+                    {"text": "in black plate armor with a gold gorget", "parts": ["torso", "arms", "neck"]},
+                    {"text": hairs[index], "parts": ["hair"]},
+                    {"text": "barefoot", "parts": ["feet"]},
+                ],
+                "part_stats": _all_parts(),
                 "frame_width": 768,
                 "visible_fraction": 0.9,
             }
@@ -791,7 +893,13 @@ class SpatialPipelineTests(unittest.TestCase):
             "x0": 30,
             "x1": 180,
             "pixel_height": 280,
-            "general_description": "in a sky-blue coat, fair skin, copper-red hair, barefoot",
+            "body": "fair skin",
+            "attributes": [
+                {"text": "in a sky-blue coat", "parts": ["torso", "arms"]},
+                {"text": "copper-red hair", "parts": ["hair"]},
+                {"text": "barefoot", "parts": ["feet"]},
+            ],
+            "part_stats": _all_parts(),
             "frame_width": 768,
             "visible_fraction": 1.0,
         }
@@ -810,55 +918,190 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertTrue(any(record["depth"] for record in records))
         self.assertTrue(all("sources" not in record for record in records))
 
-    def test_frontal_description_appends_only_when_all_conditions_pass(self) -> None:
-        def person(**extra: object) -> dict:
+    def test_one_row_at_distance_is_not_split_into_behind_and_foreground(self) -> None:
+        def person(screen_x: float, depth: float, **extra: object) -> dict:
             base = {
-                "screen_x": 200,
-                "depth": 2.0,
-                "x0": 100,
-                "x1": 300,
-                "pixel_height": 500,
-                "general_description": "in a tan wrap, olive skin, long black hair",
-                "frontal_description": "amber irises and a burn scar",
-                "character_id": "sela",
-                "facing_camera": True,
-                "head_mask_pixels": True,
+                "screen_x": screen_x,
+                "depth": depth,
+                "pixel_height": 180,
+                "body": "pale skin",
+                "attributes": [{"text": "in black plate", "parts": ["torso"]}],
+                "part_stats": _all_parts(),
+                "frame_width": 768,
+                "visible_fraction": 1.0,
             }
             base.update(extra)
             return base
 
-        sent, sent_records = pipeline.describe_people([person()], frontal_min_pixel_height=400)
-        self.assertIn("in a tan wrap, olive skin, long black hair amber irises and a burn scar", sent)
-        self.assertTrue(sent_records[0]["frontalDescriptionSent"])
-        self.assertNotIn("frontalSkipReason", sent_records[0])
-
-        turned, turned_records = pipeline.describe_people(
-            [person(facing_camera=False)], frontal_min_pixel_height=400
+        close, close_records = pipeline.describe_people(
+            [
+                person(120, 12.813),
+                person(280, 13.242),
+                person(420, 13.314),
+                person(560, 13.516),
+            ]
         )
-        self.assertIn("in a tan wrap, olive skin, long black hair", turned)
-        self.assertNotIn("amber irises", turned)
-        self.assertFalse(turned_records[0]["frontalDescriptionSent"])
-        self.assertEqual(turned_records[0]["frontalSkipReason"], "not in facing-camera list")
+        self.assertIn("Four people.", close)
+        self.assertNotIn("behind", close)
+        self.assertNotIn("foreground", close)
+        self.assertIn("On the left:", close)
+        self.assertEqual(self.show["rowDepthRatio"], 1.5)
+        depths = [record["depth"] for record in close_records]
+        self.assertLess(max(depths) / min(depths), self.show["rowDepthRatio"])
 
-        unmasked, unmasked_records = pipeline.describe_people(
-            [person(head_mask_pixels=False)], frontal_min_pixel_height=400
+        split, _split_records = pipeline.describe_people(
+            [
+                person(80, 6.623),
+                person(200, 6.825),
+                person(320, 14.815),
+                person(440, 15.416),
+                person(560, 15.618),
+                person(680, 16.124),
+            ]
         )
-        self.assertNotIn("amber irises", unmasked)
-        self.assertEqual(unmasked_records[0]["frontalSkipReason"], "no head-mask pixels")
+        self.assertIn("standing in a row behind", split)
+        self.assertIn("in the foreground", split)
+        self.assertGreater(16.124 / 6.623, self.show["rowDepthRatio"])
 
-        small, small_records = pipeline.describe_people(
-            [person(pixel_height=130)], frontal_min_pixel_height=400
+    def test_attribute_is_dropped_when_none_of_its_parts_are_visible(self) -> None:
+        floor = self.show["partMinPixelHeight"]
+
+        def person(**extra: object) -> dict:
+            base = {
+                "screen_x": 200,
+                "depth": 2.0,
+                "pixel_height": 500,
+                "body": "olive skin",
+                "attributes": [
+                    {"text": "in a tan wrap", "parts": ["torso", "legs"]},
+                    {"text": "amber irises", "parts": ["eyes"]},
+                ],
+                "part_stats": {
+                    "torso": {"pixels": 40, "width": 20, "height": floor + 20},
+                    "legs": {"pixels": 10, "width": 12, "height": floor + 10},
+                    "eyes": {"pixels": 0, "width": 0, "height": 0},
+                    "hair": {"pixels": 0, "width": 0, "height": 0},
+                    "face": {"pixels": 0, "width": 0, "height": 0},
+                    "neck": {"pixels": 0, "width": 0, "height": 0},
+                    "arms": {"pixels": 0, "width": 0, "height": 0},
+                    "hands": {"pixels": 0, "width": 0, "height": 0},
+                    "feet": {"pixels": 0, "width": 0, "height": 0},
+                },
+                "character_id": "sela",
+            }
+            base.update(extra)
+            return base
+
+        sentence, records = pipeline.describe_people([person()])
+        self.assertIn("olive skin, in a tan wrap", sentence)
+        self.assertNotIn("amber irises", sentence)
+        sent = {item["text"]: item for item in records[0]["attributes"]}
+        self.assertTrue(sent["in a tan wrap"]["sent"])
+        self.assertEqual(sent["in a tan wrap"]["part"], "torso")
+        self.assertFalse(sent["amber irises"]["sent"])
+        self.assertEqual(sent["amber irises"]["skipReason"], "eyes not visible")
+
+        wrap_hidden, wrap_records = pipeline.describe_people(
+            [
+                person(
+                    part_stats={
+                        "torso": {"pixels": 0, "width": 0, "height": 0},
+                        "legs": {"pixels": 0, "width": 0, "height": 0},
+                        "eyes": {"pixels": 12, "width": 8, "height": floor + 5},
+                        "hair": {"pixels": 0, "width": 0, "height": 0},
+                        "face": {"pixels": 0, "width": 0, "height": 0},
+                        "neck": {"pixels": 0, "width": 0, "height": 0},
+                        "arms": {"pixels": 0, "width": 0, "height": 0},
+                        "hands": {"pixels": 0, "width": 0, "height": 0},
+                        "feet": {"pixels": 0, "width": 0, "height": 0},
+                    }
+                )
+            ]
         )
-        self.assertNotIn("amber irises", small)
-        self.assertEqual(small_records[0]["frontalSkipReason"], "pixel height 130 < 400")
-
-        none, none_records = pipeline.describe_people(
-            [person(frontal_description="")], frontal_min_pixel_height=400
+        self.assertNotIn("tan wrap", wrap_hidden)
+        self.assertIn("amber irises", wrap_hidden)
+        self.assertEqual(
+            wrap_records[0]["attributes"][0]["skipReason"],
+            "torso not visible, legs not visible",
         )
-        self.assertNotIn("amber irises", none)
-        self.assertEqual(none_records[0]["frontalSkipReason"], "no frontalDescription")
 
-    def test_missing_general_description_omits_that_person_text(self) -> None:
+    def test_age_is_a_face_attribute_not_body(self) -> None:
+        for character_id, character in self.show["characters"].items():
+            self.assertNotRegex(character["body"], r"\d+\s+years old")
+            ages = [
+                attribute
+                for attribute in character["attributes"]
+                if "years old" in attribute["text"]
+            ]
+            self.assertEqual(len(ages), 1, character_id)
+            self.assertEqual(ages[0]["parts"], ["face"])
+
+    def test_part_floor_drops_back_row_face_and_keeps_closeup(self) -> None:
+        floor = self.show["partMinPixelHeight"]
+        sela = self.show["characters"]["sela"]
+        close = _all_parts(floor + 40)
+        close["feet"] = {"pixels": 0, "width": 0, "height": 0}
+        _, close_records = pipeline.describe_people(
+            [
+                _from_character(
+                    sela,
+                    character_id="sela",
+                    screen_x=200,
+                    depth=2.0,
+                    pixel_height=900,
+                    part_stats=close,
+                )
+            ]
+        )
+        close_sent = {item["text"]: item["sent"] for item in close_records[0]["attributes"]}
+        self.assertTrue(close_sent["24 years old"])
+        self.assertTrue(close_sent["amber irises"])
+        self.assertTrue(close_sent["sharp cheekbones"])
+        self.assertTrue(close_sent["long black hair"])
+        self.assertFalse(close_sent["barefoot"])
+
+        vardan = self.show["characters"]["vardan"]
+        face_h, eyes_h, hair_h, feet_h = 15, 12, 18, 10
+        self.assertLess(max(face_h, eyes_h, hair_h, feet_h), floor)
+        back = _all_parts(floor + 40)
+        back.update(
+            {
+                "hair": {"pixels": 20, "width": 12, "height": hair_h},
+                "face": {"pixels": 16, "width": 10, "height": face_h},
+                "eyes": {"pixels": 8, "width": 6, "height": eyes_h},
+                "feet": {"pixels": 12, "width": 10, "height": feet_h},
+            }
+        )
+        sentence, back_records = pipeline.describe_people(
+            [
+                _from_character(
+                    vardan,
+                    character_id="vardan",
+                    screen_x=300,
+                    depth=8.0,
+                    pixel_height=130,
+                    part_stats=back,
+                )
+            ]
+        )
+        back_sent = {item["text"]: item["sent"] for item in back_records[0]["attributes"]}
+        self.assertFalse(back_sent["52 years old"])
+        self.assertFalse(back_sent["ice-blue irises"])
+        self.assertFalse(back_sent["silver-white cropped hair"])
+        self.assertFalse(back_sent["black shoes"])
+        self.assertTrue(back_sent["in black plate armor with a gold gorget"])
+        self.assertNotIn("52 years old", sentence)
+        self.assertNotIn("ice-blue irises", sentence)
+        self.assertEqual(
+            next(item for item in back_records[0]["attributes"] if item["text"] == "52 years old")[
+                "skipReason"
+            ],
+            f"face {face_h}px < {floor}",
+        )
+        self.assertEqual(back_records[0]["parts"]["face"]["height"], face_h)
+        self.assertEqual(back_records[0]["parts"]["eyes"]["height"], eyes_h)
+
+    def test_missing_body_omits_that_person_text(self) -> None:
         sentence, records = pipeline.describe_people(
             [
                 {
@@ -866,34 +1109,43 @@ class SpatialPipelineTests(unittest.TestCase):
                     "depth": 2.0,
                     "pixel_height": 500,
                     "character_id": "sela",
-                    "frontal_description": "amber irises",
-                    "facing_camera": True,
-                    "head_mask_pixels": True,
+                    "attributes": [{"text": "amber irises", "parts": ["eyes"]}],
+                    "part_stats": _all_parts(),
                 }
-            ],
-            frontal_min_pixel_height=400,
+            ]
         )
         self.assertIn("One person.", sentence)
         self.assertNotIn("amber irises", sentence)
         self.assertTrue(records[0]["omittedText"])
-        self.assertEqual(records[0]["omitReason"], "missing generalDescription")
-        self.assertFalse(records[0]["frontalDescriptionSent"])
+        self.assertEqual(records[0]["omitReason"], "missing body")
+        self.assertFalse(records[0]["bodySent"])
 
-    def test_plates_join_general_and_frontal_description(self) -> None:
+    def test_plates_join_body_and_attributes_with_commas(self) -> None:
         self.assertEqual(
             pipeline.character_appearance_text(
                 {
-                    "generalDescription": "in a tan wrap, olive skin",
-                    "frontalDescription": "amber irises",
+                    "body": "olive skin",
+                    "attributes": [
+                        {"text": "in a tan wrap", "parts": ["torso", "legs"]},
+                        {"text": "amber irises", "parts": ["eyes"]},
+                    ],
                 }
             ),
-            "in a tan wrap, olive skin amber irises",
+            "olive skin, in a tan wrap, amber irises",
         )
         self.assertEqual(
-            pipeline.character_appearance_text({"generalDescription": "in a tan wrap, olive skin"}),
-            "in a tan wrap, olive skin",
+            pipeline.character_appearance_text({"body": "olive skin", "attributes": []}),
+            "olive skin",
         )
 
+    def test_unknown_part_fails_at_load_with_character_id(self) -> None:
+        show = json.loads(json.dumps(self.show))
+        show["characters"]["sela"]["attributes"][0]["parts"] = ["toes"]
+        with self.assertRaises(SystemExit) as raised:
+            validate_show_parts(show)
+        message = str(raised.exception)
+        self.assertIn("characters.sela.attributes[0].parts[0]", message)
+        self.assertIn("unknown part id 'toes'", message)
     def test_every_shot_uses_the_same_prompt_skeleton(self) -> None:
         from PIL import Image
 
@@ -934,7 +1186,9 @@ class SpatialPipelineTests(unittest.TestCase):
                         "pixel_height": 40 if number == 5 else 500,
                         "head_visible": number != 11,
                         "feet_visible": number != 11,
-                        "general_description": self.show["characters"][character_id]["generalDescription"],
+                        "body": self.show["characters"][character_id]["body"],
+                        "attributes": self.show["characters"][character_id]["attributes"],
+                        "part_stats": _all_parts(),
                     }
                     for index, character_id in enumerate(scene["characterIds"])
                 ]

@@ -17,18 +17,46 @@ export type CharacterProxy = {
   build: "slim" | "average" | "broad";
 };
 
+/** Body parts an attribute may depend on. Defined once; previs and stills share it. */
+export const BODY_PARTS = [
+  "hair",
+  "face",
+  "eyes",
+  "neck",
+  "torso",
+  "arms",
+  "hands",
+  "legs",
+  "feet",
+] as const;
+
+export type BodyPart = (typeof BODY_PARTS)[number];
+
+export type CharacterAttribute = {
+  /** Words sent to Qwen when any listed part is tall enough in this camera. */
+  text: string;
+  /** Parts this clause names. Empty is invalid. */
+  parts: BodyPart[];
+};
+
+export type CharacterPartRequirement = {
+  characterId: string;
+  part: BodyPart;
+};
+
 export type ShowCharacter = {
   /**
-   * Visible from all sides. Plates, portraits, and every still receive this
-   * text. No eye color, scars, tattoos, birthmarks, or other front-only details.
+   * Always sent: build, skin. Plates, portraits, and every still receive
+   * this text. Age and other appearance that lives on a body part goes in
+   * `attributes`.
    */
-  generalDescription: string;
+  body: string;
   /**
-   * Front-only details. Plates and portraits always append this. A still
-   * appends it only when that person faces the camera, has head-mask pixels,
-   * and is at least `frontalMinPixelHeight` tall.
+   * Tagged clauses. A still sends a clause only when any of its parts is at
+   * least `partMinPixelHeight` tall in that camera. Plates and portraits send
+   * every clause.
    */
-  frontalDescription?: string;
+  attributes: CharacterAttribute[];
   /** Clay mannequin proportions. Identity is still the portrait PNG. */
   proxy?: CharacterProxy;
 };
@@ -181,6 +209,11 @@ export type ScriptScene = {
    * blocking come from the timeline and start/end frames. Omit on silent scenes.
    */
   videoPrompt?: string;
+  /**
+   * Previs fails the scene when any of these parts has no visible pixels, or
+   * is under 5px wide at LTX's 448px output, on a playblast frame.
+   */
+  requiresParts?: CharacterPartRequirement[];
 };
 
 export type ShowEpisode = {

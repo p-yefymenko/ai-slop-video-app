@@ -3,6 +3,19 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const CLAY = 0xb4b6b8;
+const BODY_PARTS = ["hair", "face", "eyes", "neck", "torso", "arms", "hands", "legs", "feet"];
+const PART_COLORS = {
+  hair: [0.77, 0.24, 0.24],
+  face: [0.94, 0.78, 0.47],
+  eyes: [0.24, 0.47, 0.94],
+  neck: [0.82, 0.47, 0.78],
+  torso: [0.24, 0.71, 0.31],
+  arms: [0.94, 0.63, 0.16],
+  hands: [0.63, 0.31, 0.16],
+  legs: [0.31, 0.63, 0.78],
+  feet: [0.78, 0.78, 0.31],
+};
+export { BODY_PARTS, PART_COLORS };
 const ORIGIN_COLOR = {
   show: "#7dcea0",
   library: "#85c1e9",
@@ -252,6 +265,14 @@ export class Stage {
     });
   }
 
+  colorParts(root = this.root) {
+    if (this.characters?.size) {
+      for (const holder of this.characters.values()) colorMeshByParts(holder);
+      return;
+    }
+    colorMeshByParts(root);
+  }
+
   _label(text, origin, x, y, z) {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -306,6 +327,61 @@ export class Stage {
 
 function colorFor(origin) {
   return ORIGIN_COLOR[origin] || "#d5d8dc";
+}
+
+function partNameForVertex(x, y, z, minY, height, maxAbsX) {
+  const t = (y - minY) / Math.max(height, 1e-6);
+  const absX = Math.abs(x) / Math.max(maxAbsX, 1e-6);
+  const front = -z > 0;
+  if (t < 0.07) return "feet";
+  if (t < 0.48) {
+    if (t >= 0.42 && t < 0.52 && absX >= 0.5) return "hands";
+    return "legs";
+  }
+  if (t < 0.76) return absX >= 0.55 ? "arms" : "torso";
+  if (t < 0.82) return "neck";
+  if (front && t >= 0.86 && t < 0.91) return "eyes";
+  if (front && t < 0.92) return "face";
+  return "hair";
+}
+
+function colorMeshByParts(root) {
+  root.traverse((child) => {
+    if (!child.isMesh || !child.geometry?.getAttribute("position")) return;
+    child.geometry.computeBoundingBox();
+    const box = child.geometry.boundingBox;
+    if (!box) return;
+    const height = box.max.y - box.min.y;
+    const minY = box.min.y;
+    const pos = child.geometry.attributes.position;
+    let maxAbsX = 0;
+    for (let index = 0; index < pos.count; index += 1) {
+      maxAbsX = Math.max(maxAbsX, Math.abs(pos.getX(index)));
+    }
+    const colors = new Float32Array(pos.count * 3);
+    for (let index = 0; index < pos.count; index += 1) {
+      const name = partNameForVertex(
+        pos.getX(index),
+        pos.getY(index),
+        pos.getZ(index),
+        minY,
+        height,
+        maxAbsX,
+      );
+      const rgb = PART_COLORS[name];
+      colors[index * 3] = rgb[0];
+      colors[index * 3 + 1] = rgb[1];
+      colors[index * 3 + 2] = rgb[2];
+    }
+    child.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    child.material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      roughness: 0.7,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+    });
+  });
 }
 
 function sampleTrack(keyframes, timeSeconds) {

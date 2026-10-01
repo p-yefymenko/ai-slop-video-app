@@ -460,8 +460,14 @@ class AssetTests(unittest.TestCase):
         show = self._show()
         show["characters"] = {
             "ada": {
-                "generalDescription": "Adult woman, black hair. a soot-stained ivory wrap and a plain iron bridal collar",
-                "frontalDescription": "amber irises and a thin pale burn scar",
+                "body": "Adult woman, 24 years old",
+                "attributes": [
+                    {"text": "black hair", "parts": ["hair"]},
+                    {"text": "a soot-stained ivory wrap", "parts": ["torso", "legs"]},
+                    {"text": "a plain iron bridal collar", "parts": ["neck"]},
+                    {"text": "amber irises", "parts": ["eyes"]},
+                    {"text": "a thin pale burn scar", "parts": ["face"]},
+                ],
                 "proxy": {"heightMeters": 1.6, "build": "slim"},
             }
         }
@@ -533,7 +539,7 @@ class AssetTests(unittest.TestCase):
         bare["characters"] = {"ada": {"proxy": {"heightMeters": 1.6, "build": "slim"}}}
         with self.assertRaises(RuntimeError) as missing_description:
             self._resolver(CountingGenerator(self.cube)).resolve_show(bare)
-        self.assertIn("generalDescription", str(missing_description.exception))
+        self.assertIn("body", str(missing_description.exception))
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)

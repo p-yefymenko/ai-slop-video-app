@@ -1,11 +1,12 @@
-"""People sentence for a still. Words come from generalDescription and blocking."""
+"""People sentence for a still. Words come from body, tagged attributes, and blocking."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-ROW_DEPTH_GAP = 0.5
+from body_parts import BODY_PARTS, _collapse, empty_part_stats
+
 BODY_VISIBLE_MIN = 0.3
 COUNT_WORDS = (
     "Zero",
@@ -64,47 +65,26 @@ def _join(bits: list[str]) -> str:
     return ". ".join(cleaned) + "."
 
 
-def _collapse(raw: object) -> str:
-    if not isinstance(raw, str):
-        return ""
-    return " ".join(raw.split())
-
-
 def character_appearance_text(character: dict) -> str:
-    """Plate and portrait text: generalDescription, then frontalDescription if present."""
-    general = _collapse(character.get("generalDescription"))
-    frontal = _collapse(character.get("frontalDescription"))
-    if not general:
-        return ""
-    if frontal:
-        return f"{general} {frontal}"
-    return general
+    """Plate and portrait text: body, then every attribute."""
+    items = [_collapse(character.get("body"))]
+    for attribute in character.get("attributes") or []:
+        if not isinstance(attribute, dict):
+            continue
+        items.append(_collapse(attribute.get("text")))
+    return ", ".join(item for item in items if item)
 
 
-def load_frontal_min_pixel_height(prompts: dict | None = None) -> int:
-    data = prompts if isinstance(prompts, dict) else json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    value = data.get("frontalMinPixelHeight") if isinstance(data, dict) else None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise RuntimeError("prompts.frontalMinPixelHeight must be a positive integer")
-    return value
-
-
-def _facing_camera_ids(manifest: Path) -> list[str]:
-    if not manifest.is_file():
-        return []
-    raw = json.loads(manifest.read_text(encoding="utf-8"))
-    if not isinstance(raw, list):
-        return []
-    return [str(item) for item in raw]
-
-
-def _head_mask_has_pixels(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    from PIL import Image
-
-    with Image.open(path) as image:
-        return bool(image.convert("L").getextrema()[1] > 0)
+def _load_attributes(character: dict) -> list[dict]:
+    loaded: list[dict] = []
+    for attribute in character.get("attributes") or []:
+        if not isinstance(attribute, dict):
+            continue
+        text = _collapse(attribute.get("text"))
+        parts = [str(part) for part in (attribute.get("parts") or []) if part in BODY_PARTS]
+        if text and parts:
+            loaded.append({"text": text, "parts": parts})
+    return loaded
 
 
 def _shot_label(scene: dict, time_seconds: float, shot_label: str | None) -> str:
@@ -117,33 +97,147 @@ def _shot_label(scene: dict, time_seconds: float, shot_label: str | None) -> str
     return "start"
 
 
-def _frontal_skip_reason(person: dict, min_height: int) -> str | None:
-    if not _collapse(person.get("frontal_description")):
-        return "no frontalDescription"
-    if not person.get("facing_camera"):
-        return "not in facing-camera list"
-    if not person.get("head_mask_pixels"):
-        return "no head-mask pixels"
-    height = _height(person)
-    if height < min_height:
-        return f"pixel height {height} < {min_height}"
-    return None
+def load_row_depth_ratio(prompts: dict | None = None) -> float:
+    data = prompts if isinstance(prompts, dict) else json.loads(
+        PROMPTS_PATH.read_text(encoding="utf-8")
+    )
+    value = data.get("rowDepthRatio") if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError("prompts.rowDepthRatio must be a number")
+    ratio = float(value)
+    if ratio <= 1:
+        raise RuntimeError("prompts.rowDepthRatio must be greater than 1")
+    return ratio
+
+
+def load_part_min_pixel_height(prompts: dict | None = None) -> int:
+    data = prompts if isinstance(prompts, dict) else json.loads(
+        PROMPTS_PATH.read_text(encoding="utf-8")
+    )
+    value = data.get("partMinPixelHeight") if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise RuntimeError("prompts.partMinPixelHeight must be a positive integer")
+    return value
+
+
+def _coerce_part_stat(raw: object) -> dict[str, int]:
+    if isinstance(raw, dict):
+        try:
+            pixels = int(raw.get("pixels") or 0)
+        except (TypeError, ValueError):
+            pixels = 0
+        try:
+            width = int(raw.get("width") or 0)
+        except (TypeError, ValueError):
+            width = 0
+        try:
+            height = int(raw.get("height") or 0)
+        except (TypeError, ValueError):
+            height = 0
+        return {"pixels": pixels, "width": width, "height": height}
+    try:
+        pixels = int(raw or 0)
+    except (TypeError, ValueError):
+        pixels = 0
+    return {"pixels": pixels, "width": 0, "height": 0}
+
+
+def _part_stats(person: dict) -> dict[str, dict[str, int]]:
+    raw = person.get("part_stats")
+    if not isinstance(raw, dict):
+        raw = person.get("part_pixels")
+    stats = empty_part_stats()
+    if isinstance(raw, dict):
+        for name in BODY_PARTS:
+            stats[name] = _coerce_part_stat(raw.get(name))
+    return stats
+
+
+def _part_size_line(stats: dict[str, dict[str, int]]) -> str:
+    return " ".join(f"{name} {stats[name]['height']}px" for name in BODY_PARTS)
+
+
+def _attribute_clause(
+    attribute: dict,
+    stats: dict[str, dict[str, int]],
+    min_height: int,
+    character_id: str | None,
+) -> dict:
+    text = _collapse(attribute.get("text"))
+    parts = [str(part) for part in (attribute.get("parts") or [])]
+    tall = [part for part in parts if stats.get(part, {}).get("height", 0) >= min_height]
+    record: dict = {"text": text, "parts": parts, "sent": bool(tall)}
+    if tall:
+        part = tall[0]
+        record["part"] = part
+        record["partHeight"] = int(stats[part]["height"])
+        if character_id:
+            print(
+                f"  {character_id} attribute {text!r} sent ({part} {stats[part]['height']}px)",
+                flush=True,
+            )
+        return record
+    reasons: list[str] = []
+    for part in parts:
+        height = int(stats.get(part, {}).get("height") or 0)
+        if height <= 0:
+            reasons.append(f"{part} not visible")
+        else:
+            reasons.append(f"{part} {height}px < {min_height}")
+    record["skipReason"] = ", ".join(reasons) if reasons else "parts not visible"
+    if character_id:
+        print(f"  {character_id} attribute {text!r} dropped: {record['skipReason']}", flush=True)
+    return record
+
+
+def _person_text(person: dict, min_height: int) -> tuple[str, dict]:
+    character_id = person.get("character_id")
+    body = _collapse(person.get("body"))
+    attributes = person.get("attributes") if isinstance(person.get("attributes"), list) else []
+    stats = _part_stats(person)
+    extra: dict = {
+        "bodySent": bool(body),
+        "parts": stats,
+        "partMinPixelHeight": min_height,
+    }
+    if character_id:
+        print(f"  {character_id} parts: {_part_size_line(stats)}", flush=True)
+    if not body:
+        if character_id:
+            print(
+                f"  warning: {character_id} has no body; omitting their still text",
+                flush=True,
+            )
+        extra["omittedText"] = True
+        extra["omitReason"] = "missing body"
+        extra["attributes"] = []
+        return "", extra
+    items = [body]
+    attribute_log: list[dict] = []
+    for attribute in attributes:
+        if not isinstance(attribute, dict):
+            continue
+        record = _attribute_clause(
+            attribute, stats, min_height, str(character_id) if character_id else None
+        )
+        attribute_log.append(record)
+        if record["sent"]:
+            items.append(record["text"])
+    extra["attributes"] = attribute_log
+    return ", ".join(items), extra
 
 
 def describe_people(
     entries: list[dict] | None,
-    *,
-    frontal_min_pixel_height: int | None = None,
+    min_part_height: int | None = None,
+    row_depth_ratio: float | None = None,
 ) -> tuple[str, list[dict]]:
     """Count, a back row by depth, then each other person by side. No names."""
+    floor = load_part_min_pixel_height() if min_part_height is None else int(min_part_height)
+    ratio = load_row_depth_ratio() if row_depth_ratio is None else float(row_depth_ratio)
     people = [dict(entry) for entry in (entries or []) if isinstance(entry, dict)]
     if not people:
         return "", []
-    min_height = (
-        frontal_min_pixel_height
-        if frontal_min_pixel_height is not None
-        else load_frontal_min_pixel_height()
-    )
     width = float(people[0].get("frame_width") or 768)
     for person in people:
         person["side"] = _side(float(person.get("screen_x") or 0), width)
@@ -153,13 +247,14 @@ def describe_people(
         [
             person
             for person in people
-            if float(person.get("depth") or 0) > nearest_depth + ROW_DEPTH_GAP
+            if float(person.get("depth") or 0) > nearest_depth * ratio
         ],
         key=lambda person: float(person.get("screen_x") or 0),
     )
     used: set[int] = set()
     chunks: list[str] = []
     records: list[dict] = []
+    has_behind_row = len(behind) >= 2
 
     def hidden_phrase(person: dict) -> str:
         if float(person.get("visible_fraction") or 1) < BODY_VISIBLE_MIN:
@@ -169,34 +264,7 @@ def describe_people(
     def labeled(place: str, person: dict) -> str:
         hidden = hidden_phrase(person)
         head = f"{place}, {hidden}" if hidden else place
-        character_id = person.get("character_id")
-        general = _collapse(person.get("general_description"))
-        skip = _frontal_skip_reason(person, min_height)
-        send_frontal = skip is None
-        if not general:
-            if character_id:
-                print(
-                    f"  warning: {character_id} has no generalDescription; omitting their still text",
-                    flush=True,
-                )
-            text = ""
-            extra = {
-                "omittedText": True,
-                "omitReason": "missing generalDescription",
-                "frontalDescriptionSent": False,
-                "frontalSkipReason": "missing generalDescription",
-            }
-        else:
-            frontal = _collapse(person.get("frontal_description"))
-            text = f"{general} {frontal}" if send_frontal else general
-            extra = {"frontalDescriptionSent": send_frontal}
-            if skip is not None:
-                extra["frontalSkipReason"] = skip
-            if character_id:
-                if send_frontal:
-                    print(f"  {character_id} frontalDescription sent", flush=True)
-                else:
-                    print(f"  {character_id} frontalDescription skipped: {skip}", flush=True)
+        text, extra = _person_text(person, floor)
         phrase = f"{head}: {text}" if text else head
         record = {
             "place": place,
@@ -206,12 +274,13 @@ def describe_people(
             "phrase": phrase,
             **extra,
         }
+        character_id = person.get("character_id")
         if character_id:
             record["characterId"] = character_id
         records.append(record)
         return phrase
 
-    if len(behind) >= 2:
+    if has_behind_row:
         for person in behind:
             used.add(id(person))
         diffs = [
@@ -230,23 +299,34 @@ def describe_people(
     ]
     side_words = {"left": "On the left", "right": "On the right", "center": "In the center"}
     for person in rest:
-        front = float(person.get("depth") or 0) <= nearest_depth + ROW_DEPTH_GAP
-        place = side_words[person["side"]] + (", in the foreground" if front else "")
+        place = side_words[person["side"]]
+        if has_behind_row:
+            place += ", in the foreground"
         chunks.append(labeled(place, person))
 
     noun = "person" if len(people) == 1 else "people"
     return _join([f"{_count_word(len(people))} {noun}", *chunks]), records
 
 
-def still_people_line(
-    entries: list[dict] | None = None,
-    *,
-    frontal_min_pixel_height: int | None = None,
-) -> str:
-    sentence, _records = describe_people(
-        entries, frontal_min_pixel_height=frontal_min_pixel_height
-    )
+def still_people_line(entries: list[dict] | None = None) -> str:
+    sentence, _records = describe_people(entries)
     return sentence
+
+
+def _read_part_stats(path: Path) -> dict[str, dict[str, dict[str, int]]]:
+    if not path.is_file():
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return {}
+    found: dict[str, dict[str, dict[str, int]]] = {}
+    for character_id, parts in raw.items():
+        stats = empty_part_stats()
+        if isinstance(parts, dict):
+            for name in BODY_PARTS:
+                stats[name] = _coerce_part_stat(parts.get(name))
+        found[str(character_id)] = stats
+    return found
 
 
 def gather_visible_people(
@@ -257,7 +337,7 @@ def gather_visible_people(
     *,
     shot_label: str | None = None,
 ) -> list[dict]:
-    """People with pixels in this camera. Words come later from generalDescription."""
+    """People with pixels in this camera. Words come later from body + attributes."""
     import numpy as np
     from clay_gpu import raster_clay
     from pipeline_paths import guide_path
@@ -277,14 +357,18 @@ def gather_visible_people(
     basis = _camera_basis(camera)
     characters = show.get("characters") or {}
     label = _shot_label(scene, time_seconds, shot_label)
-    mask_path = guide_path(
+    parts_path = guide_path(
         str(show["id"]),
         int(episode["episodeNumber"]),
         int(scene["sceneNumber"]),
         label,
-        "faces",
-    )
-    facing_ids = set(_facing_camera_ids(mask_path.with_suffix(".json")))
+        "parts",
+    ).with_suffix(".json")
+    if not parts_path.is_file():
+        raise RuntimeError(
+            f"Missing previs guide {parts_path}. Run `pnpm run content:previs` first."
+        )
+    part_stats = _read_part_stats(parts_path)
     layers = []
     for character_id in scene.get("characterIds") or []:
         character = characters.get(character_id)
@@ -320,7 +404,6 @@ def gather_visible_people(
             continue
         ys, xs = np.nonzero(covered)
         projected = project((float(position[0]), float(position[1]), height_m * 0.55), camera)
-        spot = mask_path.with_name(f"{mask_path.stem}_{character_id}.png")
         layers.append(
             {
                 "character_id": character_id,
@@ -329,10 +412,9 @@ def gather_visible_people(
                 "x0": float(xs.min()),
                 "x1": float(xs.max()),
                 "pixel_height": int(ys.max() - ys.min() + 1),
-                "general_description": _collapse(character.get("generalDescription")),
-                "frontal_description": _collapse(character.get("frontalDescription")),
-                "facing_camera": character_id in facing_ids,
-                "head_mask_pixels": _head_mask_has_pixels(spot),
+                "body": _collapse(character.get("body")),
+                "attributes": _load_attributes(character),
+                "part_stats": part_stats.get(str(character_id), empty_part_stats()),
                 "frame_width": float(PROXY_WIDTH),
                 "_covered": covered,
                 "_depth": depth,

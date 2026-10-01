@@ -2,34 +2,78 @@
   "id": "the-iron-bride",
   "title": "The Iron Bride",
   "characters": {
-    "sela": {
-      "generalDescription": "adult woman, athletic compact build, olive skin, long black hair, in a tan linen wrap, barefoot",
-      "frontalDescription": "24 years old, sharp cheekbones, amber irises, a thin pale burn scar cutting the left eyebrow, a plain iron bridal collar",
+      "sela": {
+      "body": "adult woman, athletic compact build, olive skin",
+      "attributes": [
+        { "text": "24 years old", "parts": ["face"] },
+        { "text": "long black hair", "parts": ["hair"] },
+        { "text": "in a tan linen wrap", "parts": ["torso", "legs"] },
+        { "text": "barefoot", "parts": ["feet"] },
+        { "text": "sharp cheekbones", "parts": ["face"] },
+        { "text": "amber irises", "parts": ["eyes"] },
+        { "text": "a thin pale burn scar cutting the left eyebrow", "parts": ["face"] },
+        { "text": "a plain iron bridal collar", "parts": ["neck"] }
+      ],
       "proxy": { "heightMeters": 1.68, "build": "slim" }
     },
     "tomas": {
-      "generalDescription": "adult man, lean build, fair skin, copper-red hair, in a sky-blue coat, barefoot",
-      "frontalDescription": "22 years old, gray irises, a copper birthmark under the right eye",
+      "body": "adult man, lean build, fair skin",
+      "attributes": [
+        { "text": "22 years old", "parts": ["face"] },
+        { "text": "copper-red hair", "parts": ["hair"] },
+        { "text": "in a sky-blue coat", "parts": ["torso", "arms"] },
+        { "text": "barefoot", "parts": ["feet"] },
+        { "text": "gray irises", "parts": ["eyes"] },
+        { "text": "a copper birthmark under the right eye", "parts": ["face"] }
+      ],
       "proxy": { "heightMeters": 1.78, "build": "slim" }
     },
     "vardan": {
-      "generalDescription": "adult man, tall narrow build, pale skin, silver-white cropped hair, in black plate armor with a gold gorget, black shoes",
-      "frontalDescription": "52 years old, ice-blue irises, a gold ring tattoo encircling the throat",
+      "body": "adult man, tall narrow build, pale skin",
+      "attributes": [
+        { "text": "52 years old", "parts": ["face"] },
+        { "text": "silver-white cropped hair", "parts": ["hair"] },
+        { "text": "in black plate armor with a gold gorget", "parts": ["torso", "arms", "neck"] },
+        { "text": "black shoes", "parts": ["feet"] },
+        { "text": "ice-blue irises", "parts": ["eyes"] },
+        { "text": "a gold ring tattoo encircling the throat", "parts": ["neck"] }
+      ],
       "proxy": { "heightMeters": 1.9, "build": "slim" }
     },
     "nira": {
-      "generalDescription": "adult woman, broad-shouldered build, dark umber skin, shaved sides with a copper-brown crest of hair, in black plate armor with a gold gorget, barefoot",
-      "frontalDescription": "45 years old, gold-flecked brown irises",
+      "body": "adult woman, broad-shouldered build, dark umber skin",
+      "attributes": [
+        { "text": "45 years old", "parts": ["face"] },
+        { "text": "shaved sides with a copper-brown crest of hair", "parts": ["hair"] },
+        { "text": "in black plate armor with a gold gorget", "parts": ["torso", "arms", "neck"] },
+        { "text": "barefoot", "parts": ["feet"] },
+        { "text": "gold-flecked brown irises", "parts": ["eyes"] }
+      ],
       "proxy": { "heightMeters": 1.73, "build": "broad" }
     },
     "kesh": {
-      "generalDescription": "adult man, heavy build, weathered tan skin, shaved head, in black plate armor with a gold gorget, barefoot",
-      "frontalDescription": "38 years old, black irises, a split-lip scar, salt-and-pepper stubble",
+      "body": "adult man, heavy build, weathered tan skin",
+      "attributes": [
+        { "text": "38 years old", "parts": ["face"] },
+        { "text": "shaved head", "parts": ["hair"] },
+        { "text": "in black plate armor with a gold gorget", "parts": ["torso", "arms", "neck"] },
+        { "text": "barefoot", "parts": ["feet"] },
+        { "text": "black irises", "parts": ["eyes"] },
+        { "text": "a split-lip scar", "parts": ["face"] },
+        { "text": "salt-and-pepper stubble", "parts": ["face"] }
+      ],
       "proxy": { "heightMeters": 1.82, "build": "broad" }
     },
     "rhel": {
-      "generalDescription": "adult man, thin build, sallow skin, black hair bound at the nape, in black plate armor with a gold gorget, barefoot",
-      "frontalDescription": "30 years old, dark brown irises, a branded sun-disk on the forehead",
+      "body": "adult man, thin build, sallow skin",
+      "attributes": [
+        { "text": "30 years old", "parts": ["face"] },
+        { "text": "black hair bound at the nape", "parts": ["hair"] },
+        { "text": "in black plate armor with a gold gorget", "parts": ["torso", "arms", "neck"] },
+        { "text": "barefoot", "parts": ["feet"] },
+        { "text": "dark brown irises", "parts": ["eyes"] },
+        { "text": "a branded sun-disk on the forehead", "parts": ["face"] }
+      ],
       "proxy": { "heightMeters": 1.76, "build": "slim" }
     }
   },

@@ -165,11 +165,16 @@ void main() {
 
 _COLOR_FRAGMENT = """
 #version 330 core
+uniform int u_linear;
 in vec3 g_color;
 out vec4 frag_color;
 
 void main() {
     vec3 linear = clamp(g_color, 0.0, 1.0);
+    if (u_linear == 1) {
+        frag_color = vec4(linear, 1.0);
+        return;
+    }
     frag_color = vec4(pow(linear, vec3(1.0 / 2.2)), 1.0);
 }
 """
@@ -317,8 +322,8 @@ class _Renderer:
         position, right, up, forward, focal = basis
         self.fbo.use()
         self.ctx.viewport = (0, 0, width, height)
-        albedo = shading == "albedo"
-        program = self.color_program if albedo else self.program
+        colored = shading in ("albedo", "flat")
+        program = self.color_program if colored else self.program
         program["u_cam"].value = position
         program["u_right"].value = right
         program["u_up"].value = up
@@ -328,16 +333,18 @@ class _Renderer:
         program["u_near"].value = float(near)
         program["u_far"].value = float(FAR_CLIP)
         red, green, blue = (channel / 255.0 for channel in background)
-        if not albedo:
+        if colored:
+            program["u_linear"].value = 1 if shading == "flat" else 0
+        else:
             program["u_pass"].value = 1 if shading == "normal" else 0
         self.fbo.clear(red, green, blue, 1.0, depth=1.0)
         for batch in batches:
             if batch.faces.size == 0:
                 continue
-            if albedo and batch.colors is None:
+            if colored and batch.colors is None:
                 continue
-            vao, ephemeral = self._color_vao(batch) if albedo else self._vao(batch)
-            if not albedo:
+            vao, ephemeral = self._color_vao(batch) if colored else self._vao(batch)
+            if not colored:
                 program["u_base"].value = batch.base
             program["u_offset"].value = batch.offset
             vao.render(self._moderngl.TRIANGLES)

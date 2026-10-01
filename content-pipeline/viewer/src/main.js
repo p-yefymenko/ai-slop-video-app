@@ -1,4 +1,4 @@
-import { Stage } from "./stage.js";
+import { BODY_PARTS, PART_COLORS, Stage } from "./stage.js";
 
 const app = document.querySelector("#app");
 const stageHost = document.createElement("div");
@@ -128,8 +128,10 @@ function showHome() {
 async function showCharacter(characterId) {
   const listed = (catalog.characters || []).find((item) => item.characterId === characterId);
   if (!listed) throw new Error(`No character ${characterId}`);
-  if (listed.modelUrl) await stage.showModel(listed.modelUrl);
-  else stage.clear();
+  if (listed.modelUrl) {
+    await stage.showModel(listed.modelUrl);
+    stage.colorParts();
+  } else stage.clear();
   const height = listed.sizeMeters?.[2];
   fillFacts("Character", [
     ["Show", catalog.showId || ""],
@@ -144,6 +146,21 @@ async function showCharacter(characterId) {
     image.src = listed.plateUrl;
     inspector.append(image);
   }
+  const legend = document.createElement("ul");
+  for (const part of BODY_PARTS) {
+    const item = document.createElement("li");
+    const swatch = document.createElement("span");
+    const rgb = PART_COLORS[part];
+    swatch.style.display = "inline-block";
+    swatch.style.width = "10px";
+    swatch.style.height = "10px";
+    swatch.style.marginRight = "6px";
+    swatch.style.background = `rgb(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)})`;
+    item.append(swatch, document.createTextNode(part));
+    legend.append(item);
+  }
+  inspector.append(heading("Part colors"));
+  inspector.append(legend);
 }
 
 async function showLocation(locationId) {
@@ -218,7 +235,15 @@ async function showScene(episodeNumber, sceneNumber) {
   stage.onTime = (timeSeconds) => {
     slider.value = String(timeSeconds);
   };
-  toolbar.append(play, god, lens, slider);
+  const parts = document.createElement("button");
+  parts.type = "button";
+  parts.textContent = "Part colors";
+  parts.addEventListener("click", () => {
+    const on = !parts.classList.contains("active");
+    parts.classList.toggle("active", on);
+    if (on) stage.colorParts();
+  });
+  toolbar.append(play, god, lens, parts, slider);
   fillFacts("Scene", [
     ["Show", catalog.showId || scene.showId || ""],
     ["Episode", String(episodeNumber)],

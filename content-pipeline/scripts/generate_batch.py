@@ -24,7 +24,8 @@ from still_people import (
     character_appearance_text,
     describe_people,
     gather_visible_people,
-    load_frontal_min_pixel_height,
+    load_part_min_pixel_height,
+    load_row_depth_ratio,
     still_people_line,
 )
 from pipeline_paths import (
@@ -592,6 +593,7 @@ def append_generation_log(
     images: list[tuple[str, Path | None]],
     people: list[dict] | None = None,
     landmarks: list[dict] | None = None,
+    row_depth_ratio: float | None = None,
 ) -> None:
     log_path = still_log_path(dest)
     if not log_path.is_file():
@@ -612,6 +614,12 @@ def append_generation_log(
     entry = {"pass": pass_name, "prompt": prompt, "images": recorded}
     if people:
         entry["people"] = people
+        if row_depth_ratio is not None:
+            entry["rowDepthRatio"] = row_depth_ratio
+            depths = [float(item.get("depth") or 0) for item in people]
+            nearest = min(depths) if depths else 0.0
+            farthest = max(depths) if depths else 0.0
+            entry["depthRatio"] = round(farthest / nearest, 3) if nearest > 0 else 0
     if landmarks:
         entry["landmarks"] = landmarks
     payload.setdefault("passes", []).append(entry)
@@ -729,20 +737,18 @@ def load_show(path: Path) -> dict:
     characters = show.get("characters")
     if not isinstance(characters, dict) or not characters:
         raise SystemExit(f"{path.name} is missing characters")
+    from body_parts import validate_show_parts
+
+    validate_show_parts(show)
     cleaned_chars: dict[str, dict] = {}
     for cid, character in characters.items():
         if not isinstance(character, dict):
             raise SystemExit(f"characters[{cid!r}] must be an object")
         cleaned_chars[str(cid)] = {
             "id": str(cid),
-            "generalDescription": require_text(
-                character, "generalDescription", f"characters[{cid!r}]"
-            ),
+            "body": require_text(character, "body", f"characters.{cid}.body"),
+            "attributes": character["attributes"],
         }
-        if character.get("frontalDescription") is not None:
-            cleaned_chars[str(cid)]["frontalDescription"] = require_text(
-                character, "frontalDescription", f"characters[{cid!r}]"
-            )
         if isinstance(character.get("proxy"), dict):
             cleaned_chars[str(cid)]["proxy"] = character["proxy"]
     show["characters"] = cleaned_chars
@@ -780,8 +786,9 @@ def load_show(path: Path) -> dict:
     if not isinstance(prompts, dict):
         raise SystemExit(f"{PROMPTS_PATH} must contain a JSON object")
     show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
-    show["frontalMinPixelHeight"] = load_frontal_min_pixel_height(prompts)
     show["landmarkMinScreenFraction"] = load_landmark_min_screen_fraction(prompts)
+    show["partMinPixelHeight"] = load_part_min_pixel_height(prompts)
+    show["rowDepthRatio"] = load_row_depth_ratio(prompts)
     episodes = show.get("episodes")
     if not isinstance(episodes, list) or not episodes:
         raise SystemExit(f"{path.name} is missing episodes")
@@ -854,8 +861,7 @@ def load_show(path: Path) -> dict:
             duration_seconds = float(time_range[1]) - float(time_range[0])
             if duration_seconds <= 0:
                 raise SystemExit(f"{scene_label} timeRangeSeconds must increase")
-            cleaned_scenes.append(
-                {
+            cleaned = {
                     "sceneNumber": scene_number,
                     "locationId": loc_id,
                     "storyBeat": require_text(scene, "storyBeat", scene_label),
@@ -867,7 +873,9 @@ def load_show(path: Path) -> dict:
                     "videoPrompt": video_prompt,
                     "durationSeconds": duration_seconds,
                 }
-            )
+            if scene.get("requiresParts") is not None:
+                cleaned["requiresParts"] = scene["requiresParts"]
+            cleaned_scenes.append(cleaned)
         cleaned_eps.append(
             {
                 "episodeNumber": ep_num,
@@ -1764,7 +1772,8 @@ def render_spatial_still(
     )
     people_sentence, people_log = describe_people(
         people_entries,
-        frontal_min_pixel_height=show["frontalMinPixelHeight"],
+        min_part_height=show["partMinPixelHeight"],
+        row_depth_ratio=show["rowDepthRatio"],
     )
     blockout_prompt = show_prompt(
         show,
@@ -1810,7 +1819,13 @@ def render_spatial_still(
     if attach_backdrop:
         logged.append(("Backdrop", backdrop_path))
     append_generation_log(
-        dest, "blockout", blockout_prompt, logged, people_log, landmark_log
+        dest,
+        "blockout",
+        blockout_prompt,
+        logged,
+        people_log,
+        landmark_log,
+        row_depth_ratio=show.get("rowDepthRatio"),
     )
     passes: list[tuple[str, Path]] = []
     if face_prompt is not None and "70" in graph:

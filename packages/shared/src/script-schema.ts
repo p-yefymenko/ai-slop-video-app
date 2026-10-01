@@ -5,15 +5,18 @@
 
 import { z } from "zod";
 
-import type {
-  CharacterSpatialKeyframe,
-  PropSpatialKeyframe,
-  ScriptScene,
-  ShowEpisode,
-  ShowLocation,
-  ShowScript,
-  SpatialCameraKeyframe,
+import {
+  BODY_PARTS,
+  type CharacterSpatialKeyframe,
+  type PropSpatialKeyframe,
+  type ScriptScene,
+  type ShowEpisode,
+  type ShowLocation,
+  type ShowScript,
+  type SpatialCameraKeyframe,
 } from "./script";
+
+const BODY_PART_SET = new Set<string>(BODY_PARTS);
 
 export type ScriptIssue = {
   path: string;
@@ -100,10 +103,41 @@ const characterProxySchema = z
   })
   .strict();
 
+const characterAttributeSchema = z
+  .object({
+    text: text("text"),
+    parts: z
+      .array(
+        z.string({
+          required_error: "part is required",
+          invalid_type_error: "part must be a string",
+        }),
+        {
+          required_error: "parts is required",
+          invalid_type_error: "parts must be an array",
+        },
+      )
+      .min(1, "empty parts"),
+  })
+  .strict();
+
+const characterPartRequirementSchema = z
+  .object({
+    characterId: text("characterId"),
+    part: z.string({
+      required_error: "part is required",
+      invalid_type_error: "part must be a string",
+    }),
+  })
+  .strict();
+
 const showCharacterSchema = z
   .object({
-    generalDescription: text("generalDescription"),
-    frontalDescription: text("frontalDescription").optional(),
+    body: text("body"),
+    attributes: z.array(characterAttributeSchema, {
+      required_error: "attributes is required",
+      invalid_type_error: "attributes must be an array",
+    }),
     proxy: characterProxySchema.optional(),
   })
   .strict();
@@ -188,6 +222,11 @@ const sceneSchema = z
       .strict(),
     imagePrompt: z.string().optional(),
     videoPrompt: z.string().optional(),
+    requiresParts: z
+      .array(characterPartRequirementSchema, {
+        invalid_type_error: "requiresParts must be an array",
+      })
+      .optional(),
   })
   .strict();
 
@@ -334,6 +373,41 @@ function locationHasPeople(show: ShowScript, locationId: string): boolean {
     return Object.values(episode.spatialTimeline.characterTracks).some((track) =>
       track.some((frame) => frame.locationId === locationId),
     );
+  });
+}
+
+function checkPartId(issues: ScriptIssue[], path: string, part: string) {
+  if (!BODY_PART_SET.has(part)) {
+    issues.push({
+      path,
+      message: `unknown part id ${JSON.stringify(part)}`,
+    });
+  }
+}
+
+function checkCharacterAttributes(
+  issues: ScriptIssue[],
+  characterId: string,
+  character: ShowScript["characters"][string],
+) {
+  if (!character.body?.trim()) {
+    issues.push({
+      path: `characters.${characterId}.body`,
+      message: "missing body",
+    });
+  }
+  character.attributes.forEach((attribute, attributeIndex) => {
+    const partsPath = `characters.${characterId}.attributes[${attributeIndex}].parts`;
+    if (attribute.parts.length === 0) {
+      issues.push({
+        path: partsPath,
+        message: "empty parts",
+      });
+      return;
+    }
+    attribute.parts.forEach((part, partIndex) => {
+      checkPartId(issues, `${partsPath}[${partIndex}]`, part);
+    });
   });
 }
 
@@ -676,6 +750,7 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
 
   for (const characterId of Object.keys(show.characters)) {
     checkSnakeId(issues, `characters.${characterId}`, characterId, "character id");
+    checkCharacterAttributes(issues, characterId, show.characters[characterId]);
   }
   for (const [locationId, location] of Object.entries(show.locations)) {
     checkSnakeId(issues, `locations.${locationId}`, locationId, "location id");
@@ -784,6 +859,21 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
           message: `${JSON.stringify(scene.speakerId)} is not in characterIds`,
         });
       }
+      (scene.requiresParts ?? []).forEach((requirement, requirementIndex) => {
+        const requirementPath = `${scenePath}.requiresParts[${requirementIndex}]`;
+        if (!(requirement.characterId in show.characters)) {
+          issues.push({
+            path: `${requirementPath}.characterId`,
+            message: `unknown character ${JSON.stringify(requirement.characterId)}`,
+          });
+        } else if (!scene.characterIds.includes(requirement.characterId)) {
+          issues.push({
+            path: `${requirementPath}.characterId`,
+            message: `${JSON.stringify(requirement.characterId)} is not in characterIds`,
+          });
+        }
+        checkPartId(issues, `${requirementPath}.part`, requirement.part);
+      });
       checkIncreasingTimes(issues, `${scenePath}.camera.keyframes`, scene.camera.keyframes);
       if (finish > start) {
         scene.camera.keyframes.forEach((frame, frameIndex) => {
