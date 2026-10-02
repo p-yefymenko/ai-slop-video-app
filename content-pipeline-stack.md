@@ -2,7 +2,7 @@
 
 A show is one authored JSON file. The pipeline turns that file into a vertical episode on a local GPU. Geometry, blocking, and cameras are deterministic. Image and video models only paint and animate what the blockout already decided.
 
-Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. ComfyUI is the only model runtime, at `http://127.0.0.1:8188`.
+Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen, TRELLIS.2, Pixal3D, and LTX run through ComfyUI at `http://127.0.0.1:8188`. Florence-2 runs in that same virtualenv through Transformers, not through ComfyUI.
 
 ## Machine
 
@@ -37,7 +37,7 @@ script.json
     └─ content:generate    LTX-2.3 distilled-1.1         scene clips + episode cut
 ```
 
-Existing outputs are skipped. One scene is rebuilt with `--force`. After a structural script rewrite, `content:archive` moves that show’s generated files aside and keeps the reviewed character portraits.
+Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show’s generated files aside and keeps the reviewed character portraits.
 
 ### 1. Plates — Qwen-Image-Edit-2511
 
@@ -74,17 +74,17 @@ An empty location draws its one mesh, and the camera stays where it was authored
 
 Output is 768×1360. The playblast is 8 fps. Per scene: `output/previs/<show>/<episode>/scene_XX/blockout.mp4`, `start.png`, `end.png`, and `guides/`. Every scene is joined into `output/previs/<show>/<episode>/blockout.mp4`. A scene still missing leaves the episode file untouched.
 
-Guides written for the start frame, and for the end frame when blocking or the camera actually changes:
+Guides are written for the start frame and the end frame of every scene. Stills and LTX use the end guides only when blocking or the camera actually changes:
 
 | Guide | What it is |
 | --- | --- |
 | `depth` | Camera-forward depth. Near surfaces are bright. Empty space is black. Character meshes stay in this map, so position and occlusion are fixed. |
 | `clothes` | Those character meshes from this camera, the place cut away. Cloth, skin, and hair are each one flat color taken from the plate. A small stain takes the color around it. A landmark or prop in front of a person leaves that pixel black, so the cutout matches depth occlusion. |
-| `edges` | Outlines where depth jumps or a surface meets empty space. People are included when they are in frame. |
+| `edges` | Outlines where depth jumps or a surface meets empty space. Character meshes stay in this map when they are in frame. The capsule fallback does not. |
 | `pose` | OpenPose skeleton, used only when the clothes cutout is missing. |
 | `backdrop` | Empty space from this camera in flat sky, ground, and surround color. Landmarks, props, and people are black. The open floor keeps the ground color. |
 | `faces` | Head masks for people whose face points at the camera, plus a JSON list of those ids. |
-| `parts` | JSON: per `characterId`, visible pixels, width, and height per body part. Face and eyes are the front half of the head in mesh-local space (schema +Y), split at the head band's bounding-box center. Same depth test as clothes. |
+| `parts` | JSON: per `characterId`, visible pixels, width, and height per body part. Face and eyes are the front half of the head in mesh-local space (schema +Y), cut at the head band's bounding-box center on the forward axis. Eyes are the height band 0.86–0.91 of standing height on that front half. Same depth test as clothes. |
 | `normal` | Surface normals. Written for review. |
 
 ### 5. Scene stills — Qwen-Image-Edit-2511
@@ -93,19 +93,19 @@ Guides written for the start frame, and for the end frame when blocking or the c
 
 Portraits use `workflows/qwen_image_edit.json`: same Lightning settings, 768×1360, from `body` plus every attribute, on a blank canvas. The template keeps a plain shirt and no costume. They land in `output/frames/<show>/characters/<id>.png`.
 
-Scene stills use `workflows/qwen_image_edit_spatial.json` at 768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The shaded clay frame is not an input. CFG 1 has no negative channel, so the blockout still does not use “do not” sentences. The empty-shot backdrop template still does. ControlNet is not used. Surface normals are written for review and are not sent to Qwen. Clothes and the empty-space plate are never reference latents in the same pass.
+Scene stills use `workflows/qwen_image_edit_spatial.json` at 768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The shaded clay frame is not an input. CFG 1 has no negative channel, so the blockout still does not use “do not” sentences. ControlNet is not used. Surface normals are written for review and are not sent to Qwen. Clothes and the empty-space plate are never reference latents in the same pass.
 
 Picture order:
 
 - **Shot with a clothes cutout.** Depth, then the clothes cutout, then edges. All three are reference latents on `TextEncodeQwenImageEditPlus`, so garment color is copied and the outlines are kept. The empty-space plate is not attached: it is black where the person stands, and a reference latent would paint that black over the cloth.
-- **Shot with people and no clothes cutout.** Depth, pose, edges.
-- **Empty shot.** Depth and edges, plus the empty-space plate. The encoder switches to the local `TextEncodeQwenBackdrop` node so the plate is a fourth picture.
+- **Shot with people and no clothes cutout.** Depth, pose, edges, plus the empty-space plate as picture 4. The encoder switches to the local `TextEncodeQwenBackdrop` node.
+- **Empty shot.** Depth and edges, plus the empty-space plate as picture 3. Same `TextEncodeQwenBackdrop` encoder.
 
-Every shot uses one prompt skeleton, filled by `still_prompt` in `generate_batch.py` and the people builder in `still_people.py`. `spatialBlockout` in `prompts.json` is `{stillPrompt}`. Order: `stillOpening` from `prompts.json`, a legend for each attached picture, one keep sentence hardcoded in `still_prompt` (“Keep the shape, position, and occlusion from the pictures.”), the people sentence when someone is visible, the visible landmark appearances, then “Behind and around:” and the sky, ground, and surround this camera shows. An empty slot is left out, including “No people.” The still does not read `scene.imagePrompt`. Character names and ids are not sent to Qwen. The log may keep `characterId`.
+Every shot uses one prompt skeleton, filled by `still_prompt` in `generate_batch.py` and the people builder in `still_people.py`. `spatialBlockout` in `prompts.json` is `{stillPrompt}`. Order: `stillOpening` from `prompts.json`, a legend for each attached picture, one keep sentence hardcoded in `still_prompt` (“Keep the shape, position, and occlusion from the pictures.”), the people sentence on a clothes shot, the visible landmark appearances, then “Behind and around:” and the sky, ground, and surround this camera shows. An empty slot is left out, including “No people.” Pose and empty shots omit the people sentence. The still does not read `scene.imagePrompt`. Character names and ids are not sent to Qwen. The log may keep `characterId`.
 
-The people sentence is built from `body`, visible `attributes`, and blocking geometry: depth order, screen side, and occlusion. Visible people are counted in a number word. Each visible person is `{position}: {body, attributes…}` joined with commas. A still sends an attribute only when any of its tagged parts is at least `partMinPixelHeight` tall **and** covers at least `partMinScreenFraction` of the frame (`prompts.json`; one pair of numbers for every part). Age is a face-tagged attribute, so a 10 px face or a 21 px grazing sliver does not receive “52 years old”. If `body` is missing for a visible character, that person's text is left out and the log warns with their id. The log records each part's pixel height and screen fraction, each attribute sent or dropped, and which condition failed when it was dropped. Figures farther than `nearest_depth * rowDepthRatio` (`prompts.json`, 1.5) stand in a row behind, left to right, each with their own line, but only when at least two people qualify. Each other person is named by screen side; “in the foreground” is added only when that behind group exists. A figure whose visible fraction is below the cutoff is partly hidden. The log records `rowDepthRatio` and the farthest/nearest depth ratio once per frame. Character names and ids are not sent. Hair and feet on a distant figure still come from the clothes cutout when their text is dropped.
+On a clothes shot, the people sentence is built from `body`, visible `attributes`, and blocking geometry: depth order, screen side, and occlusion. Visible people are counted in a number word. Each visible person is `{position}: {body, attributes…}` joined with commas. A still sends an attribute only when any of its tagged parts is at least `partMinPixelHeight` tall **and** covers at least `partMinScreenFraction` of the frame (`prompts.json`; one pair of numbers for every part). Age is a face-tagged attribute, so a 10 px face or a 21 px grazing sliver does not receive “52 years old”. If `body` is missing for a visible character, that person's text is left out and the log warns with their id. The log records each part's pixel height and screen fraction, each attribute sent or dropped, and which condition failed when it was dropped. Figures farther than `nearest_depth * rowDepthRatio` (`prompts.json`, 1.5) stand in a row behind, left to right, each with their own line, but only when at least two people qualify. Each other person is named by screen side; “in the foreground” is added only when that behind group exists. A figure whose visible fraction is below the cutoff is partly hidden. The log records `rowDepthRatio` and the farthest/nearest depth ratio once per frame. Character names and ids are not sent. Hair and feet on a distant figure still come from the clothes cutout when their text is dropped.
 
-A landmark mesh is named when its visible front surface covers at least `landmarkMinScreenFraction` of the frame (`prompts.json`, start 0.02). The log records each landmark, whether it was sent, its screen fraction, and the skip reason if it was left out. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
+A landmark mesh is named when its visible front surface covers at least `landmarkMinScreenFraction` of the frame (`prompts.json`, 0.008). The log records each landmark, whether it was sent, its screen fraction, and the skip reason if it was left out. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
 
 Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/` (and `_end` when that frame exists). The blockout pass in `log.json` records `people` and `landmarks` the same way: each entry says whether it was sent, and the skip reason if it was left out. The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
 
@@ -126,7 +126,7 @@ Identity face painting exists in the spatial graph and is off (`FACE_PASS = Fals
 | Start frame | `LTXVImgToVideo` at strength 0.7 |
 | End frame | `LTXVAddGuide` at strength 0.85 on the last frame, only when a generative scene’s blocking or camera changes. `LTXVCropGuides` strips the guide tokens before decode. |
 | Dialogue | When `speakerId` is set, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
-| Prompt | `sceneVideo`: continue from the still. `videoPrompt` is the line and the performance. Camera and blocking come from the timeline and the start and end frames. |
+| Prompt | `sceneVideo`: continue from the still. `videoPrompt` is the line and the performance. A speaking shot also prepends `LIP SYNC: {speakerId}…`, so that id does go to Gemma. Camera and blocking come from the timeline and the start and end frames. |
 | Mux | Video Helper Suite, H.264, CRF 19, with the decoded LTX audio. |
 
 Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenates them into `episode.mp4` in that folder. A partial clip render leaves `episode.mp4` alone.
@@ -143,6 +143,7 @@ Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenat
 | Qwen stills | `qwen-image-edit-2511-Q4_K_M.gguf` (~13GB), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`, 4-step Lightning LoRA |
 | TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet |
 | Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. |
+| Unused | YuNet ONNX face detector. Downloaded by `content:models`; no stage reads it. |
 
 Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 and Pixal3D are MIT. `content:assets -- --credits` rewrites `docs/CREDITS.md` from the records under `output/assets/`.
 
@@ -155,10 +156,10 @@ Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 and Pixal3D are MIT. `content:asse
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)
 - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 
-Two local nodes are copied in:
+Local nodes:
 
-- `content-pipeline/comfy_nodes/reelshort_ltx` — accept Gemma API embeddings that are already projected
-- `content-pipeline/comfy_nodes/qwen_backdrop.py` — `TextEncodeQwenBackdrop`, a four-image Qwen edit encoder used when the empty-space plate is attached
+- `content:setup-comfy` copies `content-pipeline/comfy_nodes/reelshort_ltx` — accept Gemma API embeddings that are already projected
+- `content:comfy` copies `content-pipeline/comfy_nodes/qwen_backdrop.py` — `TextEncodeQwenBackdrop`, a four-image Qwen edit encoder used when the empty-space plate is attached
 
 `pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs. The rest load Florence-2. Do not install `content-pipeline/requirements.txt` into that virtualenv.
 
