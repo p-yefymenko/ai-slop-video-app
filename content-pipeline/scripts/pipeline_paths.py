@@ -132,6 +132,23 @@ def blockout_video_path(show_id: str, episode_number: int, scene_number: int) ->
     return scene_dir(show_id, episode_number, scene_number) / "blockout.mp4"
 
 
+def depth_video_dir(show_id: str, episode_number: int, scene_number: int) -> Path:
+    return scene_dir(show_id, episode_number, scene_number) / "guides" / "depth_video"
+
+
+def depth_video_mp4_path(show_id: str, episode_number: int, scene_number: int) -> Path:
+    return scene_dir(show_id, episode_number, scene_number) / "guides" / "depth_video.mp4"
+
+
+def clay_24fps_path(show_id: str, episode_number: int, scene_number: int) -> Path:
+    return scene_dir(show_id, episode_number, scene_number) / "guides" / "clay_24fps.mp4"
+
+
+def control_depth_mp4_path(show_id: str, episode_number: int, scene_number: int) -> Path:
+    """Depth Anything control video for IC-LoRA (not native previs depth_video)."""
+    return scene_dir(show_id, episode_number, scene_number) / "guides" / "control_depth.mp4"
+
+
 def episode_blockout_path(show_id: str, episode_number: int) -> Path:
     """Every scene blockout, in script order, as one playable episode."""
     return previs_dir(show_id, episode_number) / "blockout.mp4"

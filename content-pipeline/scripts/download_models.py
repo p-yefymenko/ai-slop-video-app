@@ -38,6 +38,11 @@ QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
 QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+LTX_IC_LORA_REPO = "Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control"
+LTX_IC_LORA_FILE = "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"
+VIDEO_DEPTH_ANYTHING_REPO = "depth-anything/Video-Depth-Anything-Small"
+VIDEO_DEPTH_ANYTHING_FILE = "video_depth_anything_vits.pth"
+VIDEO_DEPTH_ANYTHING_MIN_BYTES = 100_000_000  # ~111 MB
 YUNET_REPO = "opencv/face_detection_yunet"
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 
@@ -162,6 +167,16 @@ def main() -> None:
     download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
+    download(LTX_IC_LORA_REPO, LTX_IC_LORA_FILE, models / "loras" / LTX_IC_LORA_FILE, 100_000_000)
+    vda_dest = models / "videodepthanything" / VIDEO_DEPTH_ANYTHING_FILE
+    download(
+        VIDEO_DEPTH_ANYTHING_REPO,
+        VIDEO_DEPTH_ANYTHING_FILE,
+        vda_dest,
+        VIDEO_DEPTH_ANYTHING_MIN_BYTES,
+    )
+    if vda_dest.is_file():
+        print(f"Video Depth Anything weights: {vda_dest} ({vda_dest.stat().st_size} bytes)")
     download(TRELLIS_REPO, TRELLIS_UNET, models / "diffusion_models" / TRELLIS_UNET_NAME, 5_000_000_000)
     download(TRELLIS_REPO, TRELLIS_DINO, models / "clip_vision" / TRELLIS_DINO_NAME, 1_000_000_000)
     download(TRELLIS_REPO, TRELLIS_SHAPE_VAE, models / "vae" / TRELLIS_SHAPE_VAE_NAME, 1_000_000_000)

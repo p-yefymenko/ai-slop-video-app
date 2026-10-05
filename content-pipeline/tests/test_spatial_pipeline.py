@@ -231,28 +231,33 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("spatialBackdrop", self.show["prompts"])
         self.assertNotIn("spatialStill", self.show["prompts"])
 
-    def test_end_guides_follow_spatial_change(self) -> None:
+    def test_end_stills_follow_endStill_flag(self) -> None:
+        from spatial_previs import scene_has_spatial_change
+
         moving = next(
             scene
             for scene in self.episode["scenes"]
-            if pipeline.scene_needs_end_guide(self.episode, scene)
+            if scene_has_spatial_change(self.episode, scene)
         )
         static_insert = next(
             scene
             for scene in self.episode["scenes"]
             if not scene.get("speakerId")
             and len(scene["characterIds"]) <= 1
-            and not pipeline.scene_needs_end_guide(self.episode, scene)
+            and not scene_has_spatial_change(self.episode, scene)
         )
         static_dialogue = next(
             scene
             for scene in self.episode["scenes"]
             if scene.get("speakerId")
-            and not pipeline.scene_needs_end_guide(self.episode, scene)
+            and not scene_has_spatial_change(self.episode, scene)
         )
-        self.assertTrue(pipeline.scene_needs_end_guide(self.episode, moving))
-        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, static_insert))
-        self.assertFalse(pipeline.scene_needs_end_guide(self.episode, static_dialogue))
+        self.assertTrue(scene_has_spatial_change(self.episode, moving))
+        self.assertFalse(scene_has_spatial_change(self.episode, static_insert))
+        self.assertFalse(scene_has_spatial_change(self.episode, static_dialogue))
+        # endStill=false: no scene_XX_end.png even when spatial change is true
+        self.assertFalse(pipeline.scene_needs_end_still(self.episode, moving, {"endStill": False}))
+        self.assertTrue(pipeline.scene_needs_end_still(self.episode, moving, {"endStill": True}))
 
     def test_dialogue_uses_multimodal_guidance(self) -> None:
         graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
@@ -447,31 +452,6 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(graph["23"]["class_type"], "SetLatentNoiseMask")
         self.assertEqual(graph["12"]["inputs"]["images"], ["31", 0])
         self.assertFalse(hasattr(pipeline, "set_pose_control_strength"))
-
-    def test_end_guide_is_added_before_av_sampling_and_cropped(self) -> None:
-        graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
-        pipeline.inject_scene_length(graph, duration_seconds=5)
-        pipeline.inject_start_frame(graph, "start.png")
-        pipeline.inject_end_frame(graph, "end.png")
-        self.assertEqual(graph["27"]["class_type"], "LTXVAddGuide")
-        self.assertEqual(graph["24"]["inputs"]["video_latent"], ["27", 2])
-        self.assertEqual(graph["23"]["inputs"]["frames_number"], 129)
-        self.assertEqual(graph["28"]["class_type"], "LTXVCropGuides")
-        self.assertEqual(graph["25"]["inputs"]["av_latent"], ["6", 0])
-        self.assertEqual(graph["28"]["inputs"]["latent"], ["25", 0])
-        self.assertEqual(graph["8"]["inputs"]["samples"], ["28", 2])
-        self.assertEqual(graph["17"]["inputs"]["conditioning"], ["27", 0])
-
-    def test_dialogue_end_guide_does_not_pass_conditioning(self) -> None:
-        graph = pipeline.inject_prompt(self.ltx, "test", "test-key")
-        pipeline.inject_dialogue_multimodal_guider(graph)
-        pipeline.inject_scene_length(graph, duration_seconds=5)
-        pipeline.inject_start_frame(graph, "start.png")
-        pipeline.inject_end_frame(graph, "end.png")
-        self.assertEqual(graph["17"]["class_type"], "MultimodalGuider")
-        self.assertNotIn("conditioning", graph["17"]["inputs"])
-        self.assertEqual(graph["17"]["inputs"]["positive"], ["27", 0])
-        self.assertEqual(graph["17"]["inputs"]["negative"], ["27", 1])
 
     def test_visible_faces_are_painted_in_pairs_not_script_order(self) -> None:
         from PIL import Image

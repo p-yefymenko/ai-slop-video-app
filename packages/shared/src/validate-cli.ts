@@ -81,7 +81,12 @@ function validateFile(showFile: ShowFile): boolean {
   });
   const report = formatScriptReport(label, result.issues);
   if (result.ok) {
-    console.log(report);
+    // Warnings print to stderr but do not fail validation.
+    if (result.issues.length > 0) {
+      console.warn(report);
+    } else {
+      console.log(report);
+    }
     return true;
   }
   console.error(report);

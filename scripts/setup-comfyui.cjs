@@ -14,6 +14,12 @@ const REPOS = [
   { url: "https://github.com/Lightricks/ComfyUI-LTXVideo.git", dir: path.join(customNodes, "ComfyUI-LTXVideo") },
   { url: "https://github.com/city96/ComfyUI-GGUF.git", dir: path.join(customNodes, "ComfyUI-GGUF") },
   { url: "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", dir: path.join(customNodes, "ComfyUI-VideoHelperSuite") },
+  {
+    url: "https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git",
+    dir: path.join(customNodes, "ComfyUI-Video-Depth-Anything"),
+    // Pinned: gate 3b / spike-tested checkout
+    commit: "a0db08e63d1ea571601c45cde4aaee0acdd0544d",
+  },
 ];
 
 function run(cmd, args, cwd) {
@@ -23,14 +29,29 @@ function run(cmd, args, cwd) {
   }
 }
 
-function cloneIfMissing(url, dir) {
+function cloneIfMissing(url, dir, commit) {
   if (fs.existsSync(path.join(dir, ".git"))) {
     console.log(`Already present: ${dir}`);
-    return;
+  } else {
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    console.log(`Cloning ${url}`);
+    if (commit) {
+      run("git", ["clone", url, dir], repoRoot);
+    } else {
+      run("git", ["clone", "--depth", "1", url, dir], repoRoot);
+    }
   }
-  fs.mkdirSync(path.dirname(dir), { recursive: true });
-  console.log(`Cloning ${url}`);
-  run("git", ["clone", "--depth", "1", url, dir], repoRoot);
+  if (commit) {
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" });
+    const current = (head.stdout || "").trim();
+    if (current !== commit) {
+      console.log(`Checking out ${commit} in ${dir}`);
+      run("git", ["fetch", "--depth", "1", "origin", commit], dir);
+      run("git", ["checkout", commit], dir);
+    } else {
+      console.log(`Pinned commit already checked out: ${commit}`);
+    }
+  }
 }
 
 const python = findPython();
@@ -40,7 +61,7 @@ if (!python) {
 }
 
 for (const repo of REPOS) {
-  cloneIfMissing(repo.url, repo.dir);
+  cloneIfMissing(repo.url, repo.dir, repo.commit);
 }
 
 const pipPython = ensureComfyVenv();
@@ -53,6 +74,11 @@ console.log("Installing ComfyUI Python deps (this can take several minutes)...")
 runPython(pipPython, ["-m", "pip", "install", "--upgrade", "pip"], comfyDir);
 runPython(pipPython, ["-m", "pip", "install", "-r", "requirements.txt"], comfyDir);
 runPython(pipPython, ["-m", "pip", "install", "huggingface_hub", "imageio-ffmpeg"], comfyDir);
+const vdaReq = path.join(customNodes, "ComfyUI-Video-Depth-Anything", "requirements.txt");
+if (fs.existsSync(vdaReq)) {
+  console.log("Installing ComfyUI-Video-Depth-Anything Python deps into the Comfy venv...");
+  runPython(pipPython, ["-m", "pip", "install", "-r", vdaReq], comfyDir);
+}
 console.log("Installing CUDA 12.8 PyTorch (required for RTX 50-series)...");
 runPython(pipPython, ["-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"], comfyDir);
 runPython(
@@ -83,7 +109,17 @@ const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshor
 const nodeDest = path.join(customNodes, "reelshort_ltx");
 fs.cpSync(nodeSrc, nodeDest, { recursive: true });
 
-for (const folder of ["diffusion_models", "checkpoints", "vae", "text_encoders", "loras", "controlnet", "clip_vision", "background_removal"]) {
+for (const folder of [
+  "diffusion_models",
+  "checkpoints",
+  "vae",
+  "text_encoders",
+  "loras",
+  "controlnet",
+  "clip_vision",
+  "background_removal",
+  "videodepthanything",
+]) {
   fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
 }
 

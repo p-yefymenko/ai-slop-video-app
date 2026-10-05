@@ -33,6 +33,7 @@ from pipeline_paths import (
     OUTPUT_DIR,
     character_image_path,
     clip_path,
+    control_depth_mp4_path,
     discover_show_scripts,
     end_still_path,
     episode_video_path,
@@ -40,6 +41,16 @@ from pipeline_paths import (
     manifest_path,
     show_id_for_script,
     start_still_path,
+)
+from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, FPS, fit_to_clip, ltx_length_for_duration
+from depth_control import (
+    choose_ltx_workflow,
+    ensure_control_depth,
+    inject_depth_ltx_graph,
+    load_renderer_config,
+    scene_depth_control_enabled,
+    stage_control_video,
+    stage_fit_still,
 )
 from spatial_previs import (
     PROXY_HEIGHT,
@@ -75,7 +86,6 @@ SPATIAL_QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit_spatial.json"
 PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 COMFYUI_URL = "http://127.0.0.1:8188"
-I2V_STRENGTH = 0.7  # official LTX image-to-video default
 NVIDIA_QUERY_FIELDS = [
     "name",
     "memory.used",
@@ -236,12 +246,55 @@ def nvidia_smi_snapshot() -> dict | None:
     }
 
 
+def windows_shared_gpu_bytes() -> int | None:
+    """Peak Shared Usage across GPU adapters (Windows). nvidia-smi does not expose this."""
+    if os.name != "nt":
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "(Get-Counter '\\GPU Adapter Memory(*)\\Shared Usage').CounterSamples | "
+                "Measure-Object -Property CookedValue -Maximum | "
+                "Select-Object -ExpandProperty Maximum",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    text = (result.stdout or "").strip()
+    if not text:
+        return None
+    try:
+        return int(float(text.splitlines()[-1].strip()))
+    except ValueError:
+        return None
+
+
+def nvidia_vram_mib() -> float | None:
+    snap = nvidia_smi_snapshot()
+    if not snap or not snap.get("vram_used"):
+        return None
+    return float(snap["vram_used"]) / (1024.0 * 1024.0)
+
+
 class GpuMonitor:
     def __init__(self) -> None:
         self.samples: list[dict] = []
 
     def sample(self) -> dict:
-        snapshot = {"comfy": parse_comfy_gpu(fetch_comfy_stats()), "nv": nvidia_smi_snapshot()}
+        snapshot = {
+            "comfy": parse_comfy_gpu(fetch_comfy_stats()),
+            "nv": nvidia_smi_snapshot(),
+            "shared_bytes": windows_shared_gpu_bytes(),
+        }
         self.samples.append(snapshot)
         return snapshot
 
@@ -273,6 +326,11 @@ class GpuMonitor:
         utils = [s["gpu_util"] for s in nv_samples if s.get("gpu_util") is not None]
         temps = [s["temp_c"] for s in nv_samples if s.get("temp_c") is not None]
         powers = [s["power_w"] for s in nv_samples if s.get("power_w") is not None]
+        shared_vals = [
+            int(sample["shared_bytes"])
+            for sample in self.samples
+            if sample.get("shared_bytes") is not None
+        ]
         return {
             "name": name or "GPU",
             "start_used": start[0],
@@ -288,6 +346,7 @@ class GpuMonitor:
             "clock_max": next((s.get("clock_max_mhz") for s in reversed(nv_samples) if s.get("clock_max_mhz")), None),
             "pstate": next((s.get("pstate") for s in reversed(nv_samples) if s.get("pstate")), None),
             "throttles": sorted(throttles),
+            "peak_shared_bytes": max(shared_vals) if shared_vals else None,
         }
 
 
@@ -338,6 +397,11 @@ def log_gpu_summary(summary: dict, width: int, height: int, frames: int) -> None
         f", start {format_gb(summary['start_used'])})",
         flush=True,
     )
+    shared = summary.get("peak_shared_bytes")
+    if shared is not None:
+        shared_gb = shared / (1024 ** 3)
+        flag = " FLAG >1GB shared" if shared > 1024 ** 3 else ""
+        print(f"  Shared GPU memory peak: {shared_gb:.2f} GB{flag}", flush=True)
     extras: list[str] = []
     if summary.get("peak_util") is not None:
         extras.append(f"load {summary['peak_util']:.0f}%")
@@ -914,8 +978,10 @@ def present(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 1024
 
 
-def scene_needs_end_guide(episode: dict, scene: dict) -> bool:
-    return scene_has_spatial_change(episode, scene)
+def scene_needs_end_still(episode: dict, scene: dict, config: dict | None = None) -> bool:
+    """Generate scene_XX_end.png only when renderer endStill is enabled."""
+    cfg = config if config is not None else load_renderer_config()
+    return bool(cfg.get("endStill")) and scene_has_spatial_change(episode, scene)
 
 
 def clone_workflow(workflow_template: dict) -> dict:
@@ -935,9 +1001,12 @@ def inject_seed(graph: dict, seed: int) -> None:
             inputs["seed"] = seed
 
 
-def stage_start_still(image_path: Path) -> str:
+def stage_start_still(image_path: Path, *, fit_clip: bool = False) -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / image_path.name
+    if fit_clip:
+        fit_to_clip(Image.open(image_path).convert("RGB")).save(dest)
+        return dest.name
     if dest.resolve() != image_path.resolve():
         shutil.copy2(image_path, dest)
     return dest.name
@@ -950,8 +1019,11 @@ def stage_named_image(image_path: Path, prefix: str) -> str:
     return dest.name
 
 
-def inject_start_frame(graph: dict, image_name: str) -> None:
+def inject_start_frame(graph: dict, image_name: str, strength: float | None = None) -> None:
     width, height, length = latent_size(graph)
+    width = CLIP_WIDTH
+    height = CLIP_HEIGHT
+    i2v = float(strength if strength is not None else load_renderer_config()["ltxStartStrength"])
     graph["19"] = {
         "inputs": {"image": image_name},
         "class_type": "LoadImage",
@@ -967,7 +1039,7 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
             "height": height,
             "length": length,
             "batch_size": 1,
-            "strength": I2V_STRENGTH,
+            "strength": i2v,
         },
         "class_type": "LTXVImgToVideo",
         "_meta": {"title": "Animate from start frame"},
@@ -993,50 +1065,6 @@ def inject_start_frame(graph: dict, image_name: str) -> None:
     sampler = graph.get("6")
     if isinstance(sampler, dict):
         sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
-
-
-def inject_end_frame(graph: dict, image_name: str) -> None:
-    _, _, length = latent_size(graph)
-    graph["21"] = {
-        "inputs": {"image": image_name},
-        "class_type": "LoadImage",
-        "_meta": {"title": "Scene end frame"},
-    }
-    graph["27"] = {
-        "inputs": {
-            "positive": ["20", 0],
-            "negative": ["20", 1],
-            "vae": ["9", 0],
-            "latent": ["20", 2],
-            "image": ["21", 0],
-            "frame_idx": -1,
-            "strength": 0.85,
-        },
-        "class_type": "LTXVAddGuide",
-        "_meta": {"title": "Pin spatial end frame"},
-    }
-    graph["24"]["inputs"]["video_latent"] = ["27", 2]
-    graph["23"]["inputs"]["frames_number"] = length + 8
-    for node_id, key in (("15", "latent"), ("18", "latent")):
-        graph[node_id]["inputs"][key] = ["27", 2]
-    guider = graph["17"]
-    guider_inputs = guider.setdefault("inputs", {})
-    if guider.get("class_type") == "MultimodalGuider":
-        guider_inputs["positive"] = ["27", 0]
-        guider_inputs["negative"] = ["27", 1]
-    else:
-        guider_inputs["conditioning"] = ["27", 0]
-    graph["28"] = {
-        "inputs": {
-            "positive": ["27", 0],
-            "negative": ["27", 1],
-            "latent": ["25", 0],
-        },
-        "class_type": "LTXVCropGuides",
-        "_meta": {"title": "Remove guide tokens"},
-    }
-    graph["25"]["inputs"]["av_latent"] = ["6", 0]
-    graph["8"]["inputs"]["samples"] = ["28", 2]
 
 
 def inject_qwen_character_canvas(graph: dict) -> None:
@@ -1457,16 +1485,9 @@ def workflow_frame_rate(graph: dict) -> float:
     return 24.0
 
 
-def ltx_length_for_duration(duration_seconds: float, frame_rate: float) -> int:
-    """LTX video length must be 8n+1 (9, 17, 25, ...)."""
-    raw = max(1.0, float(duration_seconds) * float(frame_rate))
-    n = max(1, round((raw - 1.0) / 8.0))
-    return 8 * n + 1
-
-
 def inject_scene_length(graph: dict, duration_seconds: float | None = None, length: int | None = None) -> int:
     if length is None:
-        length = ltx_length_for_duration(float(duration_seconds or 1), workflow_frame_rate(graph))
+        length = ltx_length_for_duration(float(duration_seconds or 1), workflow_frame_rate(graph) or FPS)
     for node in graph.values():
         if not isinstance(node, dict):
             continue
@@ -1474,6 +1495,12 @@ def inject_scene_length(graph: dict, duration_seconds: float | None = None, leng
         inputs = node.setdefault("inputs", {})
         if class_type == "EmptyLTXVLatentVideo":
             inputs["length"] = length
+            inputs["width"] = CLIP_WIDTH
+            inputs["height"] = CLIP_HEIGHT
+        elif class_type == "LTXVImgToVideo":
+            inputs["length"] = length
+            inputs["width"] = CLIP_WIDTH
+            inputs["height"] = CLIP_HEIGHT
         elif class_type == "LTXVEmptyLatentAudio":
             inputs["frames_number"] = length
     return length
@@ -1879,6 +1906,23 @@ def run_qwen_image(
     execute_queued_graph(graph, dest, prefer="image", mode=mode)
 
 
+def confirm_vram_released(label: str, *, max_mib: float = 4096.0) -> float | None:
+    """After /free, sample nvidia-smi and warn if Depth Anything may still be resident."""
+    time.sleep(1.0)
+    used = nvidia_vram_mib()
+    if used is None:
+        print(f"  VRAM after {label}: unavailable", flush=True)
+        return None
+    print(f"  VRAM after {label}: {used:.0f} MiB", flush=True)
+    if used > max_mib:
+        print(
+            f"  WARNING: VRAM still high after unload ({used:.0f} MiB > {max_mib:.0f} MiB); "
+            "continuing but LTX may OOM.",
+            flush=True,
+        )
+    return used
+
+
 def generate_show(
     show: dict,
     workflow_template: dict,
@@ -1891,6 +1935,7 @@ def generate_show(
     started = time.time()
     generated = 0
     skipped = 0
+    renderer = load_renderer_config()
 
     if stage == "frames":
         for character_id, character in show["characters"].items():
@@ -1941,6 +1986,8 @@ def generate_show(
         scene_files: list[Path] = []
         episode_generated = 0
         episode_skipped = 0
+        pending_video: list[dict] = []
+
         for scene in episode["scenes"]:
             scene_number = scene["sceneNumber"]
             scene_label = f"episode {episode_number} scene {scene_number}"
@@ -1951,9 +1998,13 @@ def generate_show(
             location = resolve_location(show, scene)
             names = ", ".join(scene["characterIds"])
             print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
-            needs_end_guide = scene_needs_end_guide(episode, scene)
+            needs_end_still = scene_needs_end_still(episode, scene, renderer)
+            spatial = scene_has_spatial_change(episode, scene)
+            depth_control = spatial and scene_depth_control_enabled(
+                show_id, episode_number, scene_number, renderer
+            )
             frame_outputs_present = present(still_path) and (
-                not needs_end_guide or present(end_path)
+                not needs_end_still or present(end_path)
             )
             output_present = frame_outputs_present if stage == "frames" else present(dest)
             if output_present and not force:
@@ -1967,11 +2018,6 @@ def generate_show(
                 raise SystemExit(
                     f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
                     "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
-                )
-            if stage == "video" and needs_end_guide and not present(end_path):
-                raise SystemExit(
-                    f"Missing spatial end guide {end_path}. Regenerate this scene with "
-                    "`pnpm run content:frame -- --show <id> --episode <n> --scene <n> --force`."
                 )
             if stage == "frames":
                 if not scene.get("camera"):
@@ -1996,7 +2042,7 @@ def generate_show(
                         f"Qwen scene still ({names or 'environment'} @ {location['id']})",
                         episode,
                     )
-                if needs_end_guide and (not present(end_path) or force):
+                if needs_end_still and (not present(end_path) or force):
                     render_spatial_still(
                         show,
                         scene,
@@ -2010,43 +2056,137 @@ def generate_show(
                         f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
                         episode,
                     )
+                episode_generated += 1
+                generated += 1
             else:
+                pending_video.append(
+                    {
+                        "scene": scene,
+                        "still_path": still_path,
+                        "video_path": video_path,
+                        "location": location,
+                        "names": names,
+                        "spatial": spatial,
+                        "depth_control": depth_control,
+                    }
+                )
+
+        if stage == "video" and pending_video:
+            # Depth pass first for every depth-controlled scene, then unload before LTX.
+            depth_scenes = [item for item in pending_video if item["depth_control"]]
+            for item in depth_scenes:
+                print(
+                    f"  Depth pass for scene {item['scene']['sceneNumber']} "
+                    f"(controlDepth={renderer['controlDepth']})...",
+                    flush=True,
+                )
+                ensure_control_depth(
+                    show_id,
+                    episode_number,
+                    item["scene"],
+                    force=force,
+                    config=renderer,
+                    queue_prompt=queue_prompt,
+                    free_comfy_models=free_comfy_models,
+                    comfy_url=COMFYUI_URL,
+                    sample_vram_mib=nvidia_vram_mib,
+                )
+            if depth_scenes:
+                free_comfy_models()
+                confirm_vram_released("Depth Anything unload")
+
+            for item in pending_video:
+                scene = item["scene"]
+                scene_number = scene["sceneNumber"]
+                still_path = item["still_path"]
+                dest = item["video_path"]
+                location = item["location"]
+                names = item["names"]
+                spatial = item["spatial"]
+                use_depth = item["depth_control"]
+                if spatial and not use_depth:
+                    print("  depth control disabled by override", flush=True)
+                wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
+                workflow = load_json(wf_path)
                 prompt = show_prompt(
                     show,
                     "sceneVideo",
-                    {
-                        "videoPrompt": compile_spatial_video_prompt(scene),
-                    },
+                    {"videoPrompt": compile_spatial_video_prompt(scene)},
                 )
                 seed = (
                     seed_override
                     if seed_override is not None
                     else stable_seed(show_id, episode_number, scene_number, "video")
                 )
-                graph = inject_prompt(
-                    workflow_template, prompt, os.environ.get("LTXV_API_KEY", "")
-                )
-                if scene.get("speakerId"):
-                    inject_dialogue_multimodal_guider(graph)
+                graph = inject_prompt(workflow, prompt, os.environ.get("LTXV_API_KEY", ""))
+                length = inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
                 inject_seed(graph, seed)
-                inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
-                inject_start_frame(graph, stage_start_still(still_path))
-                if needs_end_guide:
-                    inject_end_frame(graph, stage_named_image(end_path, "ltx_end"))
-                print(f"  Graph seed {seed}", flush=True)
-                execute_queued_graph(
-                    graph,
-                    dest,
-                    prefer="video",
-                    mode=f"I2V ({names} @ {location['id']})",
+                start_strength = float(renderer["ltxStartStrength"])
+                ic_strength = float(renderer["ltxIcLoRAStrength"])
+                if use_depth:
+                    control = control_depth_mp4_path(show_id, episode_number, scene_number)
+                    if not present(control):
+                        raise SystemExit(
+                            f"Missing control depth {control}. Depth pass should have written it."
+                        )
+                    still_name = stage_fit_still(
+                        still_path, f"ltx_start_s{int(scene_number):02d}.png"
+                    )
+                    depth_name = stage_control_video(
+                        control, f"ltx_depth_s{int(scene_number):02d}.mp4"
+                    )
+                    inject_depth_ltx_graph(
+                        graph,
+                        length=length,
+                        still_name=still_name,
+                        depth_name=depth_name,
+                        start_strength=start_strength,
+                        ic_strength=ic_strength,
+                    )
+                    mode = f"depth-IC ({names or 'environment'} @ {location['id']})"
+                else:
+                    if scene.get("speakerId"):
+                        inject_dialogue_multimodal_guider(graph)
+                    inject_start_frame(
+                        graph,
+                        stage_start_still(still_path, fit_clip=True),
+                        strength=start_strength,
+                    )
+                    mode = f"I2V ({names or 'environment'} @ {location['id']})"
+                if os.environ.get("LTX_TILED_VAE", "").strip() in {"1", "true", "yes"}:
+                    node = graph.get("8")
+                    if isinstance(node, dict) and node.get("class_type") == "VAEDecode":
+                        node["class_type"] = "VAEDecodeTiled"
+                        node.setdefault("inputs", {})["tile_size"] = 512
+                        node["inputs"]["overlap"] = 64
+                        print("  Using VAEDecodeTiled (tile_size=512)", flush=True)
+                graph["10"]["inputs"]["filename_prefix"] = (
+                    f"reelshort_{show_id}_e{episode_number}_s{int(scene_number):02d}"
                 )
+                print(
+                    f"  Graph={graph_name} spatial={spatial} depth={use_depth} seed={seed} "
+                    f"i2v={start_strength} ic={ic_strength if use_depth else 'n/a'} "
+                    f"size={CLIP_WIDTH}x{CLIP_HEIGHT} frames={length}",
+                    flush=True,
+                )
+                ltx_started = time.time()
+                execute_queued_graph(graph, dest, prefer="video", mode=mode)
+                print(f"  LTX wall {time.time() - ltx_started:.1f}s", flush=True)
+                free_comfy_models()
                 scene_files.append(dest)
-            episode_generated += 1
-            generated += 1
+                episode_generated += 1
+                generated += 1
+
         if stage == "video" and not partial:
             episode_mp4 = episode_video_path(show_id, episode_number)
-            concat_videos(scene_files, episode_mp4)
-            print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
+            # Keep skipped scenes in concat order.
+            ordered = [
+                clip_path(show_id, episode_number, scene["sceneNumber"])
+                for scene in episode["scenes"]
+            ]
+            if all(present(path) for path in ordered):
+                concat_videos(ordered, episode_mp4)
+                print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
         print(
             f"Episode {show_id}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
             f" ({episode_generated} generated, {episode_skipped} skipped)",
@@ -2069,6 +2209,7 @@ def generate_show(
 
 
 def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
+    renderer = load_renderer_config()
     for show in shows:
         show_id = show["id"]
         if stage == "frames":
@@ -2081,7 +2222,7 @@ def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
                     scene_number = scene["sceneNumber"]
                     if not present(start_still_path(show_id, episode_number, scene_number)):
                         return True
-                    if scene_needs_end_guide(episode, scene) and not present(
+                    if scene_needs_end_still(episode, scene, renderer) and not present(
                         end_still_path(show_id, episode_number, scene_number)
                     ):
                         return True
@@ -2123,10 +2264,20 @@ def main() -> None:
     if args.seed is not None and not 0 <= args.seed <= 2**32 - 1:
         parser.error("--seed must be between 0 and 4294967295")
     load_dotenv()
-    workflow_path = QWEN_WORKFLOW_PATH if args.stage == "frames" else LTX_WORKFLOW_PATH
-    if not workflow_path.is_file():
-        raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
-    workflow_template = load_json(workflow_path)
+    if args.stage == "frames":
+        workflow_path = QWEN_WORKFLOW_PATH
+        if not workflow_path.is_file():
+            raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
+        workflow_template = load_json(workflow_path)
+    else:
+        for path in (
+            LTX_WORKFLOW_PATH,
+            ROOT / "workflows" / "ltx_gemma_api_depth.json",
+            ROOT / "workflows" / "ltx_gemma_api_depth_dialogue.json",
+        ):
+            if not path.is_file():
+                raise SystemExit(f"Missing ComfyUI workflow: {path}")
+        workflow_template = load_json(LTX_WORKFLOW_PATH)
     scripts = discover_show_scripts(args.show)
     if not scripts:
         target = f" for show {args.show!r}" if args.show else ""

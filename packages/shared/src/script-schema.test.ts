@@ -5,7 +5,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import type { ShowScript } from "./script";
-import { parseShowScript } from "./script-schema";
+import {
+  CAMERA_TRAVEL_WARN_THRESHOLD,
+  cameraTravelScore,
+  parseShowScript,
+} from "./script-schema";
 
 const ironBridePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -118,6 +122,7 @@ test("the iron bride script matches its filename", () => {
   if (!result.ok) {
     const leftover = result.issues.filter(
       (issue) =>
+        issue.severity !== "warning" &&
         !issue.message.includes("keep at least 1.5m from every mesh") &&
         !issue.message.includes("size and appearance belong on a location that has people"),
     );
@@ -128,6 +133,19 @@ test("the iron bride script matches its filename", () => {
     return;
   }
   assert.equal(result.script.id, "the-iron-bride");
+  const travelWarnings = result.issues.filter((issue) =>
+    issue.message.includes("high camera travel+rotation score"),
+  );
+  assert.ok(travelWarnings.length >= 1, "expected at least one high-travel warning");
+});
+
+test("cameraTravelScore matches Gate 3b scene 01 figure (~39.5)", () => {
+  const data = JSON.parse(readFileSync(ironBridePath, "utf8")) as ShowScript;
+  const scene01 = data.episodes[0]!.scenes.find((scene) => scene.sceneNumber === 1);
+  assert.ok(scene01);
+  const score = cameraTravelScore(scene01);
+  assert.ok(score > CAMERA_TRAVEL_WARN_THRESHOLD);
+  assert.ok(Math.abs(score - 39.47) < 0.05, `expected ~39.47, got ${score}`);
 });
 
 test("rejects a prop track whose id was never declared", () => {

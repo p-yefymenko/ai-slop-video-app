@@ -8,15 +8,26 @@ import hashlib
 import json
 import math
 import re
+import shutil
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from clip_spec import (
+    CLIP_HEIGHT,
+    CLIP_WIDTH,
+    FPS as CLIP_FPS,
+    clip_frame_count,
+    fit_to_clip,
+)
 from pipeline_paths import (
     blockout_video_path,
+    clay_24fps_path,
     clay_frame_path,
     contact_sheet_path,
+    depth_video_dir,
+    depth_video_mp4_path,
     discover_show_scripts,
     episode_blockout_path,
     guide_path,
@@ -1303,6 +1314,201 @@ def _depth_image(zbuf: np.ndarray) -> Image.Image:
     return Image.fromarray(np.stack((gray, gray, gray), axis=-1), "RGB")
 
 
+def load_depth_video_settings(prompts: dict | None = None) -> dict:
+    data = prompts if isinstance(prompts, dict) else json.loads(
+        Path(__file__).resolve().parents[1].joinpath("prompts.json").read_text(encoding="utf-8")
+    )
+    cfg = data.get("depthVideo") if isinstance(data, dict) else None
+    if cfg is None:
+        cfg = {}
+    if not isinstance(cfg, dict):
+        raise RuntimeError("prompts.depthVideo must be an object")
+    mapping = str(cfg.get("mapping", "inverse")).strip().lower()
+    if mapping not in {"inverse", "linear"}:
+        raise RuntimeError('prompts.depthVideo.mapping must be "inverse" or "linear"')
+    near_pct = cfg.get("nearPercentile", 1)
+    far_pct = cfg.get("farPercentile", 99)
+    if isinstance(near_pct, bool) or not isinstance(near_pct, (int, float)):
+        raise RuntimeError("prompts.depthVideo.nearPercentile must be a number")
+    if isinstance(far_pct, bool) or not isinstance(far_pct, (int, float)):
+        raise RuntimeError("prompts.depthVideo.farPercentile must be a number")
+    near_pct = float(near_pct)
+    far_pct = float(far_pct)
+    if not 0.0 <= near_pct < far_pct <= 100.0:
+        raise RuntimeError("prompts.depthVideo percentiles must satisfy 0 <= near < far <= 100")
+    return {
+        "mapping": mapping,
+        "nearPercentile": near_pct,
+        "farPercentile": far_pct,
+    }
+
+
+def _depth_near_far(
+    zbufs: list[np.ndarray],
+    near_percentile: float,
+    far_percentile: float,
+) -> tuple[float, float]:
+    chunks: list[np.ndarray] = []
+    for zbuf in zbufs:
+        valid = zbuf[np.isfinite(zbuf)]
+        if valid.size:
+            chunks.append(valid.astype(np.float64, copy=False))
+    if not chunks:
+        return 0.05, 1.05
+    values = np.concatenate(chunks)
+    near = float(np.percentile(values, near_percentile))
+    far = float(np.percentile(values, far_percentile))
+    if far <= near:
+        far = near + 1e-3
+    return near, far
+
+
+def _normalize_depth_frame(
+    zbuf: np.ndarray,
+    near: float,
+    far: float,
+    mapping: str,
+) -> np.ndarray:
+    """Return float normalized depth in [0, 1]; empty space is 0. Near is bright."""
+    out = np.zeros(zbuf.shape, dtype=np.float32)
+    valid = np.isfinite(zbuf)
+    if not bool(valid.any()):
+        return out
+    z = zbuf[valid].astype(np.float64, copy=False)
+    if mapping == "inverse":
+        near_safe = max(near, 1e-6)
+        far_safe = max(far, near_safe + 1e-6)
+        inv = 1.0 / np.clip(z, near_safe, far_safe)
+        inv_near = 1.0 / near_safe
+        inv_far = 1.0 / far_safe
+        span = max(inv_near - inv_far, 1e-9)
+        normalized = (inv - inv_far) / span
+    else:
+        span = max(far - near, 1e-3)
+        normalized = (far - z) / span
+    out[valid] = np.clip(normalized, 0.0, 1.0).astype(np.float32)
+    return out
+
+
+def _save_depth_png16(normalized: np.ndarray, destination: Path) -> str:
+    """Write grayscale depth. Prefer 16-bit; fall back to 8-bit RGB."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    gray16 = np.rint(np.clip(normalized, 0.0, 1.0) * 65535.0).astype(np.uint16)
+    try:
+        Image.fromarray(gray16).save(destination)
+        return "16-bit"
+    except Exception:
+        gray8 = np.rint(np.clip(normalized, 0.0, 1.0) * 255.0).astype(np.uint8)
+        Image.fromarray(np.stack((gray8, gray8, gray8), axis=-1), "RGB").save(destination)
+        return "8-bit"
+
+
+def _clear_depth_video_outputs(show_id: str, episode_number: int, scene_number: int) -> None:
+    depth_dir = depth_video_dir(show_id, episode_number, scene_number)
+    if depth_dir.exists():
+        shutil.rmtree(depth_dir)
+    for path in (
+        depth_video_mp4_path(show_id, episode_number, scene_number),
+        clay_24fps_path(show_id, episode_number, scene_number),
+    ):
+        path.unlink(missing_ok=True)
+
+
+def render_depth_video_guides(
+    show: dict,
+    episode: dict,
+    scene: dict,
+) -> list[Path]:
+    """24 fps native depth sequence + convenience MP4s for scenes with spatial change."""
+    from ffmpeg_tools import encode_rgb_frames
+
+    show_id = show["id"]
+    episode_number = episode["episodeNumber"]
+    scene_number = scene["sceneNumber"]
+    _clear_depth_video_outputs(show_id, episode_number, scene_number)
+    if not scene_has_spatial_change(episode, scene):
+        return []
+
+    settings = load_depth_video_settings()
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    frame_count = clip_frame_count([start, finish])
+    times = [start + index / CLIP_FPS for index in range(frame_count)]
+
+    zbufs: list[np.ndarray] = []
+    clay_frames: list[Image.Image] = []
+    print(
+        f"  depth video: {frame_count} frames @ {CLIP_FPS} fps "
+        f"({start:g}-{finish:g}s, mapping={settings['mapping']})",
+        flush=True,
+    )
+    for time_seconds in times:
+        image, zbuf, _people = render_blocked_frame(show, episode, scene, time_seconds)
+        clay_frames.append(image.convert("RGB"))
+        zbufs.append(np.asarray(zbuf, dtype=np.float32))
+
+    near, far = _depth_near_far(
+        zbufs,
+        settings["nearPercentile"],
+        settings["farPercentile"],
+    )
+    depth_dir = depth_video_dir(show_id, episode_number, scene_number)
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    bit_depth = "16-bit"
+    depth_rgb_frames: list[Image.Image] = []
+    for index, zbuf in enumerate(zbufs):
+        normalized = _normalize_depth_frame(zbuf, near, far, settings["mapping"])
+        frame_path = depth_dir / f"frame_{index:05d}.png"
+        bit_depth = _save_depth_png16(normalized, frame_path)
+        gray8 = np.rint(np.clip(normalized, 0.0, 1.0) * 255.0).astype(np.uint8)
+        depth_rgb = Image.fromarray(np.stack((gray8, gray8, gray8), axis=-1), "RGB")
+        depth_rgb_frames.append(fit_to_clip(depth_rgb))
+
+    meta = {
+        "near": near,
+        "far": far,
+        "mapping": settings["mapping"],
+        "nearPercentile": settings["nearPercentile"],
+        "farPercentile": settings["farPercentile"],
+        "frameCount": frame_count,
+        "fps": CLIP_FPS,
+        "sourceResolution": [PROXY_WIDTH, PROXY_HEIGHT],
+        "clipResolution": [CLIP_WIDTH, CLIP_HEIGHT],
+        "bitDepth": bit_depth,
+        "timeRangeSeconds": [start, finish],
+    }
+    meta_path = depth_dir / "meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+
+    depth_mp4 = depth_video_mp4_path(show_id, episode_number, scene_number)
+    clay_mp4 = clay_24fps_path(show_id, episode_number, scene_number)
+    depth_raw = b"".join(frame.tobytes() for frame in depth_rgb_frames)
+    clay_raw = b"".join(fit_to_clip(frame).tobytes() for frame in clay_frames)
+    encode_rgb_frames(
+        depth_raw,
+        CLIP_WIDTH,
+        CLIP_HEIGHT,
+        CLIP_FPS,
+        depth_mp4,
+        crf=14,
+    )
+    encode_rgb_frames(
+        clay_raw,
+        CLIP_WIDTH,
+        CLIP_HEIGHT,
+        CLIP_FPS,
+        clay_mp4,
+        crf=14,
+    )
+    written = sorted(depth_dir.glob("frame_*.png"))
+    written.extend([meta_path, depth_mp4, clay_mp4])
+    print(
+        f"  depth video wrote {frame_count} {bit_depth} PNGs "
+        f"(near={near:.4f}, far={far:.4f}) + {depth_mp4.name} + {clay_mp4.name}",
+        flush=True,
+    )
+    return written
+
+
 def _draw_openpose(draw: ImageDraw.ImageDraw, camera: dict, people: list[dict[str, Vec3]]) -> None:
     ordered: list[tuple[float, dict[str, Vec3]]] = []
     for joints in people:
@@ -2264,6 +2470,28 @@ def compile_spatial_video_prompt(scene: dict) -> str:
     return " ".join(parts)
 
 
+def camera_travel_score(scene: dict) -> float:
+    """Authored camera travel + rotation score (same formula as gate breadth picker).
+
+    Sums position deltas, 0.5× lookAt deltas, and small FOV/roll terms across
+    consecutive camera keyframes. Gate 3b scene 01 scored ~39.5 on this scale.
+    """
+    kfs = (scene.get("camera") or {}).get("keyframes") or []
+    if len(kfs) < 2:
+        return 0.0
+    travel = 0.0
+    for a, b in zip(kfs, kfs[1:]):
+        travel += length(sub(vec(b["position"]), vec(a["position"])))
+        travel += 0.5 * length(sub(vec(b["lookAt"]), vec(a["lookAt"])))
+        travel += 0.02 * abs(
+            float(b.get("verticalFovDegrees", 0)) - float(a.get("verticalFovDegrees", 0))
+        )
+        ra = float(a.get("rollDegrees") or 0)
+        rb = float(b.get("rollDegrees") or 0)
+        travel += 0.02 * abs(((rb - ra + 180) % 360) - 180)
+    return travel
+
+
 def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return False
@@ -2697,6 +2925,7 @@ def render_blocked_scene(
     raw = b"".join(frame.convert("RGB").tobytes() for frame in frames)
     encode_rgb_frames(raw, PROXY_WIDTH, PROXY_HEIGHT, BLOCKOUT_FPS, video_path)
     written.append(video_path)
+    written.extend(render_depth_video_guides(show, episode, scene))
     return written
 
 

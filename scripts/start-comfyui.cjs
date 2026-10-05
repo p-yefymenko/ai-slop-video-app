@@ -15,8 +15,20 @@ if (!python) {
   process.exit(1);
 }
 
-console.log(`Starting ComfyUI with ${python}`);
-const child = spawn(python, ["main.py", "--listen", "127.0.0.1", "--port", "8188"], {
+// No default --reserve-vram: content:frames regressed with it (slower stills).
+// Override any args via COMFY_ARGS (replaces defaults entirely when set).
+const extraArgs = (process.env.COMFY_ARGS || "")
+  .split(/\s+/)
+  .map((part) => part.trim())
+  .filter(Boolean);
+const comfyArgs = ["main.py", "--listen", "127.0.0.1", "--port", "8188", ...extraArgs];
+if (extraArgs.length) {
+  console.log(`ComfyUI args from COMFY_ARGS: ${extraArgs.join(" ")}`);
+} else {
+  console.log("ComfyUI args: defaults only (set COMFY_ARGS to override, e.g. --reserve-vram 2)");
+}
+console.log(`Starting ComfyUI with ${python} ${comfyArgs.slice(1).join(" ")}`);
+const child = spawn(python, comfyArgs, {
   cwd: comfyDir,
   stdio: "inherit",
   env: process.env,

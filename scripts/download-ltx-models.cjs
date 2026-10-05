@@ -17,7 +17,7 @@ if (!python) {
   process.exit(1);
 }
 
-for (const folder of ["diffusion_models", "vae", "checkpoints", "text_encoders", "loras"]) {
+for (const folder of ["diffusion_models", "vae", "checkpoints", "text_encoders", "loras", "videodepthanything"]) {
   fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
 }
 

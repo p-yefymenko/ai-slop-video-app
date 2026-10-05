@@ -21,6 +21,8 @@ const BODY_PART_SET = new Set<string>(BODY_PARTS);
 export type ScriptIssue = {
   path: string;
   message: string;
+  /** Defaults to error. Warnings do not fail `content:validate`. */
+  severity?: "error" | "warning";
 };
 
 export type ScriptSource = {
@@ -31,8 +33,16 @@ export type ScriptSource = {
 };
 
 export type ParseResult =
-  | { ok: true; script: ShowScript; issues: [] }
+  | { ok: true; script: ShowScript; issues: ScriptIssue[] }
   | { ok: false; issues: ScriptIssue[] };
+
+/**
+ * Authored camera travel+rotation warn threshold (Gate 3b / docs/ltx-depth-gate.md).
+ * Scene 01 scored 39.47 with follow 0.55 (fail); scenes 11/06 passed with travel ≤4.04
+ * and follow ≥0.93. Threshold sits in that gap. Scene 04 scored only 2.44 with weak
+ * follow 0.686 — not explained by this score.
+ */
+export const CAMERA_TRAVEL_WARN_THRESHOLD = 20;
 
 const SNAKE_ID = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -739,6 +749,49 @@ function checkCameraMeshClearance(
   }
 }
 
+function vecLength(v: readonly [number, number, number]): number {
+  return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+function vecSub(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): [number, number, number] {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+/** Same formula as `camera_travel_score` in spatial_previs.py. */
+export function cameraTravelScore(scene: ScriptScene): number {
+  const keyframes = scene.camera.keyframes;
+  if (keyframes.length < 2) {
+    return 0;
+  }
+  let travel = 0;
+  for (let i = 0; i < keyframes.length - 1; i++) {
+    const a = keyframes[i]!;
+    const b = keyframes[i + 1]!;
+    travel += vecLength(vecSub(b.position, a.position));
+    travel += 0.5 * vecLength(vecSub(b.lookAt, a.lookAt));
+    travel += 0.02 * Math.abs(b.verticalFovDegrees - a.verticalFovDegrees);
+    const ra = a.rollDegrees ?? 0;
+    const rb = b.rollDegrees ?? 0;
+    let roll = (rb - ra + 180) % 360;
+    if (roll < 0) {
+      roll += 360;
+    }
+    travel += 0.02 * Math.abs(roll - 180);
+  }
+  return travel;
+}
+
+function cameraTravelWarnMessage(score: number, threshold: number): string {
+  return (
+    `high camera travel+rotation score ${score.toFixed(2)} exceeds warn threshold ${threshold} ` +
+    `(Gate 3b: scene 01 scored 39.47 with follow 0.55; scenes 11/06 passed with travel ≤4.04 and ` +
+    `follow ≥0.93; scene 04 scored only 2.44 with weak follow 0.686 — not explained by this score)`
+  );
+}
+
 function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   const issues: ScriptIssue[] = [];
   if (source && show.id !== source.showId) {
@@ -887,9 +940,21 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
         });
         checkCameraMeshClearance(issues, show, episode, scene, scenePath);
       }
+      const travel = cameraTravelScore(scene);
+      if (travel > CAMERA_TRAVEL_WARN_THRESHOLD) {
+        issues.push({
+          path: `${scenePath}.camera`,
+          message: cameraTravelWarnMessage(travel, CAMERA_TRAVEL_WARN_THRESHOLD),
+          severity: "warning",
+        });
+      }
     });
   });
   return issues;
+}
+
+function isErrorIssue(issue: ScriptIssue): boolean {
+  return issue.severity !== "warning";
 }
 
 export function parseShowScript(data: unknown, source?: ScriptSource): ParseResult {
@@ -899,16 +964,19 @@ export function parseShowScript(data: unknown, source?: ScriptSource): ParseResu
   }
   const script = parsed.data as ShowScript;
   const issues = crossCheck(script, source);
-  if (issues.length > 0) {
+  if (issues.some(isErrorIssue)) {
     return { ok: false, issues };
   }
-  return { ok: true, script, issues: [] };
+  return { ok: true, script, issues };
 }
 
 export function formatScriptReport(label: string, issues: ScriptIssue[]): string {
   if (issues.length === 0) {
     return `${label}\n  ok`;
   }
-  const lines = issues.map((issue) => `  ${issue.path}: ${issue.message}`);
+  const lines = issues.map((issue) => {
+    const tag = issue.severity === "warning" ? "warning" : "error";
+    return `  ${tag} ${issue.path}: ${issue.message}`;
+  });
   return [`${label}`, ...lines].join("\n");
 }

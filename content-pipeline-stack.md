@@ -4,18 +4,22 @@ A show is one authored JSON file. The pipeline turns that file into a vertical e
 
 Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen, TRELLIS.2, Pixal3D, and LTX run through ComfyUI at `http://127.0.0.1:8188`. Florence-2 runs in that same virtualenv through Transformers, not through ComfyUI.
 
+Depth-control research notes (not the live path): [docs/ltx-depth-control-spike.md](docs/ltx-depth-control-spike.md), [docs/ltx-depth-gate.md](docs/ltx-depth-gate.md). Gate runners live under `content-pipeline/scripts/experiments/` and are not part of the pipeline.
+
 ## Machine
 
-Generation is offline, on the GPU machine (an RTX 5070 Ti, 16GB). CUDA 12.8 PyTorch is installed into the ComfyUI virtualenv so Blackwell cards work. Qwen, the mesh models, and LTX are never resident together: each stage unloads idle weights before the next one starts.
+Generation is offline, on the GPU machine (an RTX 5070 Ti, 16GB). CUDA 12.8 PyTorch is installed into the ComfyUI virtualenv so Blackwell cards work. Qwen, the mesh models, Depth Anything, and LTX are never resident together: each stage unloads idle weights before the next one starts. LTX peak VRAM on the depth-control path is about **15.8 GB**.
 
 Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipeline/.env`). That call is free. Video denoising stays local. The key is injected into the graph at run time and is not stored in the workflow JSON.
+
+`pnpm run content:comfy` starts ComfyUI with listen `127.0.0.1:8188` only. Set `COMFY_ARGS` to replace those defaults (for example `COMFY_ARGS=--reserve-vram 2`). On this machine `--reserve-vram 2` reduced LTX shared-memory spill but slowed Qwen stills, so it is **not** the default.
 
 ## What is authored
 
 | Path | Role |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `body` (always sent: build, skin) and `attributes` tagged with body parts. Age is a face-tagged attribute. A still sends an attribute only when any of its parts is at least `partMinPixelHeight` tall and covers at least `partMinScreenFraction` of the frame. |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `rowDepthRatio`, `landmarkMinScreenFraction`, `partMinPixelHeight`, and `partMinScreenFraction`. Not show content. |
+| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `rowDepthRatio`, `landmarkMinScreenFraction`, `partMinPixelHeight`, `partMinScreenFraction`, `endStill` (default `false`), `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `cameraTravelWarnThreshold`, `sceneRenderOptions`, and `depthVideo` (native previs depth export only). Not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
 `spatialTimeline` is the physical source of truth: measured locations, character and prop keyframes, and a camera path per shot. Scene length is `timeRangeSeconds`. Prompt-only scenes are invalid.
@@ -33,11 +37,13 @@ script.json
     ├─ content:assets      TRELLIS.2 / Pixal3D           meshes
     ├─ content:landmarks   Florence-2                    positions in the script
     ├─ content:previs      moderngl                      clay playblast + guides
-    ├─ content:frames      Qwen-Image-Edit-2511          portraits + scene stills
-    └─ content:generate    LTX-2.3 distilled-1.1         scene clips + episode cut
+    ├─ content:frames      Qwen-Image-Edit-2511          portraits + start stills
+    └─ content:generate    Depth Anything → LTX-2.3      control depth + scene clips + episode cut
 ```
 
 Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show’s generated files aside and keeps the reviewed character portraits.
+
+`pnpm run content:validate` checks every show script. Errors fail the command. A high authored camera travel+rotation score (threshold **20**, same formula as `camera_travel_score`) prints a **warning** and does not fail. The warning text notes that scene types like scene 04 (low travel, weak depth follow) are not predicted by this score.
 
 ### 1. Plates — Qwen-Image-Edit-2511
 
@@ -74,7 +80,15 @@ An empty location draws its one mesh, and the camera stays where it was authored
 
 Output is 768×1360. The playblast is 8 fps. Per scene: `output/previs/<show>/<episode>/scene_XX/blockout.mp4`, `start.png`, `end.png`, and `guides/`. Every scene is joined into `output/previs/<show>/<episode>/blockout.mp4`. A scene still missing leaves the episode file untouched.
 
-Guides are written for the start frame and the end frame of every scene. Stills and LTX use the end guides only when blocking or the camera actually changes:
+Guides are written for the **start** and **end** of every scene (end guides are for review; `content:frames` does not generate end stills when `endStill` is false). Additional clip-rate guides:
+
+| Guide | What it is |
+| --- | --- |
+| `guides/clay_24fps.mp4` | Clay playblast resampled to LTX size/rate (448×768, 24 fps, `8n+1` frames). Input to Depth Anything. |
+| `guides/control_depth.mp4` | Written by `content:generate` (not previs): Depth Anything on `clay_24fps.mp4`. |
+| `guides/depth_video.mp4` (+ `guides/depth_video/`) | Native inverse (or linear) camera depth at clip rate. Still exported for review and experiments. **Unused by `content:generate`.** |
+
+Per-frame start/end guides:
 
 | Guide | What it is |
 | --- | --- |
@@ -89,7 +103,7 @@ Guides are written for the start frame and the end frame of every scene. Stills 
 
 ### 5. Scene stills — Qwen-Image-Edit-2511
 
-`content:frames` talks only to the ComfyUI HTTP API. It generates character portraits first, then each scene still.
+`content:frames` talks only to the ComfyUI HTTP API. It generates character portraits first, then each scene **start** still. With `endStill: false` in `prompts.json` (the default), it does **not** write `scene_XX_end.png`. Previs end guides remain on disk for review only.
 
 Portraits use `workflows/qwen_image_edit.json`: same Lightning settings, 768×1360, from `body` plus every attribute, on a blank canvas. The template keeps a plain shirt and no costume. They land in `output/frames/<show>/characters/<id>.png`.
 
@@ -107,29 +121,47 @@ On a clothes shot, the people sentence is built from `body`, visible `attributes
 
 A landmark mesh is named when its visible front surface covers at least `landmarkMinScreenFraction` of the frame (`prompts.json`, 0.008). The log records each landmark, whether it was sent, its screen fraction, and the skip reason if it was left out. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
 
-Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/` (and `_end` when that frame exists). The blockout pass in `log.json` records `people` and `landmarks` the same way: each entry says whether it was sent, and the skip reason if it was left out. The episode folder itself keeps `scene_XX_start.png` and, when the timeline or camera changes, `scene_XX_end.png`. The end still is generated from the end guides, because Qwen-Image-Edit keeps the camera of whatever picture it is given.
+Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/`. The blockout pass in `log.json` records `people` and `landmarks` the same way: each entry says whether it was sent, and the skip reason if it was left out. The episode folder keeps `scene_XX_start.png` only (no end still when `endStill` is false).
 
 Identity face painting exists in the spatial graph and is off (`FACE_PASS = False`). LTX never receives a character portrait.
 
-### 6. Clips — LTX-2.3 distilled-1.1
+### 6. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
 
-`content:generate` animates each reviewed still. Graph: `workflows/ltx_gemma_api.json`.
+`content:generate` animates each reviewed start still. Clip geometry is shared (`clip_spec.py`): **448×768**, **24 fps**, length **`8n+1`** for the scene duration. Stills are center-cropped and resized through `fit_to_clip` before LTX.
+
+**Routing**
+
+| Scene | Graph | Control |
+| --- | --- | --- |
+| Spatial change (camera/blocking moves) | `workflows/ltx_gemma_api_depth.json`, or `ltx_gemma_api_depth_dialogue.json` when `speakerId` is set | Start still + Depth Anything control video through the union IC-LoRA |
+| No spatial change | `workflows/ltx_gemma_api.json` | Start still only (plain image-to-video) |
+| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph even when the scene is spatial; logs `depth control disabled by override` |
+
+**Depth Anything pass (spatial scenes, before LTX)**
+
+1. Load `guides/clay_24fps.mp4`.
+2. Run Video Depth Anything (`video_depth_anything_vits.pth`, small) via ComfyUI-Video-Depth-Anything.
+3. Write `guides/control_depth.mp4` (H.264 + silent AAC).
+4. Unload Comfy models (`/free`) before queuing LTX.
+
+Native `guides/depth_video.mp4` is not read by this stage.
 
 | Setting | Value |
 | --- | --- |
 | Weights | `ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf` |
+| IC-LoRA (spatial) | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` via `LTXICLoRALoaderModelOnly` |
 | Video VAE / audio VAE | Matching LTX-2.3 distilled VAEs |
 | Text | `GemmaAPITextEncode` against a tiny safetensors stub that carries the API `model_id`. Local node `LTXAVUseProcessedAPIEmbeds` marks those embeddings as already projected to 6144 so they match the Q4 GGUF. |
-| Size | 448×800, near 9:16, divisible by 32 |
-| Rate | 24 fps. Length is `8n+1` frames for the scene duration. |
+| Size / rate | 448×768, 24 fps, `8n+1` frames |
 | Sampler | Euler, 8 steps, LTX shift (max 2.05, base 0.95) |
-| Start frame | `LTXVImgToVideo` at strength 0.7 |
-| End frame | `LTXVAddGuide` at strength 0.85 on the last frame, only when a generative scene’s blocking or camera changes. `LTXVCropGuides` strips the guide tokens before decode. |
-| Dialogue | When `speakerId` is set, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
-| Prompt | `sceneVideo`: continue from the still. `videoPrompt` is the line and the performance. A speaking shot also prepends `LIP SYNC: {speakerId}…`, so that id does go to Gemma. Camera and blocking come from the timeline and the start and end frames. |
+| Start frame | `LTXVImgToVideo` at `ltxStartStrength` (default **0.7**) |
+| IC-LoRA strength | `ltxIcLoRAStrength` (default **1.0**) on spatial/depth graphs |
+| End frame guide | Not used. No `LTXVAddGuide` end still. |
+| Dialogue | When `speakerId` is set on the plain graph, or on the depth-dialogue graph, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
+| Prompt | `sceneVideo`: continue from the still. `videoPrompt` is the line and the performance. A speaking shot also prepends `LIP SYNC: {speakerId}…`, so that id does go to Gemma. Camera and blocking come from the timeline; spatial scenes also follow the depth control video. |
 | Mux | Video Helper Suite, H.264, CRF 19, with the decoded LTX audio. |
 
-Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenates them into `episode.mp4` in that folder. A partial clip render leaves `episode.mp4` alone.
+Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenates them into `episode.mp4` in that folder. `concat_videos` **aborts** if clip width, height, or fps differ (it does not auto-regenerate). A partial clip render leaves `episode.mp4` alone.
 
 `content:upload` pushes the finished MP4s and thumbnails to Cloudflare R2 and registers episodes on the Worker. That step is distribution, not generation.
 
@@ -137,24 +169,27 @@ Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenat
 
 `pnpm run content:models` downloads these into `content-pipeline/.comfyui/models/` and skips files already present.
 
-| Stack | Files |
-| --- | --- |
-| LTX-2.3 | Q4_K_M GGUF (~14GB), video VAE, audio VAE, distilled API stub |
-| Qwen stills | `qwen-image-edit-2511-Q4_K_M.gguf` (~13GB), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`, 4-step Lightning LoRA |
-| TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet |
-| Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. |
-| Unused | YuNet ONNX face detector. Downloaded by `content:models`; no stage reads it. |
+| Stack | Files | Licence (model card) |
+| --- | --- | --- |
+| LTX-2.3 | Q4_K_M GGUF (~14GB), video VAE, audio VAE, distilled API stub | LTX-2 Community License |
+| LTX union IC-LoRA | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` (~654 MB) under `models/loras/` | LTX-2 Community License ([Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control)) |
+| Video Depth Anything (small) | `video_depth_anything_vits.pth` (~111 MB, 116440756 bytes) under `models/videodepthanything/` | Apache-2.0 ([depth-anything/Video-Depth-Anything-Small](https://huggingface.co/depth-anything/Video-Depth-Anything-Small)) |
+| Qwen stills | `qwen-image-edit-2511-Q4_K_M.gguf` (~13GB), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`, 4-step Lightning LoRA | Apache-2.0 |
+| TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet | MIT |
+| Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. | MIT |
+| Unused | YuNet ONNX face detector. Downloaded by `content:models`; no stage reads it. | — |
 
-Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 and Pixal3D are MIT. `content:assets -- --credits` rewrites `docs/CREDITS.md` from the records under `output/assets/`.
+`content:assets -- --credits` rewrites `docs/CREDITS.md` from the records under `output/assets/`.
 
 ## ComfyUI checkout
 
 `pnpm run content:setup-comfy` clones into `content-pipeline/.comfyui`:
 
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI), including native TRELLIS.2 and Pixal3D nodes
-- [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) (`GemmaAPITextEncode`, image-to-video, guides)
+- [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) (`GemmaAPITextEncode`, image-to-video, IC-LoRA guides)
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)
 - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
+- [ComfyUI-Video-Depth-Anything](https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything) pinned at `a0db08e63d1ea571601c45cde4aaee0acdd0544d` (Python deps installed into the Comfy venv)
 
 Local nodes:
 
@@ -173,4 +208,4 @@ Local nodes:
 | --- | --- | --- |
 | Plates and mesh conditioning | 1024 square | TRELLIS.2 / Pixal3D shape cascade |
 | Previs and Qwen stills | 768×1360 | Vertical, near 9:16 |
-| LTX clips | 448×800 | Same aspect, divisible by 32, small enough for 16GB |
+| LTX clips / Depth Anything control | 448×768 | Union IC-LoRA `reference_downscale_factor=2` needs even latent dims; 448×800 is incompatible |
