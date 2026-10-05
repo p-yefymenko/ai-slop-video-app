@@ -180,8 +180,12 @@ export type ScriptScene = {
    */
   imagePrompt?: string;
   /**
-   * One short line and the non-spatial performance (shout, smile, strike).
-   * Camera and blocking come from the timeline. Omit on silent scenes.
+   * Required whenever characterIds is not empty, silent scenes included:
+   * `PERFORMANCE: …` says what each visible person does for the whole take,
+   * even "stands still, breathing slowly". LTX invents motion it is not given
+   * (hands drifting in, touching props). Positive text only: say what happens,
+   * not what must not. Add one short DIALOGUE line on speaking scenes.
+   * Camera and blocking come from the timeline. Optional on world/VFX shots.
    * Dialogue stays here; non-speech sounds go in `sound.events`.
    */
   videoPrompt?: string;

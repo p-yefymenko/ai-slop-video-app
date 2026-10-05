@@ -85,6 +85,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             storyBeat: "Ada waits.",
             characterIds: ["ada"],
             timeRangeSeconds: [0, 4],
+            videoPrompt: "PERFORMANCE: Ada stands still, breathing slowly, then shifts her weight once.",
             camera: {
               keyframes: [
                 {
@@ -297,6 +298,21 @@ test("rejects a speaker who is not on camera", () => {
   const report = messages(show);
   assert.match(report, /speakerId/);
   assert.match(report, /not in characterIds/);
+});
+
+test("rejects a scene with people and no videoPrompt", () => {
+  const show = minimalShow();
+  delete show.episodes[0].scenes[0].videoPrompt;
+  const report = messages(show);
+  assert.match(report, /scenes\[0\]\.videoPrompt: required when characterIds is not empty/);
+});
+
+test("accepts a scene with no people and no videoPrompt", () => {
+  const show = minimalShow();
+  delete show.episodes[0].scenes[0].videoPrompt;
+  show.episodes[0].scenes[0].characterIds = [];
+  const result = parseShowScript(show);
+  assert.equal(result.ok, true);
 });
 
 test("rejects a prefab id on a landmark", () => {

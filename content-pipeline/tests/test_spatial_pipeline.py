@@ -72,6 +72,28 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(len(scene["timeRangeSeconds"]), 2)
         self.assertIn("verticalFovDegrees", scene["camera"]["keyframes"][0])
 
+    def test_ltx_prompt_states_performance_and_locked_camera_before_sound(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        location = self.show["locations"][scene["locationId"]]
+        prompt = pipeline.compile_ltx_prompt(self.show, scene, location)
+        locked = self.show["prompts"]["sceneCameraLocked"]
+        self.assertLess(prompt.index(scene["videoPrompt"]), prompt.index(locked))
+        self.assertLess(prompt.index(locked), prompt.index(self.show["prompts"]["sceneSoundLabel"]))
+
+        moving = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 11)
+        self.assertNotIn(locked, pipeline.compile_ltx_prompt(self.show, moving, location))
+
+    def test_loader_rejects_people_without_a_video_prompt(self) -> None:
+        raw = json.loads((self.root / "shows" / "the-iron-bride" / "script.json").read_text(encoding="utf-8"))
+        del raw["episodes"][0]["scenes"][2]["videoPrompt"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "the-iron-bride" / "script.json"
+            path.parent.mkdir()
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            with self.assertRaises(SystemExit) as caught:
+                pipeline.load_show(path)
+        self.assertIn("scene 3 has people but no videoPrompt", str(caught.exception))
+
     def test_ltx_prompt_appends_authored_sound_after_visual_text(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
         location = self.show["locations"][scene["locationId"]]

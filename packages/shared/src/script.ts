@@ -255,7 +255,9 @@ export type ScriptScene = {
   imagePrompt?: string;
   /**
    * Spoken line and non-spatial performance for generative scenes. Camera and
-   * blocking come from the timeline and start/end frames. Omit on silent scenes.
+   * blocking come from the timeline and start/end frames. Required when
+   * characterIds is not empty, silent scenes included: LTX invents motion it
+   * is not given.
    * Dialogue stays here; non-speech sounds go in `sound.events`.
    */
   videoPrompt?: string;

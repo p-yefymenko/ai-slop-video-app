@@ -1016,6 +1016,13 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
           });
         }
       }
+      if (scene.characterIds.length > 0 && !scene.videoPrompt?.trim()) {
+        issues.push({
+          path: `${scenePath}.videoPrompt`,
+          message:
+            "required when characterIds is not empty: LTX invents motion it is not given, so describe what each visible person does, even standing still and breathing",
+        });
+      }
       if (scene.speakerId && !scene.characterIds.includes(scene.speakerId)) {
         issues.push({
           path: `${scenePath}.speakerId`,

@@ -2537,7 +2537,8 @@ def camera_travel_score(scene: dict) -> float:
     return travel
 
 
-def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
+def camera_moves(scene: dict) -> bool:
+    """The camera pose differs between the first and last frame of the shot."""
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
         return False
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
@@ -2552,13 +2553,25 @@ def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
         return True
     if abs(last_camera["verticalFovDegrees"] - first_camera["verticalFovDegrees"]) >= 0.5:
         return True
-    if (
+    return (
         abs(
             (last_camera["rollDegrees"] - first_camera["rollDegrees"] + 180.0) % 360.0
             - 180.0
         )
         >= 0.5
-    ):
+    )
+
+
+def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
+    if not scene.get("timeRangeSeconds") or not scene.get("camera"):
+        return False
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    try:
+        camera_at(scene, start)
+        camera_at(scene, finish)
+    except ValueError:
+        return False
+    if camera_moves(scene):
         return True
     for character_id in scene["characterIds"]:
         first = episode_character_state(episode, character_id, start)

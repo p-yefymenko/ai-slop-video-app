@@ -844,6 +844,7 @@
             "sela"
           ],
           "imagePrompt": "Sela wears a soot-stained ivory wrap and a plain iron bridal collar. Her mouth stays closed.",
+          "videoPrompt": "PERFORMANCE: Sela stands still and silent, chin level, breathing slowly and shallowly; her gaze holds steady.",
           "timeRangeSeconds": [
             4,
             6
@@ -937,6 +938,7 @@
             "rhel"
           ],
           "imagePrompt": "Sela wears the ivory wrap and iron collar. Tomas wears a torn sky-blue court coat. Vardan, Nira, Kesh, and Rhel wear black sun-priest plate and gold gorgets.",
+          "videoPrompt": "PERFORMANCE: Sela and Tomas stand close together, breathing hard. The four priests hold their line, armor shifting with small changes of weight.",
           "timeRangeSeconds": [
             8,
             10
@@ -1035,6 +1037,7 @@
             "vardan"
           ],
           "imagePrompt": "Tomas wears the torn sky-blue court coat, jaw locked. Vardan wears black sun-priest plate, waiting.",
+          "videoPrompt": "PERFORMANCE: Tomas stands rigid, jaw locked, breathing hard under Vardan's stare. Vardan stands motionless, waiting.",
           "timeRangeSeconds": [
             15,
             17
@@ -1114,6 +1117,7 @@
             "kesh"
           ],
           "imagePrompt": "Kesh wears black sun-priest plate. Only the armored torso and closing gauntlet; no face.",
+          "videoPrompt": "PERFORMANCE: Kesh's armored gauntlet slowly closes into a fist at chest height; his body stays motionless.",
           "timeRangeSeconds": [
             22,
             24
@@ -1195,6 +1199,7 @@
             "sela"
           ],
           "imagePrompt": "Sela wears the ivory wrap and iron collar. Only boots, wrap, and collar as she walks; head may leave the frame.",
+          "videoPrompt": "PERFORMANCE: Sela walks forward at a steady, unhurried pace, bare feet on the iron floor, the wrap swaying with each step.",
           "timeRangeSeconds": [
             29,
             31
@@ -1247,6 +1252,7 @@
             "sela"
           ],
           "imagePrompt": "Sela's amber eyes catch forge-gold. Closed mouth. Iron collar at the bottom of frame.",
+          "videoPrompt": "PERFORMANCE: Sela holds perfectly still and does not blink; forge-gold light flickers across her eyes, mouth closed.",
           "timeRangeSeconds": [
             31,
             33
@@ -1340,6 +1346,7 @@
             "sela"
           ],
           "imagePrompt": "Sela's bare feet and the hem of the ivory wrap stand in white-gold well-fire. No face.",
+          "videoPrompt": "PERFORMANCE: Sela stands motionless in the fire; white-gold flames lick around her bare feet and the wrap hem stirs in the heat.",
           "timeRangeSeconds": [
             38,
             40
@@ -1421,6 +1428,7 @@
             "rhel"
           ],
           "imagePrompt": "Vardan, Nira, Kesh, and Rhel wear black sun-priest plate. Shock, not ceremony.",
+          "videoPrompt": "PERFORMANCE: The four priests flinch back together half a step, then freeze, staring in shock.",
           "timeRangeSeconds": [
             45,
             47
@@ -1499,6 +1507,7 @@
             "tomas"
           ],
           "imagePrompt": "Tomas wears the torn sky-blue court coat. Shock breaking into awe. Closed mouth.",
+          "videoPrompt": "PERFORMANCE: Tomas stands frozen, staring; his breath catches and his face slowly opens from shock into awe, mouth closed.",
           "timeRangeSeconds": [
             52,
             55
