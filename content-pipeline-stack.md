@@ -18,8 +18,8 @@ Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipelin
 
 | Path | Role |
 | --- | --- |
-| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `body` (always sent: build, skin) and `attributes` tagged with body parts. Age is a face-tagged attribute. A still sends an attribute only when any of its parts is at least `partMinPixelHeight` tall and covers at least `partMinScreenFraction` of the frame. |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `rowDepthRatio`, `landmarkMinScreenFraction`, `partMinPixelHeight`, `partMinScreenFraction`, `endStill` (default `false`), `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `cameraTravelWarnThreshold`, `sceneRenderOptions`, and `depthVideo` (native previs depth export only). Not show content. |
+| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `body` (always sent: build, skin) and `attributes` tagged with body parts. Age is a face-tagged attribute. A still sends an attribute only when any of its parts is at least `partMinPixelHeight` tall and covers at least `partMinScreenFraction` of the frame. Every location has `soundscape` (`ambience` + `space`). Every scene has `sound` (`events`, `bed`, `music`). |
+| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `rowDepthRatio`, `landmarkMinScreenFraction`, `partMinPixelHeight`, `partMinScreenFraction`, `endStill` (default `false`), `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `cameraTravelWarnThreshold`, `sceneRenderOptions`, `depthVideo` (native previs depth export only), LTX sound sentence templates (`sceneSound*`), `soundLint` word lists, and `episodeLoudnessTargetLufs` (pre-concat loudness normalize). Not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
 `spatialTimeline` is the physical source of truth: measured locations, character and prop keyframes, and a camera path per shot. Scene length is `timeRangeSeconds`. Prompt-only scenes are invalid.
@@ -43,7 +43,7 @@ script.json
 
 Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show’s generated files aside and keeps the reviewed character portraits.
 
-`pnpm run content:validate` checks every show script. Errors fail the command. A high authored camera travel+rotation score (threshold **20**, same formula as `camera_travel_score`) prints a **warning** and does not fail. The warning text notes that scene types like scene 04 (low travel, weak depth follow) are not predicted by this score.
+`pnpm run content:validate` checks every show script. Errors fail the command. Missing `locations.*.soundscape` or `scenes[].sound` (or any required sub-field) is an error. A high authored camera travel+rotation score (threshold **20**, same formula as `camera_travel_score`) prints a **warning** and does not fail. Sound lint also warns (does not fail) when a speaking scene's bed is not `faint`, when `sound.events` is empty-ish, or when `music.kind` is `none` but ambience/events contain music-related words from `prompts.json` `soundLint`. The camera-travel warning text notes that scene types like scene 04 (low travel, weak depth follow) are not predicted by this score.
 
 ### 1. Plates — Qwen-Image-Edit-2511
 
@@ -158,10 +158,11 @@ Native `guides/depth_video.mp4` is not read by this stage.
 | IC-LoRA strength | `ltxIcLoRAStrength` (default **1.0**) on spatial/depth graphs |
 | End frame guide | Not used. No `LTXVAddGuide` end still. |
 | Dialogue | When `speakerId` is set on the plain graph, or on the depth-dialogue graph, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
-| Prompt | `sceneVideo`: continue from the still. `videoPrompt` is the line and the performance. A speaking shot also prepends `LIP SYNC: {speakerId}…`, so that id does go to Gemma. Camera and blocking come from the timeline; spatial scenes also follow the depth control video. |
+| Prompt | Shared path `compile_ltx_prompt`: `sceneVideo` (continue from the still; `videoPrompt` is the line and the performance; a speaking shot also prepends `LIP SYNC: {speakerId}…`) then labeled sound sentences from `location.soundscape` + `scene.sound` using `sceneSound*` templates in `prompts.json` (label → bed → space → events → music). Distilled CFG 1: positive descriptions only; no negative-prompt reliance. `GemmaAPITextEncode` runs with `enhance_prompt: false` (encodes the authored text; does not rewrite it). |
+| Log | Final LTX prompt, graph name, seed, and `enhance_prompt` land in `output/generate/<show>/<episode>/inputs/scene_XX/log.json`. |
 | Mux | Video Helper Suite, H.264, CRF 19, with the decoded LTX audio. |
 
-Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg concatenates them into `episode.mp4` in that folder. `concat_videos` **aborts** if clip width, height, or fps differ (it does not auto-regenerate). A partial clip render leaves `episode.mp4` alone.
+Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg loudness-normalizes each clip to `episodeLoudnessTargetLufs` from `prompts.json` (default **-16** LUFS), then concatenates them into `episode.mp4` in that folder. `concat_videos` **aborts** if clip width, height, or fps differ (it does not auto-regenerate). A partial clip render leaves `episode.mp4` alone.
 
 `content:upload` pushes the finished MP4s and thumbnails to Cloudflare R2 and registers episodes on the Worker. That step is distribution, not generation.
 

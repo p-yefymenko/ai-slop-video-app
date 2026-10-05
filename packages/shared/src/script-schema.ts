@@ -3,6 +3,9 @@
  * camera basis (intersection, projection) stays in spatial_previs.py.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import {
@@ -49,6 +52,56 @@ const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const STANCES = ["standing", "sitting", "kneeling", "walking"] as const;
 const BUILDS = ["slim", "average", "broad"] as const;
+const BED_LEVELS = ["present", "faint"] as const;
+
+const PROMPTS_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../content-pipeline/prompts.json",
+);
+
+type SoundLintConfig = {
+  emptyEventsMaxWords: number;
+  musicConflictWords: string[];
+};
+
+function loadSoundLint(): SoundLintConfig {
+  if (!existsSync(PROMPTS_PATH)) {
+    return { emptyEventsMaxWords: 2, musicConflictWords: [] };
+  }
+  try {
+    const prompts = JSON.parse(readFileSync(PROMPTS_PATH, "utf8")) as {
+      soundLint?: { emptyEventsMaxWords?: unknown; musicConflictWords?: unknown };
+    };
+    const lint = prompts.soundLint;
+    const maxWords =
+      typeof lint?.emptyEventsMaxWords === "number" && Number.isFinite(lint.emptyEventsMaxWords)
+        ? Math.max(0, Math.floor(lint.emptyEventsMaxWords))
+        : 2;
+    const words = Array.isArray(lint?.musicConflictWords)
+      ? lint.musicConflictWords
+          .filter((word): word is string => typeof word === "string" && word.trim().length > 0)
+          .map((word) => word.trim().toLowerCase())
+      : [];
+    return { emptyEventsMaxWords: maxWords, musicConflictWords: words };
+  } catch {
+    return { emptyEventsMaxWords: 2, musicConflictWords: [] };
+  }
+}
+
+function wordCount(value: string): number {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function containsMusicWord(text: string, words: string[]): string | undefined {
+  const lower = text.toLowerCase();
+  return words.find((word) => {
+    const pattern = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    return pattern.test(lower);
+  });
+}
 
 function text(label: string) {
   return z
@@ -200,6 +253,60 @@ const cameraKeyframeSchema = z
   })
   .strict();
 
+const locationSoundscapeSchema = z
+  .object({
+    ambience: text("soundscape.ambience").describe(
+      "Persistent bed always audible at this location. Present tense. Not music unless the place truly has source music.",
+    ),
+    space: text("soundscape.space").describe(
+      "Acoustic character: open air, enclosed hall, reverb, dry stone, little echo.",
+    ),
+  })
+  .strict()
+  .describe(
+    "Required location soundscape. ambience is the bed; space is the acoustic character. Both non-empty.",
+  );
+
+const sceneMusicSchema = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        kind: z.literal("none"),
+      })
+      .strict()
+      .describe('No music in this clip. Authors must choose kind "none" explicitly; there is no default.'),
+    z
+      .object({
+        kind: z.literal("described"),
+        description: text("sound.music.description").describe(
+          "Positive description of diegetic or scored music that should play in this clip.",
+        ),
+      })
+      .strict()
+      .describe("Music is intentionally present; describe it in present tense."),
+  ])
+  .describe('Music policy: { kind: "none" } or { kind: "described", description }. No default.');
+
+const sceneSoundSchema = z
+  .object({
+    events: text("sound.events").describe(
+      "Sounds of things visibly happening in this clip. Each needs a visible cause in the start still. Add to the location bed; never restate or contradict it. On speaking scenes, non-speech only; dialogue stays in videoPrompt.",
+    ),
+    bed: z
+      .enum(BED_LEVELS, {
+        required_error: "sound.bed is required",
+        invalid_type_error: `sound.bed must be ${BED_LEVELS.join(" or ")}`,
+      })
+      .describe(
+        'How loud the location bed sits. "present" = full bed. "faint" = bed lowered under the scene (preferred when speakerId is set).',
+      ),
+    music: sceneMusicSchema,
+  })
+  .strict()
+  .describe(
+    "Required per-scene sound. Composed into the LTX prompt after visuals. Distilled CFG 1: steer only with positive text.",
+  );
+
 const sceneSchema = z
   .object({
     sceneNumber: z
@@ -232,6 +339,7 @@ const sceneSchema = z
       .strict(),
     imagePrompt: z.string().optional(),
     videoPrompt: z.string().optional(),
+    sound: sceneSoundSchema,
     requiresParts: z
       .array(characterPartRequirementSchema, {
         invalid_type_error: "requiresParts must be an array",
@@ -312,6 +420,7 @@ const showScriptSchema = z
                 surroundColor: z.tuple([z.number(), z.number(), z.number()]),
               })
               .strict(),
+            soundscape: locationSoundscapeSchema,
             spatial: stageGeometrySchema,
           })
           .strict(),
@@ -794,6 +903,7 @@ function cameraTravelWarnMessage(score: number, threshold: number): string {
 
 function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   const issues: ScriptIssue[] = [];
+  const soundLint = loadSoundLint();
   if (source && show.id !== source.showId) {
     issues.push({
       path: "id",
@@ -912,6 +1022,7 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
           message: `${JSON.stringify(scene.speakerId)} is not in characterIds`,
         });
       }
+      checkSceneSoundWarnings(issues, show, scene, scenePath, soundLint);
       (scene.requiresParts ?? []).forEach((requirement, requirementIndex) => {
         const requirementPath = `${scenePath}.requiresParts[${requirementIndex}]`;
         if (!(requirement.characterId in show.characters)) {
@@ -951,6 +1062,53 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
     });
   });
   return issues;
+}
+
+function checkSceneSoundWarnings(
+  issues: ScriptIssue[],
+  show: ShowScript,
+  scene: ScriptScene,
+  scenePath: string,
+  soundLint: SoundLintConfig,
+) {
+  const sound = scene.sound;
+  if (!sound) {
+    return;
+  }
+  if (scene.speakerId && sound.bed !== "faint") {
+    issues.push({
+      path: `${scenePath}.sound.bed`,
+      message: `speaking scene should use bed "faint" so dialogue is not buried under the location bed`,
+      severity: "warning",
+    });
+  }
+  if (wordCount(sound.events) <= soundLint.emptyEventsMaxWords) {
+    issues.push({
+      path: `${scenePath}.sound.events`,
+      message: `events looks empty-ish (${wordCount(sound.events)} word(s); describe audible action visible in the start still)`,
+      severity: "warning",
+    });
+  }
+  if (sound.music.kind === "none") {
+    const location = show.locations[scene.locationId];
+    const ambience = location?.soundscape.ambience ?? "";
+    const hitAmbience = containsMusicWord(ambience, soundLint.musicConflictWords);
+    if (hitAmbience) {
+      issues.push({
+        path: `${scenePath}.sound.music`,
+        message: `music is "none" but location ambience contains ${JSON.stringify(hitAmbience)}`,
+        severity: "warning",
+      });
+    }
+    const hitEvents = containsMusicWord(sound.events, soundLint.musicConflictWords);
+    if (hitEvents) {
+      issues.push({
+        path: `${scenePath}.sound.music`,
+        message: `music is "none" but sound.events contains ${JSON.stringify(hitEvents)}`,
+        severity: "warning",
+      });
+    }
+  }
 }
 
 function isErrorIssue(issue: ScriptIssue): boolean {

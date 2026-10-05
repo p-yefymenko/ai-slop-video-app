@@ -117,6 +117,53 @@ export type LocationBackdrop = {
   surroundColor: [number, number, number];
 };
 
+/**
+ * Persistent audio of a place. Required on every location. LTX always generates
+ * audio with the clip, so omitting this lets the model invent music.
+ */
+export type LocationSoundscape = {
+  /**
+   * The bed that is always audible here: wind, fire, crowd, machines.
+   * Present tense. Not music unless this place truly has source music.
+   */
+  ambience: string;
+  /**
+   * Acoustic character of the place: open air, enclosed hall, wet reverb,
+   * dry stone, little echo.
+   */
+  space: string;
+};
+
+/**
+ * Per-clip music policy. Authors must choose explicitly; there is no default.
+ * Distilled LTX runs at CFG 1, so "none" is steered only by a positive phrase
+ * from prompts.json, never by a negative prompt.
+ */
+export type SceneMusic =
+  | { kind: "none" }
+  | { kind: "described"; description: string };
+
+/**
+ * Per-scene sound direction. Required on every scene. Composed into the LTX
+ * prompt after visuals and after any videoPrompt / LIP SYNC text.
+ */
+export type SceneSound = {
+  /**
+   * Sounds of things visibly happening in this clip. Each event needs a cause
+   * visible in the start still. Add to the location bed; never restate or
+   * contradict it. On speaking scenes, describe only non-speech sounds;
+   * dialogue stays in videoPrompt.
+   */
+  events: string;
+  /**
+   * How loud the location bed sits under this scene.
+   * `present` = full bed. `faint` = bed lowered under the scene (use on
+   * speaking scenes so dialogue is not buried).
+   */
+  bed: "present" | "faint";
+  music: SceneMusic;
+};
+
 export type ShowLocation = {
   /**
    * Materials and light next to the people. Not a viewpoint. Not a space you look down.
@@ -124,6 +171,8 @@ export type ShowLocation = {
   promptBlock: string;
   /** What to paint where the camera sees no asset. */
   backdrop: LocationBackdrop;
+  /** Persistent ambience and acoustic space for every scene here. */
+  soundscape: LocationSoundscape;
   /** Deterministic blocking space used by every scene at this location. */
   spatial: StageGeometry;
 };
@@ -207,8 +256,14 @@ export type ScriptScene = {
   /**
    * Spoken line and non-spatial performance for generative scenes. Camera and
    * blocking come from the timeline and start/end frames. Omit on silent scenes.
+   * Dialogue stays here; non-speech sounds go in `sound.events`.
    */
   videoPrompt?: string;
+  /**
+   * Required sound direction for this clip. Location bed + events + music
+   * policy are composed into the LTX prompt; LTX always generates audio.
+   */
+  sound: SceneSound;
   /**
    * Previs fails the scene when any of these parts has no visible pixels, or
    * is under 5px wide at LTX's 448px output, on a playblast frame.

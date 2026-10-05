@@ -24,15 +24,14 @@ from gate_depth_lib import (
     stage_fit_still,
 )
 from generate_batch import (
+    compile_ltx_prompt,
     execute_queued_graph,
     free_comfy_models,
     inject_prompt,
     inject_seed,
     load_show,
-    show_prompt,
 )
 from pipeline_paths import discover_show_scripts, start_still_path
-from spatial_previs import compile_spatial_video_prompt
 
 
 class NvidiaPeak:
@@ -141,11 +140,8 @@ def main() -> None:
 
     wf_path = DIALOGUE_WF if args.dialogue else DEPTH_WF
     workflow = json.loads(wf_path.read_text(encoding="utf-8"))
-    prompt = show_prompt(
-        show,
-        "sceneVideo",
-        {"videoPrompt": compile_spatial_video_prompt(scene)},
-    )
+    location = show["locations"][scene["locationId"]]
+    prompt = compile_ltx_prompt(show, scene, location)
     api_key = load_api_key()
     if not api_key:
         raise SystemExit("LTXV_API_KEY missing from content-pipeline/.env")

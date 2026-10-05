@@ -72,6 +72,66 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(len(scene["timeRangeSeconds"]), 2)
         self.assertIn("verticalFovDegrees", scene["camera"]["keyframes"][0])
 
+    def test_ltx_prompt_appends_authored_sound_after_visual_text(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        location = self.show["locations"][scene["locationId"]]
+        prompt = pipeline.compile_ltx_prompt(self.show, scene, location)
+        self.assertIn("Continue directly from this image", prompt)
+        self.assertIn(self.show["prompts"]["sceneSoundLabel"], prompt)
+        self.assertIn(location["soundscape"]["ambience"].split(",")[0].capitalize(), prompt)
+        # Space and events appear as their own sentences after the bed.
+        space_body = location["soundscape"]["space"]
+        self.assertTrue(
+            any(part in prompt for part in (space_body, space_body[0].upper() + space_body[1:]))
+        )
+        events_body = scene["sound"]["events"]
+        self.assertTrue(
+            any(part in prompt for part in (events_body, events_body[0].upper() + events_body[1:]))
+        )
+        self.assertIn(self.show["prompts"]["sceneSoundMusicNone"].strip(), prompt)
+        label_at = prompt.index(self.show["prompts"]["sceneSoundLabel"])
+        ambience_at = prompt.index("Deep roar")
+        events_at = prompt.index("The fire surges")
+        music_at = prompt.index(self.show["prompts"]["sceneSoundMusicNone"].strip())
+        self.assertLess(label_at, ambience_at)
+        self.assertLess(ambience_at, events_at)
+        self.assertLess(events_at, music_at)
+        self.assertEqual(self.show["prompts"]["sceneSoundBedPresent"].count("{ambience}"), 1)
+        self.assertEqual(self.show["prompts"]["sceneSoundSpace"].count("{space}"), 1)
+        self.assertNotIn("the location holds", prompt)
+
+    def test_ltx_prompt_uses_faint_bed_template_for_speaking_scenes(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item.get("speakerId"))
+        location = self.show["locations"][scene["locationId"]]
+        prompt = pipeline.compile_ltx_prompt(self.show, scene, location)
+        self.assertEqual(scene["sound"]["bed"], "faint")
+        faint = self.show["prompts"]["sceneSoundBedFaint"].split("{", 1)[0]
+        self.assertTrue(faint)
+        self.assertIn(faint, prompt)
+        self.assertIn("LIP SYNC:", prompt)
+        self.assertLess(prompt.index("LIP SYNC:"), prompt.index(faint))
+
+    def test_ltx_prompt_can_omit_music_phrase(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
+        location = self.show["locations"][scene["locationId"]]
+        with_music = pipeline.compile_ltx_prompt(self.show, scene, location)
+        without = pipeline.compile_ltx_prompt(
+            self.show, scene, location, include_music=False
+        )
+        self.assertIn(self.show["prompts"]["sceneSoundMusicNone"].strip(), with_music)
+        self.assertNotIn(self.show["prompts"]["sceneSoundMusicNone"].strip(), without)
+
+    def test_ltx_prompt_fails_without_sound_data(self) -> None:
+        scene = copy.deepcopy(self.episode["scenes"][0])
+        location = copy.deepcopy(self.show["locations"][scene["locationId"]])
+        del scene["sound"]
+        with self.assertRaises(SystemExit):
+            pipeline.compile_ltx_prompt(self.show, scene, location)
+        scene = copy.deepcopy(self.episode["scenes"][0])
+        del location["soundscape"]
+        with self.assertRaises(SystemExit):
+            pipeline.compile_ltx_prompt(self.show, scene, location)
+
     def test_show_json_contains_no_renderer_templates_or_legacy_prose_state(self) -> None:
         raw = json.loads(SHOW_JSON.read_text(encoding="utf-8"))
         self.assertNotIn("prompts", raw)

@@ -74,6 +74,14 @@ PROMPT_KEYS = (
     "spatialFaces",
     "spatialBackdrop",
     "sceneVideo",
+    "sceneSound",
+    "sceneSoundLabel",
+    "sceneSoundBedPresent",
+    "sceneSoundBedFaint",
+    "sceneSoundSpace",
+    "sceneSoundEvents",
+    "sceneSoundMusicNone",
+    "sceneSoundMusicDescribed",
 )
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 # Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
@@ -744,6 +752,160 @@ def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
     return render_prompt(show["prompts"][key], values)
 
 
+def _sound_clause(text: str) -> str:
+    """Trim trailing punctuation and capitalize the first letter for a sentence body."""
+    cleaned = text.strip().rstrip(".,; ").strip()
+    if not cleaned:
+        return cleaned
+    return cleaned[0].upper() + cleaned[1:]
+
+
+def compile_scene_sound_sentence(
+    show: dict,
+    scene: dict,
+    location: dict,
+    *,
+    include_music: bool = True,
+) -> str:
+    """Sound block from location.soundscape + scene.sound.
+
+    Separate sentences (label, bed, space, events, optional music). All connective
+    wording comes from prompts.json. Missing sound data is a hard error.
+    """
+    soundscape = location.get("soundscape")
+    if not isinstance(soundscape, dict):
+        raise SystemExit(
+            f"scene {scene.get('sceneNumber')}: location {location.get('id')!r} "
+            "is missing soundscape"
+        )
+    ambience = str(soundscape.get("ambience") or "").strip()
+    space = str(soundscape.get("space") or "").strip()
+    if not ambience or not space:
+        raise SystemExit(
+            f"scene {scene.get('sceneNumber')}: location {location.get('id')!r} "
+            "soundscape needs non-empty ambience and space"
+        )
+    sound = scene.get("sound")
+    if not isinstance(sound, dict):
+        raise SystemExit(f"scene {scene.get('sceneNumber')} is missing sound")
+    events = str(sound.get("events") or "").strip()
+    if not events:
+        raise SystemExit(f"scene {scene.get('sceneNumber')} sound.events is required")
+    bed = sound.get("bed")
+    if bed == "present":
+        bed_key = "sceneSoundBedPresent"
+    elif bed == "faint":
+        bed_key = "sceneSoundBedFaint"
+    else:
+        raise SystemExit(
+            f"scene {scene.get('sceneNumber')} sound.bed must be present or faint"
+        )
+    music_phrase = ""
+    if include_music:
+        music = sound.get("music")
+        if not isinstance(music, dict) or "kind" not in music:
+            raise SystemExit(f"scene {scene.get('sceneNumber')} sound.music is required")
+        kind = music["kind"]
+        if kind == "none":
+            music_phrase = show["prompts"]["sceneSoundMusicNone"]
+        elif kind == "described":
+            description = str(music.get("description") or "").strip()
+            if not description:
+                raise SystemExit(
+                    f"scene {scene.get('sceneNumber')} sound.music.description is required"
+                )
+            music_phrase = show_prompt(
+                show,
+                "sceneSoundMusicDescribed",
+                {"description": _sound_clause(description)},
+            )
+        else:
+            raise SystemExit(
+                f"scene {scene.get('sceneNumber')} sound.music.kind must be none or described"
+            )
+    label = show_prompt(show, "sceneSoundLabel", {})
+    bed_phrase = show_prompt(show, bed_key, {"ambience": _sound_clause(ambience)})
+    space_phrase = show_prompt(
+        show, "sceneSoundSpace", {"space": _sound_clause(space)}
+    )
+    events_phrase = show_prompt(
+        show, "sceneSoundEvents", {"events": _sound_clause(events)}
+    )
+    return show_prompt(
+        show,
+        "sceneSound",
+        {
+            "label": label,
+            "bedPhrase": bed_phrase,
+            "spacePhrase": space_phrase,
+            "eventsPhrase": events_phrase,
+            "musicPhrase": music_phrase,
+        },
+    )
+
+
+def compile_ltx_prompt(
+    show: dict,
+    scene: dict,
+    location: dict,
+    *,
+    include_music: bool = True,
+) -> str:
+    """Shared LTX prompt for plain, depth, and depth-dialogue graphs.
+
+    Visual / camera / lip-sync text first, then authored sound sentences.
+    """
+    visual = show_prompt(
+        show,
+        "sceneVideo",
+        {"videoPrompt": compile_spatial_video_prompt(scene)},
+    )
+    sound = compile_scene_sound_sentence(
+        show, scene, location, include_music=include_music
+    )
+    return f"{visual} {sound}".strip()
+
+
+def write_clip_generation_log(
+    dest: Path,
+    *,
+    prompt: str,
+    graph_name: str,
+    seed: int,
+    still_path: Path,
+    enhance_prompt: bool,
+) -> None:
+    """Record the final LTX prompt and graph beside the clip, as stills do."""
+    begin_generation_log(dest)
+    log_path = still_log_path(dest)
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    inputs = still_inputs_dir(dest)
+    inputs.mkdir(parents=True, exist_ok=True)
+    recorded: list[dict] = []
+    if still_path.is_file():
+        copied = inputs / f"ltx_start{still_path.suffix.lower() or '.png'}"
+        shutil.copy2(still_path, copied)
+        recorded.append({"role": "start still", "source": str(still_path), "file": copied.name})
+    else:
+        recorded.append({"role": "start still", "missing": True})
+    payload["clip"] = dest.name
+    payload["passes"] = [
+        {
+            "pass": "ltx",
+            "prompt": prompt,
+            "graph": graph_name,
+            "seed": seed,
+            "enhance_prompt": enhance_prompt,
+            "gemma_api": (
+                "GemmaAPITextEncode encodes the authored prompt as-is when "
+                "enhance_prompt is false; it does not rewrite or enhance the text."
+            ),
+            "images": recorded,
+        }
+    ]
+    log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def write_solid_png(path: Path, color: tuple[int, int, int], width: int = 768, height: int = 1360) -> None:
     pixel = bytes(color)
     raw = b"".join(b"\x00" + (pixel * width) for _ in range(height))
@@ -844,6 +1006,7 @@ def load_show(path: Path) -> dict:
                 "surround": require_text(backdrop, "surround", where),
                 "surroundColor": _backdrop_color(backdrop.get("surroundColor"), f"{where}.surroundColor"),
             },
+            "soundscape": loc.get("soundscape"),
             "spatial": loc.get("spatial"),
         }
     show["locations"] = cleaned_locs
@@ -937,6 +1100,7 @@ def load_show(path: Path) -> dict:
                     "camera": camera,
                     "imagePrompt": image_prompt,
                     "videoPrompt": video_prompt,
+                    "sound": scene.get("sound"),
                     "durationSeconds": duration_seconds,
                 }
             if scene.get("requiresParts") is not None:
@@ -2108,16 +2272,13 @@ def generate_show(
                     print("  depth control disabled by override", flush=True)
                 wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
                 workflow = load_json(wf_path)
-                prompt = show_prompt(
-                    show,
-                    "sceneVideo",
-                    {"videoPrompt": compile_spatial_video_prompt(scene)},
-                )
+                prompt = compile_ltx_prompt(show, scene, location)
                 seed = (
                     seed_override
                     if seed_override is not None
                     else stable_seed(show_id, episode_number, scene_number, "video")
                 )
+                enhance_prompt = False
                 graph = inject_prompt(workflow, prompt, os.environ.get("LTXV_API_KEY", ""))
                 length = inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
                 inject_seed(graph, seed)
@@ -2163,6 +2324,14 @@ def generate_show(
                 graph["10"]["inputs"]["filename_prefix"] = (
                     f"reelshort_{show_id}_e{episode_number}_s{int(scene_number):02d}"
                 )
+                write_clip_generation_log(
+                    dest,
+                    prompt=prompt,
+                    graph_name=graph_name,
+                    seed=seed,
+                    still_path=still_path,
+                    enhance_prompt=enhance_prompt,
+                )
                 print(
                     f"  Graph={graph_name} spatial={spatial} depth={use_depth} seed={seed} "
                     f"i2v={start_strength} ic={ic_strength if use_depth else 'n/a'} "
@@ -2185,7 +2354,11 @@ def generate_show(
                 for scene in episode["scenes"]
             ]
             if all(present(path) for path in ordered):
-                concat_videos(ordered, episode_mp4)
+                concat_videos(
+                    ordered,
+                    episode_mp4,
+                    loudness_target_lufs=renderer.get("episodeLoudnessTargetLufs"),
+                )
                 print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
         print(
             f"Episode {show_id}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"

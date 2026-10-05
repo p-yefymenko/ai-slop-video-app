@@ -29,12 +29,15 @@ def load_renderer_config(prompts: dict | None = None) -> dict:
     options = data.get("sceneRenderOptions") or {}
     if not isinstance(options, dict):
         options = {}
+    loudness = data.get("episodeLoudnessTargetLufs")
+    loudness_target = float(loudness) if isinstance(loudness, (int, float)) else None
     return {
         "endStill": bool(data.get("endStill", False)),
         "ltxStartStrength": float(data.get("ltxStartStrength", 0.7)),
         "ltxIcLoRAStrength": float(data.get("ltxIcLoRAStrength", 1.0)),
         "controlDepth": str(data.get("controlDepth") or "depthanything"),
         "cameraTravelWarnThreshold": float(data.get("cameraTravelWarnThreshold", 20)),
+        "episodeLoudnessTargetLufs": loudness_target,
         "sceneRenderOptions": options,
         "depthAnything": {
             "weights": str(da.get("weights") or "video_depth_anything_vits.pth"),

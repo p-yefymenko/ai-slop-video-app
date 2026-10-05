@@ -69,6 +69,13 @@ export type ShowLocation = {
    * One charged space, reused for wides, groups, and ECUs. Not a viewpoint.
    */
   promptBlock: string;
+  /**
+   * Persistent audio of this place. Required. LTX always invents audio if you
+   * omit it. ambience = the bed that is always audible here. space = acoustic
+   * character (open air, enclosed hall, reverb). Present tense. Not music
+   * unless the place truly has source music.
+   */
+  soundscape: { ambience: string; space: string };
   spatial: StageGeometry;
 };
 
@@ -172,8 +179,22 @@ export type ScriptScene = {
   /**
    * One short line and the non-spatial performance (shout, smile, strike).
    * Camera and blocking come from the timeline. Omit on silent scenes.
+   * Dialogue stays here; non-speech sounds go in `sound.events`.
    */
   videoPrompt?: string;
+  /**
+   * Required sound for every scene. LTX generates audio with every clip.
+   * events = audible action with a cause visible in the start still; add to
+   * the location bed, never restate or contradict it. On speaking scenes,
+   * non-speech only. bed = "present" | "faint" (use "faint" when speakerId
+   * is set). music = { kind: "none" } or { kind: "described", description };
+   * choose explicitly — there is no default. Distilled CFG 1: positive text only.
+   */
+  sound: {
+    events: string;
+    bed: "present" | "faint";
+    music: { kind: "none" } | { kind: "described"; description: string };
+  };
 };
 
 export type ShowEpisode = {

@@ -139,65 +139,144 @@ def assert_clips_match_for_concat(scene_files: list[Path]) -> None:
         )
 
 
-def concat_videos(scene_files: list[Path], dest: Path) -> None:
-    if not scene_files:
-        raise RuntimeError("No scene MP4s to concatenate")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    assert_clips_match_for_concat(scene_files)
-    if len(scene_files) == 1:
-        shutil.copyfile(scene_files[0], dest)
-        return
+def normalize_clip_loudness(
+    source: Path,
+    dest: Path,
+    *,
+    target_lufs: float,
+    true_peak: float = -1.5,
+    lra: float = 11.0,
+) -> None:
+    """Re-encode audio to a loudness target; copy video bitstream."""
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
         raise RuntimeError(
             "ffmpeg is missing. Re-run `pnpm run content:setup-comfy` so imageio-ffmpeg is installed."
         )
-    list_file = dest.with_suffix(".concat.txt")
-    lines = []
-    for path in scene_files:
-        escaped = path.resolve().as_posix().replace("'", r"'\''")
-        lines.append(f"file '{escaped}'")
-    list_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    filter_arg = f"loudnorm=I={target_lufs}:TP={true_peak}:LRA={lra}"
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(source),
+            "-c:v",
+            "copy",
+            "-af",
+            filter_arg,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(dest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not dest.exists() or dest.stat().st_size < 1024:
+        detail = (result.stderr or result.stdout or "").strip()[-2000:]
+        raise RuntimeError(f"Failed to loudness-normalize {source} -> {dest}\n{detail}")
+
+
+def concat_videos(
+    scene_files: list[Path],
+    dest: Path,
+    *,
+    loudness_target_lufs: float | None = None,
+) -> None:
+    if not scene_files:
+        raise RuntimeError("No scene MP4s to concatenate")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    assert_clips_match_for_concat(scene_files)
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError(
+            "ffmpeg is missing. Re-run `pnpm run content:setup-comfy` so imageio-ffmpeg is installed."
+        )
+
+    normalized_dir: Path | None = None
+    concat_inputs = list(scene_files)
     try:
-        copy = subprocess.run(
-            [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", str(dest)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if copy.returncode == 0 and dest.exists() and dest.stat().st_size > 1024:
+        if loudness_target_lufs is not None:
+            normalized_dir = dest.parent / f".loudnorm_{dest.stem}"
+            if normalized_dir.exists():
+                shutil.rmtree(normalized_dir)
+            normalized_dir.mkdir(parents=True, exist_ok=True)
+            concat_inputs = []
+            for index, path in enumerate(scene_files):
+                normalized = normalized_dir / f"{index:02d}_{path.name}"
+                normalize_clip_loudness(path, normalized, target_lufs=float(loudness_target_lufs))
+                concat_inputs.append(normalized)
+
+        if len(concat_inputs) == 1:
+            shutil.copyfile(concat_inputs[0], dest)
             return
-        encode = subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(list_file),
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-movflags",
-                "+faststart",
-                str(dest),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if encode.returncode != 0 or not dest.exists():
-            detail = (encode.stderr or copy.stderr or "").strip()[-2000:]
-            raise RuntimeError(f"Failed to concatenate scene MP4s into {dest}\n{detail}")
+
+        list_file = dest.with_suffix(".concat.txt")
+        lines = []
+        for path in concat_inputs:
+            escaped = path.resolve().as_posix().replace("'", r"'\''")
+            lines.append(f"file '{escaped}'")
+        list_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        try:
+            copy = subprocess.run(
+                [
+                    ffmpeg,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(list_file),
+                    "-c",
+                    "copy",
+                    str(dest),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if copy.returncode == 0 and dest.exists() and dest.stat().st_size > 1024:
+                return
+            encode = subprocess.run(
+                [
+                    ffmpeg,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(list_file),
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-movflags",
+                    "+faststart",
+                    str(dest),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if encode.returncode != 0 or not dest.exists():
+                detail = (encode.stderr or copy.stderr or "").strip()[-2000:]
+                raise RuntimeError(f"Failed to concatenate scene MP4s into {dest}\n{detail}")
+        finally:
+            list_file.unlink(missing_ok=True)
     finally:
-        list_file.unlink(missing_ok=True)
+        if normalized_dir is not None and normalized_dir.exists():
+            shutil.rmtree(normalized_dir, ignore_errors=True)
 
 
 def encode_rgb_frames(

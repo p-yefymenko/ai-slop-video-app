@@ -41,6 +41,10 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
           surround: "open fields",
           surroundColor: [24, 56, 40],
         },
+        soundscape: {
+          ambience: "soft wind through stone arches, distant drip of water",
+          space: "enclosed stone chamber with short dry echo",
+        },
         spatial: {
           sizeMeters: [8, 10, 4],
           landmarks: {
@@ -91,6 +95,11 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
                 },
               ],
             },
+            sound: {
+              events: "dress fabric rustles as she shifts her weight",
+              bed: "present",
+              music: { kind: "none" },
+            },
           },
         ],
       },
@@ -105,12 +114,65 @@ function messages(data: unknown) {
   return result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
 }
 
-test("accepts a show that omits the new optional fields", () => {
+test("accepts a complete minimal show", () => {
   const result = parseShowScript(minimalShow(), {
     showId: "demo-show",
     showIdLabel: "the filename stem",
   });
   assert.equal(result.ok, true);
+});
+
+test("rejects a location missing soundscape", () => {
+  const show = minimalShow();
+  delete (show.locations.room as { soundscape?: unknown }).soundscape;
+  const report = messages(show);
+  assert.match(report, /locations\.room\.soundscape/);
+});
+
+test("rejects a scene missing sound", () => {
+  const show = minimalShow();
+  delete (show.episodes[0].scenes[0] as { sound?: unknown }).sound;
+  const report = messages(show);
+  assert.match(report, /episodes\[0\]\.scenes\[0\]\.sound/);
+});
+
+test("rejects sound.music without an explicit kind", () => {
+  const show = minimalShow();
+  (show.episodes[0].scenes[0].sound as { music: unknown }).music = {};
+  const report = messages(show);
+  assert.match(report, /sound\.music/);
+});
+
+test("warns when a speaking scene does not use bed faint", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].speakerId = "ada";
+  show.episodes[0].scenes[0].sound.bed = "present";
+  show.episodes[0].scenes[0].videoPrompt = 'DIALOGUE: "Hello."';
+  const result = parseShowScript(show, {
+    showId: "demo-show",
+    showIdLabel: "the filename stem",
+  });
+  assert.equal(result.ok, true);
+  const warning = result.issues.find(
+    (issue) => issue.severity === "warning" && issue.path.endsWith("sound.bed"),
+  );
+  assert.ok(warning, "expected bed warning");
+  assert.match(warning.message, /faint/);
+});
+
+test("warns when music none conflicts with ambience music words", () => {
+  const show = minimalShow();
+  show.locations.room.soundscape.ambience = "soft choir music under the arches";
+  const result = parseShowScript(show, {
+    showId: "demo-show",
+    showIdLabel: "the filename stem",
+  });
+  assert.equal(result.ok, true);
+  const warning = result.issues.find(
+    (issue) => issue.severity === "warning" && issue.path.endsWith("sound.music"),
+  );
+  assert.ok(warning, "expected music conflict warning");
+  assert.match(warning.message, /choir|music/);
 });
 
 test("the iron bride script matches its filename", () => {
@@ -123,8 +185,7 @@ test("the iron bride script matches its filename", () => {
     const leftover = result.issues.filter(
       (issue) =>
         issue.severity !== "warning" &&
-        !issue.message.includes("keep at least 1.5m from every mesh") &&
-        !issue.message.includes("size and appearance belong on a location that has people"),
+        !issue.message.includes("keep at least 1.5m from every mesh"),
     );
     if (leftover.length > 0) {
       const report = leftover.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
@@ -137,6 +198,15 @@ test("the iron bride script matches its filename", () => {
     issue.message.includes("high camera travel+rotation score"),
   );
   assert.ok(travelWarnings.length >= 1, "expected at least one high-travel warning");
+  for (const location of Object.values(result.script.locations)) {
+    assert.ok(location.soundscape?.ambience);
+    assert.ok(location.soundscape?.space);
+  }
+  for (const scene of result.script.episodes[0]!.scenes) {
+    assert.ok(scene.sound?.events);
+    assert.ok(scene.sound?.bed === "present" || scene.sound?.bed === "faint");
+    assert.ok(scene.sound?.music?.kind === "none" || scene.sound?.music?.kind === "described");
+  }
 });
 
 test("cameraTravelScore matches Gate 3b scene 01 figure (~39.5)", () => {
