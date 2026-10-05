@@ -805,6 +805,39 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertTrue(thin[0].startswith("scene 12 frame start character sela part feet visible pixels 20"))
         self.assertIn("448", thin[0])
 
+    def test_scene_text_naming_a_hidden_part_fails_previs(self) -> None:
+        from spatial_previs import mentioned_part_errors
+
+        scene = {
+            "sceneNumber": 3,
+            "characterIds": ["sela"],
+            "imagePrompt": "Her mouth stays closed. Both hands grip the collar.",
+            "sound": {"events": "the collar scrapes as her grip tightens"},
+        }
+        stats = {
+            "sela": {
+                "face": {"pixels": 400, "width": 300},
+                "hands": {"pixels": 0, "width": 0},
+            }
+        }
+        errors = mentioned_part_errors(scene, "start", stats)
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(errors[0].startswith("scene 3 frame start imagePrompt names hands ('hands', 'grip')"))
+        self.assertTrue(errors[1].startswith("scene 3 frame start sound.events names hands ('grip')"))
+
+        stats["sela"]["hands"] = {"pixels": 300, "width": 40}
+        self.assertEqual(mentioned_part_errors(scene, "start", stats), [])
+
+    def test_mentioned_parts_skip_dialogue_and_teeth(self) -> None:
+        from body_parts import mentioned_parts
+
+        self.assertEqual(
+            mentioned_parts('PERFORMANCE: teeth bared. DIALOGUE: "Give me your hand."'),
+            {"face": ["teeth"]},
+        )
+        self.assertEqual(mentioned_parts("breath through clenched teeth"), {"face": ["teeth"]})
+        self.assertEqual(mentioned_parts("She faces the gate."), {})
+
     def test_part_id_draw_keeps_depth_and_flat_ids(self) -> None:
         from body_parts import decode_part_buffer, part_id_colors
         from clay_gpu import ClayBatch, raster_clay

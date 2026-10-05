@@ -80,6 +80,8 @@ An empty location draws its one mesh, and the camera stays where it was authored
 
 Output is 768×1360. The playblast is 8 fps. Per scene: `output/previs/<show>/<episode>/scene_XX/blockout.mp4`, `start.png`, `end.png`, and `guides/`. Every scene is joined into `output/previs/<show>/<episode>/blockout.mp4`. A scene still missing leaves the episode file untouched.
 
+Previs fails a scene when its `imagePrompt`, `videoPrompt` (quoted dialogue excluded), or `sound.events` names a body part (`mentioned_parts` in `body_parts.py`: "hands", "grip", "feet", "mouth", …) that no character in `characterIds` shows on the **start** frame. The still is drawn from that frame, so LTX would otherwise invent the part mid-shot (hands popping in at low effective frame rate). Explicit `requiresParts` still checks every playblast frame.
+
 Guides are written for the **start** and **end** of every scene (end guides are for review; `content:frames` does not generate end stills when `endStill` is false). Additional clip-rate guides:
 
 | Guide | What it is |

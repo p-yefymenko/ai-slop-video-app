@@ -843,7 +843,7 @@
           "characterIds": [
             "sela"
           ],
-          "imagePrompt": "Sela wears a soot-stained ivory wrap and a plain iron bridal collar. Her mouth stays closed. Both hands grip the collar.",
+          "imagePrompt": "Sela wears a soot-stained ivory wrap and a plain iron bridal collar. Her mouth stays closed.",
           "timeRangeSeconds": [
             4,
             6
@@ -867,7 +867,7 @@
             ]
           },
           "sound": {
-            "events": "the iron collar scrapes softly as her grip tightens",
+            "events": "the iron collar creaks softly with each shallow breath",
             "bed": "present",
             "music": {
               "kind": "none"

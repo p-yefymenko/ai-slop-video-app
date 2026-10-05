@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 
 BODY_PARTS = (
@@ -45,6 +47,37 @@ PART_DEBUG_COLORS = {
 
 LTX_WIDTH = 448
 LTX_MIN_PART_WIDTH = 5
+
+# Anatomy words in scene text that need that part on screen in the start still.
+# Wardrobe words (boots, gloves, collar) stay out; attributes gate those by part.
+# "clench" stays out: it is as often teeth or jaw as fists.
+_PART_WORDS = {
+    "hair": r"hair",
+    "face": r"(?:her|his|their|its|a|the)\s+face|mouth|lips?|teeth|jaw|cheeks?|chin|nose|forehead",
+    "eyes": r"eyes?",
+    "neck": r"neck|throat|nape",
+    "torso": r"chest|torso|belly|stomach|waist",
+    "arms": r"arms?|forearms?|elbows?",
+    "hands": r"hands?|fists?|fingers?|fingertips?|palms?|knuckles?|wrists?"
+    r"|grip(?:s|ped|ping)?|clutch(?:es|ed|ing)?",
+    "legs": r"legs?|knees?|thighs?|shins?",
+    "feet": r"foot|feet|barefoot|heels?|toes?",
+}
+_PART_PATTERNS = {
+    part: re.compile(rf"\b(?:{words})\b", re.IGNORECASE) for part, words in _PART_WORDS.items()
+}
+_QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”")
+
+
+def mentioned_parts(text: str) -> dict[str, list[str]]:
+    """Body part -> the words that name it. Quoted dialogue is not a shot description."""
+    unquoted = _QUOTED.sub(" ", text or "")
+    found: dict[str, list[str]] = {}
+    for part, pattern in _PART_PATTERNS.items():
+        words = [match.group(0) for match in pattern.finditer(unquoted)]
+        if words:
+            found[part] = words
+    return found
 
 
 def _collapse(raw: object) -> str:

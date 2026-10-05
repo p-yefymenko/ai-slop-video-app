@@ -1812,6 +1812,51 @@ def required_part_errors(
     return errors
 
 
+def _scene_text_fields(scene: dict) -> dict[str, str]:
+    """Text LTX and Qwen read as things on screen."""
+    sound = scene.get("sound") if isinstance(scene.get("sound"), dict) else {}
+    return {
+        "imagePrompt": str(scene.get("imagePrompt") or ""),
+        "videoPrompt": str(scene.get("videoPrompt") or ""),
+        "sound.events": str(sound.get("events") or ""),
+    }
+
+
+def mentioned_part_errors(
+    scene: dict,
+    frame_label: str,
+    stats: dict[str, dict[str, dict[str, int]]],
+) -> list[str]:
+    """Scene text names a body part no one in the frame shows.
+
+    The start still is drawn from the previs. A part it lacks is invented by
+    LTX mid-shot, which reads as limbs popping into frame.
+    """
+    from body_parts import LTX_MIN_PART_WIDTH, ltx_part_width, mentioned_parts
+
+    def shown(part: str) -> bool:
+        for character_id in scene.get("characterIds") or []:
+            info = ((stats.get(str(character_id)) or {}).get(part)) or {}
+            width = ltx_part_width(int(info.get("width") or 0), PROXY_WIDTH)
+            if int(info.get("pixels") or 0) > 0 and width >= LTX_MIN_PART_WIDTH:
+                return True
+        return False
+
+    errors: list[str] = []
+    number = scene.get("sceneNumber")
+    for field, text in _scene_text_fields(scene).items():
+        for part, words in mentioned_parts(text).items():
+            if shown(part):
+                continue
+            errors.append(
+                f"scene {number} frame {frame_label} {field} names {part} "
+                f"({', '.join(repr(word) for word in words)}) but no character in "
+                f"characterIds shows {part}. Reframe the camera, change the blocking "
+                f"(stance, hand targets), or remove the words."
+            )
+    return errors
+
+
 # Name a landmark when it covers at least this much of the frame. Overridden by
 # prompts.json landmarkMinScreenFraction when that file is loaded.
 LANDMARK_MIN_SCREEN_FRACTION = 0.02
@@ -2806,6 +2851,8 @@ def render_blocked_scene(
         if label is not None or needs_required:
             stats = render_part_visibility(show, episode, scene, time_seconds)
             part_errors.extend(required_part_errors(scene, frame_label, stats))
+        if label == "start":
+            part_errors.extend(mentioned_part_errors(scene, frame_label, stats))
         if label is None:
             continue
         _camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
