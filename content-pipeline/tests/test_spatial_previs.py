@@ -22,7 +22,6 @@ from spatial_previs import (  # noqa: E402
     character_facing_direction,
     character_pose_joints,
     face_points_at_camera,
-    compile_spatial_video_prompt,
     episode_character_state,
     facing_yaw_degrees,
     project,
@@ -238,15 +237,6 @@ class SpatialPrevisTests(unittest.TestCase):
             mid["position"][0],
             (first["position"][0] + last["position"][0]) / 2.0,
         )
-
-    def test_prompt_compiler_does_not_expose_coordinates(self) -> None:
-        scene = next(item for item in self.episode["scenes"] if item.get("speakerId"))
-        prompt = compile_spatial_video_prompt(scene)
-        self.assertIn("visibly lip-syncs every spoken word", prompt)
-        self.assertNotIn("established mark", prompt)
-        self.assertNotIn("CAMERA:", prompt)
-        self.assertNotIn("VISUAL:", prompt)
-        self.assertNotIn("[", prompt)
 
     def test_standoff_uses_reciprocal_screen_direction(self) -> None:
         scene = next(
@@ -805,38 +795,71 @@ class SpatialPrevisTests(unittest.TestCase):
         self.assertTrue(thin[0].startswith("scene 12 frame start character sela part feet visible pixels 20"))
         self.assertIn("448", thin[0])
 
-    def test_scene_text_naming_a_hidden_part_fails_previs(self) -> None:
-        from spatial_previs import mentioned_part_errors
+    def test_performance_parts_must_be_on_screen(self) -> None:
+        from spatial_previs import performance_errors
 
         scene = {
             "sceneNumber": 3,
             "characterIds": ["sela"],
-            "imagePrompt": "Her mouth stays closed. Both hands grip the collar.",
-            "sound": {"events": "the collar scrapes as her grip tightens"},
+            "performances": {"sela": {"action": "grips the collar", "parts": ["hands", "neck"]}},
         }
         stats = {
             "sela": {
-                "face": {"pixels": 400, "width": 300},
-                "hands": {"pixels": 0, "width": 0},
+                "hands": {"pixels": 0, "width": 0, "height": 0},
+                "neck": {"pixels": 900, "width": 120, "height": 40},
+                "face": {"pixels": 0, "width": 0, "height": 0},
             }
         }
-        errors = mentioned_part_errors(scene, "start", stats)
-        self.assertEqual(len(errors), 2)
-        self.assertTrue(errors[0].startswith("scene 3 frame start imagePrompt names hands ('hands', 'grip')"))
-        self.assertTrue(errors[1].startswith("scene 3 frame start sound.events names hands ('grip')"))
+        errors = performance_errors(scene, "start", stats)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("performances.sela.parts names hands", errors[0])
 
-        stats["sela"]["hands"] = {"pixels": 300, "width": 40}
-        self.assertEqual(mentioned_part_errors(scene, "start", stats), [])
+    def test_expression_is_required_exactly_when_the_face_is_readable(self) -> None:
+        from spatial_previs import performance_errors
 
-    def test_mentioned_parts_skip_dialogue_and_teeth(self) -> None:
-        from body_parts import mentioned_parts
+        readable = {"sela": {"face": {"pixels": 40000, "width": 300, "height": 300}}}
+        tiny = {"sela": {"face": {"pixels": 6, "width": 3, "height": 3}}}
+        scene = {
+            "sceneNumber": 3,
+            "characterIds": ["sela"],
+            "performances": {"sela": {"action": "stands still", "parts": ["face"]}},
+        }
+        missing = performance_errors(scene, "start", readable)
+        self.assertTrue(any("expression is missing" in error for error in missing))
+        scene["performances"]["sela"]["expression"] = "jaw set, eyes unblinking"
+        self.assertFalse(any("expression" in error for error in performance_errors(scene, "start", readable)))
+        unread = performance_errors(scene, "start", tiny)
+        self.assertTrue(any("expression is set, but the face is not readable" in error for error in unread))
 
-        self.assertEqual(
-            mentioned_parts('PERFORMANCE: teeth bared. DIALOGUE: "Give me your hand."'),
-            {"face": ["teeth"]},
-        )
-        self.assertEqual(mentioned_parts("breath through clenched teeth"), {"face": ["teeth"]})
-        self.assertEqual(mentioned_parts("She faces the gate."), {})
+    def test_speaker_face_must_be_on_screen(self) -> None:
+        from spatial_previs import performance_errors
+
+        scene = {
+            "sceneNumber": 8,
+            "characterIds": ["tomas"],
+            "speakerId": "tomas",
+            "performances": {"tomas": {"action": "leans in", "parts": ["torso"]}},
+        }
+        stats = {
+            "tomas": {
+                "torso": {"pixels": 900, "width": 120, "height": 200},
+                "face": {"pixels": 0, "width": 0, "height": 0},
+            }
+        }
+        errors = performance_errors(scene, "start", stats)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("speakerId tomas: the face is not on screen", errors[0])
+
+    def test_body_sound_source_must_be_on_screen(self) -> None:
+        from spatial_previs import sound_source_errors
+
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        hidden = {"sela": {"neck": {"pixels": 0, "width": 0, "height": 0}}}
+        errors = sound_source_errors(self.show, self.episode, scene, "start", 4.0, hidden)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("sound.events[0].source: sela's neck is not on screen", errors[0])
+        shown = {"sela": {"neck": {"pixels": 900, "width": 120, "height": 40}}}
+        self.assertEqual(sound_source_errors(self.show, self.episode, scene, "start", 4.0, shown), [])
 
     def test_part_id_draw_keeps_depth_and_flat_ids(self) -> None:
         from body_parts import decode_part_buffer, part_id_colors

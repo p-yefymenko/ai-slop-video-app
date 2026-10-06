@@ -85,7 +85,9 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             storyBeat: "Ada waits.",
             characterIds: ["ada"],
             timeRangeSeconds: [0, 4],
-            videoPrompt: "PERFORMANCE: Ada stands still, breathing slowly, then shifts her weight once.",
+            performances: {
+              ada: { action: "stands still, then shifts her weight once", parts: ["legs"] },
+            },
             camera: {
               keyframes: [
                 {
@@ -97,7 +99,12 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
               ],
             },
             sound: {
-              events: "dress fabric rustles as she shifts her weight",
+              events: [
+                {
+                  text: "dress fabric rustles as she shifts her weight",
+                  source: { characterId: "ada", part: "legs" },
+                },
+              ],
               bed: "present",
               music: { kind: "none" },
             },
@@ -148,7 +155,7 @@ test("warns when a speaking scene does not use bed faint", () => {
   const show = minimalShow();
   show.episodes[0].scenes[0].speakerId = "ada";
   show.episodes[0].scenes[0].sound.bed = "present";
-  show.episodes[0].scenes[0].videoPrompt = 'DIALOGUE: "Hello."';
+  show.episodes[0].scenes[0].dialogue = { line: "Hello.", delivery: "soft" };
   const result = parseShowScript(show, {
     showId: "demo-show",
     showIdLabel: "the filename stem",
@@ -239,6 +246,10 @@ test("rejects a prop track whose id was never declared", () => {
 test("accepts an empty landmark on a location with no people", () => {
   const show = minimalShow();
   show.episodes[0].scenes[0].characterIds = [];
+  show.episodes[0].scenes[0].performances = {};
+  show.episodes[0].scenes[0].sound.events = [
+    { text: "the bench creaks as it settles", source: { landmarkId: "bench" } },
+  ];
   show.episodes[0].spatialTimeline.characterTracks = {};
   show.locations.room.spatial.landmarks.bench = {};
   const result = parseShowScript(show, {
@@ -300,19 +311,80 @@ test("rejects a speaker who is not on camera", () => {
   assert.match(report, /not in characterIds/);
 });
 
-test("rejects a scene with people and no videoPrompt", () => {
+test("rejects a character on camera without a performance", () => {
   const show = minimalShow();
-  delete show.episodes[0].scenes[0].videoPrompt;
+  show.episodes[0].scenes[0].performances = {};
   const report = messages(show);
-  assert.match(report, /scenes\[0\]\.videoPrompt: required when characterIds is not empty/);
+  assert.match(report, /scenes\[0\]\.performances\.ada: every character on camera needs a performance/);
 });
 
-test("accepts a scene with no people and no videoPrompt", () => {
+test("rejects a performance for someone not in the shot", () => {
   const show = minimalShow();
-  delete show.episodes[0].scenes[0].videoPrompt;
-  show.episodes[0].scenes[0].characterIds = [];
-  const result = parseShowScript(show);
-  assert.equal(result.ok, true);
+  show.episodes[0].scenes[0].performances.bram = { action: "waits", parts: ["torso"] };
+  const report = messages(show);
+  assert.match(report, /scenes\[0\]\.performances\.bram: "bram" is not in characterIds/);
+});
+
+test("rejects a performance without parts or with an unknown part", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].performances.ada.parts = [];
+  assert.match(messages(show), /parts needs at least one body part/);
+  show.episodes[0].scenes[0].performances.ada.parts = ["toes" as "feet"];
+  assert.match(messages(show), /performances\.ada\.parts\[0\]: unknown part id "toes"/);
+});
+
+test("rejects the removed free-text prompt fields", () => {
+  const show = minimalShow();
+  (show.episodes[0].scenes[0] as { videoPrompt?: string }).videoPrompt = "PERFORMANCE: waits.";
+  assert.match(messages(show), /videoPrompt/);
+});
+
+test("requires dialogue exactly when someone speaks", () => {
+  const speaking = minimalShow();
+  speaking.episodes[0].scenes[0].speakerId = "ada";
+  assert.match(messages(speaking), /scenes\[0\]\.dialogue: required when speakerId is set/);
+  const silent = minimalShow();
+  silent.episodes[0].scenes[0].dialogue = { line: "Hello.", delivery: "soft" };
+  assert.match(messages(silent), /scenes\[0\]\.dialogue: dialogue needs a speakerId/);
+});
+
+test("rejects a body sound from a part the performance does not move", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].sound.events[0].source = { characterId: "ada", part: "face" };
+  const report = messages(show);
+  assert.match(report, /source\.part: ada's face makes this sound, but performances\.ada\.parts does not move it/);
+});
+
+test("lets a speaker's face make a sound", () => {
+  const show = minimalShow();
+  const scene = show.episodes[0].scenes[0];
+  scene.speakerId = "ada";
+  scene.sound.bed = "faint";
+  scene.dialogue = { line: "Hello.", delivery: "soft" };
+  scene.sound.events[0] = { text: "a sharp breath before the word", source: { characterId: "ada", part: "face" } };
+  assert.equal(parseShowScript(show).ok, true);
+});
+
+test("rejects sound sources that are not in the scene", () => {
+  const show = minimalShow();
+  const events = show.episodes[0].scenes[0].sound.events;
+  events.push({ text: "wood creaks under a weight", source: { landmarkId: "altar" } });
+  events.push({ text: "a lantern rattles on its hook", source: { propId: "lantern" } });
+  events.push({ text: "a heavy step on stone", source: { characterId: "bram", part: "feet" } });
+  const report = messages(show);
+  assert.match(report, /events\[1\]\.source\.landmarkId: unknown landmark "altar"/);
+  assert.match(report, /events\[2\]\.source\.propId: prop "lantern" has no propTracks entry/);
+  assert.match(report, /events\[3\]\.source\.characterId: "bram" is not in characterIds/);
+});
+
+test("accepts a world shot with no people and a landmark sound", () => {
+  const show = minimalShow();
+  const scene = show.episodes[0].scenes[0];
+  scene.characterIds = [];
+  scene.performances = {};
+  scene.motion = "dust drifts through a shaft of light";
+  scene.sound.events = [{ text: "the bench creaks as it settles", source: { landmarkId: "bench" } }];
+  assert.equal(parseShowScript(show).ok, true);
 });
 
 test("rejects a prefab id on a landmark", () => {
@@ -397,4 +469,10 @@ test("rejects a show id that does not match the file", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.issues[0].message, /other-show/);
+});
+
+test("rejects visual text that names a character", () => {
+  const show = minimalShow();
+  show.episodes[0].scenes[0].performances.ada.action = "stands still, watching Ada's reflection";
+  assert.match(messages(show), /performances\.ada\.action: names character "ada"/);
 });

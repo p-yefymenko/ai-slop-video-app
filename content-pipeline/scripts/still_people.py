@@ -89,6 +89,13 @@ def _load_attributes(character: dict) -> list[dict]:
     return loaded
 
 
+def _expression_attributes(scene: dict, character_id: str) -> list[dict]:
+    """The scene's expression is face-tagged text, sent only when the face carries it."""
+    performance = (scene.get("performances") or {}).get(str(character_id)) or {}
+    text = _collapse(performance.get("expression"))
+    return [{"text": text, "parts": ["face"]}] if text else []
+
+
 def _shot_label(scene: dict, time_seconds: float, shot_label: str | None) -> str:
     if shot_label in ("start", "end"):
         return shot_label
@@ -216,6 +223,16 @@ def _part_carries(
 ) -> bool:
     height = int(stat.get("height") or 0)
     return height >= min_height and _part_share(stat, frame_area) >= min_share
+
+
+def face_carries_text(stat: dict) -> bool:
+    """Same gate a still uses for face-tagged attributes, on a full previs frame."""
+    return _part_carries(
+        stat,
+        load_part_min_pixel_height(),
+        load_part_min_screen_fraction(),
+        _frame_area(),
+    )
 
 
 def _attribute_clause(
@@ -507,7 +524,8 @@ def gather_visible_people(
                 "x1": float(xs.max()),
                 "pixel_height": int(ys.max() - ys.min() + 1),
                 "body": _collapse(character.get("body")),
-                "attributes": _load_attributes(character),
+                "attributes": _load_attributes(character)
+                + _expression_attributes(scene, character_id),
                 "part_stats": part_stats.get(str(character_id), empty_part_stats()),
                 "frame_width": float(PROXY_WIDTH),
                 "frame_height": float(PROXY_HEIGHT),

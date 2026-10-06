@@ -57,7 +57,6 @@ from spatial_previs import (
     PROXY_WIDTH,
     camera_at,
     camera_moves,
-    compile_spatial_video_prompt,
     describe_landmarks,
     generate_episode_previs,
     landmark_screen_fractions,
@@ -75,6 +74,11 @@ PROMPT_KEYS = (
     "spatialFaces",
     "spatialBackdrop",
     "sceneVideo",
+    "sceneDialogue",
+    "scenePerson",
+    "scenePerformance",
+    "scenePerformanceExpression",
+    "sceneMotion",
     "sceneCameraLocked",
     "sceneSound",
     "sceneSoundLabel",
@@ -790,7 +794,11 @@ def compile_scene_sound_sentence(
     sound = scene.get("sound")
     if not isinstance(sound, dict):
         raise SystemExit(f"scene {scene.get('sceneNumber')} is missing sound")
-    events = str(sound.get("events") or "").strip()
+    events = "; ".join(
+        _clause(event.get("text"))
+        for event in sound.get("events") or []
+        if isinstance(event, dict) and _clause(event.get("text"))
+    )
     if not events:
         raise SystemExit(f"scene {scene.get('sceneNumber')} sound.events is required")
     bed = sound.get("bed")
@@ -846,21 +854,99 @@ def compile_scene_sound_sentence(
     )
 
 
+def _clause(text: object) -> str:
+    """Authored text as a clause: collapsed whitespace, no trailing punctuation."""
+    return " ".join(str(text or "").split()).rstrip(".,;: ")
+
+
+def still_places(still_path: Path) -> dict[str, str]:
+    """characterId -> the place words the start still used for that person."""
+    log_path = still_log_path(still_path)
+    if not log_path.is_file():
+        return {}
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    for item in payload.get("passes") or []:
+        people = item.get("people") if isinstance(item, dict) else None
+        if isinstance(people, list):
+            return {
+                str(person["characterId"]): str(person["place"])
+                for person in people
+                if isinstance(person, dict) and person.get("characterId") and person.get("place")
+            }
+    return {}
+
+
+def compile_scene_action(show: dict, scene: dict, places: dict[str, str]) -> str:
+    """Dialogue, each performance, non-character motion, then a locked camera.
+
+    People are named the way the start still placed and described them, so LTX
+    can find them in the first frame. Character ids mean nothing to it.
+    """
+    number = scene.get("sceneNumber")
+
+    def person(character_id: str) -> str:
+        if character_id not in places:
+            raise SystemExit(
+                f"scene {number}: the start still log does not place {character_id}. "
+                "Rerun content:frames for this scene."
+            )
+        body = _clause(show["characters"][character_id]["body"])
+        return show_prompt(show, "scenePerson", {"place": places[character_id], "body": body})
+
+    parts: list[str] = []
+    dialogue = scene.get("dialogue")
+    if dialogue:
+        parts.append(
+            show_prompt(
+                show,
+                "sceneDialogue",
+                {
+                    "person": person(str(scene["speakerId"])),
+                    "delivery": _clause(dialogue["delivery"]),
+                    "line": " ".join(str(dialogue["line"]).split()),
+                },
+            )
+        )
+    performances = scene.get("performances") or {}
+    for character_id in scene.get("characterIds") or []:
+        performance = performances[character_id]
+        parts.append(
+            show_prompt(
+                show,
+                "scenePerformance",
+                {"person": person(character_id), "action": _clause(performance["action"])},
+            )
+        )
+        if performance.get("expression"):
+            parts.append(
+                show_prompt(
+                    show,
+                    "scenePerformanceExpression",
+                    {"expression": _clause(performance["expression"])},
+                )
+            )
+    if scene.get("motion"):
+        parts.append(show_prompt(show, "sceneMotion", {"motion": _clause(scene["motion"])}))
+    if not camera_moves(scene):
+        parts.append(show_prompt(show, "sceneCameraLocked", {}))
+    return " ".join(parts)
+
+
 def compile_ltx_prompt(
     show: dict,
     scene: dict,
     location: dict,
     *,
+    places: dict[str, str] | None = None,
     include_music: bool = True,
 ) -> str:
     """Shared LTX prompt for plain, depth, and depth-dialogue graphs.
 
-    Visual / camera / lip-sync text first, then authored sound sentences.
+    Action first (dialogue, performances, motion, camera), then authored sound.
+    `places` comes from the start still log; scenes with people need it.
     """
-    motion = compile_spatial_video_prompt(scene)
-    if not camera_moves(scene):
-        motion = f"{motion} {show_prompt(show, 'sceneCameraLocked', {})}".strip()
-    visual = show_prompt(show, "sceneVideo", {"videoPrompt": motion})
+    action = compile_scene_action(show, scene, places or {})
+    visual = show_prompt(show, "sceneVideo", {"action": action})
     sound = compile_scene_sound_sentence(
         show, scene, location, include_music=include_music
     )
@@ -1061,14 +1147,6 @@ def load_show(path: Path) -> dict:
                     )
             else:
                 speaker_id = None
-            image_prompt = str(scene.get("imagePrompt") or "").strip()
-            video_prompt = str(scene.get("videoPrompt") or "")
-            if character_ids and not video_prompt.strip():
-                raise SystemExit(
-                    f"{scene_label} has people but no videoPrompt. LTX invents motion "
-                    "it is not given; describe what each visible person does, even "
-                    "standing still and breathing."
-                )
             if scene.get("motionMode"):
                 raise SystemExit(
                     f"{scene_label} still has motionMode; every shot is generated by LTX"
@@ -1105,8 +1183,9 @@ def load_show(path: Path) -> dict:
                     "speakerId": speaker_id,
                     "timeRangeSeconds": [float(time_range[0]), float(time_range[1])],
                     "camera": camera,
-                    "imagePrompt": image_prompt,
-                    "videoPrompt": video_prompt,
+                    "performances": scene.get("performances") or {},
+                    "dialogue": scene.get("dialogue"),
+                    "motion": scene.get("motion"),
                     "sound": scene.get("sound"),
                     "durationSeconds": duration_seconds,
                 }
@@ -2279,7 +2358,9 @@ def generate_show(
                     print("  depth control disabled by override", flush=True)
                 wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
                 workflow = load_json(wf_path)
-                prompt = compile_ltx_prompt(show, scene, location)
+                prompt = compile_ltx_prompt(
+                    show, scene, location, places=still_places(still_path)
+                )
                 seed = (
                     seed_override
                     if seed_override is not None

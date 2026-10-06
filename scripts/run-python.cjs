@@ -23,6 +23,24 @@ if (!python) {
   process.exit(1);
 }
 
+// The ShowScript schema is the one strict gate. Every pipeline stage reads the
+// scripts, so none starts on a script that fails it. Test runs (-m) skip this.
+if (script.startsWith("content-pipeline/scripts/")) {
+  const validation = spawnSync("pnpm", ["--silent", "run", "content:validate"], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    shell: process.platform === "win32",
+  });
+  if (validation.error) {
+    console.error(validation.error.message);
+    process.exit(1);
+  }
+  if (validation.status !== 0) {
+    console.error("Show scripts failed validation; fix them before running this stage.");
+    process.exit(validation.status ?? 1);
+  }
+}
+
 const env = { ...process.env, PYTHONUNBUFFERED: "1" };
 const result = spawnSync(python, [script, ...extraArgs], {
   stdio: "inherit",

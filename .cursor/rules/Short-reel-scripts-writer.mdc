@@ -92,7 +92,7 @@ export type CharacterSpatialKeyframe = {
   /** Enemy, ally, or landmark they eye. Reciprocal in a standoff. */
   lookAtId?: string;
   /**
-   * Proxy body height only. Strike, fall, and transform live in `videoPrompt`.
+   * Proxy body height only. Strike, fall, and transform live in the scene's `performances`.
    */
   stance: "standing" | "sitting" | "kneeling" | "walking";
   leftHandTargetId?: string;
@@ -171,34 +171,28 @@ export type ScriptScene = {
   /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
   /**
-   * Wardrobe, expression, and atmosphere for this world's rank and mood.
-   * Nameplates and captions are not this field. Omit when location + proxy
-   * are enough. Never restate position, facing, eyeline, framing, or location geometry.
-   * Name a body part (hands, grip, fist, feet, mouth, eyes…) here, in
-   * videoPrompt, or in sound.events only when the camera shows it at the start
-   * of the shot; previs fails otherwise.
+   * One entry per characterId, no more; `{}` when no one is on camera.
+   * LTX invents motion it is not given (hands drifting in, touching props),
+   * so even stillness is written as an action. Previs checks every entry
+   * against the render of the start frame.
    */
-  imagePrompt?: string;
+  performances: Record<string, ScenePerformance>;
+  /** The spoken line. Required exactly when `speakerId` is set. */
+  dialogue?: { line: string; delivery: string };
   /**
-   * Required whenever characterIds is not empty, silent scenes included:
-   * `PERFORMANCE: …` says what each visible person does for the whole take,
-   * even "stands still, breathing slowly". LTX invents motion it is not given
-   * (hands drifting in, touching props). Positive text only: say what happens,
-   * not what must not. Add one short DIALOGUE line on speaking scenes.
-   * Camera and blocking come from the timeline. Optional on world/VFX shots.
-   * Dialogue stays here; non-speech sounds go in `sound.events`.
+   * Motion that belongs to no character: fire, smoke, sparks, cloth, light.
+   * Camera motion comes from the keyframes.
    */
-  videoPrompt?: string;
+  motion?: string;
   /**
    * Required sound for every scene. LTX generates audio with every clip.
-   * events = audible action with a cause visible in the start still; add to
-   * the location bed, never restate or contradict it. On speaking scenes,
-   * non-speech only. bed = "present" | "faint" (use "faint" when speakerId
-   * is set). music = { kind: "none" } or { kind: "described", description };
-   * choose explicitly — there is no default. Distilled CFG 1: positive text only.
+   * bed = "present" | "faint" (use "faint" when speakerId is set).
+   * music = { kind: "none" } or { kind: "described", description }; choose
+   * explicitly, there is no default. Distilled CFG 1: positive text only.
    */
   sound: {
-    events: string;
+    /** At least one. Add to the location bed; never restate or contradict it. */
+    events: SoundEvent[];
     bed: "present" | "faint";
     music: { kind: "none" } | { kind: "described"; description: string };
   };
@@ -207,6 +201,42 @@ export type ScriptScene = {
    * reaching). Previs fails any playblast frame where one is missing.
    */
   requiresParts?: { characterId: string; part: BodyPart }[];
+};
+
+export type ScenePerformance = {
+  /**
+   * Visible motion for the whole take, positive and present tense:
+   * "slowly lifts her chin, jaw tightening". Never name a character; LTX only
+   * sees the frame. Say "him" / "her" and let lookAtId set the gaze.
+   */
+  action: string;
+  /**
+   * Body parts the action moves, at least one. Previs fails when one is off
+   * screen in the start frame, because LTX would invent it mid-shot.
+   */
+  parts: BodyPart[];
+  /**
+   * What the face shows, as visible cues, not a label: "fear held under
+   * defiance: jaw set, eyes glassy but unblinking", not "sad". Previs requires
+   * it exactly when the face is readable in the start frame.
+   */
+  expression?: string;
+};
+
+export type SoundEvent = {
+  /** The audible action, present tense. Dialogue is not an event. */
+  text: string;
+  /**
+   * What makes it. Previs fails when the source is not on screen in the start frame.
+   * A character part (or wardrobe worn on it) must be in that character's
+   * performance parts, so the sound has motion behind it: a breath from a
+   * silent face needs "face" in parts and an action that moves the mouth.
+   * A speaker's face counts as moving.
+   */
+  source:
+    | { characterId: string; part: BodyPart }
+    | { landmarkId: string }
+    | { propId: string };
 };
 
 export type BodyPart =

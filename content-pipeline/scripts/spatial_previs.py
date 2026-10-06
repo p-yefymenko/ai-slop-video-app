@@ -1812,48 +1812,124 @@ def required_part_errors(
     return errors
 
 
-def _scene_text_fields(scene: dict) -> dict[str, str]:
-    """Text LTX and Qwen read as things on screen."""
-    sound = scene.get("sound") if isinstance(scene.get("sound"), dict) else {}
-    return {
-        "imagePrompt": str(scene.get("imagePrompt") or ""),
-        "videoPrompt": str(scene.get("videoPrompt") or ""),
-        "sound.events": str(sound.get("events") or ""),
-    }
+def _part_shown(
+    stats: dict[str, dict[str, dict[str, int]]],
+    character_id: str,
+    part: str,
+) -> bool:
+    """Visible and at least LTX_MIN_PART_WIDTH wide at LTX's output width."""
+    from body_parts import LTX_MIN_PART_WIDTH, ltx_part_width
+
+    info = ((stats.get(str(character_id)) or {}).get(part)) or {}
+    width = ltx_part_width(int(info.get("width") or 0), PROXY_WIDTH)
+    return int(info.get("pixels") or 0) > 0 and width >= LTX_MIN_PART_WIDTH
 
 
-def mentioned_part_errors(
+def performance_errors(
     scene: dict,
     frame_label: str,
     stats: dict[str, dict[str, dict[str, int]]],
 ) -> list[str]:
-    """Scene text names a body part no one in the frame shows.
+    """Check each performance against what the camera shows.
 
-    The start still is drawn from the previs. A part it lacks is invented by
-    LTX mid-shot, which reads as limbs popping into frame.
+    The still is drawn from this frame. A part the action moves but the frame
+    lacks is invented by LTX mid-shot. A readable face without an expression
+    stays neutral; an expression on an unreadable face is never drawn.
     """
-    from body_parts import LTX_MIN_PART_WIDTH, ltx_part_width, mentioned_parts
+    from still_people import face_carries_text
 
-    def shown(part: str) -> bool:
-        for character_id in scene.get("characterIds") or []:
-            info = ((stats.get(str(character_id)) or {}).get(part)) or {}
-            width = ltx_part_width(int(info.get("width") or 0), PROXY_WIDTH)
-            if int(info.get("pixels") or 0) > 0 and width >= LTX_MIN_PART_WIDTH:
-                return True
-        return False
-
-    errors: list[str] = []
     number = scene.get("sceneNumber")
-    for field, text in _scene_text_fields(scene).items():
-        for part, words in mentioned_parts(text).items():
-            if shown(part):
-                continue
+    performances = scene.get("performances") or {}
+    errors: list[str] = []
+    for character_id in scene.get("characterIds") or []:
+        performance = performances.get(character_id) or {}
+        where = f"scene {number} frame {frame_label} performances.{character_id}"
+        for part in performance.get("parts") or []:
+            if not _part_shown(stats, character_id, part):
+                errors.append(
+                    f"{where}.parts names {part}, but {character_id}'s {part} is not on "
+                    f"screen. Reframe the camera, change the blocking, or change the action."
+                )
+        face = ((stats.get(str(character_id)) or {}).get("face")) or {}
+        readable = face_carries_text(face)
+        written = bool(str(performance.get("expression") or "").strip())
+        if readable and not written:
             errors.append(
-                f"scene {number} frame {frame_label} {field} names {part} "
-                f"({', '.join(repr(word) for word in words)}) but no character in "
-                f"characterIds shows {part}. Reframe the camera, change the blocking "
-                f"(stance, hand targets), or remove the words."
+                f"{where}.expression is missing, but the face is readable. Without it "
+                f"the still and the clip keep a neutral face."
             )
+        elif written and not readable:
+            errors.append(
+                f"{where}.expression is set, but the face is not readable in this camera, "
+                f"so it is never drawn. Remove it or reframe."
+            )
+    speaker_id = scene.get("speakerId")
+    if speaker_id and not _part_shown(stats, str(speaker_id), "face"):
+        errors.append(
+            f"scene {number} frame {frame_label} speakerId {speaker_id}: the face is not on "
+            f"screen, so the line has no mouth to sync to."
+        )
+    return errors
+
+
+def sound_source_errors(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    frame_label: str,
+    time_seconds: float,
+    stats: dict[str, dict[str, dict[str, int]]],
+) -> list[str]:
+    """Every sound event's source is on screen in the start frame.
+
+    A landmark counts by the same rule a still uses to name it. A prop needs
+    the screen share a still needs to name a landmark.
+    """
+    camera = camera_at(scene, time_seconds)
+    spatial_landmarks = (
+        (show["locations"][scene["locationId"]].get("spatial") or {}).get("landmarks") or {}
+    )
+    events = (scene.get("sound") or {}).get("events") or []
+    sources = [event.get("source") or {} for event in events if isinstance(event, dict)]
+    min_fraction = load_landmark_min_screen_fraction()
+    landmarks = (
+        landmark_screen_fractions(show, episode, scene, time_seconds)
+        if any("landmarkId" in source for source in sources)
+        else {}
+    )
+    props = (
+        prop_screen_fractions(show, episode, scene, time_seconds)
+        if any("propId" in source for source in sources)
+        else {}
+    )
+    number = scene.get("sceneNumber")
+    errors: list[str] = []
+    for index, source in enumerate(sources):
+        where = f"scene {number} frame {frame_label} sound.events[{index}].source"
+        if "characterId" in source:
+            character_id, part = str(source["characterId"]), str(source.get("part"))
+            if not _part_shown(stats, character_id, part):
+                errors.append(f"{where}: {character_id}'s {part} is not on screen.")
+        elif "landmarkId" in source:
+            landmark_id = str(source["landmarkId"])
+            landmark = spatial_landmarks.get(landmark_id) or {}
+            shown, record = _landmark_is_shown(
+                landmark_id, landmark, camera, None, landmarks or None, "", min_fraction
+            )
+            if not shown:
+                errors.append(
+                    f"{where}: landmark {landmark_id} is not on screen "
+                    f"({record.get('skipReason', 'not shown')})."
+                )
+        elif "propId" in source:
+            prop_id = str(source["propId"])
+            if prop_id not in props:
+                errors.append(f"{where}: prop {prop_id} has no mesh in this frame.")
+            elif props[prop_id] < min_fraction:
+                errors.append(
+                    f"{where}: prop {prop_id} covers {props[prop_id]:.4f} of the frame "
+                    f"(needs {min_fraction})."
+                )
     return errors
 
 
@@ -1974,6 +2050,34 @@ def _prop_surfaces(
     scene: dict,
     time_seconds: float,
 ):
+    return [batch for _prop_id, batch in _named_prop_batches(show, episode, scene, time_seconds)]
+
+
+def prop_screen_fractions(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+) -> dict[str, float]:
+    """How much of the frame each prop mesh occupies. Props without a mesh are absent."""
+    camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
+    named = _named_prop_batches(show, episode, scene, time_seconds)
+    if not named:
+        return {}
+    _image, scene_z = _raster_clay(batches, camera)
+    fractions: dict[str, float] = {}
+    for prop_id, batch in named:
+        _image, own_z = _raster_clay([batch], camera)
+        fractions[prop_id] = screen_coverage(own_z, scene_z)
+    return fractions
+
+
+def _named_prop_batches(
+    show: dict,
+    episode: dict,
+    scene: dict,
+    time_seconds: float,
+):
     from clay_gpu import ClayBatch
     from pipeline_paths import stage_dir
 
@@ -2000,7 +2104,9 @@ def _prop_surfaces(
         if position is None:
             continue
         vertices, faces, key = _cached_mesh(glb)
-        batches.append(ClayBatch(vertices, faces, 190, offset=vec(position), key=key))
+        batches.append(
+            (str(prop_id), ClayBatch(vertices, faces, 190, offset=vec(position), key=key))
+        )
     return batches
 
 
@@ -2503,40 +2609,6 @@ def validate_spatial_episode(show: dict, episode: dict) -> list[str]:
     return errors
 
 
-def compile_spatial_video_prompt(scene: dict) -> str:
-    parts: list[str] = []
-    if scene.get("speakerId"):
-        parts.append(
-            f"LIP SYNC: {scene['speakerId']} visibly lip-syncs every spoken word; "
-            "the lips open on the first syllable and articulate continuously through the line."
-        )
-    if scene.get("videoPrompt"):
-        parts.append(scene["videoPrompt"])
-    return " ".join(parts)
-
-
-def camera_travel_score(scene: dict) -> float:
-    """Authored camera travel + rotation score (same formula as gate breadth picker).
-
-    Sums position deltas, 0.5× lookAt deltas, and small FOV/roll terms across
-    consecutive camera keyframes. Gate 3b scene 01 scored ~39.5 on this scale.
-    """
-    kfs = (scene.get("camera") or {}).get("keyframes") or []
-    if len(kfs) < 2:
-        return 0.0
-    travel = 0.0
-    for a, b in zip(kfs, kfs[1:]):
-        travel += length(sub(vec(b["position"]), vec(a["position"])))
-        travel += 0.5 * length(sub(vec(b["lookAt"]), vec(a["lookAt"])))
-        travel += 0.02 * abs(
-            float(b.get("verticalFovDegrees", 0)) - float(a.get("verticalFovDegrees", 0))
-        )
-        ra = float(a.get("rollDegrees") or 0)
-        rb = float(b.get("rollDegrees") or 0)
-        travel += 0.02 * abs(((rb - ra + 180) % 360) - 180)
-    return travel
-
-
 def camera_moves(scene: dict) -> bool:
     """The camera pose differs between the first and last frame of the shot."""
     if not scene.get("timeRangeSeconds") or not scene.get("camera"):
@@ -2865,7 +2937,10 @@ def render_blocked_scene(
             stats = render_part_visibility(show, episode, scene, time_seconds)
             part_errors.extend(required_part_errors(scene, frame_label, stats))
         if label == "start":
-            part_errors.extend(mentioned_part_errors(scene, frame_label, stats))
+            part_errors.extend(performance_errors(scene, frame_label, stats))
+            part_errors.extend(
+                sound_source_errors(show, episode, scene, frame_label, time_seconds, stats)
+            )
         if label is None:
             continue
         _camera, batches, _people = _scene_surfaces(show, episode, scene, time_seconds)
@@ -2978,7 +3053,7 @@ def render_blocked_scene(
             )
         )
     if part_errors:
-        raise SystemExit("Part visibility failed:\n- " + "\n- ".join(part_errors))
+        raise SystemExit("Previs checks failed:\n- " + "\n- ".join(part_errors))
     video_path = blockout_video_path(
         show["id"], episode["episodeNumber"], scene["sceneNumber"]
     )

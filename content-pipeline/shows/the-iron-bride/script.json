@@ -755,7 +755,6 @@
           "locationId": "sky_forge_exterior",
           "storyBeat": "The hanging citadel and burning sky establish a kingdom that can be dropped.",
           "characterIds": [],
-          "imagePrompt": "The citadel hangs in a storm of ash and molten rivers.",
           "timeRangeSeconds": [
             0,
             2
@@ -792,8 +791,23 @@
               }
             ]
           },
+          "performances": {},
+          "motion": "Ash streams across the hanging citadel above molten rivers",
           "sound": {
-            "events": "sky-chains groan and wind tears ash across the hanging iron",
+            "events": [
+              {
+                "text": "sky-chains groan under the hanging weight",
+                "source": {
+                  "landmarkId": "chain_pylon"
+                }
+              },
+              {
+                "text": "wind tears ash across the hanging iron",
+                "source": {
+                  "landmarkId": "citadel_core"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -805,7 +819,6 @@
           "locationId": "sun_well_court",
           "storyBeat": "The sun-well is shown as a killing machine before anyone speaks.",
           "characterIds": [],
-          "imagePrompt": "No people. White-gold fire stands in the well like a blade.",
           "timeRangeSeconds": [
             2,
             4
@@ -828,8 +841,17 @@
               }
             ]
           },
+          "performances": {},
+          "motion": "White-gold fire stands in the well like a blade, flickering",
           "sound": {
-            "events": "the fire surges upward with a deep furnace boom and rising crackle",
+            "events": [
+              {
+                "text": "the fire surges upward with a deep furnace boom and rising crackle",
+                "source": {
+                  "landmarkId": "sun_well"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -843,8 +865,6 @@
           "characterIds": [
             "sela"
           ],
-          "imagePrompt": "Sela wears a soot-stained ivory wrap and a plain iron bridal collar. Her mouth stays closed.",
-          "videoPrompt": "PERFORMANCE: Sela stands still and silent, chin level, breathing slowly and shallowly; her gaze holds steady.",
           "timeRangeSeconds": [
             4,
             6
@@ -867,8 +887,26 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "stands silent; she slowly lifts her chin and her jaw tightens, her gaze steady",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "fear held under hard defiance: jaw set, brows low and level, eyes glassy but unblinking, lips pressed together"
+            }
+          },
           "sound": {
-            "events": "the iron collar creaks softly with each shallow breath",
+            "events": [
+              {
+                "text": "the iron collar creaks softly as she lifts her chin",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -880,7 +918,6 @@
           "locationId": "sun_well_court",
           "storyBeat": "The well proves it can unmake a body, so the threat is physical.",
           "characterIds": [],
-          "imagePrompt": "No people. A column of white fire punches from the well into the storm.",
           "timeRangeSeconds": [
             6,
             8
@@ -917,8 +954,17 @@
               }
             ]
           },
+          "performances": {},
+          "motion": "A column of white fire punches from the well into the storm",
           "sound": {
-            "events": "a column of fire punches upward with a roaring blast and crackling heat",
+            "events": [
+              {
+                "text": "a column of fire punches upward with a roaring blast and crackling heat",
+                "source": {
+                  "landmarkId": "sun_well"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -937,8 +983,6 @@
             "kesh",
             "rhel"
           ],
-          "imagePrompt": "Sela wears the ivory wrap and iron collar. Tomas wears a torn sky-blue court coat. Vardan, Nira, Kesh, and Rhel wear black sun-priest plate and gold gorgets.",
-          "videoPrompt": "PERFORMANCE: Sela and Tomas stand close together, breathing hard. The four priests hold their line, armor shifting with small changes of weight.",
           "timeRangeSeconds": [
             8,
             10
@@ -975,8 +1019,64 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "stands close beside him, braced, shoulders tight",
+              "parts": [
+                "torso",
+                "arms"
+              ]
+            },
+            "tomas": {
+              "action": "stands at her side, chest heaving, hands loose at his sides",
+              "parts": [
+                "torso",
+                "hands"
+              ]
+            },
+            "vardan": {
+              "action": "holds the center of the priests' line, armor shifting as he settles his weight",
+              "parts": [
+                "torso"
+              ]
+            },
+            "nira": {
+              "action": "holds the line, shifting her stance on the iron floor",
+              "parts": [
+                "legs",
+                "feet"
+              ]
+            },
+            "kesh": {
+              "action": "holds the line, motionless",
+              "parts": [
+                "torso"
+              ]
+            },
+            "rhel": {
+              "action": "stands motionless at the end of the line, head high",
+              "parts": [
+                "face"
+              ]
+            }
+          },
           "sound": {
-            "events": "armor plates shift and boots grind on slag-gold iron",
+            "events": [
+              {
+                "text": "armor plates shift",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "torso"
+                }
+              },
+              {
+                "text": "boots grind on slag-gold iron",
+                "source": {
+                  "characterId": "nira",
+                  "part": "feet"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -996,8 +1096,6 @@
             "rhel"
           ],
           "speakerId": "vardan",
-          "imagePrompt": "Vardan wears black sun-priest plate and a gold gorget, ice-cold authority. The others hold the established wardrobe.",
-          "videoPrompt": "PERFORMANCE: still face, merciless articulation. DIALOGUE (low, ceremonial, cruel): \"The sun-well takes a false bride tonight.\"",
           "timeRangeSeconds": [
             10,
             15
@@ -1020,8 +1118,59 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "stands still beside him",
+              "parts": [
+                "torso"
+              ]
+            },
+            "tomas": {
+              "action": "stands still, shoulders tense",
+              "parts": [
+                "torso"
+              ]
+            },
+            "vardan": {
+              "action": "stands rigid at the center of the line and speaks without moving his body",
+              "parts": [
+                "face",
+                "torso"
+              ]
+            },
+            "nira": {
+              "action": "holds the line, motionless",
+              "parts": [
+                "torso"
+              ]
+            },
+            "kesh": {
+              "action": "holds the line, motionless",
+              "parts": [
+                "torso"
+              ]
+            },
+            "rhel": {
+              "action": "holds the line, motionless",
+              "parts": [
+                "torso"
+              ]
+            }
+          },
+          "dialogue": {
+            "line": "The sun-well takes a false bride tonight.",
+            "delivery": "low, ceremonial, cruel; still face, merciless articulation"
+          },
           "sound": {
-            "events": "armor settles as he holds still in the wind",
+            "events": [
+              {
+                "text": "armor settles as he holds still in the wind",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1036,8 +1185,6 @@
             "tomas",
             "vardan"
           ],
-          "imagePrompt": "Tomas wears the torn sky-blue court coat, jaw locked. Vardan wears black sun-priest plate, waiting.",
-          "videoPrompt": "PERFORMANCE: Tomas stands rigid, jaw locked, breathing hard under Vardan's stare. Vardan stands motionless, waiting.",
           "timeRangeSeconds": [
             15,
             17
@@ -1060,8 +1207,32 @@
               }
             ]
           },
+          "performances": {
+            "tomas": {
+              "action": "stands rigid, jaw locked, nostrils flaring under the priest's stare, coat whipping in the wind",
+              "parts": [
+                "face",
+                "torso"
+              ]
+            },
+            "vardan": {
+              "action": "stands motionless, waiting, eyes fixed on him",
+              "parts": [
+                "eyes"
+              ],
+              "expression": "cold patience: lids half lowered, mouth a flat line lifting faintly at one corner in contempt"
+            }
+          },
           "sound": {
-            "events": "torn coat fabric flutters in the well wind",
+            "events": [
+              {
+                "text": "torn coat fabric flutters in the well wind",
+                "source": {
+                  "characterId": "tomas",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1077,8 +1248,6 @@
             "sela"
           ],
           "speakerId": "tomas",
-          "imagePrompt": "Tomas wears the torn sky-blue court coat, desperate control. Sela wears the ivory wrap and iron collar, listening without looking at him.",
-          "videoPrompt": "PERFORMANCE: urgent, clear articulation. DIALOGUE (strained, loud): \"She is the last Voss. You cannot burn a living house.\"",
           "timeRangeSeconds": [
             17,
             22
@@ -1101,8 +1270,34 @@
               }
             ]
           },
+          "performances": {
+            "tomas": {
+              "action": "leans toward the priests, urgent, chest heaving",
+              "parts": [
+                "torso"
+              ]
+            },
+            "sela": {
+              "action": "stands still, listening, her gaze held straight ahead",
+              "parts": [
+                "eyes"
+              ]
+            }
+          },
+          "dialogue": {
+            "line": "She is the last Voss. You cannot burn a living house.",
+            "delivery": "strained, loud; urgent, clear articulation"
+          },
           "sound": {
-            "events": "coat cloth rustles with his urgent breath",
+            "events": [
+              {
+                "text": "coat cloth rustles with his urgent breath",
+                "source": {
+                  "characterId": "tomas",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1116,8 +1311,6 @@
           "characterIds": [
             "kesh"
           ],
-          "imagePrompt": "Kesh wears black sun-priest plate. Only the armored torso and closing gauntlet; no face.",
-          "videoPrompt": "PERFORMANCE: Kesh's armored gauntlet slowly closes into a fist at chest height; his body stays motionless.",
           "timeRangeSeconds": [
             22,
             24
@@ -1140,8 +1333,25 @@
               }
             ]
           },
+          "performances": {
+            "kesh": {
+              "action": "slowly closes his armored gauntlet into a fist at chest height; his body stays motionless",
+              "parts": [
+                "hands"
+              ],
+              "expression": "flat, dutiful contempt: eyes hooded, mouth a thin hard line"
+            }
+          },
           "sound": {
-            "events": "the gauntlet closes with a heavy iron clack",
+            "events": [
+              {
+                "text": "the gauntlet closes with a heavy iron clack",
+                "source": {
+                  "characterId": "kesh",
+                  "part": "hands"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1159,8 +1369,6 @@
             "rhel"
           ],
           "speakerId": "nira",
-          "imagePrompt": "Nira wears black sun-priest plate and a gold gorget, contempt. Vardan, Kesh, and Rhel wear the same order's plate as a wall behind her.",
-          "videoPrompt": "PERFORMANCE: clipped, public scorn. DIALOGUE (sharp, dismissive): \"House Voss died with the old emperor.\"",
           "timeRangeSeconds": [
             24,
             29
@@ -1183,8 +1391,46 @@
               }
             ]
           },
+          "performances": {
+            "nira": {
+              "action": "stands at the front of the line, chin lifted in scorn",
+              "parts": [
+                "face"
+              ]
+            },
+            "vardan": {
+              "action": "stands behind her as part of the wall, motionless",
+              "parts": [
+                "torso"
+              ]
+            },
+            "kesh": {
+              "action": "stands behind her as part of the wall, armor creaking as he shifts",
+              "parts": [
+                "torso"
+              ]
+            },
+            "rhel": {
+              "action": "stands behind her as part of the wall, motionless",
+              "parts": [
+                "torso"
+              ]
+            }
+          },
+          "dialogue": {
+            "line": "House Voss died with the old emperor.",
+            "delivery": "sharp, dismissive; clipped, public scorn"
+          },
           "sound": {
-            "events": "plate armor creaks in the line behind her",
+            "events": [
+              {
+                "text": "plate armor creaks in the line behind her",
+                "source": {
+                  "characterId": "kesh",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1198,8 +1444,6 @@
           "characterIds": [
             "sela"
           ],
-          "imagePrompt": "Sela wears the ivory wrap and iron collar. Only boots, wrap, and collar as she walks; head may leave the frame.",
-          "videoPrompt": "PERFORMANCE: Sela walks forward at a steady, unhurried pace, bare feet on the iron floor, the wrap swaying with each step.",
           "timeRangeSeconds": [
             29,
             31
@@ -1236,8 +1480,32 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "walks forward at a steady, unhurried pace, the wrap swaying against her legs with each step",
+              "parts": [
+                "legs",
+                "feet"
+              ]
+            }
+          },
           "sound": {
-            "events": "bare feet strike the iron floor in soft steps while wrap cloth brushes her legs",
+            "events": [
+              {
+                "text": "bare feet strike the iron floor in soft steps",
+                "source": {
+                  "characterId": "sela",
+                  "part": "feet"
+                }
+              },
+              {
+                "text": "wrap cloth brushes her legs",
+                "source": {
+                  "characterId": "sela",
+                  "part": "legs"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1251,8 +1519,6 @@
           "characterIds": [
             "sela"
           ],
-          "imagePrompt": "Sela's amber eyes catch forge-gold. Closed mouth. Iron collar at the bottom of frame.",
-          "videoPrompt": "PERFORMANCE: Sela holds perfectly still and does not blink; forge-gold light flickers across her eyes, mouth closed.",
           "timeRangeSeconds": [
             31,
             33
@@ -1289,8 +1555,27 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "holds perfectly still and does not blink; she swallows once, the collar shifting at her throat",
+              "parts": [
+                "eyes",
+                "neck"
+              ],
+              "expression": "wary wonder: eyes wide and unblinking, brows lifting, lips still"
+            }
+          },
+          "motion": "Forge-gold light flickers across her eyes",
           "sound": {
-            "events": "well-fire crackles as forge-gold light flickers across her eyes",
+            "events": [
+              {
+                "text": "the iron collar scrapes faintly as she swallows",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1306,8 +1591,6 @@
             "sela"
           ],
           "speakerId": "sela",
-          "imagePrompt": "Vardan's black plate fills the foreground. Sela beyond him in the ivory wrap and iron collar, unburned.",
-          "videoPrompt": "PERFORMANCE: quiet, certain, no blink. DIALOGUE (low, final): \"Then the well will refuse you.\"",
           "timeRangeSeconds": [
             33,
             38
@@ -1330,8 +1613,37 @@
               }
             ]
           },
+          "performances": {
+            "vardan": {
+              "action": "stands rigid in the foreground",
+              "parts": [
+                "torso"
+              ],
+              "expression": "rigid disbelief: brows drawn together, jaw clenched"
+            },
+            "sela": {
+              "action": "holds her ground, chin level, eyes locked on him",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "calm certainty: level unblinking gaze, jaw quietly set"
+            }
+          },
+          "dialogue": {
+            "line": "Then the well will refuse you.",
+            "delivery": "low, final; quiet, certain, no blink"
+          },
           "sound": {
-            "events": "the iron collar ticks as she holds her ground",
+            "events": [
+              {
+                "text": "the iron collar ticks as she holds her ground",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1345,8 +1657,6 @@
           "characterIds": [
             "sela"
           ],
-          "imagePrompt": "Sela's bare feet and the hem of the ivory wrap stand in white-gold well-fire. No face.",
-          "videoPrompt": "PERFORMANCE: Sela stands motionless in the fire; white-gold flames lick around her bare feet and the wrap hem stirs in the heat.",
           "timeRangeSeconds": [
             38,
             40
@@ -1369,8 +1679,24 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "stands motionless in the fire, the wrap hem stirring in the heat",
+              "parts": [
+                "legs"
+              ]
+            }
+          },
+          "motion": "White-gold flames lick around her bare feet",
           "sound": {
-            "events": "fire hisses and pops around bare feet without burning",
+            "events": [
+              {
+                "text": "fire hisses and pops around bare feet without burning",
+                "source": {
+                  "landmarkId": "sun_well"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1385,8 +1711,6 @@
             "vardan"
           ],
           "speakerId": "vardan",
-          "imagePrompt": "Vardan's ice-blue eyes and gold throat-tattoo fill the frame. Fury breaking through ceremony.",
-          "videoPrompt": "PERFORMANCE: teeth bared, precise. DIALOGUE (harsh, rising): \"If it spares her, it names her empress.\"",
           "timeRangeSeconds": [
             40,
             45
@@ -1409,8 +1733,29 @@
               }
             ]
           },
+          "performances": {
+            "vardan": {
+              "action": "bares his teeth as he speaks, precise",
+              "parts": [
+                "face"
+              ],
+              "expression": "fury breaking through ceremony: brows crushed down, nostrils flared, lips pulled back from bared teeth"
+            }
+          },
+          "dialogue": {
+            "line": "If it spares her, it names her empress.",
+            "delivery": "harsh, rising"
+          },
           "sound": {
-            "events": "breath tears through clenched teeth over still armor",
+            "events": [
+              {
+                "text": "breath tears through clenched teeth over still armor",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "face"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1427,8 +1772,6 @@
             "kesh",
             "rhel"
           ],
-          "imagePrompt": "Vardan, Nira, Kesh, and Rhel wear black sun-priest plate. Shock, not ceremony.",
-          "videoPrompt": "PERFORMANCE: The four priests flinch back together half a step, then freeze, staring in shock.",
           "timeRangeSeconds": [
             45,
             47
@@ -1451,8 +1794,46 @@
               }
             ]
           },
+          "performances": {
+            "vardan": {
+              "action": "flinches back half a step with the others, then freezes, staring in shock",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            },
+            "nira": {
+              "action": "flinches back half a step with the others, then freezes, staring in shock",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            },
+            "kesh": {
+              "action": "flinches back half a step with the others, then freezes, staring in shock",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            },
+            "rhel": {
+              "action": "flinches back half a step with the others, then freezes, staring in shock",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            }
+          },
           "sound": {
-            "events": "armor plates clatter as the priests flinch together",
+            "events": [
+              {
+                "text": "armor plates clatter as the priests flinch together",
+                "source": {
+                  "characterId": "nira",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1467,8 +1848,6 @@
             "sela"
           ],
           "speakerId": "sela",
-          "imagePrompt": "Sela wears the ivory wrap; the iron collar now glows slag-gold. Unblinking.",
-          "videoPrompt": "PERFORMANCE: almost a smile, no shout. DIALOGUE (soft, lethal): \"Then kneel. Or burn.\"",
           "timeRangeSeconds": [
             47,
             52
@@ -1491,8 +1870,30 @@
               }
             ]
           },
+          "performances": {
+            "sela": {
+              "action": "holds still as the glowing collar pulses at her throat; the corners of her mouth lift toward a smile",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "cold, lethal calm: steady unblinking eyes, the corners of her mouth lifting toward a smile"
+            }
+          },
+          "dialogue": {
+            "line": "Then kneel. Or burn.",
+            "delivery": "soft, lethal; almost a smile, no shout"
+          },
           "sound": {
-            "events": "the glowing collar hums with a low slag-gold vibration",
+            "events": [
+              {
+                "text": "the glowing collar hums with a low slag-gold vibration",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
             "bed": "faint",
             "music": {
               "kind": "none"
@@ -1506,8 +1907,6 @@
           "characterIds": [
             "tomas"
           ],
-          "imagePrompt": "Tomas wears the torn sky-blue court coat. Shock breaking into awe. Closed mouth.",
-          "videoPrompt": "PERFORMANCE: Tomas stands frozen, staring; his breath catches and his face slowly opens from shock into awe, mouth closed.",
           "timeRangeSeconds": [
             52,
             55
@@ -1530,8 +1929,26 @@
               }
             ]
           },
+          "performances": {
+            "tomas": {
+              "action": "stands frozen, staring; his chest jerks as his lips part on a sharp caught breath, and his face slowly opens from shock into awe",
+              "parts": [
+                "face",
+                "torso"
+              ],
+              "expression": "shock breaking into awe: eyes widening, brows lifting, lips parting"
+            }
+          },
           "sound": {
-            "events": "coat fabric settles as his breath catches",
+            "events": [
+              {
+                "text": "coat fabric settles as his breath catches",
+                "source": {
+                  "characterId": "tomas",
+                  "part": "torso"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"
@@ -1543,7 +1960,6 @@
           "locationId": "sky_forge_exterior",
           "storyBeat": "The citadel's chains fail, so her claim can drop the kingdom.",
           "characterIds": [],
-          "imagePrompt": "No people. Sky-chains above the citadel snap, throwing gold sparks into the storm.",
           "timeRangeSeconds": [
             55,
             60
@@ -1580,8 +1996,17 @@
               }
             ]
           },
+          "performances": {},
+          "motion": "Sky-chains above the citadel snap, throwing gold sparks into the storm",
           "sound": {
-            "events": "sky-chains snap with sharp metal cracks and gold sparks hiss into the storm",
+            "events": [
+              {
+                "text": "sky-chains snap with sharp metal cracks and gold sparks hiss into the storm",
+                "source": {
+                  "landmarkId": "citadel_core"
+                }
+              }
+            ],
             "bed": "present",
             "music": {
               "kind": "none"

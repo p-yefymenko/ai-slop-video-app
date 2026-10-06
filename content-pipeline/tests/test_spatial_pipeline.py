@@ -72,27 +72,34 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertEqual(len(scene["timeRangeSeconds"]), 2)
         self.assertIn("verticalFovDegrees", scene["camera"]["keyframes"][0])
 
-    def test_ltx_prompt_states_performance_and_locked_camera_before_sound(self) -> None:
+    def test_ltx_prompt_names_people_as_the_still_placed_them(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
         location = self.show["locations"][scene["locationId"]]
-        prompt = pipeline.compile_ltx_prompt(self.show, scene, location)
+        prompt = pipeline.compile_ltx_prompt(
+            self.show, scene, location, places={"sela": "In the center"}
+        )
+        performance = scene["performances"]["sela"]
+        body = pipeline._clause(self.show["characters"]["sela"]["body"])
+        person = f"In the center, {body}: {performance['action']}."
         locked = self.show["prompts"]["sceneCameraLocked"]
-        self.assertLess(prompt.index(scene["videoPrompt"]), prompt.index(locked))
+        self.assertIn(person, prompt)
+        self.assertIn(f"Face: {performance['expression']}.", prompt)
+        self.assertNotIn("sela", prompt)
+        self.assertLess(prompt.index(person), prompt.index(locked))
         self.assertLess(prompt.index(locked), prompt.index(self.show["prompts"]["sceneSoundLabel"]))
 
         moving = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 11)
-        self.assertNotIn(locked, pipeline.compile_ltx_prompt(self.show, moving, location))
+        moving_prompt = pipeline.compile_ltx_prompt(
+            self.show, moving, location, places={"sela": "In the center"}
+        )
+        self.assertNotIn(locked, moving_prompt)
 
-    def test_loader_rejects_people_without_a_video_prompt(self) -> None:
-        raw = json.loads((self.root / "shows" / "the-iron-bride" / "script.json").read_text(encoding="utf-8"))
-        del raw["episodes"][0]["scenes"][2]["videoPrompt"]
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "the-iron-bride" / "script.json"
-            path.parent.mkdir()
-            path.write_text(json.dumps(raw), encoding="utf-8")
-            with self.assertRaises(SystemExit) as caught:
-                pipeline.load_show(path)
-        self.assertIn("scene 3 has people but no videoPrompt", str(caught.exception))
+    def test_ltx_prompt_fails_when_the_still_did_not_place_a_performer(self) -> None:
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        location = self.show["locations"][scene["locationId"]]
+        with self.assertRaises(SystemExit) as caught:
+            pipeline.compile_ltx_prompt(self.show, scene, location, places={})
+        self.assertIn("does not place sela", str(caught.exception))
 
     def test_ltx_prompt_appends_authored_sound_after_visual_text(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 2)
@@ -106,7 +113,7 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertTrue(
             any(part in prompt for part in (space_body, space_body[0].upper() + space_body[1:]))
         )
-        events_body = scene["sound"]["events"]
+        events_body = scene["sound"]["events"][0]["text"]
         self.assertTrue(
             any(part in prompt for part in (events_body, events_body[0].upper() + events_body[1:]))
         )
@@ -125,7 +132,9 @@ class SpatialPipelineTests(unittest.TestCase):
     def test_ltx_prompt_uses_faint_bed_template_for_speaking_scenes(self) -> None:
         scene = next(item for item in self.episode["scenes"] if item.get("speakerId"))
         location = self.show["locations"][scene["locationId"]]
-        prompt = pipeline.compile_ltx_prompt(self.show, scene, location)
+        places = {character_id: "On the left" for character_id in scene["characterIds"]}
+        prompt = pipeline.compile_ltx_prompt(self.show, scene, location, places=places)
+        self.assertIn(f'"{scene["dialogue"]["line"]}"', prompt)
         self.assertEqual(scene["sound"]["bed"], "faint")
         faint = self.show["prompts"]["sceneSoundBedFaint"].split("{", 1)[0]
         self.assertTrue(faint)
@@ -742,7 +751,6 @@ class SpatialPipelineTests(unittest.TestCase):
         self.assertIn("white-gold", prompt)
         self.assertNotIn("sela", prompt.lower())
         self.assertNotIn("vardan", prompt.lower())
-        self.assertNotIn(scene["imagePrompt"], prompt)
         self.assertIn("plate", prompt)
         self.assertNotIn("sun-priest", prompt.lower())
         self.assertNotIn("torn", prompt.lower())
@@ -1089,6 +1097,25 @@ class SpatialPipelineTests(unittest.TestCase):
             wrap_records[0]["attributes"][0]["skipReason"],
             "torso not visible, legs not visible",
         )
+
+    def test_scene_expression_rides_the_face_gate_into_the_still(self) -> None:
+        from still_people import _expression_attributes
+
+        scene = next(item for item in self.episode["scenes"] if item["sceneNumber"] == 3)
+        expression = scene["performances"]["sela"]["expression"]
+        sela = self.show["characters"]["sela"]
+        attributes = sela["attributes"] + _expression_attributes(scene, "sela")
+        close, _ = pipeline.describe_people(
+            [_from_character(sela, character_id="sela", attributes=attributes)]
+        )
+        self.assertIn(expression, close)
+
+        hidden = _all_parts()
+        hidden["face"] = {"pixels": 0, "width": 0, "height": 0}
+        back, _ = pipeline.describe_people(
+            [_from_character(sela, character_id="sela", attributes=attributes, part_stats=hidden)]
+        )
+        self.assertNotIn(expression, back)
 
     def test_age_is_a_face_attribute_not_body(self) -> None:
         for character_id, character in self.show["characters"].items():
@@ -1448,13 +1475,11 @@ class SpatialPipelineTests(unittest.TestCase):
                 "characterCount": "1",
                 "characterIds": "sela",
                 "locationPromptBlock": location["promptBlock"],
-                "imagePrompt": scene["imagePrompt"],
             },
             [{"id": "sela"}],
         )
         self.assertIn("Picture 2 = the face of sela only", prompt)
         self.assertNotIn(location["promptBlock"], prompt)
-        self.assertNotIn(scene["imagePrompt"], prompt)
         self.assertNotIn("sun-well", prompt)
 
 

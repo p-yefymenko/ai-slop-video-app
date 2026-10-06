@@ -287,11 +287,63 @@ const sceneMusicSchema = z
   ])
   .describe('Music policy: { kind: "none" } or { kind: "described", description }. No default.');
 
+const soundSourceSchema = z
+  .union(
+    [
+      z
+        .object({ characterId: text("source.characterId"), part: text("source.part") })
+        .strict(),
+      z.object({ landmarkId: text("source.landmarkId") }).strict(),
+      z.object({ propId: text("source.propId") }).strict(),
+    ],
+    {
+      errorMap: () => ({
+        message: "source must be { characterId, part }, { landmarkId }, or { propId }",
+      }),
+    },
+  )
+  .describe("What makes the sound. Previs fails when it is not on screen in the start frame.");
+
+const soundEventSchema = z
+  .object({
+    text: text("sound event text"),
+    source: soundSourceSchema,
+  })
+  .strict();
+
+const performanceSchema = z
+  .object({
+    action: text("performance action").describe(
+      "Visible motion of this person for the whole take, positive and present tense.",
+    ),
+    parts: z
+      .array(text("performance part"), {
+        required_error: "parts is required",
+        invalid_type_error: "parts must be an array",
+      })
+      .min(1, "parts needs at least one body part the action moves"),
+    expression: text("performance expression").optional(),
+  })
+  .strict();
+
+const dialogueSchema = z
+  .object({
+    line: text("dialogue.line"),
+    delivery: text("dialogue.delivery"),
+  })
+  .strict();
+
 const sceneSoundSchema = z
   .object({
-    events: text("sound.events").describe(
-      "Sounds of things visibly happening in this clip. Each needs a visible cause in the start still. Add to the location bed; never restate or contradict it. On speaking scenes, non-speech only; dialogue stays in videoPrompt.",
-    ),
+    events: z
+      .array(soundEventSchema, {
+        required_error: "sound.events is required",
+        invalid_type_error: "sound.events must be an array",
+      })
+      .min(1, "sound.events needs at least one event")
+      .describe(
+        "Sounds of things visibly happening in this clip, each with its on-screen source. Add to the location bed; never restate or contradict it. Dialogue is not an event.",
+      ),
     bed: z
       .enum(BED_LEVELS, {
         required_error: "sound.bed is required",
@@ -337,8 +389,12 @@ const sceneSchema = z
           .min(1, "camera.keyframes needs at least one pose"),
       })
       .strict(),
-    imagePrompt: z.string().optional(),
-    videoPrompt: z.string().optional(),
+    performances: z.record(performanceSchema, {
+      required_error: "performances is required; use {} when no one is on camera",
+      invalid_type_error: "performances must be an object keyed by characterId",
+    }),
+    dialogue: dialogueSchema.optional(),
+    motion: text("motion").optional(),
     sound: sceneSoundSchema,
     requiresParts: z
       .array(characterPartRequirementSchema, {
@@ -1016,13 +1072,7 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
           });
         }
       }
-      if (scene.characterIds.length > 0 && !scene.videoPrompt?.trim()) {
-        issues.push({
-          path: `${scenePath}.videoPrompt`,
-          message:
-            "required when characterIds is not empty: LTX invents motion it is not given, so describe what each visible person does, even standing still and breathing",
-        });
-      }
+      checkPerformances(issues, show, episode, scene, scenePath);
       if (scene.speakerId && !scene.characterIds.includes(scene.speakerId)) {
         issues.push({
           path: `${scenePath}.speakerId`,
@@ -1089,13 +1139,15 @@ function checkSceneSoundWarnings(
       severity: "warning",
     });
   }
-  if (wordCount(sound.events) <= soundLint.emptyEventsMaxWords) {
-    issues.push({
-      path: `${scenePath}.sound.events`,
-      message: `events looks empty-ish (${wordCount(sound.events)} word(s); describe audible action visible in the start still)`,
-      severity: "warning",
-    });
-  }
+  sound.events.forEach((event, eventIndex) => {
+    if (wordCount(event.text) <= soundLint.emptyEventsMaxWords) {
+      issues.push({
+        path: `${scenePath}.sound.events[${eventIndex}].text`,
+        message: `event looks empty-ish (${wordCount(event.text)} word(s); describe the audible action)`,
+        severity: "warning",
+      });
+    }
+  });
   if (sound.music.kind === "none") {
     const location = show.locations[scene.locationId];
     const ambience = location?.soundscape.ambience ?? "";
@@ -1107,7 +1159,10 @@ function checkSceneSoundWarnings(
         severity: "warning",
       });
     }
-    const hitEvents = containsMusicWord(sound.events, soundLint.musicConflictWords);
+    const hitEvents = containsMusicWord(
+      sound.events.map((event) => event.text).join(" "),
+      soundLint.musicConflictWords,
+    );
     if (hitEvents) {
       issues.push({
         path: `${scenePath}.sound.music`,
@@ -1116,6 +1171,107 @@ function checkSceneSoundWarnings(
       });
     }
   }
+}
+
+/**
+ * Structure only. Whether parts, faces, and sources are on screen is a 3D
+ * question that previs answers from the render.
+ */
+function checkPerformances(
+  issues: ScriptIssue[],
+  show: ShowScript,
+  episode: ShowEpisode,
+  scene: ScriptScene,
+  scenePath: string,
+) {
+  const performances = scene.performances ?? {};
+  for (const characterId of scene.characterIds) {
+    if (!(characterId in performances)) {
+      issues.push({
+        path: `${scenePath}.performances.${characterId}`,
+        message: "every character on camera needs a performance; LTX invents motion it is not given",
+      });
+    }
+  }
+  // LTX sees pixels, not this script's ids. People are placed for it from the
+  // still, and gaze comes from lookAtId, so visual text must not name anyone.
+  const namesSomeone = (value: string | undefined) =>
+    Object.keys(show.characters).find((id) =>
+      new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""),
+    );
+  const visualText: [string, string | undefined][] = [[`${scenePath}.motion`, scene.motion]];
+  for (const [characterId, performance] of Object.entries(performances)) {
+    visualText.push([`${scenePath}.performances.${characterId}.action`, performance.action]);
+    visualText.push([`${scenePath}.performances.${characterId}.expression`, performance.expression]);
+  }
+  for (const [path, value] of visualText) {
+    const named = namesSomeone(value);
+    if (named) {
+      issues.push({
+        path,
+        message: `names character ${JSON.stringify(named)}; the video model only sees the frame, so say "him", "her", or "them" and let lookAtId set the gaze`,
+      });
+    }
+  }
+  for (const [characterId, performance] of Object.entries(performances)) {
+    const path = `${scenePath}.performances.${characterId}`;
+    if (!scene.characterIds.includes(characterId)) {
+      issues.push({ path, message: `${JSON.stringify(characterId)} is not in characterIds` });
+    }
+    const seen = new Set<string>();
+    performance.parts.forEach((part, partIndex) => {
+      checkPartId(issues, `${path}.parts[${partIndex}]`, part);
+      if (seen.has(part)) {
+        issues.push({
+          path: `${path}.parts[${partIndex}]`,
+          message: `duplicate part ${JSON.stringify(part)}`,
+        });
+      }
+      seen.add(part);
+    });
+  }
+  if (scene.speakerId && !scene.dialogue) {
+    issues.push({ path: `${scenePath}.dialogue`, message: "required when speakerId is set" });
+  }
+  if (scene.dialogue && !scene.speakerId) {
+    issues.push({ path: `${scenePath}.dialogue`, message: "dialogue needs a speakerId" });
+  }
+  const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
+  const tracked = episode.spatialTimeline.propTracks ?? {};
+  scene.sound.events.forEach((event, eventIndex) => {
+    const path = `${scenePath}.sound.events[${eventIndex}].source`;
+    const source = event.source;
+    if ("characterId" in source) {
+      if (!scene.characterIds.includes(source.characterId)) {
+        issues.push({
+          path: `${path}.characterId`,
+          message: `${JSON.stringify(source.characterId)} is not in characterIds`,
+        });
+        return;
+      }
+      checkPartId(issues, `${path}.part`, source.part);
+      const moves = performances[source.characterId]?.parts ?? [];
+      const speaks = source.characterId === scene.speakerId && source.part === "face";
+      if (!moves.includes(source.part) && !speaks) {
+        issues.push({
+          path: `${path}.part`,
+          message: `${source.characterId}'s ${source.part} makes this sound, but performances.${source.characterId}.parts does not move it; LTX voices the sound and leaves the part still`,
+        });
+      }
+    } else if ("landmarkId" in source) {
+      if (!(source.landmarkId in landmarks)) {
+        issues.push({
+          path: `${path}.landmarkId`,
+          message: `unknown landmark ${JSON.stringify(source.landmarkId)} in location ${JSON.stringify(scene.locationId)}`,
+        });
+      }
+    } else if (!(source.propId in tracked)) {
+      issues.push({
+        path: `${path}.propId`,
+        message: `prop ${JSON.stringify(source.propId)} has no propTracks entry in this episode`,
+      });
+    }
+  });
 }
 
 function isErrorIssue(issue: ScriptIssue): boolean {

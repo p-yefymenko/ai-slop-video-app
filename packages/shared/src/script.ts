@@ -144,17 +144,38 @@ export type SceneMusic =
   | { kind: "described"; description: string };
 
 /**
+ * What makes a sound. Previs fails when it is not on screen in the start frame:
+ * a character part by the part render, a landmark or prop by its mesh's share
+ * of the frame (the share a still needs to name a landmark).
+ */
+export type SoundSource =
+  /**
+   * A body part, or wardrobe worn on it. The part must be in that character's
+   * `performances[id].parts`, so the sound has visible motion behind it; a
+   * speaker's `face` counts as moving.
+   */
+  | { characterId: string; part: BodyPart }
+  /** A landmark of this scene's location. */
+  | { landmarkId: string }
+  /** A prop with a track in this episode. Needs a mesh to be seen. */
+  | { propId: string };
+
+export type SoundEvent = {
+  /** The audible action, present tense. */
+  text: string;
+  source: SoundSource;
+};
+
+/**
  * Per-scene sound direction. Required on every scene. Composed into the LTX
- * prompt after visuals and after any videoPrompt / LIP SYNC text.
+ * prompt after the dialogue and performances.
  */
 export type SceneSound = {
   /**
-   * Sounds of things visibly happening in this clip. Each event needs a cause
-   * visible in the start still. Add to the location bed; never restate or
-   * contradict it. On speaking scenes, describe only non-speech sounds;
-   * dialogue stays in videoPrompt.
+   * Sounds of things visibly happening in this clip, at least one. Add to the
+   * location bed; never restate or contradict it. Dialogue is not an event.
    */
-  events: string;
+  events: SoundEvent[];
   /**
    * How loud the location bed sits under this scene.
    * `present` = full bed. `faint` = bed lowered under the scene (use on
@@ -248,19 +269,17 @@ export type ScriptScene = {
    */
   camera: SpatialCamera;
   /**
-   * Optional wardrobe, expression, and atmosphere. Omit when the location
-   * text and the clay frame are enough. Never restate position,
-   * facing, eyeline, framing, or location geometry.
+   * One entry per characterId, no more. What each person visibly does for the
+   * whole take; LTX invents motion it is not given. `{}` with no people.
    */
-  imagePrompt?: string;
+  performances: Record<string, ScenePerformance>;
+  /** The spoken line. Required exactly when `speakerId` is set. */
+  dialogue?: SceneDialogue;
   /**
-   * Spoken line and non-spatial performance for generative scenes. Camera and
-   * blocking come from the timeline and start/end frames. Required when
-   * characterIds is not empty, silent scenes included: LTX invents motion it
-   * is not given.
-   * Dialogue stays here; non-speech sounds go in `sound.events`.
+   * Motion that belongs to no character: fire, smoke, cloth, debris, light.
+   * Camera motion comes from the keyframes.
    */
-  videoPrompt?: string;
+  motion?: string;
   /**
    * Required sound direction for this clip. Location bed + events + music
    * policy are composed into the LTX prompt; LTX always generates audio.
@@ -271,6 +290,30 @@ export type ScriptScene = {
    * is under 5px wide at LTX's 448px output, on a playblast frame.
    */
   requiresParts?: CharacterPartRequirement[];
+};
+
+export type ScenePerformance = {
+  /** Visible motion for the whole take, positive and present tense. */
+  action: string;
+  /**
+   * Body parts the action moves, at least one. Previs fails when one is not on
+   * screen in the start frame, because LTX would invent it mid-shot.
+   */
+  parts: BodyPart[];
+  /**
+   * What the face shows, as visible cues ("jaw set, eyes glassy but
+   * unblinking"), not a label. Previs requires it exactly when the face is
+   * readable in the start frame (the face-attribute gate): without it the
+   * still and the clip keep a neutral face; on an unreadable face it is never drawn.
+   */
+  expression?: string;
+};
+
+export type SceneDialogue = {
+  /** The words spoken, nothing else. */
+  line: string;
+  /** How it is said: "low, final", "harsh, rising". */
+  delivery: string;
 };
 
 export type ShowEpisode = {
