@@ -50,7 +50,7 @@ from pipeline_paths import (
 from previs import current_previs, load_observation, previs_episode
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
-from world import load_show, scene_has_spatial_change
+from world import load_show, plate_path, scene_has_spatial_change
 
 ROOT = Path(__file__).resolve().parents[1]
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -937,12 +937,19 @@ _FACE_PASS_NODES = ("20", "21", "22", "23", "24", "25", "30", "31", "70")
 
 
 def qwen_pass(
-    dest: Path, prompt: str, pictures: list[tuple[str, Path]], seed: int, mode: str, keep: tuple[Path, Path] | None = None
+    dest: Path,
+    prompt: str,
+    pictures: list[tuple[str, Path]],
+    seed: int,
+    mode: str,
+    keep: tuple[Path, Path] | None = None,
+    matte: Path | None = None,
 ) -> None:
     """One Qwen-Image-Edit draw from up to four pictures. The first sets the canvas size.
 
     ``keep`` is (image, mask): the image's pixels where the mask is black are
-    kept exactly, and only the white area is drawn.
+    kept exactly, and only the white area is drawn. ``matte`` also writes the
+    drawn subject's soft outline (background removal on the result).
     """
     graph = clone_workflow(json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8")))
     inject_seed(graph, seed)
@@ -971,9 +978,16 @@ def qwen_pass(
         graph["54"] = {"inputs": {"image": ["53", 0], "channel": "red"}, "class_type": "ImageToMask"}
         graph["55"] = {"inputs": {"samples": ["52", 0], "mask": ["54", 0]}, "class_type": "SetLatentNoiseMask"}
         graph["10"]["inputs"]["latent_image"] = ["55", 0]
+    also = None
+    if matte is not None:
+        graph["60"] = {"inputs": {"bg_removal_name": "birefnet.safetensors"}, "class_type": "LoadBackgroundRemovalModel"}
+        graph["61"] = {"inputs": {"bg_removal_model": ["60", 0], "image": ["11", 0]}, "class_type": "RemoveBackground"}
+        graph["62"] = {"inputs": {"mask": ["61", 0]}, "class_type": "MaskToImage"}
+        graph["63"] = {"inputs": {"filename_prefix": "reelshort_matte", "images": ["62", 0]}, "class_type": "SaveImage"}
+        also = [("reelshort_matte", matte)]
     print(f"  Prompt: {prompt}", flush=True)
     print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode, also=also)
     if keep is not None:
         # The sampler works in latent space; put the kept pixels back exactly.
         drawn = Image.open(dest).convert("RGB")
@@ -982,38 +996,41 @@ def qwen_pass(
         Image.composite(kept, drawn, hold).save(dest)
 
 
-# Each person or prop is drawn alone from its own plate; landmarks and empty space are drawn in the shot.
-_PLATE_FOLDER = {"character": "characters", "prop": "props"}
 # Pixels of a pasted entity this close to its edge are redrawn, so it sits in the shot.
 _BLEND_PIXELS = 3
 
 
-def paste_drawn(color: Path, drawn: list[tuple[Path, Path, list[float]]], dest: Path, draw_mask: Path) -> Path:
-    """The shot's color guide with each drawn entity put back where, and only where, the shot shows it.
+def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], dest: Path, draw_mask: Path) -> Path:
+    """The shot's color guide with each drawn person, prop, and landmark laid in.
 
-    ``draw_mask`` is white wherever the shot still has to be drawn: everything
-    but the pasted entities, plus a thin band at their edges.
+    Each drawing is scaled down into its window (never up: the window lies inside
+    the frame) and blended by its own soft outline times where the shot shows it,
+    so nothing drawn can land where the 3D scene has no such thing. ``draw_mask``
+    is white wherever the shot still has to be drawn.
     """
     from scipy import ndimage
 
     shot = Image.open(color).convert("RGB")
-    held = np.zeros((shot.height, shot.width), dtype=bool)
-    for picture, mask, crop in drawn:
+    held = np.zeros((shot.height, shot.width), dtype=np.float32)
+    for picture, matte, shown, crop in drawn:
         x0, y0, x1, y1 = crop
         size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
         layer = Image.new("RGB", shot.size)
+        alpha = Image.new("L", shot.size, 0)
         layer.paste(Image.open(picture).convert("RGB").resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
-        visible_here = Image.open(mask).convert("L")
-        shot = Image.composite(layer, shot, visible_here)
-        held |= np.asarray(visible_here) > 127
+        alpha.paste(Image.open(matte).convert("L").resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
+        cover = np.asarray(alpha, dtype=np.float32) / 255.0
+        cover *= np.asarray(Image.open(shown).convert("L"), dtype=np.float32) / 255.0
+        shot = Image.composite(layer, shot, Image.fromarray(np.rint(cover * 255).astype(np.uint8)))
+        held = np.maximum(held, cover)
     shot.save(dest)
-    held = ndimage.binary_erosion(held, iterations=_BLEND_PIXELS)
-    Image.fromarray(np.where(held, 0, 255).astype(np.uint8)).save(draw_mask)
+    kept = ndimage.binary_erosion(held > 0.5, iterations=_BLEND_PIXELS)
+    Image.fromarray(np.where(kept, 0, 255).astype(np.uint8)).save(draw_mask)
     return dest
 
 
 def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
-    """One scene still: each visible person and prop drawn alone, pasted into the shot, the rest drawn around them.
+    """One scene still: everything in the shot drawn alone and pasted in, the empty space drawn around it.
 
     A drawn entity sees only its own guides (the shot camera magnified onto it),
     its plate, and its own words, so it never borrows another's description and
@@ -1033,21 +1050,24 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
             ("Depth", guide(f"drawn_{entity_id}_depth")),
             ("OwnColor", guide(f"drawn_{entity_id}_color")),
             ("Edges", guide(f"drawn_{entity_id}_edges")),
-            ("Appearance", OUTPUT_DIR / "plates" / show["id"] / _PLATE_FOLDER[entry["kind"]] / entity_id / "plate.png"),
+            ("Appearance", plate_path(show, entry["kind"], entity_id, scene["locationId"])),
         ]
         missing = [str(path) for _title, path in files if not present(path)]
         if missing:
             raise SystemExit(f"Missing {missing[0]}. Run `pnpm run content:previs` (and content:plates) first.")
         prompt = drawn_prompt(show, scene, entry["kind"], entity_id, [title for title, _path in files])
         picture = inputs / f"drawn_{entity_id}.png"
+        matte = inputs / f"drawn_{entity_id}_matte.png"
         print(f"  Drawn alone: {entity_id}", flush=True)
-        qwen_pass(picture, prompt, files, stable_seed(seed, "drawn", entity_id), f"Qwen {entry['kind']} ({entity_id})")
+        qwen_pass(
+            picture, prompt, files, stable_seed(seed, "drawn", entity_id), f"Qwen {entry['kind']} ({entity_id})", matte=matte
+        )
         append_generation_log(dest, f"drawn_{entity_id}", prompt, files, {"id": entity_id, "kind": entry["kind"]})
-        drawn.append((picture, guide(f"drawn_{entity_id}_mask"), entry["crop"]))
+        drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"]))
     draw_mask = inputs / "draw_mask.png"
     composite = paste_drawn(guide("color"), drawn, inputs / "composite.png", draw_mask)
     files = [("Depth", guide("depth")), ("Composite", composite), ("Edges", guide("edges"))]
-    prompt, details = still_prompt(show, scene, observation, [title for title, _path in files])
+    prompt, details = still_prompt(show, scene, observation, [title for title, _path in files], len(drawn))
     keep = (composite, draw_mask) if drawn else None
     qwen_pass(dest, prompt, files, seed, f"Qwen scene still ({label})", keep)
     append_generation_log(dest, "still", prompt, files, details)

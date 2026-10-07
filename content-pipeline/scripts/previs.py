@@ -21,7 +21,7 @@ from checks import check_scene
 from clip_spec import FPS as CLIP_FPS
 from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, clip_frame_count, fit_to_clip
 from coords import schema_to_gltf
-from observe import observe, visible
+from observe import in_shot, observe
 from pipeline_paths import (
     OUTPUT_DIR,
     blockout_video_path,
@@ -162,30 +162,80 @@ def color_image(frame, entities, labels: np.ndarray | None, backdrop: dict | Non
     return Image.fromarray(canvas)
 
 
-# People and props are drawn alone and pasted in; landmarks and empty space are drawn in the shot.
-DRAWN_ALONE = ("character", "prop")
+# Every person, prop, and landmark is drawn alone and pasted in; only empty space is drawn in the shot.
+DRAWN_ALONE = ("character", "prop", "landmark")
 
 
 def crop_window(entity, camera: dict) -> list[float] | None:
-    """A frame-shaped window around the whole entity, past the frame edge if it is."""
+    """A frame-shaped window around the whole entity, so it is always drawn whole.
+
+    A person cut by the frame edge is still a whole person in its window (the
+    window may run past the frame); the shot keeps only what it shows. Only an
+    entity bigger than the frame gets a frame-sized window over the part in view,
+    so a drawing is only ever scaled down into the shot, never up.
+    """
     from render import screen_box
 
     box = screen_box(entity, camera)
     if box is None:
         return None
     x0, y0, x1, y1 = box
-    height = max((y1 - y0) * 1.08, (x1 - x0) * 1.08 * HEIGHT / WIDTH, 1.0)
-    width = height * WIDTH / HEIGHT
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    return [round(cx - width / 2, 2), round(cy - height / 2, 2), round(cx + width / 2, 2), round(cy + height / 2, 2)]
+    if min(x1, WIDTH) <= max(x0, 0.0) or min(y1, HEIGHT) <= max(y0, 0.0):
+        return None
+    height = max((y1 - y0) * 1.06, (x1 - x0) * 1.06 * HEIGHT / WIDTH, 16.0)
+    if height <= HEIGHT:
+        width = height * WIDTH / HEIGHT
+        left, top = (x0 + x1) / 2 - width / 2, (y0 + y1) / 2 - height / 2
+    else:
+        x0, y0, x1, y1 = max(x0, 0.0), max(y0, 0.0), min(x1, float(WIDTH)), min(y1, float(HEIGHT))
+        height = min(max((y1 - y0) * 1.06, (x1 - x0) * 1.06 * HEIGHT / WIDTH, 16.0), float(HEIGHT))
+        width = height * WIDTH / HEIGHT
+        left = min(max((x0 + x1) / 2 - width / 2, 0.0), WIDTH - width)
+        top = min(max((y0 + y1) / 2 - height / 2, 0.0), HEIGHT - height)
+    return [round(left, 2), round(top, 2), round(left + width, 2), round(top + height, 2)]
+
+
+# A drawn outline may differ from the mesh by this much (hair, cloth), and is softened over it.
+SHOWN_GROW_PIXELS = 4
+
+
+def shown_mask(frame, entities, index: int, alone) -> Image.Image:
+    """Soft mask of where the shot shows this entity: its rendered silhouette, grown a
+    little so the drawing's own hair and cloth edges survive, minus what is in front.
+
+    A drawing can never land outside it, whatever was drawn.
+    """
+    from scipy import ndimage
+
+    silhouette = ndimage.binary_dilation(np.isfinite(alone.depth), iterations=SHOWN_GROW_PIXELS)
+    shown = silhouette & ~hidden_mask(frame, entities, index, alone)
+    soft = ndimage.gaussian_filter(shown.astype(np.float32), sigma=1.0)
+    return Image.fromarray(np.rint(np.clip(soft, 0, 1) * 255).astype(np.uint8))
+
+
+def hidden_mask(frame, entities, index: int, alone) -> np.ndarray:
+    """Where something closer than this entity covers it in the shot. The floor hides nothing.
+
+    Inside its silhouette that is anything in front of its own surface; just
+    outside (hair or cloth the drawing adds) anything nearer than its nearest point.
+    """
+    own = alone.depth
+    inside = np.isfinite(own)
+    if not inside.any():
+        return np.zeros(own.shape, dtype=bool)
+    floors = [number + 1 for number, entity in enumerate(entities) if entity.kind == "floor"]
+    other = (frame.entity > 0) & (frame.entity != index + 1) & ~np.isin(frame.entity, floors)
+    slack = np.maximum(np.float32(0.05), np.where(inside, own, 0) * np.float32(0.02))
+    in_front = np.where(inside, frame.depth < own - slack, frame.depth < np.float32(own[inside].min()))
+    return other & in_front
 
 
 def write_guides(show, episode, scene, label, observation, frame, labels, entities) -> list[Path]:
-    """Scene guides, and for each visible person or prop its own guides, drawn alone at full size.
+    """Scene guides, and for each person, prop, and landmark in the shot its own guides, drawn alone.
 
-    The crop is the same camera magnified onto it, so pose and turn are exactly
-    the shot's. ``drawn_<id>_mask`` is where it is visible in the shot, which is
-    where its drawn picture is pasted.
+    The crop is the same camera magnified onto its part of the frame, so pose and
+    turn are exactly the shot's. ``drawn_<id>_shown`` is where the shot shows it,
+    the only place its drawing may land.
     """
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
     location = show["locations"][scene["locationId"]]
@@ -197,7 +247,7 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         guide_path(*ids, label, "color"): color_image(frame, entities, labels, location["backdrop"]),
     }
     for index, entity in enumerate(entities):
-        if entity.kind not in DRAWN_ALONE or not visible(observation, entity.id):
+        if entity.kind not in DRAWN_ALONE or not in_shot(observation, entity.id):
             continue
         crop = crop_window(entity, camera)
         if crop is None:
@@ -207,9 +257,7 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         images[guide_path(*ids, label, f"{prefix}_depth")] = depth_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_edges")] = edge_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_color")] = color_image(alone, [entity], None, None)
-        images[guide_path(*ids, label, f"{prefix}_mask")] = Image.fromarray(
-            np.where(frame.entity == index + 1, 255, 0).astype(np.uint8)
-        )
+        images[guide_path(*ids, label, f"{prefix}_shown")] = shown_mask(frame, entities, index, render([entity], camera))
         observation["entities"][entity.id]["crop"] = crop
     for path, image in images.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -234,7 +282,7 @@ def write_world(show, episode, scene, samples) -> Path:
                     "id": entity.id,
                     "position": list(schema_to_gltf(entity.offset)),
                     "yawDegrees": round(entity.yaw_degrees, 3),
-                    "visible": visible(observation, entity.id),
+                    "visible": in_shot(observation, entity.id),
                 }
             )
         camera = observation["camera"]
@@ -316,7 +364,7 @@ def render_scene(show: dict, episode: dict, scene: dict) -> tuple[list[str], lis
     seen = [
         entity_id
         for entity_id, entry in samples[0][1]["entities"].items()
-        if entry["kind"] != "backdrop" and visible(samples[0][1], entity_id)
+        if entry["kind"] != "backdrop" and in_shot(samples[0][1], entity_id)
     ]
     print(f"  start frame shows: {', '.join(seen) or 'nothing'}", flush=True)
     video = blockout_video_path(show["id"], episode["episodeNumber"], scene["sceneNumber"])

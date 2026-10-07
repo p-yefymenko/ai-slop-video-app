@@ -75,10 +75,10 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
                     f"{where}: performances.{cid}.parts names {part}, but their {part} is never visible "
                     f"in the shot (start: {_numbers(start, cid, part)}). Reframe, re-block, or change the action."
                 )
-        if performance.get("expression") and not visible(start, cid, ["face"]):
+        if performance.get("expression") and not on_screen(start, cid, ["face"]):
             errors.append(
                 f"{where}: performances.{cid}.expression is set, but their face is not visible in the start "
-                f"frame ({_numbers(start, cid, 'face')}), so it would be painted where no face is. Remove it or reframe."
+                f"frame ({_numbers(start, cid, 'face')}), so nobody would see it. Remove it or reframe."
             )
 
     speaker = scene.get("speakerId")

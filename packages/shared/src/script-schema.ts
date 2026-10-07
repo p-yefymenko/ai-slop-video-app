@@ -661,6 +661,19 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   }
   for (const propId of Object.keys(show.props ?? {})) {
     checkSnakeId(issues, `props.${propId}`, propId, "prop id");
+    // One object is written once: worn for the whole show it is part of the
+    // character's look; a prop is a separate mesh the timeline places.
+    const words = propId.split("_");
+    for (const [characterId, character] of Object.entries(show.characters)) {
+      character.attributes.forEach((attribute, attributeIndex) => {
+        if (words.every((word) => new RegExp(`\\b${word}\\b`, "i").test(attribute))) {
+          issues.push({
+            path: `characters.${characterId}.attributes[${attributeIndex}]`,
+            message: `describes prop ${JSON.stringify(propId)}; an object is either part of the character's look (an attribute) or a prop the timeline places, never both`,
+          });
+        }
+      });
+    }
   }
 
   const seenEpisodes = new Set<number>();

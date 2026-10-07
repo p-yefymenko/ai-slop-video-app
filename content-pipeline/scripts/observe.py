@@ -1,12 +1,17 @@
-"""What the camera sees at one moment, and the one rule for "visible".
+"""What the camera sees at one moment: what is in the shot, and what is visible enough.
 
 An observation lists every entity in the location with, per region, the pixels
 that are actually the front surface (``visible``) and the pixels the region would
 cover with nothing in front of it, not even the rest of the same body (``extent``).
 Sky, ground, and surround are entities too, measured on the empty-space plate.
 
-``visible`` is the only test anything uses: a still names a description, a
-check accepts a performance part, a sound source, or a speaker's face, all by it.
+Two tests, for two different jobs:
+
+- ``in_shot``: any pixel of it is in the frame. Everything in the shot is drawn
+  (or, for sky, ground, and surround, said), so there is no size cutoff that
+  could leave words without a place or a place without its picture.
+- ``visible``: large enough for a purpose and not mostly hidden. Only the
+  script checks use it (a performance part, a sound source, a speaker's face).
 """
 
 from __future__ import annotations
@@ -19,23 +24,28 @@ from world import camera_at, entities_at, settings
 BACKDROP = ("sky", "ground", "surround")
 
 
-def passes(visible_px: int, extent_px: int | None, minimum: int | None = None) -> bool:
-    """Large enough, and not mostly hidden behind something, itself included.
+def in_shot(observation: dict, entity_id: str) -> bool:
+    """Any pixel of it is in the frame."""
+    entry = observation["entities"].get(entity_id)
+    return entry is not None and entry["pixels"][0] > 0
 
-    ``minimum`` defaults to ``visibleMinPixels`` (large enough to name in a
-    still). A purpose that needs more, such as a mouth to lip-sync, passes its
-    own minimum; the measurement and the hidden-share test stay the same.
-    ``extent_px`` is None when the region was too small to be worth measuring.
+
+def passes(visible_px: int, extent_px: int | None, minimum: int) -> bool:
+    """At least ``minimum`` pixels, and not mostly hidden behind something, itself included.
+
+    Each check passes its own minimum (on screen, a mouth to lip-sync); the
+    measurement and the hidden-share test stay the same. ``extent_px`` is None
+    when the region was too small to be worth measuring.
     """
     config = settings()
     return (
-        visible_px >= (config["visibleMinPixels"] if minimum is None else minimum)
+        visible_px >= minimum
         and extent_px is not None
         and visible_px >= config["visibleMinShare"] * extent_px
     )
 
 
-def visible(observation: dict, entity_id: str, regions=None, minimum: int | None = None) -> bool:
+def visible(observation: dict, entity_id: str, regions, minimum: int) -> bool:
     """True when any of these regions (default: any region) passes."""
     entry = observation["entities"].get(entity_id)
     if entry is None:
@@ -99,8 +109,8 @@ def observe(show: dict, episode: dict, scene: dict, time_seconds: float, full: b
     shown_total = np.bincount(frame.entity.ravel(), minlength=len(entities) + 1)
     if full:
         x_sum = np.bincount(frame.entity.ravel(), weights=np.tile(np.arange(WIDTH, dtype=np.float64), HEIGHT), minlength=len(entities) + 1)
-    # Every purpose's minimum is at least this; smaller regions fail them all.
-    minimum = min(settings()["visibleMinPixels"], settings()["onScreenMinPixels"])
+    # Every check's minimum is at least this; smaller regions fail them all.
+    minimum = settings()["onScreenMinPixels"]
     found: dict[str, dict] = {}
     for index, entity in enumerate(entities):
         if entity.kind == "floor":

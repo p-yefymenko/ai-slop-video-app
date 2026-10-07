@@ -18,7 +18,7 @@ from body_parts import BODY_PARTS  # noqa: E402
 from checks import check_scene  # noqa: E402
 from describe import drawn_prompt, ltx_prompt, people_places, still_prompt  # noqa: E402
 from mesh_io import write_schema_glb  # noqa: E402
-from observe import passes, visible  # noqa: E402
+from observe import in_shot, passes, visible  # noqa: E402
 
 
 def column(radius: float = 0.2, height: float = 1.7, rings: int = 80, around: int = 24):
@@ -172,15 +172,21 @@ class EntityTests(unittest.TestCase):
 
 
 class VisibilityTests(unittest.TestCase):
-    def test_one_rule_for_every_region(self) -> None:
-        self.assertTrue(passes(5000, 6000))
-        self.assertFalse(passes(1800, 42000), "a face seen from behind is a sliver of its extent")
-        self.assertFalse(passes(100, 100), "too small to read")
+    def test_checks_share_one_rule_with_their_own_minimum(self) -> None:
+        self.assertTrue(passes(5000, 6000, 250))
+        self.assertFalse(passes(1800, 42000, 250), "a face seen from behind is a sliver of its extent")
+        self.assertFalse(passes(100, 100, 250), "too small for this purpose")
         seen = observation({"ada": BEHIND})
-        self.assertTrue(visible(seen, "ada"))
-        self.assertTrue(visible(seen, "ada", ["hair"]))
-        self.assertFalse(visible(seen, "ada", ["face"]))
-        self.assertFalse(visible(seen, "nobody"))
+        self.assertTrue(visible(seen, "ada", None, 250))
+        self.assertTrue(visible(seen, "ada", ["hair"], 250))
+        self.assertFalse(visible(seen, "ada", ["face"], 250))
+        self.assertFalse(visible(seen, "nobody", None, 250))
+
+    def test_in_shot_has_no_size_cutoff(self) -> None:
+        seen = observation({"ada": {"hair": [1, 9000]}})
+        self.assertTrue(in_shot(seen, "ada"))
+        self.assertFalse(in_shot(observation({"ada": {"hair": [0, 9000]}}), "ada"))
+        self.assertFalse(in_shot(seen, "nobody"))
 
 
 class DescribeTests(unittest.TestCase):
@@ -193,28 +199,29 @@ class DescribeTests(unittest.TestCase):
         self.assertIn("One person, alone", prompt)
         self.assertNotIn("ada", prompt)
 
-    def test_the_shot_prompt_names_no_person(self) -> None:
+    def test_a_landmark_is_drawn_whole_from_its_own_words(self) -> None:
         show = show_with({})
-        prompt, _log = still_prompt(show, scene(), observation({"ada": FRONT}), ["Depth", "Composite", "Edges"])
-        self.assertIn("One person, already painted.", prompt)
-        self.assertIn("already painted are finished and stay exactly as they are", prompt)
-        self.assertNotIn("52 years old", prompt)
-        self.assertNotIn("black hair", prompt)
+        prompt = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
+        self.assertIn("One object, alone", prompt)
+        self.assertIn("One stone bench.", prompt)
 
-    def test_landmarks_props_and_backdrop_use_the_same_rule(self) -> None:
+    def test_the_shot_prompt_names_no_object_only_the_setting(self) -> None:
         show = show_with({})
         seen = observation(
-            {},
+            {"ada": FRONT},
             bench={"kind": "landmark", "pixels": [9000, 10000], "regions": {"whole": [9000, 10000]}},
             sky={"kind": "backdrop", "pixels": [20000, 20000], "regions": {"whole": [20000, 20000]}},
             ground={"kind": "backdrop", "pixels": [40, 40], "regions": {"whole": [40, 40]}},
+            surround={"kind": "backdrop", "pixels": [0, 0], "regions": {"whole": [0, 0]}},
         )
-        prompt, _log = still_prompt(show, scene(), seen, ["Depth", "Composite", "Edges"])
-        self.assertIn("One stone bench.", prompt)
-        self.assertIn("Behind and around: A gray sky.", prompt)
-        self.assertNotIn("stone paving", prompt)
-        hidden = observation({}, bench={"kind": "landmark", "pixels": [900, 10000], "regions": {"whole": [900, 10000]}})
-        self.assertNotIn("bench", still_prompt(show, scene(), hidden, ["Depth", "Composite", "Edges"])[0])
+        prompt, _log = still_prompt(show, scene(), seen, ["Depth", "Composite", "Edges"], 2)
+        self.assertIn("already painted are finished and stay exactly as they are", prompt)
+        self.assertIn("Everything standing in the shot is already painted", prompt)
+        self.assertNotIn("bench", prompt)
+        self.assertNotIn("52 years old", prompt)
+        self.assertIn("A gray sky.", prompt)
+        self.assertIn("stone paving", prompt.lower(), "any pixel of the ground in the shot is said")
+        self.assertNotIn("open fields", prompt)
 
     def test_ltx_names_people_by_where_the_start_frame_shows_them(self) -> None:
         show = show_with({})
@@ -264,15 +271,13 @@ class RenderTests(unittest.TestCase):
             frame = render([person], camera)
             shown = int(np.count_nonzero((frame.entity == 1) & (frame.region == face + 1)))
             extent = coverage(person, camera)[0][face]
-            self.assertEqual(passes(shown, extent), expected, (position, shown, extent))
+            self.assertEqual(passes(shown, extent, 250), expected, (position, shown, extent))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class PasteTests(unittest.TestCase):
-    def test_a_drawn_person_lands_only_where_the_shot_shows_them(self) -> None:
+    def test_a_drawing_lands_only_where_the_shot_shows_its_subject(self) -> None:
         from PIL import Image
 
         from generate_batch import paste_drawn
@@ -280,18 +285,55 @@ class PasteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             Image.new("RGB", (40, 80), (0, 0, 255)).save(root / "color.png")
-            Image.new("RGB", (20, 40), (255, 0, 0)).save(root / "drawn.png")
-            mask = Image.new("L", (40, 80), 0)
-            mask.paste(255, (10, 10, 20, 30))
-            mask.save(root / "mask.png")
+            Image.new("RGB", (40, 80), (255, 0, 0)).save(root / "drawn.png")
+            Image.new("L", (40, 80), 255).save(root / "matte.png")  # the drawing fills its whole canvas
+            shown = Image.new("L", (40, 80), 0)
+            shown.paste(255, (2, 4, 18, 30))  # the subject is only here in the shot
+            shown.save(root / "shown.png")
             out = paste_drawn(
-                root / "color.png", [(root / "drawn.png", root / "mask.png", [5.0, 5.0, 25.0, 45.0])], root / "out.png", root / "draw.png"
+                root / "color.png",
+                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0])],
+                root / "out.png",
+                root / "draw.png",
             )
             image = Image.open(out)
-            self.assertEqual(image.getpixel((15, 20)), (255, 0, 0))
-            self.assertEqual(image.getpixel((22, 20)), (0, 0, 255), "drawn but hidden in the shot")
-            self.assertEqual(image.getpixel((2, 2)), (0, 0, 255))
+            self.assertEqual(image.getpixel((10, 20)), (255, 0, 0), "where the shot shows it")
+            self.assertEqual(image.getpixel((10, 35)), (0, 0, 255), "drawn there, but the subject is not there")
+            self.assertEqual(image.getpixel((30, 60)), (0, 0, 255), "a window scales the drawing down only")
             draw = Image.open(root / "draw.png")
-            self.assertEqual(draw.getpixel((15, 20)), 0, "a pasted pixel is kept")
-            self.assertEqual(draw.getpixel((10, 10)), 255, "its edge is redrawn to sit in the shot")
-            self.assertEqual(draw.getpixel((30, 60)), 255, "everything else is drawn")
+            self.assertEqual(draw.getpixel((10, 20)), 0, "a laid-in pixel is kept")
+            self.assertEqual(draw.getpixel((10, 35)), 255, "everything else is drawn by the shot")
+
+
+class WindowTests(unittest.TestCase):
+    def window(self, box):
+        from previs import crop_window
+
+        with patch("render.screen_box", lambda _entity, _camera: box):
+            return crop_window(None, {})
+
+    def test_a_person_cut_by_the_frame_edge_is_drawn_whole(self) -> None:
+        from render import HEIGHT, WIDTH
+
+        x0, y0, x1, y1 = self.window((-120.0, 300.0, 40.0, 900.0))
+        self.assertLessEqual(x0, -120.0, "the window runs past the frame to hold the whole person")
+        self.assertGreaterEqual(x1, 40.0)
+        self.assertLessEqual(y0, 300.0)
+        self.assertGreaterEqual(y1, 900.0)
+        self.assertAlmostEqual((x1 - x0) / (y1 - y0), WIDTH / HEIGHT, places=2)
+
+    def test_something_bigger_than_the_frame_is_never_scaled_up(self) -> None:
+        from render import HEIGHT, WIDTH
+
+        x0, y0, x1, y1 = self.window((100.0, 200.0, 700.0, 4000.0))
+        self.assertGreaterEqual(x0, 0.0)
+        self.assertGreaterEqual(y0, 0.0)
+        self.assertLessEqual(x1, WIDTH + 0.01)
+        self.assertLessEqual(y1, HEIGHT + 0.01)
+
+    def test_out_of_frame_has_no_window(self) -> None:
+        self.assertIsNone(self.window((-300.0, 100.0, -10.0, 500.0)))
+
+
+if __name__ == "__main__":
+    unittest.main()

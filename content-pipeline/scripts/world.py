@@ -267,14 +267,24 @@ def _floor_mesh(size: Vec3) -> Mesh:
     return _region_mesh(f"floor:{width}x{depth}", vertices, faces, None, np.zeros(4, dtype=np.int16))
 
 
+def asset_dir(show: dict, stage: str, kind: str, entity_id: str, location_id: str | None = None) -> Path:
+    """Where one entity's files of a pipeline stage (plates, assets) live."""
+    root = stage_dir(stage, str(show["id"]))
+    if kind == "character":
+        return root / "characters" / entity_id
+    if kind == "prop":
+        return root / "props" / entity_id
+    return root / str(location_id) / entity_id
+
+
 def mesh_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
     """Where the generated mesh of one entity lives."""
-    root = stage_dir("assets", str(show["id"]))
-    if kind == "character":
-        return root / "characters" / entity_id / "model.glb"
-    if kind == "prop":
-        return root / "props" / entity_id / "model.glb"
-    return root / str(location_id) / entity_id / "model.glb"
+    return asset_dir(show, "assets", kind, entity_id, location_id) / "model.glb"
+
+
+def plate_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
+    """The picture an entity is drawn from: how it looks."""
+    return asset_dir(show, "plates", kind, entity_id, location_id) / "plate.png"
 
 
 def required_meshes(show: dict) -> list[Path]:
@@ -382,10 +392,10 @@ def plate_clause(text: str) -> str:
 
 
 def descriptions(show: dict, scene: dict, kind: str, entity_id: str) -> list[tuple[str, tuple[str, ...]]]:
-    """Words for a landmark, prop, or stretch of empty space, sent when it is visible.
+    """Words for a landmark, prop, or stretch of empty space (sky, ground, surround).
 
-    A person is not described in the shot: each is drawn whole in their own pass
-    from ``character_appearance_text``.
+    A landmark or prop is said only in its own drawn-alone pass; a person's words
+    are ``character_appearance_text``.
     """
     if kind == "landmark":
         appearance = show["locations"][scene["locationId"]]["spatial"]["landmarks"][entity_id]["appearance"]

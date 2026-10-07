@@ -3,7 +3,6 @@
   "characterPlate": "One adult standing full-body on a plain background, feet visible, arms at their sides, facing the camera. Solid unbroken skin and solid cloth, no holes, no lace, no mesh, no transparent fabric. Ignore the attached blank image and create only this person: {description}",
   "stillOpening": "Photorealistic vertical 9:16 film frame with real cloth and skin texture, natural storm light.",
   "rowDepthRatio": 1.5,
-  "visibleMinPixels": 250,
   "onScreenMinPixels": 50,
   "visibleMinShare": 0.25,
   "speakerFaceMinPixels": 2500,

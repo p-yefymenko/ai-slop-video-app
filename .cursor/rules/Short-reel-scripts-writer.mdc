@@ -242,7 +242,11 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** One object, alone. Drawn, meshed, and named like a landmark. */
+  /**
+   * One object, alone, that the timeline moves or hands around. Something a
+   * character wears for the whole show is an attribute of theirs, not a prop;
+   * writing it as both is an error.
+   */
   appearance: string;
   size: Vec3;
 };

@@ -19,7 +19,7 @@ Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipelin
 | Path | Role |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates and renderer numbers: `visibleMinShare` and one minimum size per purpose: `visibleMinPixels` (named in a still), `onScreenMinPixels` (on screen: needs a performance, can move, can make a sound), `speakerFaceMinPixels` (can lip-sync), `rowDepthRatio`, `endStill`, `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `sceneRenderOptions`, the `scene*` LTX templates, `soundLint`, and `episodeLoudnessTargetLufs`. Not show content. |
+| `content-pipeline/prompts.json` | Shared Qwen and LTX templates and renderer numbers: `visibleMinShare` and one minimum size per check: `onScreenMinPixels` (on screen: needs a performance, can move, can make a sound), `speakerFaceMinPixels` (can lip-sync), `rowDepthRatio`, `endStill`, `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `sceneRenderOptions`, the `scene*` LTX templates, `soundLint`, and `episodeLoudnessTargetLufs`. Not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
 ### The world
@@ -29,7 +29,7 @@ Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `c
 - **Entities.** A character (`body`, `attributes`, `heightMeters`), a landmark (`position`, `size`, `appearance`, per location), and a prop (`appearance`, `size`) are all the same thing: one generated, plate-colored mesh, fitted into its size, with named regions. A character's regions are body parts; anything else has one region, `whole`. A whole place seen from far away (a hanging citadel) is one landmark the size of the location.
 - **Timeline.** Every character and every prop has a track in every episode, starting at 0. A keyframe puts it in a location at a position, or off stage (`locationId: null`). A prop is held (`heldByCharacterId`, `heldInHand`) or placed. A character's body faces `lookAtId` when set, else `bodyYawDegrees`.
 - **Presence.** Who is in a shot is never written down. `world.entities_at` lists everything whose track puts it in the scene's location at that moment. Nobody despawns.
-- **Visibility.** `observe.observe` renders one moment and measures, per entity and region, `visible` (pixels that are the front surface) and `extent` (pixels the region would cover with nothing in front, not even the same body). A region is visible when `visible ≥ visibleMinPixels` and `visible ≥ visibleMinShare × extent`. Each purpose has its own minimum size and shares the hidden-share test: named in a still (`visibleMinPixels`), on screen at all (`onScreenMinPixels`), large enough to lip-sync (`speakerFaceMinPixels`). A face seen from behind covers its full extent but shows a sliver, so it is not visible. That one test decides what a still names, and every check below.
+- **Visibility.** `observe.observe` renders one moment and measures, per entity and region, `visible` (pixels that are the front surface) and `extent` (pixels the region would cover with nothing in front, not even the same body). There are two tests for two jobs. **In shot** (`observe.in_shot`): any pixel in the frame. Everything in shot is drawn into the still, with no size cutoff, so no words ever have to find their own place in a picture. **Visible** (`observe.visible`): `visible ≥ minimum` and `visible ≥ visibleMinShare × extent`, where each check has its own minimum: on screen at all (`onScreenMinPixels`), large enough to lip-sync (`speakerFaceMinPixels`). A face seen from behind covers its full extent but shows a sliver, so it is not visible. Only the checks below use it.
 
 `pnpm run content:validate` checks every show script's shape and references (TypeScript, zod). Every `content:*` stage runs it first and stops on an error. It does not decide what is visible; previs does. A high authored camera travel+rotation score (threshold **20**) and sound lint print warnings and do not fail.
 
@@ -85,9 +85,9 @@ Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `b
 | `depth` | Camera-forward depth. Near is bright, empty space black. |
 | `edges` | Where depth jumps or a surface meets empty space. |
 | `color` | Every entity in flat plate colors, empty space in the location's flat sky, ground, and surround colors. |
-| `drawn_<id>_depth`, `_edges`, `_color` | One visible person or prop drawn alone: the shot camera magnified onto their whole body, so pose and turn are the shot's at full resolution, even past the frame edge. |
-| `drawn_<id>_mask` | Where it is visible in the shot. |
-| `observation.json` | Per entity, region pixels `[visible, extent]`, screen x, depth, and each person's crop window. |
+| `drawn_<id>_depth`, `_edges`, `_color` | One person, prop, or landmark in shot, drawn alone: the shot camera magnified onto a window around the whole entity, so pose and turn are the shot's and it is always drawn whole, even when the frame edge cuts it (the window may run past the frame). Only an entity bigger than the frame gets a frame-sized window over the part in view, so a drawing is only ever scaled down into the shot. |
+| `drawn_<id>_shown` | Where the shot shows it: its rendered silhouette, grown 4 px and softened, minus anything closer (the floor covers nothing). A drawing can land only here. |
+| `observation.json` | Per entity, region pixels `[visible, extent]`, screen x, depth, and each drawn entity's crop window. |
 | `clay_24fps.mp4` | Clay at LTX size and rate, for shots whose camera or people move. Input to Depth Anything. |
 | `control_depth.mp4` | Written by `content:generate`: Depth Anything on `clay_24fps.mp4`. |
 
@@ -95,11 +95,11 @@ Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `b
 
 `content:frames` runs previs for each scene first, unless `guides/previs_record.json` shows the guides were made from the same script, meshes, settings, and previs code, and stops on a mismatch. Each still is drawn in passes with `workflows/qwen_image_edit_spatial.json` (768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0, from noise, the four-picture `TextEncodeQwenBackdrop` encoder):
 
-1. **One pass per visible person and prop.** Pictures: its depth, colors, and edges (the shot camera magnified onto it), plus its plate as the appearance reference. Words: only its own. A person gets `body`, every attribute, and their expression; a prop its appearance. Each is drawn whole, so a figure the shot shows a sliver of is still dressed, nothing borrows another's description, and size in the shot does not matter.
-2. **Composite.** Each drawn picture is scaled back to its crop window and pasted into the `color` guide only where `drawn_<id>_mask` shows it.
-3. **The shot, inpainted.** Pictures: depth, the composite, edges. The pasted pixels are kept exactly; only the rest of the frame (and a 3-pixel band at each pasted edge, so it sits in the shot) is drawn. Words: `stillOpening`, the legend, the count of people, the visible landmarks, and "Behind and around:" with the visible sky, ground, and surround.
+1. **One pass per person, prop, and landmark in shot**, however little of it shows. Pictures: its depth, colors, and edges (the shot camera magnified onto its window), plus its plate as the appearance reference. Words: only its own. A person gets `body`, every attribute, and their expression; a prop or landmark its appearance. A fire ring is drawn with its fire because its plate has it. Nothing borrows another's description, and the drawing has at least the resolution the shot needs. The same pass also writes the drawing's soft outline (BiRefNet on the result).
+2. **Composite.** Each drawing is scaled down into its window and blended into the `color` guide by its own soft outline times `drawn_<id>_shown`. Nothing drawn can land where the 3D scene has no such thing, and the soft cut leaves no stair-step or background fringe.
+3. **The shot, inpainted.** Pictures: depth, the composite, edges. The pasted pixels are kept exactly; only the rest of the frame (and a 3-pixel band at each pasted edge, so it sits in the shot) is drawn. Words: `stillOpening`, the legend, that everything standing in the shot is already painted, and "Behind and around:" with the sky, ground, and surround in shot. No object is named, so no description can land on the wrong one.
 
-A description is sent when any region it depends on is visible; trailing plate instructions such as "a single object" are dropped. Names and ids are never sent. `output/frames/<show>/<episode>/inputs/scene_XX_start/` keeps every pass's prompt and pictures, each drawn picture, `composite.png`, and `draw_mask.png`.
+Trailing plate instructions such as "a single object" are dropped. Names and ids are never sent. `output/frames/<show>/<episode>/inputs/scene_XX_start/` keeps every pass's prompt and pictures, each drawn picture, `composite.png`, and `draw_mask.png`.
 
 ### 5. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
 

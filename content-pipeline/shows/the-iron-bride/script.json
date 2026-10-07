@@ -227,16 +227,6 @@
       }
     }
   },
-  "props": {
-    "iron_collar": {
-      "appearance": "One thick open iron torc neck ring, a single piece of dark metal, no person and no chain.",
-      "size": [
-        0.28,
-        0.22,
-        0.08
-      ]
-    }
-  },
   "episodes": [
     {
       "episodeNumber": 1,
@@ -490,20 +480,7 @@
             }
           ]
         },
-        "propTracks": {
-          "iron_collar": [
-            {
-              "timeSeconds": 0,
-              "heldByCharacterId": "sela",
-              "heldInHand": "left"
-            },
-            {
-              "timeSeconds": 60,
-              "heldByCharacterId": "sela",
-              "heldInHand": "left"
-            }
-          ]
-        }
+        "propTracks": {}
       },
       "scenes": [
         {

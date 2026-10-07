@@ -56,7 +56,10 @@ export type LocationLandmark = {
   appearance: string;
 };
 
-/** A movable object. Generated and placed the same way as a landmark. */
+/**
+ * A movable object. Generated and placed the same way as a landmark. Something a
+ * character wears for the whole show is one of their attributes instead, never both.
+ */
 export type ShowProp = {
   appearance: string;
   /** Box `[width X, depth Y, height Z]` in meters. */

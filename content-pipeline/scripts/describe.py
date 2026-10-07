@@ -1,21 +1,20 @@
 """Words for Qwen and LTX, taken from the script and an observation.
 
-Every entity is described the same way: each of its descriptions is sent when
-any region it depends on is visible (``observe.visible``). People, landmarks,
-props, and the sky/ground/surround differ only in where their sentence goes.
-Character names and ids never reach a model.
+Words never have to find their own place in a picture. Every person, prop, and
+landmark in the shot is drawn alone from its own guides and plate, with only its
+own words, and pasted where the shot shows it. The shot pass is told only the
+sky, ground, and surround in the shot. Character names and ids never reach a model.
 """
 
 from __future__ import annotations
 
 import re
 
-from observe import visible
+from observe import in_shot
 from render import WIDTH
 from world import camera_moves, character_appearance_text, clause, descriptions, settings
 
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
-COUNT_WORDS = ("Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten")
 PICTURE_LEGEND = {
     "Depth": "Picture {n} is depth: brighter is closer, black is empty space.",
     "Edges": "Picture {n} is outlines.",
@@ -50,22 +49,6 @@ def _sentence(text: str) -> str:
     return text[:1].upper() + text[1:] + "." if text else ""
 
 
-def entity_text(show: dict, scene: dict, observation: dict, entity_id: str) -> tuple[list[str], list[dict]]:
-    """Visible descriptions of one entity, and a log line for each description."""
-    entry = observation["entities"][entity_id]
-    sent: list[str] = []
-    log: list[dict] = []
-    for text, regions in descriptions(show, scene, entry["kind"], entity_id):
-        shown = visible(observation, entity_id, regions)
-        record = {"text": text, "sent": shown}
-        if not shown:
-            record["regions"] = {name: entry["regions"].get(name) for name in regions}
-        log.append(record)
-        if shown:
-            sent.append(text)
-    return sent, log
-
-
 def _side(screen_x: float) -> str:
     if screen_x < WIDTH * 0.34:
         return "On the left"
@@ -87,13 +70,14 @@ def _row_slot(index: int, count: int) -> str:
 def people_places(observation: dict) -> dict[str, str]:
     """characterId -> where the person stands in this frame, in words.
 
-    Figures deeper than the nearest person times ``rowDepthRatio`` stand in a row
-    behind when at least two qualify; everyone else is named by screen side.
+    Everyone in the shot counts. Figures deeper than the nearest person times
+    ``rowDepthRatio`` stand in a row behind when at least two qualify; everyone
+    else is named by screen side.
     """
     people = [
         (entity_id, entry)
         for entity_id, entry in observation["entities"].items()
-        if entry["kind"] == "character" and visible(observation, entity_id)
+        if entry["kind"] == "character" and in_shot(observation, entity_id)
     ]
     if not people:
         return {}
@@ -112,20 +96,17 @@ def people_places(observation: dict) -> dict[str, str]:
     return places
 
 
-def thing_sentences(show: dict, scene: dict, observation: dict, kinds: tuple[str, ...]) -> tuple[str, list[dict]]:
-    """Visible appearances of these kinds of entity, each said once."""
+def setting_sentences(show: dict, scene: dict, observation: dict) -> str:
+    """The sky, ground, and surround in the shot. Each fills its own stretch of the frame."""
     said: list[str] = []
-    log: list[dict] = []
     for entity_id, entry in observation["entities"].items():
-        if entry["kind"] not in kinds:
+        if entry["kind"] != "backdrop" or not in_shot(observation, entity_id):
             continue
-        sent, records = entity_text(show, scene, observation, entity_id)
-        log.append({"id": entity_id, "kind": entry["kind"], "pixels": entry["pixels"], "descriptions": records})
-        for text in sent:
+        for text, _regions in descriptions(show, scene, "backdrop", entity_id):
             sentence = _sentence(text)
             if sentence and sentence not in said:
                 said.append(sentence)
-    return " ".join(said), log
+    return " ".join(said)
 
 
 def _legend(pictures: list[str]) -> str:
@@ -133,7 +114,7 @@ def _legend(pictures: list[str]) -> str:
 
 
 def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: list[str]) -> str:
-    """One person or prop drawn whole and alone, from its own guides and only its own words.
+    """One person, prop, or landmark drawn whole and alone, from its own guides and only its own words.
 
     The shot keeps only the part of it the camera shows, so nothing here depends
     on what is visible.
@@ -156,21 +137,17 @@ def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: l
     return " ".join(part for part in parts if part)
 
 
-def still_prompt(show: dict, scene: dict, observation: dict, pictures: list[str]) -> tuple[str, dict]:
-    """The shot around its already painted people and props: legend, keep, count, landmarks, setting."""
-    people = len(people_places(observation))
-    things, things_log = thing_sentences(show, scene, observation, ("landmark",))
-    setting, setting_log = thing_sentences(show, scene, observation, ("backdrop",))
-    count = COUNT_WORDS[people] if people < len(COUNT_WORDS) else str(people)
+def still_prompt(show: dict, scene: dict, observation: dict, pictures: list[str], drawn: int) -> tuple[str, dict]:
+    """The shot around what is already painted: legend, keep, and the setting. No object is named here."""
+    setting = setting_sentences(show, scene, observation)
     parts = [
         clause(settings()["stillOpening"]) + ".",
         _legend(pictures),
         "Keep the shape, position, and occlusion from the pictures.",
-        f"{count} {'person' if people == 1 else 'people'}, already painted." if people else "",
-        things,
+        "Everything standing in the shot is already painted; draw only what is around it." if drawn else "",
         f"Behind and around: {setting}" if setting else "",
     ]
-    return " ".join(part for part in parts if part), {"people": people, "things": things_log, "setting": setting_log}
+    return " ".join(part for part in parts if part), {"drawn": drawn, "setting": setting}
 
 
 def sound_sentence(show: dict, scene: dict) -> str:

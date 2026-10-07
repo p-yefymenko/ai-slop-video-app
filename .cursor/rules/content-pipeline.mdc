@@ -16,7 +16,7 @@ Everything the pipeline creates lives under `output/<command>/<show>/`:
 - `frames` — scene stills
 - `generate` — scene clips and the episode cut
 
-A location is a set of landmarks plus a backdrop. A scene is one timed shot in an episode. Characters, landmarks, and props are all entities: one mesh, placed by the timeline (`world.py`). Who is in a shot comes from the tracks, never from a list. What is visible is one rule (`observe.visible`), used by the still prompt (`describe.py`) and the script checks (`checks.py`) alike. `pnpm run content:asset-deps` installs trimesh and moderngl.
+A location is a set of landmarks plus a backdrop. A scene is one timed shot in an episode. Characters, landmarks, and props are all entities: one mesh, placed by the timeline (`world.py`). Who is in a shot comes from the tracks, never from a list. Everything in the shot (any pixel, `observe.in_shot`) is drawn alone and pasted into the still; the shot prompt names no object, only sky, ground, and surround. Whether something is visible enough is one rule (`observe.visible`), used only by the script checks (`checks.py`). `pnpm run content:asset-deps` installs trimesh and moderngl.
 
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The viewer reads Y-up and does not convert. Open it with `pnpm run view -- --show <show-id>`.
 

@@ -296,6 +296,15 @@ test("rejects unknown landmark and prop sound sources", () => {
   assert.match(report, /events\[2\]\.source\.propId: unknown prop "lantern"/);
 });
 
+test("rejects an object written both as an attribute and as a prop", () => {
+  const show = minimalShow({ props: { iron_collar: { appearance: "One iron torc", size: [0.28, 0.22, 0.08] } } });
+  show.characters.ada.attributes.push("a plain iron bridal collar");
+  show.episodes[0].spatialTimeline.propTracks = {
+    iron_collar: [{ timeSeconds: 0, heldByCharacterId: "ada", heldInHand: "left" }],
+  };
+  assert.match(messages(show), /characters\.ada\.attributes\[3\]: describes prop "iron_collar"/);
+});
+
 test("rejects tagged attributes; a detail is plain text", () => {
   const show = minimalShow();
   (show.characters.ada.attributes as unknown[]) = [{ text: "black hair", parts: ["hair"] }];
