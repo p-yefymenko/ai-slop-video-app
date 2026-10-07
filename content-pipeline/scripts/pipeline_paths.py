@@ -3,11 +3,10 @@
 Authored files live under ``shows/<id>/``. Everything the pipeline creates
 lives under ``output/<command>/<show>/``:
 
-- ``plates`` — the location picture
-- ``assets`` — the location mesh
-- ``landmarks`` — shaded views used to place landmark coordinates
-- ``previs`` — clay scenes
-- ``frames`` — character portraits and scene stills
+- ``plates`` — one picture per landmark, prop, and character
+- ``assets`` — one mesh per plate
+- ``previs`` — rendered scenes, guides, and observations
+- ``frames`` — scene stills
 - ``generate`` — scene clips and the episode cut
 """
 

@@ -190,11 +190,7 @@ async function showScene(episodeNumber, sceneNumber) {
   );
   if (!listed) throw new Error(`No scene ${episodeNumber}/${sceneNumber}`);
   const scene = await fetchJson(listed.url);
-  const location = catalog.locations.find((item) => item.locationId === scene.locationId);
-  const modelUrl = scene.location?.model
-    ? `/pipeline/output/${scene.location.model}`
-    : location?.modelUrl || null;
-  await stage.showScene(scene, modelUrl);
+  await stage.showScene(scene);
   const [start, finish] = scene.timeRangeSeconds || [0, 0];
   const slider = document.createElement("input");
   slider.type = "range";

@@ -67,9 +67,6 @@ export const COIN_PACKAGES: CoinPackage[] = [
 export { BODY_PARTS } from "./script";
 export type {
   BodyPart,
-  CharacterAttribute,
-  CharacterPartRequirement,
-  CharacterProxy,
   LocationBackdrop,
   ScriptScene,
   ShowCharacter,

@@ -1,13 +1,12 @@
 {
-  "locationPlate": "A movie set. Ignore the attached blank image and create this place: {appearance}",
   "landmarkPlate": "One isolated object on a plain background. Ignore the attached blank image and create only this object: {appearance}",
   "characterPlate": "One adult standing full-body on a plain background, feet visible, arms at their sides, facing the camera. Solid unbroken skin and solid cloth, no holes, no lace, no mesh, no transparent fabric. Ignore the attached blank image and create only this person: {description}",
-  "characterImage": "Photorealistic vertical 9:16 identity reference, waist-up, exactly one person facing camera, neutral closed-mouth expression, hands out of frame, plain fitted crew-neck shirt, plain warm-grey studio backdrop, soft even light, natural skin, sharp eyes. No text, props, jewelry, costume, or other people. Ignore the attached blank image and create a new person from this description: {description}",
   "stillOpening": "Photorealistic vertical 9:16 film frame with real cloth and skin texture, natural storm light.",
   "rowDepthRatio": 1.5,
-  "landmarkMinScreenFraction": 0.008,
-  "partMinPixelHeight": 25,
-  "partMinScreenFraction": 0.00025,
+  "visibleMinPixels": 250,
+  "onScreenMinPixels": 50,
+  "visibleMinShare": 0.25,
+  "speakerFaceMinPixels": 2500,
   "endStill": false,
   "ltxStartStrength": 0.7,
   "ltxIcLoRAStrength": 1.0,
@@ -19,15 +18,6 @@
   },
   "cameraTravelWarnThreshold": 20,
   "sceneRenderOptions": {},
-
-  "depthVideo": {
-    "mapping": "inverse",
-    "nearPercentile": 1,
-    "farPercentile": 99
-  },
-  "spatialBlockout": "{stillPrompt}",
-  "spatialFaces": "Picture 1 is the finished shot of real people. Keep its camera, bodies, hands, set, and light. The later pictures are identity faces only: {referenceMap}. Replace only the masked faces with those identities. Do not describe or redraw the place. Do not turn the body into a mannequin or blocks. Do not move anyone or add people. Exactly {characterCount} visible people: {characterIds}.",
-  "spatialBackdrop": "Picture 1 is the people and assets from this shot. Keep them. Empty space in picture 1 is flat color, not a finished place. {structurePictures} Replace only the masked empty pixels with that place. Do not change faces, clothes, or assets. Do not invent walls, windows, or a palace.",
   "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its people, wardrobe, props, set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {action}",
   "sceneDialogue": "LIP SYNC: {person} visibly lip-syncs every spoken word; the lips open on the first syllable and articulate continuously through the line. DIALOGUE ({delivery}): \"{line}\"",
   "scenePerson": "{place}, {body}",

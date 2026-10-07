@@ -1,6 +1,6 @@
-"""Draw one place with Qwen, or turn a reviewed picture into a mesh.
+"""Draw one object or character with Qwen, or turn a reviewed picture into a mesh.
 
-A place or a landmark uses TRELLIS.2. A character uses Pixal3D, which shares
+A landmark or prop uses TRELLIS.2. A character uses Pixal3D, which shares
 that shape VAE and adds pixel-aligned features so the front matches the plate.
 """
 
@@ -32,14 +32,10 @@ UPSAMPLE_RESOLUTION = 1024
 PIXAL3D_PAD = 1.1
 
 
-def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = False) -> str:
+def plate_prompt(appearance: str, *, character: bool = False) -> str:
+    """A character, or one isolated object (a landmark or a prop)."""
     prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    if character:
-        key = "characterPlate"
-    elif landmark:
-        key = "landmarkPlate"
-    else:
-        key = "locationPlate"
+    key = "characterPlate" if character else "landmarkPlate"
     template = prompts.get(key)
     token = "{description}" if character else "{appearance}"
     if not isinstance(template, str) or token not in template:
@@ -50,9 +46,15 @@ def plate_prompt(appearance: str, *, landmark: bool = False, character: bool = F
     return template.replace(token, text)
 
 
-def trellis_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
-    """Image to a shape mesh. Location meshes stay untextured."""
-    return _shape_graph(image_name, seed, triangle_budget, pixel_aligned=False)
+def object_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
+    """TRELLIS.2 shape in its upright, canonical frame, then its texture painted on.
+
+    Pixel alignment would build the object in the plate's camera frame, tilted
+    by however far above it the plate was drawn from.
+    """
+    graph = _shape_graph(image_name, seed, triangle_budget, pixel_aligned=False)
+    _paint_plate_texture(graph, seed)
+    return graph
 
 
 def pixal3d_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
@@ -297,9 +299,7 @@ def plate_is_ready(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 1024
 
 
-def generate_asset_plate(
-    appearance: str, raw_dir: Path, *, landmark: bool = False, character: bool = False
-) -> Path:
+def generate_asset_plate(appearance: str, raw_dir: Path, *, character: bool = False) -> Path:
     """Write ``plate.png`` and stop. ComfyUI must already be running."""
     from generate_batch import (
         clone_workflow,
@@ -316,9 +316,7 @@ def generate_asset_plate(
     write_solid_png(blank, (210, 210, 210), PLATE_SIZE, PLATE_SIZE)
     plate_graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
     plate_graph["6"]["inputs"]["image"] = stage_named_image(blank, "asset_blank")
-    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(
-        appearance, landmark=landmark, character=character
-    )
+    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, character=character)
     plate_graph["10"]["inputs"]["seed"] = seed
     plate_path = raw_dir / "plate.png"
     try:
@@ -327,13 +325,7 @@ def generate_asset_plate(
             plate_graph,
             plate_path,
             prefer="image",
-            mode=(
-                "Qwen character plate"
-                if character
-                else "Qwen landmark plate"
-                if landmark
-                else "Qwen location plate"
-            ),
+            mode="Qwen character plate" if character else "Qwen object plate",
         )
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc
@@ -364,18 +356,16 @@ def generate_asset_mesh(
     mesh_path = raw_dir / "model.glb"
     seed = stable_seed("asset", " ".join(appearance.split()))
     staged = stage_named_image(plate_path, "asset_plate")
-    graph = (
-        pixal3d_graph(staged, seed, triangle_budget)
-        if character
-        else trellis_graph(staged, seed, triangle_budget)
-    )
+    # Every mesh keeps the plate's color. A character plate is a frontal photo,
+    # so its mesh is pixel-aligned to it; an object keeps TRELLIS.2's upright frame.
+    graph = (pixal3d_graph if character else object_graph)(staged, seed, triangle_budget)
     try:
         free_comfy_models()
         execute_queued_graph(
             graph,
             mesh_path,
             prefer="mesh",
-            mode="Pixal3D mesh" if character else "TRELLIS.2 mesh",
+            mode="Pixal3D mesh" if character else "TRELLIS.2 textured mesh",
         )
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc

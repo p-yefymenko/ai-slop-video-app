@@ -12,14 +12,14 @@ import numpy as np
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from asset_generate import generate_asset_mesh, pixal3d_graph, plate_prompt, trellis_graph  # noqa: E402
+from asset_generate import generate_asset_mesh, object_graph, pixal3d_graph, plate_prompt  # noqa: E402
 from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     collect_requests,
     export_credits,
-    location_scene_description,
-    write_location_plates,
+    description_hash,
+    write_plates,
 )
 from asset_sources import materialize_mesh  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
@@ -109,31 +109,23 @@ class AssetTests(unittest.TestCase):
         self.assertGreater(len(faces), 0)
         self.assertEqual(len(vertices), 8)
 
-    def test_trellis_graph_uses_the_int8_shape_pipeline(self) -> None:
-        graph = trellis_graph("plate.png", 7)
+    def test_objects_stay_upright_and_characters_are_pixel_aligned(self) -> None:
+        upright = [node["class_type"] for node in object_graph("plate.png", 7).values()]
+        self.assertIn("Trellis2Conditioning", upright)
+        self.assertNotIn("Pixal3DConditioning", upright)
+        self.assertIn("PaintMesh", upright)
+        graph = pixal3d_graph("plate.png", 7)
         classes = [node["class_type"] for node in graph.values()]
-        self.assertIn("Trellis2Conditioning", classes)
         self.assertIn("SaveGLB", classes)
-        self.assertIn("DecimateMesh", classes)
-        self.assertNotIn("Pixal3DConditioning", classes)
         decimate_id = next(node_id for node_id, node in graph.items() if node["class_type"] == "DecimateMesh")
-        decimate_node = graph[decimate_id]
-        self.assertEqual(decimate_node["inputs"]["target_face_count"], TRIANGLE_BUDGET)
-        custom = trellis_graph("plate.png", 7, triangle_budget=12_000)
+        self.assertEqual(graph[decimate_id]["inputs"]["target_face_count"], TRIANGLE_BUDGET)
+        self.assertEqual(graph[decimate_id]["inputs"]["placement_mode"], "midpoint")
+        custom = pixal3d_graph("plate.png", 7, triangle_budget=12_000)
         custom_decimate = next(node for node in custom.values() if node["class_type"] == "DecimateMesh")
         self.assertEqual(custom_decimate["inputs"]["target_face_count"], 12_000)
-        self.assertEqual(decimate_node["inputs"]["placement_mode"], "midpoint")
-        save = next(node for node in graph.values() if node["class_type"] == "SaveGLB")
-        self.assertEqual(save["inputs"]["mesh"], [decimate_id, 0])
-        unet = next(node for node in graph.values() if node["class_type"] == "UNETLoader")
-        self.assertEqual(unet["inputs"]["unet_name"], "trellis_2_int8_convrot.safetensors")
-        crop = next(node for node in graph.values() if node["class_type"] == "ImageCropToMask")
-        self.assertEqual(crop["inputs"]["pad_factor"], 1.0)
         self.assertEqual(latent_size(graph), (1024, 1024, 1))
         self.assertIn("a stone bench", plate_prompt("  a   stone bench "))
-        place = plate_prompt("a stone bench")
-        landmark = plate_prompt("a stone bench", landmark=True)
-        self.assertIn("movie set", place.lower())
+        landmark = plate_prompt("a stone bench")
         self.assertNotIn("movie set", landmark.lower())
         self.assertNotIn("place", landmark.lower())
         self.assertIn("a stone bench", landmark)
@@ -142,8 +134,6 @@ class AssetTests(unittest.TestCase):
         self.assertIn("black hair", person)
         self.assertIn("no holes", person)
         self.assertNotIn("movie set", person.lower())
-        self.assertNotIn("FillHoles", classes)
-        self.assertNotIn("RemeshMesh", classes)
         aligned = pixal3d_graph("plate.png", 7)
         aligned_classes = [node["class_type"] for node in aligned.values()]
         self.assertIn("Pixal3DConditioning", aligned_classes)
@@ -179,7 +169,6 @@ class AssetTests(unittest.TestCase):
             [node["inputs"]["vae_name"] for node in texture_vae],
             ["trellis_2_shape_vae_bf16.safetensors", "trellis_2_texture_vae_bf16.safetensors"],
         )
-        self.assertNotIn("PaintMesh", classes)
         small, small_faces = box_mesh((0.01, 0.01, 0.01))
         opened = small_faces[:-1]
         capped, capped_faces = cap_holes(small, opened)
@@ -249,12 +238,12 @@ class AssetTests(unittest.TestCase):
         self.assertIsNone(standing_proportion_warning("sela", fitted))
         self.assertIn("vardan", standing_proportion_warning("vardan", vertices) or "")
 
-    def test_triangle_limit_is_recorded_on_the_location(self) -> None:
+    def test_triangle_limit_is_recorded_on_the_landmark(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show()
-        self._write_plate(show)
+        self._write_plates(show)
         resolved = self._resolver(generator, triangle_budget=12_000).resolve_show(show)
-        record = json.loads((resolved["location:room"].glb.parent / "location.json").read_text(encoding="utf-8"))
+        record = json.loads((resolved["landmark:room:bench"].glb.parent / "landmark.json").read_text(encoding="utf-8"))
         self.assertEqual(record["triangleBudget"], 12_000)
         self.assertEqual(generator.triangle_budget, 12_000)
         with self.assertRaises(ValueError):
@@ -263,183 +252,109 @@ class AssetTests(unittest.TestCase):
     def test_generation_is_fitted_and_a_second_resolve_does_not_generate(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show()
-        self._write_plate(show)
-        resolved = self._resolver(generator).resolve_show(show)
-        item = resolved["location:room"]
-        self.assertEqual(item.source, "trellis2")
+        self._write_plates(show)
+        item = self._resolver(generator).resolve_show(show)["landmark:room:bench"]
+        self.assertEqual(item.source, "trellis2-textured")
         self.assertEqual(generator.calls, 1)
         vertices, faces = read_schema_mesh(item.glb)
-        np.testing.assert_allclose(vertices.min(axis=0), [-2.0, -2.0, 0.0], atol=1e-4)
-        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [4.0, 4.0, 4.0], atol=1e-4)
+        np.testing.assert_allclose(vertices.min(axis=0), [-0.25, -0.25, 0.0], atol=1e-4)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.5, 0.5, 0.5], atol=1e-4)
         self.assertLessEqual(len(faces), TRIANGLE_BUDGET)
         again = self._resolver(generator).resolve_show(show)
-        self.assertEqual(again["location:room"].glb, item.glb)
+        self.assertEqual(again["landmark:room:bench"].glb, item.glb)
         self.assertEqual(generator.calls, 1)
         credits = self.output / "CREDITS.md"
         export_credits(self.output, credits)
         text = credits.read_text(encoding="utf-8")
-        self.assertIn("MIT", text)
         self.assertIn("TRELLIS.2", text)
-        self.assertIn("demo/room", text)
+        self.assertIn("demo/room/bench", text)
 
     def test_plates_stop_before_the_mesh(self) -> None:
         show = self._show()
         drawn: list[Path] = []
 
-        def writer(appearance: str, raw_dir: Path) -> Path:
-            del appearance
+        def writer(appearance: str, raw_dir: Path, character: bool = False) -> Path:
+            del appearance, character
             raw_dir.mkdir(parents=True, exist_ok=True)
             plate = raw_dir / "plate.png"
             plate.write_bytes(b"x" * 2048)
             drawn.append(plate)
             return plate
 
-        plates = write_location_plates(show, writer, output_dir=self.output)
+        plates = write_plates(show, writer, output_dir=self.output)
         self.assertEqual(plates, drawn)
         self.assertEqual(len(drawn), 1)
-        mesh = self.output / "assets" / "demo" / "room" / "model.glb"
+        mesh = self.output / "assets" / "demo" / "room" / "bench" / "model.glb"
         mesh.parent.mkdir(parents=True, exist_ok=True)
         mesh.write_bytes(b"mesh")
-        again = write_location_plates(show, writer, output_dir=self.output)
-        self.assertEqual(again, plates)
+        self.assertEqual(write_plates(show, writer, output_dir=self.output), plates)
         self.assertEqual(len(drawn), 1)
         self.assertTrue(mesh.is_file())
-        write_location_plates(show, writer, output_dir=self.output, refresh=True)
+        write_plates(show, writer, output_dir=self.output, refresh=True)
         self.assertEqual(len(drawn), 2)
         self.assertFalse(mesh.exists())
-        self.assertTrue(plates[0].is_file())
 
     def test_mesh_step_requires_a_reviewed_plate(self) -> None:
-        raw_dir = self.output / "plates" / "demo" / "room"
         with self.assertRaises(RuntimeError) as caught:
-            generate_asset_mesh("a stone bench", raw_dir)
+            generate_asset_mesh("a stone bench", self.output / "plates" / "demo" / "room" / "bench")
         self.assertIn("content:plates", str(caught.exception))
         with self.assertRaises(RuntimeError) as missing:
             self._resolver(CountingGenerator(self.cube)).resolve_show(self._show())
         self.assertIn("content:plates", str(missing.exception))
 
-    def test_place_description_is_the_location_text(self) -> None:
-        text = location_scene_description(
-            "court",
-            {
-                "promptBlock": "An open basalt court.",
-                "spatial": {
-                    "sizeMeters": [22, 30, 18],
-                    "landmarks": {"sun_well": {}},
-                },
-            },
-        )
-        lowered = text.lower()
-        self.assertIn("open basalt court", lowered)
-        self.assertIn("bare floor", lowered)
-        self.assertIn("no human figures", lowered)
-        self.assertNotIn("sun well", lowered)
-        self.assertNotIn("several people", lowered)
-
-    def test_a_location_with_people_builds_one_mesh_per_landmark(self) -> None:
+    def test_every_landmark_and_prop_is_its_own_mesh(self) -> None:
         show = self._show()
-        show["episodes"] = [
-            {
-                "scenes": [{"locationId": "room", "characterIds": ["ada"]}],
-                "spatialTimeline": {"characterTracks": {}},
-            }
-        ]
-        show["locations"]["room"]["spatial"]["landmarks"] = {
-            "bench": {
-                "position": [0, 1, 0],
-                "size": [2.0, 1.0, 0.5],
-                "appearance": "One stone bench, a single object, no room.",
-            },
-            "column": {
-                "position": [2, 1, 0],
-                "size": [0.4, 0.4, 3.0],
-                "appearance": "One marble column standing alone.",
-            },
+        show["locations"]["room"]["spatial"]["landmarks"]["column"] = {
+            "position": [2, 1, 0],
+            "size": [0.4, 0.4, 3.0],
+            "appearance": "One marble column standing alone.",
         }
+        show["props"] = {"cup": {"appearance": "One clay cup", "size": [0.1, 0.1, 0.12]}}
         requests = collect_requests(show)
-        self.assertEqual({item.landmark_id for item in requests}, {"bench", "column"})
-        self.assertNotIn("location:room", [item.consumer_id for item in requests])
+        self.assertEqual([item.consumer_id for item in requests], ["landmark:room:bench", "landmark:room:column", "prop:cup"])
+        self._write_plates(show)
         generator = CountingGenerator(self.cube)
-        for request in requests:
-            plate = self.output / "plates" / "demo" / request.location_id / request.landmark_id / "plate.png"
-            plate.parent.mkdir(parents=True, exist_ok=True)
-            plate.write_bytes(b"x" * 2048)
-            from asset_resolver import description_hash
-
-            digest = description_hash(request)
-            plate.with_name("plate.json").write_text(
-                json.dumps({"descriptionHash": digest}),
-                encoding="utf-8",
-            )
         resolved = self._resolver(generator).resolve_show(show)
-        self.assertEqual(generator.calls, 2)
-        bench = resolved["landmark:room:bench"]
-        vertices, _faces = read_schema_mesh(bench.glb)
-        extent = vertices.max(axis=0) - vertices.min(axis=0)
-        np.testing.assert_allclose(sorted(extent), sorted([0.5, 0.5, 0.5]), atol=1e-3)
-        self.assertTrue((bench.glb.parent / "landmark.json").is_file())
+        self.assertEqual(generator.calls, 3)
+        cup = resolved["prop:cup"]
+        self.assertEqual(cup.glb, self.output / "assets" / "demo" / "props" / "cup" / "model.glb")
+        record = json.loads((cup.glb.parent / "prop.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["propId"], "cup")
+        vertices, _faces = read_schema_mesh(cup.glb)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.1, 0.1, 0.1], atol=1e-4)
 
     def test_identical_landmarks_are_generated_once(self) -> None:
         show = self._show()
-        show["episodes"] = [
-            {
-                "scenes": [{"locationId": "room", "characterIds": ["ada"]}],
-                "spatialTimeline": {"characterTracks": {}},
-            }
-        ]
         appearance = "One twisted marble column standing alone."
         show["locations"]["room"]["spatial"]["landmarks"] = {
-            "gate_column_l": {
-                "position": [-4.2, -12.4, 0],
-                "size": [0.8, 0.8, 4.2],
-                "appearance": appearance,
-            },
-            "gate_column_r": {
-                "position": [4.2, -12.4, 0],
-                "size": [0.8, 0.8, 4.2],
-                "appearance": appearance,
-            },
+            "gate_column_l": {"position": [-4.2, -12.4, 0], "size": [0.8, 0.8, 4.2], "appearance": appearance},
+            "gate_column_r": {"position": [4.2, -12.4, 0], "size": [0.8, 0.8, 4.2], "appearance": appearance},
         }
         drawn: list[Path] = []
 
-        def writer(text: str, raw_dir: Path, landmark: bool = False) -> Path:
-            del text, landmark
+        def writer(text: str, raw_dir: Path, character: bool = False) -> Path:
+            del text, character
             raw_dir.mkdir(parents=True, exist_ok=True)
             plate = raw_dir / "plate.png"
             plate.write_bytes(b"column" * 400)
             drawn.append(plate)
             return plate
 
-        plates = write_location_plates(show, writer, output_dir=self.output)
+        plates = write_plates(show, writer, output_dir=self.output)
         self.assertEqual(len(drawn), 1)
-        self.assertEqual(len(plates), 2)
         self.assertEqual(plates[0].read_bytes(), plates[1].read_bytes())
         generator = CountingGenerator(self.cube)
         resolved = self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, 1)
-        left = json.loads(
-            (resolved["landmark:room:gate_column_l"].glb.parent / "landmark.json").read_text(encoding="utf-8")
-        )
         right = json.loads(
             (resolved["landmark:room:gate_column_r"].glb.parent / "landmark.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(left["schemaPosition"], [-4.2, -12.4, 0.0])
         self.assertEqual(right["schemaPosition"], [4.2, -12.4, 0.0])
-        self.assertEqual(generator.calls, 1)
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, 1)
         show["locations"]["room"]["spatial"]["landmarks"]["gate_column_r"]["size"] = [1.0, 1.0, 4.2]
-        write_location_plates(show, writer, output_dir=self.output)
+        write_plates(show, writer, output_dir=self.output)
         self.assertEqual(len(drawn), 2)
-
-    def test_one_location_is_one_mesh(self) -> None:
-        generator = CountingGenerator(self.cube)
-        show = self._show()
-        show["locations"]["room"]["spatial"]["landmarks"]["column_r"] = {}
-        self._write_plate(show)
-        resolved = self._resolver(generator).resolve_show(show)
-        self.assertEqual(list(resolved), ["location:room"])
-        self.assertEqual(generator.calls, 1)
 
     def test_fit_keeps_proportions_inside_the_requested_box(self) -> None:
         fitted = fit_to_size(box_mesh((2.0, 1.0, 4.0))[0], (8.0, 0.2, 0.2))
@@ -448,71 +363,43 @@ class AssetTests(unittest.TestCase):
         self.assertAlmostEqual(float(fitted[:, 2].min()), 0.0, places=5)
         self.assertAlmostEqual(float(fitted[:, 0].min()), -float(fitted[:, 0].max()), places=5)
 
-    def test_a_generated_mesh_keeps_its_shape_inside_the_location(self) -> None:
-        generator = CountingGenerator(self.cube)
-        show = self._show(location_size=(8.0, 0.2, 0.2))
-        self._write_plate(show)
-        resolved = self._resolver(generator).resolve_show(show)
-        vertices, _faces = read_schema_mesh(resolved["location:room"].glb)
-        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [0.2, 0.2, 0.2], atol=1e-3)
-
-    def test_a_character_is_plated_and_fitted_like_a_landmark(self) -> None:
+    def test_a_character_is_plated_and_fitted_to_their_height(self) -> None:
         show = self._show()
         show["characters"] = {
             "ada": {
                 "body": "Adult woman, 24 years old",
-                "attributes": [
-                    {"text": "black hair", "parts": ["hair"]},
-                    {"text": "a soot-stained ivory wrap", "parts": ["torso", "legs"]},
-                    {"text": "a plain iron bridal collar", "parts": ["neck"]},
-                    {"text": "amber irises", "parts": ["eyes"]},
-                    {"text": "a thin pale burn scar", "parts": ["face"]},
-                ],
-                "proxy": {"heightMeters": 1.6, "build": "slim"},
+                "attributes": ["black hair", "a soot-stained ivory wrap", "amber irises"],
+                "heightMeters": 1.6,
             }
         }
         drawn: list[tuple[bool, Path]] = []
 
-        def writer(text: str, raw_dir: Path, landmark: bool = False, character: bool = False) -> Path:
-            del text, landmark
+        def writer(text: str, raw_dir: Path, character: bool = False) -> Path:
+            del text
             raw_dir.mkdir(parents=True, exist_ok=True)
             plate = raw_dir / "plate.png"
             plate.write_bytes(b"x" * 2048)
             drawn.append((character, plate))
             return plate
 
-        write_location_plates(show, writer, output_dir=self.output)
+        write_plates(show, writer, output_dir=self.output)
         character_plates = [plate for character, plate in drawn if character]
-        self.assertEqual(len(character_plates), 1)
-        self.assertEqual(character_plates[0].parent.name, "ada")
+        self.assertEqual([plate.parent.name for plate in character_plates], ["ada"])
         generator = CountingGenerator(self.cube)
-        resolved = self._resolver(generator).resolve_show(show)
-        item = resolved["character:ada"]
+        item = self._resolver(generator).resolve_show(show)["character:ada"]
         self.assertEqual(item.source, "pixal3d")
         vertices, _faces = read_schema_mesh(item.glb)
-        extent = vertices.max(axis=0) - vertices.min(axis=0)
-        np.testing.assert_allclose(extent, [1.6, 1.6, 1.6], atol=1e-3)
-        precleanup = item.glb.with_name("model.precleanup.glb")
-        self.assertTrue(precleanup.is_file())
-        raw_vertices, raw_faces = read_schema_mesh(precleanup)
-        self.assertEqual(len(raw_faces), 12)
-        raw_extent = raw_vertices.max(axis=0) - raw_vertices.min(axis=0)
-        self.assertLess(float(raw_extent.max()), 1.2)
+        np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [1.6, 1.6, 1.6], atol=1e-3)
+        self.assertTrue(item.glb.with_name("model.precleanup.glb").is_file())
         record_path = item.glb.parent / "character.json"
         record = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(record["characterId"], "ada")
-        self.assertEqual(record["fit"], "uniform")
         self.assertEqual(record["meshModel"], "pixal3d")
         self.assertEqual(record["facing"], "schema-plus-y")
         self.assertEqual(record["meshRepair"], "cap-holes")
         self.assertEqual(record["surface"], "vertex-color")
-        np.testing.assert_allclose(
-            face_schema_forward(np.array([[0.2, -0.5, 1.0]])),
-            [[-0.2, 0.5, 1.0]],
-        )
-        self.assertEqual(record["source"], "pixal3d")
-        self.assertIn("ivory wrap", record["title"])
         self.assertIn("amber irises", record["title"])
+        np.testing.assert_allclose(face_schema_forward(np.array([[0.2, -0.5, 1.0]])), [[-0.2, 0.5, 1.0]])
         calls = generator.calls
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, calls)
@@ -521,81 +408,65 @@ class AssetTests(unittest.TestCase):
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, calls + 1)
         painted_vertices, painted_faces = box_mesh((1.0, 1.0, 1.0))
-        painted_colors = np.tile(
-            np.array([[0.2, 0.4, 0.8]], dtype=np.float64),
-            (len(painted_vertices), 1),
-        )
+        painted_colors = np.tile(np.array([[0.2, 0.4, 0.8]], dtype=np.float64), (len(painted_vertices), 1))
         painted = self.library / "painted.glb"
         write_schema_glb(painted, painted_vertices, painted_faces, painted_colors)
         item.glb.unlink()
         record_path.unlink()
-        painted_item = self._resolver(CountingGenerator(painted)).resolve_show(show)[
-            "character:ada"
-        ]
-        kept = read_vertex_colors(painted_item.glb)
+        kept = read_vertex_colors(self._resolver(CountingGenerator(painted)).resolve_show(show)["character:ada"].glb)
         assert kept is not None
         np.testing.assert_allclose(kept, painted_colors)
-        bare = self._show()
-        bare["characters"] = {"ada": {"proxy": {"heightMeters": 1.6, "build": "slim"}}}
-        with self.assertRaises(RuntimeError) as missing_description:
-            self._resolver(CountingGenerator(self.cube)).resolve_show(bare)
-        self.assertIn("body", str(missing_description.exception))
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)
         show = self._show()
-        self._write_plate(show)
+        self._write_plates(show)
         with self.assertRaises(RuntimeError):
             self._resolver(generator, offline=True).resolve_show(show)
         self.assertEqual(generator.calls, 0)
 
-    def test_location_mesh_is_gltf_y_up(self) -> None:
+    def test_landmark_record_is_gltf_y_up(self) -> None:
         show = self._show()
-        self._write_plate(show)
+        self._write_plates(show)
         self._resolver(CountingGenerator(self.cube)).resolve_show(show)
-        document = json.loads(
-            (self.output / "assets" / "demo" / "room" / "location.json").read_text(encoding="utf-8")
+        record = json.loads(
+            (self.output / "assets" / "demo" / "room" / "bench" / "landmark.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(document["space"], "gltf-y-up")
-        self.assertEqual(document["locationId"], "room")
-        self.assertEqual(document["sizeMeters"], [8.0, 10.0, 4.0])
-        self.assertTrue((self.output / "assets" / "demo" / "room" / "model.glb").is_file())
-        origin = schema_to_gltf((0.0, 0.0, 0.0))
-        self.assertEqual(list(origin), [0.0, 0.0, 0.0])
+        self.assertEqual(record["space"], "gltf-y-up")
+        self.assertEqual(record["schemaPosition"], [0.0, 1.0, 0.0])
+        self.assertEqual(record["position"], list(schema_to_gltf((0.0, 1.0, 0.0))))
 
     def _resolver(self, generator: CountingGenerator, **kwargs) -> AssetResolver:
         return AssetResolver("demo", output_dir=self.output, generator=generator, **kwargs)
 
-    def _show(
-        self,
-        appearance: str = "A stone room with one bench.",
-        location_size: tuple[float, float, float] = (8.0, 10.0, 4.0),
-    ) -> dict:
+    def _show(self) -> dict:
         return {
             "id": "demo",
+            "characters": {},
             "locations": {
                 "room": {
-                    "promptBlock": appearance,
                     "spatial": {
-                        "sizeMeters": list(location_size),
-                        "landmarks": {"bench": {}},
-                    },
+                        "sizeMeters": [8.0, 10.0, 4.0],
+                        "landmarks": {
+                            "bench": {
+                                "position": [0, 1, 0],
+                                "size": [1.6, 0.6, 0.5],
+                                "appearance": "One stone bench, a single object, no room.",
+                            }
+                        },
+                    }
                 }
             },
         }
 
-    def _write_plate(self, show: dict) -> None:
-        request = collect_requests(show)[0]
-        from asset_resolver import appearance_source_id, asset_hash
-
-        plate = self.output / "plates" / "demo" / request.location_id / "plate.png"
-        plate.parent.mkdir(parents=True, exist_ok=True)
-        plate.write_bytes(b"x" * 2048)
-        digest = asset_hash("trellis2", appearance_source_id(request.appearance), request.size)
-        plate.with_name("plate.json").write_text(
-            json.dumps({"descriptionHash": digest}),
-            encoding="utf-8",
-        )
+    def _write_plates(self, show: dict) -> None:
+        for request in collect_requests(show):
+            plate = request.directory(self.output, "plates", "demo") / "plate.png"
+            plate.parent.mkdir(parents=True, exist_ok=True)
+            plate.write_bytes(b"x" * 2048)
+            plate.with_name("plate.json").write_text(
+                json.dumps({"descriptionHash": description_hash(request)}), encoding="utf-8"
+            )
 
 
 if __name__ == "__main__":

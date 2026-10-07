@@ -8,7 +8,7 @@ const stages = [
   },
   {
     name: "content:previs",
-    args: ["scripts/run-python.cjs", "content-pipeline/scripts/spatial_previs.py"],
+    args: ["scripts/run-python.cjs", "content-pipeline/scripts/previs.py"],
   },
   {
     name: "content:frames",

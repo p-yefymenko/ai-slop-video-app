@@ -10,14 +10,13 @@ alwaysApply: false
 
 Everything the pipeline creates lives under `output/<command>/<show>/`:
 
-- `plates` — the location picture
-- `assets` — the location mesh
-- `landmarks` — shaded views used to place landmark coordinates
+- `plates` — one picture per landmark, prop, and character
+- `assets` — one mesh per plate
 - `previs` — clay scenes, including the episode `blockout.mp4`
-- `frames` — character portraits and scene stills
+- `frames` — scene stills
 - `generate` — scene clips and the episode cut
 
-A location is the place. A scene is one timed shot in an episode. A landmark on an empty location is an optional coordinate in that location's one mesh. `pnpm run content:landmarks` fills that coordinate after `content:assets`. A landmark on a location with people is one object with `position`, `size`, and `appearance`; previs places its mesh there and does not move the camera or the people. `pnpm run content:asset-deps` installs moderngl for the draw and Florence-2 for the empty-location landmark step.
+A location is a set of landmarks plus a backdrop. A scene is one timed shot in an episode. Characters, landmarks, and props are all entities: one mesh, placed by the timeline (`world.py`). Who is in a shot comes from the tracks, never from a list. What is visible is one rule (`observe.visible`), used by the still prompt (`describe.py`) and the script checks (`checks.py`) alike. `pnpm run content:asset-deps` installs trimesh and moderngl.
 
 Schema space is Z-up and +Y forward. glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`. The viewer reads Y-up and does not convert. Open it with `pnpm run view -- --show <show-id>`.
 

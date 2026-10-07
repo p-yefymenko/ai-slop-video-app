@@ -5,299 +5,80 @@
     "sela": {
       "body": "adult woman, athletic compact build, olive skin",
       "attributes": [
-        {
-          "text": "24 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "long black hair",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in a tan linen wrap",
-          "parts": [
-            "torso",
-            "legs"
-          ]
-        },
-        {
-          "text": "barefoot",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "sharp cheekbones",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "amber irises",
-          "parts": [
-            "eyes"
-          ]
-        },
-        {
-          "text": "a thin pale burn scar cutting the left eyebrow",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "a plain iron bridal collar",
-          "parts": [
-            "neck"
-          ]
-        }
+        "24 years old",
+        "long black hair",
+        "in a tan linen wrap",
+        "barefoot",
+        "sharp cheekbones",
+        "amber irises",
+        "a thin pale burn scar cutting the left eyebrow",
+        "a plain iron bridal collar"
       ],
-      "proxy": {
-        "heightMeters": 1.68,
-        "build": "slim"
-      }
+      "heightMeters": 1.68
     },
     "tomas": {
       "body": "adult man, lean build, fair skin",
       "attributes": [
-        {
-          "text": "22 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "copper-red hair",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in a sky-blue coat",
-          "parts": [
-            "torso",
-            "arms"
-          ]
-        },
-        {
-          "text": "barefoot",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "gray irises",
-          "parts": [
-            "eyes"
-          ]
-        },
-        {
-          "text": "a copper birthmark under the right eye",
-          "parts": [
-            "face"
-          ]
-        }
+        "22 years old",
+        "copper-red hair",
+        "in a sky-blue coat",
+        "barefoot",
+        "gray irises",
+        "a copper birthmark under the right eye"
       ],
-      "proxy": {
-        "heightMeters": 1.78,
-        "build": "slim"
-      }
+      "heightMeters": 1.78
     },
     "vardan": {
       "body": "adult man, tall narrow build, pale skin",
       "attributes": [
-        {
-          "text": "52 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "silver-white cropped hair",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in black plate armor with a gold gorget",
-          "parts": [
-            "torso",
-            "arms",
-            "neck"
-          ]
-        },
-        {
-          "text": "black shoes",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "ice-blue irises",
-          "parts": [
-            "eyes"
-          ]
-        },
-        {
-          "text": "a gold ring tattoo encircling the throat",
-          "parts": [
-            "neck"
-          ]
-        }
+        "52 years old",
+        "silver-white cropped hair",
+        "in black plate armor with a gold gorget",
+        "black shoes",
+        "ice-blue irises",
+        "a gold ring tattoo encircling the throat"
       ],
-      "proxy": {
-        "heightMeters": 1.9,
-        "build": "slim"
-      }
+      "heightMeters": 1.9
     },
     "nira": {
       "body": "adult woman, broad-shouldered build, dark umber skin",
       "attributes": [
-        {
-          "text": "45 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "shaved sides with a copper-brown crest of hair",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in black plate armor with a gold gorget",
-          "parts": [
-            "torso",
-            "arms",
-            "neck"
-          ]
-        },
-        {
-          "text": "barefoot",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "gold-flecked brown irises",
-          "parts": [
-            "eyes"
-          ]
-        }
+        "45 years old",
+        "shaved sides with a copper-brown crest of hair",
+        "in black plate armor with a gold gorget",
+        "barefoot",
+        "gold-flecked brown irises"
       ],
-      "proxy": {
-        "heightMeters": 1.73,
-        "build": "broad"
-      }
+      "heightMeters": 1.73
     },
     "kesh": {
       "body": "adult man, heavy build, weathered tan skin",
       "attributes": [
-        {
-          "text": "38 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "shaved head",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in black plate armor with a gold gorget",
-          "parts": [
-            "torso",
-            "arms",
-            "neck"
-          ]
-        },
-        {
-          "text": "barefoot",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "black irises",
-          "parts": [
-            "eyes"
-          ]
-        },
-        {
-          "text": "a split-lip scar",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "salt-and-pepper stubble",
-          "parts": [
-            "face"
-          ]
-        }
+        "38 years old",
+        "shaved head",
+        "in black plate armor with a gold gorget",
+        "barefoot",
+        "black irises",
+        "a split-lip scar",
+        "salt-and-pepper stubble"
       ],
-      "proxy": {
-        "heightMeters": 1.82,
-        "build": "broad"
-      }
+      "heightMeters": 1.82
     },
     "rhel": {
       "body": "adult man, thin build, sallow skin",
       "attributes": [
-        {
-          "text": "30 years old",
-          "parts": [
-            "face"
-          ]
-        },
-        {
-          "text": "black hair bound at the nape",
-          "parts": [
-            "hair"
-          ]
-        },
-        {
-          "text": "in black plate armor with a gold gorget",
-          "parts": [
-            "torso",
-            "arms",
-            "neck"
-          ]
-        },
-        {
-          "text": "barefoot",
-          "parts": [
-            "feet"
-          ]
-        },
-        {
-          "text": "dark brown irises",
-          "parts": [
-            "eyes"
-          ]
-        },
-        {
-          "text": "a branded sun-disk on the forehead",
-          "parts": [
-            "face"
-          ]
-        }
+        "30 years old",
+        "black hair bound at the nape",
+        "in black plate armor with a gold gorget",
+        "barefoot",
+        "dark brown irises",
+        "a branded sun-disk on the forehead"
       ],
-      "proxy": {
-        "heightMeters": 1.76,
-        "build": "slim"
-      }
+      "heightMeters": 1.76
     }
   },
   "locations": {
     "sky_forge_exterior": {
-      "promptBlock": "A hanging black-iron citadel over molten rivers, storm ash, slag-gold fire in the clouds, and broken sky-chains.",
       "backdrop": {
         "sky": "storm ash, slag-gold fire in the clouds, and broken sky-chains",
         "skyColor": [
@@ -325,19 +106,18 @@
           140
         ],
         "landmarks": {
-          "citadel_core": {
+          "citadel": {
             "position": [
-              2.52,
-              1.74,
-              87.35
-            ]
-          },
-          "chain_pylon": {
-            "position": [
-              42.5,
-              46.17,
-              9.57
-            ]
+              0,
+              0,
+              0
+            ],
+            "size": [
+              200,
+              240,
+              140
+            ],
+            "appearance": "A hanging citadel of black forged iron towers on broken sky-chains"
           }
         }
       },
@@ -347,7 +127,6 @@
       }
     },
     "sun_well_court": {
-      "promptBlock": "An open basalt court around a sun-well of white-gold fire, iron floor veined with slag-gold, heat shimmer, storm sky above, no walls.",
       "backdrop": {
         "sky": "storm sky of ash and blue-black cloud",
         "skyColor": [
@@ -450,12 +229,12 @@
   },
   "props": {
     "iron_collar": {
-      "sizeMeters": [
+      "appearance": "One thick open iron torc neck ring, a single piece of dark metal, no person and no chain.",
+      "size": [
         0.28,
         0.22,
         0.08
-      ],
-      "appearance": "One thick open iron torc neck ring, a single piece of dark metal, no person and no chain."
+      ]
     }
   },
   "episodes": [
@@ -477,8 +256,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "vardan",
-              "stance": "standing"
+              "lookAtId": "vardan"
             },
             {
               "timeSeconds": 29,
@@ -489,8 +267,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "vardan",
-              "stance": "walking"
+              "lookAtId": "vardan"
             },
             {
               "timeSeconds": 31,
@@ -501,8 +278,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "sun_well",
-              "stance": "walking"
+              "lookAtId": "sun_well"
             },
             {
               "timeSeconds": 38,
@@ -513,8 +289,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "vardan",
-              "stance": "standing"
+              "lookAtId": "vardan"
             },
             {
               "timeSeconds": 60,
@@ -525,8 +300,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "sun_well",
-              "stance": "standing"
+              "lookAtId": "sun_well"
             }
           ],
           "tomas": [
@@ -539,8 +313,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "vardan",
-              "stance": "standing"
+              "lookAtId": "vardan"
             },
             {
               "timeSeconds": 60,
@@ -551,8 +324,7 @@
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             }
           ],
           "vardan": [
@@ -565,8 +337,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 45,
@@ -577,8 +348,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 47,
@@ -589,8 +359,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 60,
@@ -601,8 +370,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             }
           ],
           "nira": [
@@ -615,8 +383,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 45,
@@ -627,8 +394,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 47,
@@ -639,8 +405,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 60,
@@ -651,8 +416,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             }
           ],
           "kesh": [
@@ -665,8 +429,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "tomas",
-              "stance": "standing"
+              "lookAtId": "tomas"
             },
             {
               "timeSeconds": 45,
@@ -677,8 +440,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "tomas",
-              "stance": "standing"
+              "lookAtId": "tomas"
             },
             {
               "timeSeconds": 47,
@@ -689,8 +451,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 60,
@@ -701,8 +462,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             }
           ],
           "rhel": [
@@ -715,8 +475,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             },
             {
               "timeSeconds": 60,
@@ -727,8 +486,7 @@
                 0
               ],
               "bodyYawDegrees": 180,
-              "lookAtId": "sela",
-              "stance": "standing"
+              "lookAtId": "sela"
             }
           ]
         },
@@ -736,13 +494,11 @@
           "iron_collar": [
             {
               "timeSeconds": 0,
-              "locationId": "sun_well_court",
               "heldByCharacterId": "sela",
               "heldInHand": "left"
             },
             {
               "timeSeconds": 60,
-              "locationId": "sun_well_court",
               "heldByCharacterId": "sela",
               "heldInHand": "left"
             }
@@ -754,7 +510,6 @@
           "sceneNumber": 1,
           "locationId": "sky_forge_exterior",
           "storyBeat": "The hanging citadel and burning sky establish a kingdom that can be dropped.",
-          "characterIds": [],
           "timeRangeSeconds": [
             0,
             2
@@ -798,13 +553,13 @@
               {
                 "text": "sky-chains groan under the hanging weight",
                 "source": {
-                  "landmarkId": "chain_pylon"
+                  "landmarkId": "citadel"
                 }
               },
               {
                 "text": "wind tears ash across the hanging iron",
                 "source": {
-                  "landmarkId": "citadel_core"
+                  "landmarkId": "citadel"
                 }
               }
             ],
@@ -818,7 +573,6 @@
           "sceneNumber": 2,
           "locationId": "sun_well_court",
           "storyBeat": "The sun-well is shown as a killing machine before anyone speaks.",
-          "characterIds": [],
           "timeRangeSeconds": [
             2,
             4
@@ -841,7 +595,28 @@
               }
             ]
           },
-          "performances": {},
+          "performances": {
+            "sela": {
+              "action": "stands still under guard, breathing slowly",
+              "parts": []
+            },
+            "tomas": {
+              "action": "stands still, watching her",
+              "parts": []
+            },
+            "vardan": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "nira": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "kesh": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            }
+          },
           "motion": "White-gold fire stands in the well like a blade, flickering",
           "sound": {
             "events": [
@@ -862,9 +637,6 @@
           "sceneNumber": 3,
           "locationId": "sun_well_court",
           "storyBeat": "The condemned bride is seen before she is allowed a voice.",
-          "characterIds": [
-            "sela"
-          ],
           "timeRangeSeconds": [
             4,
             6
@@ -917,7 +689,6 @@
           "sceneNumber": 4,
           "locationId": "sun_well_court",
           "storyBeat": "The well proves it can unmake a body, so the threat is physical.",
-          "characterIds": [],
           "timeRangeSeconds": [
             6,
             8
@@ -954,7 +725,32 @@
               }
             ]
           },
-          "performances": {},
+          "performances": {
+            "sela": {
+              "action": "stands still under guard, breathing slowly",
+              "parts": []
+            },
+            "tomas": {
+              "action": "stands still, watching her",
+              "parts": []
+            },
+            "vardan": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "nira": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "kesh": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "rhel": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            }
+          },
           "motion": "A column of white fire punches from the well into the storm",
           "sound": {
             "events": [
@@ -975,14 +771,6 @@
           "sceneNumber": 5,
           "locationId": "sun_well_court",
           "storyBeat": "The outsider and the last prince are spatially trapped in front of the priesthood.",
-          "characterIds": [
-            "sela",
-            "tomas",
-            "vardan",
-            "nira",
-            "kesh",
-            "rhel"
-          ],
           "timeRangeSeconds": [
             8,
             10
@@ -1087,14 +875,6 @@
           "sceneNumber": 6,
           "locationId": "sun_well_court",
           "storyBeat": "The high priest sentences her in front of his wall of rank.",
-          "characterIds": [
-            "sela",
-            "tomas",
-            "vardan",
-            "nira",
-            "kesh",
-            "rhel"
-          ],
           "speakerId": "vardan",
           "timeRangeSeconds": [
             10,
@@ -1103,58 +883,29 @@
           "camera": {
             "keyframes": [
               {
-                "timeSeconds": 10,
+                "timeSeconds": 10.0,
                 "position": [
                   0,
                   -7.4,
                   1.68
                 ],
                 "lookAt": [
-                  0,
-                  5.8,
-                  1.5
+                  0.0,
+                  6.0,
+                  1.71
                 ],
-                "verticalFovDegrees": 48
+                "verticalFovDegrees": 18
               }
             ]
           },
           "performances": {
-            "sela": {
-              "action": "stands still beside him",
-              "parts": [
-                "torso"
-              ]
-            },
-            "tomas": {
-              "action": "stands still, shoulders tense",
-              "parts": [
-                "torso"
-              ]
-            },
             "vardan": {
               "action": "stands rigid at the center of the line and speaks without moving his body",
               "parts": [
                 "face",
                 "torso"
-              ]
-            },
-            "nira": {
-              "action": "holds the line, motionless",
-              "parts": [
-                "torso"
-              ]
-            },
-            "kesh": {
-              "action": "holds the line, motionless",
-              "parts": [
-                "torso"
-              ]
-            },
-            "rhel": {
-              "action": "holds the line, motionless",
-              "parts": [
-                "torso"
-              ]
+              ],
+              "expression": "cold ceremonial authority: brows level, lips parted to speak"
             }
           },
           "dialogue": {
@@ -1181,10 +932,6 @@
           "sceneNumber": 7,
           "locationId": "sun_well_court",
           "storyBeat": "The prince is forced to answer while still standing in the priest's eyeline.",
-          "characterIds": [
-            "tomas",
-            "vardan"
-          ],
           "timeRangeSeconds": [
             15,
             17
@@ -1211,7 +958,6 @@
             "tomas": {
               "action": "stands rigid, jaw locked, nostrils flaring under the priest's stare, coat whipping in the wind",
               "parts": [
-                "face",
                 "torso"
               ]
             },
@@ -1221,6 +967,18 @@
                 "eyes"
               ],
               "expression": "cold patience: lids half lowered, mouth a flat line lifting faintly at one corner in contempt"
+            },
+            "nira": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "kesh": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "rhel": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
             }
           },
           "sound": {
@@ -1243,10 +1001,6 @@
           "sceneNumber": 8,
           "locationId": "sun_well_court",
           "storyBeat": "Tomas claims her house is still alive, which is treason if he is wrong.",
-          "characterIds": [
-            "tomas",
-            "sela"
-          ],
           "speakerId": "tomas",
           "timeRangeSeconds": [
             17,
@@ -1255,16 +1009,16 @@
           "camera": {
             "keyframes": [
               {
-                "timeSeconds": 17,
+                "timeSeconds": 17.0,
                 "position": [
-                  0,
-                  -9,
+                  1.6,
+                  1.4,
                   1.62
                 ],
                 "lookAt": [
-                  -0.05,
-                  -2.1,
-                  1.48
+                  1.3,
+                  -2.2,
+                  1.6
                 ],
                 "verticalFovDegrees": 50
               }
@@ -1275,13 +1029,8 @@
               "action": "leans toward the priests, urgent, chest heaving",
               "parts": [
                 "torso"
-              ]
-            },
-            "sela": {
-              "action": "stands still, listening, her gaze held straight ahead",
-              "parts": [
-                "eyes"
-              ]
+              ],
+              "expression": "urgent and pleading: brows raised, lips parted mid-breath"
             }
           },
           "dialogue": {
@@ -1308,9 +1057,6 @@
           "sceneNumber": 9,
           "locationId": "sun_well_court",
           "storyBeat": "The priesthood answers the claim with a hand, not a debate.",
-          "characterIds": [
-            "kesh"
-          ],
           "timeRangeSeconds": [
             22,
             24
@@ -1362,12 +1108,6 @@
           "sceneNumber": 10,
           "locationId": "sun_well_court",
           "storyBeat": "The marshal erases House Voss in public so the well can take her.",
-          "characterIds": [
-            "nira",
-            "vardan",
-            "kesh",
-            "rhel"
-          ],
           "speakerId": "nira",
           "timeRangeSeconds": [
             24,
@@ -1376,18 +1116,18 @@
           "camera": {
             "keyframes": [
               {
-                "timeSeconds": 24,
+                "timeSeconds": 24.0,
                 "position": [
                   -0.4,
                   -6.2,
                   1.7
                 ],
                 "lookAt": [
-                  -0.4,
-                  6.6,
-                  1.46
+                  -1.8,
+                  6.8,
+                  1.56
                 ],
-                "verticalFovDegrees": 50
+                "verticalFovDegrees": 16
               }
             ]
           },
@@ -1395,26 +1135,14 @@
             "nira": {
               "action": "stands at the front of the line, chin lifted in scorn",
               "parts": [
-                "face"
-              ]
-            },
-            "vardan": {
-              "action": "stands behind her as part of the wall, motionless",
-              "parts": [
+                "face",
                 "torso"
-              ]
+              ],
+              "expression": "open scorn: chin lifted, lips parted to speak"
             },
-            "kesh": {
-              "action": "stands behind her as part of the wall, armor creaking as he shifts",
-              "parts": [
-                "torso"
-              ]
-            },
-            "rhel": {
-              "action": "stands behind her as part of the wall, motionless",
-              "parts": [
-                "torso"
-              ]
+            "sela": {
+              "action": "stands still under guard, breathing slowly",
+              "parts": []
             }
           },
           "dialogue": {
@@ -1424,9 +1152,9 @@
           "sound": {
             "events": [
               {
-                "text": "plate armor creaks in the line behind her",
+                "text": "her plate armor creaks as she draws breath to speak",
                 "source": {
-                  "characterId": "kesh",
+                  "characterId": "nira",
                   "part": "torso"
                 }
               }
@@ -1441,9 +1169,6 @@
           "sceneNumber": 11,
           "locationId": "sun_well_court",
           "storyBeat": "Sela walks toward the machine that is supposed to kill her.",
-          "characterIds": [
-            "sela"
-          ],
           "timeRangeSeconds": [
             29,
             31
@@ -1487,6 +1212,10 @@
                 "legs",
                 "feet"
               ]
+            },
+            "tomas": {
+              "action": "stands still, watching her",
+              "parts": []
             }
           },
           "sound": {
@@ -1516,9 +1245,6 @@
           "sceneNumber": 12,
           "locationId": "sun_well_court",
           "storyBeat": "The well answers her blood before she speaks.",
-          "characterIds": [
-            "sela"
-          ],
           "timeRangeSeconds": [
             31,
             33
@@ -1586,10 +1312,6 @@
           "sceneNumber": 13,
           "locationId": "sun_well_court",
           "storyBeat": "She turns the sentence back on the priesthood.",
-          "characterIds": [
-            "vardan",
-            "sela"
-          ],
           "speakerId": "sela",
           "timeRangeSeconds": [
             33,
@@ -1618,8 +1340,7 @@
               "action": "stands rigid in the foreground",
               "parts": [
                 "torso"
-              ],
-              "expression": "rigid disbelief: brows drawn together, jaw clenched"
+              ]
             },
             "sela": {
               "action": "holds her ground, chin level, eyes locked on him",
@@ -1654,9 +1375,6 @@
           "sceneNumber": 14,
           "locationId": "sun_well_court",
           "storyBeat": "The fire fails to take her, so the machine has chosen.",
-          "characterIds": [
-            "sela"
-          ],
           "timeRangeSeconds": [
             38,
             40
@@ -1685,6 +1403,14 @@
               "parts": [
                 "legs"
               ]
+            },
+            "nira": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "rhel": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
             }
           },
           "motion": "White-gold flames lick around her bare feet",
@@ -1707,9 +1433,6 @@
           "sceneNumber": 15,
           "locationId": "sun_well_court",
           "storyBeat": "Vardan names the political cost of a well that will not kill her.",
-          "characterIds": [
-            "vardan"
-          ],
           "speakerId": "vardan",
           "timeRangeSeconds": [
             40,
@@ -1739,7 +1462,15 @@
               "parts": [
                 "face"
               ],
-              "expression": "fury breaking through ceremony: brows crushed down, nostrils flared, lips pulled back from bared teeth"
+              "expression": "fury breaking through ceremony: brows crushed down, nostrils flared, lips parted over clenched teeth"
+            },
+            "nira": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
+            },
+            "rhel": {
+              "action": "stands motionless in the line of nobles, watching",
+              "parts": []
             }
           },
           "dialogue": {
@@ -1766,12 +1497,6 @@
           "sceneNumber": 16,
           "locationId": "sun_well_court",
           "storyBeat": "The wall of rank breaks, proving they believed the well would obey them.",
-          "characterIds": [
-            "vardan",
-            "nira",
-            "kesh",
-            "rhel"
-          ],
           "timeRangeSeconds": [
             45,
             47
@@ -1798,8 +1523,8 @@
             "vardan": {
               "action": "flinches back half a step with the others, then freezes, staring in shock",
               "parts": [
-                "torso",
-                "legs"
+                "neck",
+                "arms"
               ]
             },
             "nira": {
@@ -1822,6 +1547,10 @@
                 "torso",
                 "legs"
               ]
+            },
+            "sela": {
+              "action": "stands still under guard, breathing slowly",
+              "parts": []
             }
           },
           "sound": {
@@ -1844,9 +1573,6 @@
           "sceneNumber": 17,
           "locationId": "sun_well_court",
           "storyBeat": "She offers them the same death they wrote for her.",
-          "characterIds": [
-            "sela"
-          ],
           "speakerId": "sela",
           "timeRangeSeconds": [
             47,
@@ -1878,6 +1604,10 @@
                 "neck"
               ],
               "expression": "cold, lethal calm: steady unblinking eyes, the corners of her mouth lifting toward a smile"
+            },
+            "tomas": {
+              "action": "stands still, watching her",
+              "parts": []
             }
           },
           "dialogue": {
@@ -1904,9 +1634,6 @@
           "sceneNumber": 18,
           "locationId": "sun_well_court",
           "storyBeat": "The last prince realizes he crowned her by defending her.",
-          "characterIds": [
-            "tomas"
-          ],
           "timeRangeSeconds": [
             52,
             55
@@ -1959,7 +1686,6 @@
           "sceneNumber": 19,
           "locationId": "sky_forge_exterior",
           "storyBeat": "The citadel's chains fail, so her claim can drop the kingdom.",
-          "characterIds": [],
           "timeRangeSeconds": [
             55,
             60
@@ -2003,7 +1729,7 @@
               {
                 "text": "sky-chains snap with sharp metal cracks and gold sparks hiss into the storm",
                 "source": {
-                  "landmarkId": "citadel_core"
+                  "landmarkId": "citadel"
                 }
               }
             ],

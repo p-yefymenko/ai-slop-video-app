@@ -7,68 +7,62 @@ alwaysApply: false
 /**
  * Types from `packages/shared/src/script.ts`.
  * Comments are how to author any vertical microdrama, not a particular plot.
+ *
+ * The script is a physical world. Every character, landmark, and prop is a
+ * mesh the timeline places. You never list who is in a shot: previs renders
+ * the world from the camera and checks the script against it. Anyone the
+ * camera sees needs a performance; anything you say is on screen (a moving
+ * part, a face, a speaker, a sound source) must be visible in the render.
+ * Write blocking and cameras first, run `pnpm run content:previs`, and fix
+ * what it reports before writing more.
  */
 
 export type ShowCharacter = {
+  /** Build and skin, visible from every side. Sent whenever any part of them shows. */
+  body: string;
   /**
-   * Visible from all sides. Plates, portraits, and every still receive this text.
-   * No eye color, scars, tattoos, birthmarks, or other front-only details.
+   * One clause per detail, tagged with the parts it lives on. Age goes on
+   * "face", eye color on "eyes", a tattoo on "neck". A still sends a clause
+   * only when one of its parts is visible in that camera.
    */
-  generalDescription: string;
-  /**
-   * Front-only details. Plates and portraits always append this. A still appends
-   * it only when that person faces the camera, has head-mask pixels, and is at
-   * least frontalMinPixelHeight tall.
-   */
-  frontalDescription?: string;
-  /**
-   * Standing height in meters, and slim / average / broad. The mesh is fitted to this height.
-   * Omit to use 1.72m average. This is not the identity portrait.
-   */
-  proxy?: { heightMeters: number; build: "slim" | "average" | "broad" };
+  attributes: { text: string; parts: BodyPart[] }[];
+  /** Standing height in meters. The mesh is fitted to it. */
+  heightMeters: number;
 };
 
-/** `[X left/right, Y depth, Z height]` in meters. */
+/** `[X right, Y forward, Z up]` in meters. */
 export type Vec3 = [number, number, number];
 
 export type LocationLandmark = {
+  /** Base center. */
+  position: Vec3;
+  /** `[width X, depth Y, height Z]`. The mesh is fitted into this box. */
+  size: Vec3;
   /**
-   * Meters: `[X right, Y forward, Z up]`.
-   * Author this when people stand in the location. On an empty location, omit it
-   * until `pnpm run content:landmarks` fills it from the whole-location mesh.
+   * One object, alone: no people, camera, or surrounding place. Qwen draws it,
+   * TRELLIS.2 meshes it, and a still names it whenever it is visible.
+   * A place seen from far away (a hanging citadel, a ship at sea) is one
+   * landmark as large as the location.
    */
-  position?: Vec3;
-  /**
-   * `[width X, depth Y, height Z]`. Required when people stand here.
-   * The mesh is fitted into this box.
-   */
-  size?: Vec3;
-  /**
-   * One object, alone. Qwen draws it and TRELLIS.2 meshes it.
-   * No people, camera, or the surrounding place. Required when people stand here.
-   */
-  appearance?: string;
+  appearance: string;
 };
 
 export type StageGeometry = {
   /**
    * Large enough that one ground plane can take a crowd, a body in motion,
    * and a world-scale camera. A tight box forces isolated talking heads.
-   * `[width X, depth Y, height Z]`.
-   * An empty location is generated as one mesh of this size.
-   * A location with people keeps this as the open floor, and each landmark
-   * is its own mesh at `size`.
    */
   sizeMeters: Vec3;
   landmarks: Record<string, LocationLandmark>;
 };
 
 export type ShowLocation = {
-  /**
-   * Materials and light of this world's arena (palace, alley, boardroom, forest).
-   * One charged space, reused for wides, groups, and ECUs. Not a viewpoint.
-   */
-  promptBlock: string;
+  /** What fills empty space: sky, ground inside the location, and the horizon beyond, each with a flat color. */
+  backdrop: {
+    sky: string; skyColor: [number, number, number];
+    ground: string; groundColor: [number, number, number];
+    surround: string; surroundColor: [number, number, number];
+  };
   /**
    * Persistent audio of this place. Required. LTX always invents audio if you
    * omit it. ambience = the bed that is always audible here. space = acoustic
@@ -79,33 +73,31 @@ export type ShowLocation = {
   spatial: StageGeometry;
 };
 
+/**
+ * Every character has a track in every episode, starting at 0. Where they are
+ * is where they are: if they stand in the court, every camera in the court
+ * that sees them shows them. Move them out with `locationId: null`.
+ */
 export type CharacterSpatialKeyframe = {
   timeSeconds: number;
-  locationId: string;
+  /** `null` while off stage. */
+  locationId: string | null;
   /**
-   * Feet. Status stands as a line or cluster facing the outsider.
-   * Do not park each speaker on an isolated mark so coverage becomes singles.
+   * Feet. Required in a location. Status stands as a line or cluster facing the
+   * outsider. Do not park each speaker on an isolated mark so coverage becomes singles.
    */
-  position: Vec3;
-  /** `0` faces +Y; positive turns toward +X. */
-  bodyYawDegrees: number;
-  /** Enemy, ally, or landmark they eye. Reciprocal in a standoff. */
+  position?: Vec3;
+  /** Required in a location. `0` faces +Y; positive turns toward +X. */
+  bodyYawDegrees?: number;
+  /** Enemy, ally, landmark, or prop they face. The whole body turns to it. */
   lookAtId?: string;
-  /**
-   * Proxy body height only. Strike, fall, and transform live in the scene's `performances`.
-   */
-  stance: "standing" | "sitting" | "kneeling" | "walking";
-  leftHandTargetId?: string;
-  rightHandTargetId?: string;
 };
 
-export type PropSpatialKeyframe = {
-  timeSeconds: number;
-  locationId: string;
-  position?: Vec3;
-  heldByCharacterId?: string;
-  heldInHand?: "left" | "right";
-};
+/** Held, placed, or off stage. Every prop has a track starting at 0. */
+export type PropSpatialKeyframe =
+  | { timeSeconds: number; heldByCharacterId: string; heldInHand: "left" | "right" }
+  | { timeSeconds: number; locationId: string; position: Vec3 }
+  | { timeSeconds: number; locationId: null };
 
 export type SpatialTimeline = {
   /**
@@ -119,10 +111,12 @@ export type SpatialTimeline = {
 
 export type SpatialCameraKeyframe = {
   timeSeconds: number;
+  /** Never inside a mesh. */
   position: Vec3;
   lookAt: Vec3;
   /**
    * World/empty ~50–70; group ~40–55; single ~20–28; eye or mouth ECU ~12–18.
+   * A speaker needs a readable face: a group shot from 12m does not lip-sync.
    */
   verticalFovDegrees: number;
   /** Dutch. Omit or `0` for a level horizon. */
@@ -136,6 +130,8 @@ export type SpatialCamera = {
    * group or OTS dialogue, ECU on the wounding line, body/hand/foot insert,
    * approach or fight. Heads may leave the frame.
    * One keyframe is locked-off; more than one interpolates.
+   * Everything the lens sees is in the shot: a wide of the court shows everyone
+   * standing in it, so they all need performances.
    */
   keyframes: SpatialCameraKeyframe[];
 };
@@ -152,29 +148,19 @@ export type ScriptScene = {
    */
   storyBeat: string;
   /**
-   * Everyone visible, including bodies behind the speaker.
-   * Empty for world, VFX, and inserts with no face.
-   * First two are Qwen identity Pictures; everyone is in the proxy.
-   * A group argument is a group shot, not a rotation of talking singles.
-   */
-  characterIds: string[];
-  /**
    * Who is speaking in this camera, including inside a crowd or two-shot.
-   * Omit on silent spectacle. Must be in `characterIds`.
+   * Their face must be visible in the start frame. Omit on silent spectacle.
    */
   speakerId?: string;
-  /**
-   * Shot duration. ~2s for world, inserts, and VFX; 3–6s for one spoken line.
-   * Do not also store `durationSeconds`.
-   */
+  /** ~2s for world, inserts, and VFX; 3–6s for one spoken line. */
   timeRangeSeconds: [number, number];
   /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
   /**
-   * One entry per characterId, no more; `{}` when no one is on camera.
-   * LTX invents motion it is not given (hands drifting in, touching props),
-   * so even stillness is written as an action. Previs checks every entry
-   * against the render of the start frame.
+   * One entry for everyone the camera sees at any moment of the shot, no more;
+   * `{}` when nobody is visible. LTX invents motion it is not given (hands
+   * drifting in, touching props), so even stillness is written as an action:
+   * a background line "stands motionless, watching her".
    */
   performances: Record<string, ScenePerformance>;
   /** The spoken line. Required exactly when `speakerId` is set. */
@@ -196,11 +182,6 @@ export type ScriptScene = {
     bed: "present" | "faint";
     music: { kind: "none" } | { kind: "described"; description: string };
   };
-  /**
-   * Parts that must stay on screen for the whole shot (a foot insert, a hand
-   * reaching). Previs fails any playblast frame where one is missing.
-   */
-  requiresParts?: { characterId: string; part: BodyPart }[];
 };
 
 export type ScenePerformance = {
@@ -211,14 +192,20 @@ export type ScenePerformance = {
    */
   action: string;
   /**
-   * Body parts the action moves, at least one. Previs fails when one is off
-   * screen in the start frame, because LTX would invent it mid-shot.
+   * Body parts the action moves; `[]` when the action is stillness (a
+   * background figure holding still). Each must be on screen at some moment
+   * of the shot, because LTX would otherwise invent it.
+   * Someone seen from behind has no visible face.
    */
   parts: BodyPart[];
   /**
-   * What the face shows, as visible cues, not a label: "fear held under
-   * defiance: jaw set, eyes glassy but unblinking", not "sad". Previs requires
-   * it exactly when the face is readable in the start frame.
+   * The face in the start frame, as visible cues, not a label: "fear held under
+   * defiance: jaw set, eyes glassy but unblinking", not "sad". The still draws
+   * it and the clip continues from it, so it must match how the take begins:
+   * a speaker, or someone about to exhale, has the lips slightly parted.
+   * Keep the mouth close to rest; an open snarl has nowhere to go on a mesh
+   * with a closed mouth. Required for the speaker. Only on a face visible in
+   * the start frame.
    */
   expression?: string;
 };
@@ -227,11 +214,9 @@ export type SoundEvent = {
   /** The audible action, present tense. Dialogue is not an event. */
   text: string;
   /**
-   * What makes it. Previs fails when the source is not on screen in the start frame.
-   * A character part (or wardrobe worn on it) must be in that character's
-   * performance parts, so the sound has motion behind it: a breath from a
-   * silent face needs "face" in parts and an action that moves the mouth.
-   * A speaker's face counts as moving.
+   * What makes it. Visible in the start frame. A character part (or wardrobe
+   * worn on it) must be in that character's performance parts, so the sound
+   * has motion behind it. A speaker's face counts as moving.
    */
   source:
     | { characterId: string; part: BodyPart }
@@ -257,9 +242,9 @@ export type ShowEpisode = {
 };
 
 export type ShowProp = {
-  /** Held-prop note. Required. It is not part of the location mesh. */
+  /** One object, alone. Drawn, meshed, and named like a landmark. */
   appearance: string;
-  sizeMeters?: Vec3;
+  size: Vec3;
 };
 
 export type ShowScript = {
@@ -269,10 +254,7 @@ export type ShowScript = {
   title: string;
   characters: Record<string, ShowCharacter>;
   locations: Record<string, ShowLocation>;
-  /**
-   * Every propTracks id. Omit the object when the show has no props.
-   * Each prop needs an appearance.
-   */
+  /** Omit when the show has no props. */
   props?: Record<string, ShowProp>;
   episodes: ShowEpisode[];
 };

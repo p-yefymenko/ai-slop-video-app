@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Render show JSON via ComfyUI: Qwen-Image-Edit stills, then LTX video."""
+"""content:frames and content:generate. Qwen-Image-Edit stills, then LTX clips, through ComfyUI.
+
+The words come from ``describe``; the pictures and the facts behind the words
+come from ``content:previs`` (guides plus the observation of each start frame).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import shutil
 import struct
 import subprocess
@@ -18,30 +21,9 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-from ffmpeg_tools import concat_videos
-from PIL import Image, ImageChops
-from still_people import (
-    character_appearance_text,
-    describe_people,
-    gather_visible_people,
-    load_part_min_pixel_height,
-    load_part_min_screen_fraction,
-    load_row_depth_ratio,
-    still_people_line,
-)
-from pipeline_paths import (
-    OUTPUT_DIR,
-    character_image_path,
-    clip_path,
-    control_depth_mp4_path,
-    discover_show_scripts,
-    end_still_path,
-    episode_video_path,
-    guide_path,
-    manifest_path,
-    show_id_for_script,
-    start_still_path,
-)
+import numpy as np
+from PIL import Image
+
 from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, FPS, fit_to_clip, ltx_length_for_duration
 from depth_control import (
     choose_ltx_workflow,
@@ -52,54 +34,31 @@ from depth_control import (
     stage_control_video,
     stage_fit_still,
 )
-from spatial_previs import (
-    PROXY_HEIGHT,
-    PROXY_WIDTH,
-    camera_at,
-    camera_moves,
-    describe_landmarks,
-    generate_episode_previs,
-    landmark_screen_fractions,
-    load_landmark_min_screen_fraction,
-    scene_has_spatial_change,
-    validate_spatial_episode,
-    visible_setting_line,
+from describe import drawn_prompt, ltx_prompt, still_prompt
+from ffmpeg_tools import concat_videos
+from pipeline_paths import (
+    OUTPUT_DIR,
+    clip_path,
+    control_depth_mp4_path,
+    discover_show_scripts,
+    end_still_path,
+    episode_video_path,
+    guide_path,
+    manifest_path,
+    start_still_path,
 )
+from previs import current_previs, load_observation, previs_episode
+from render import HEIGHT as PROXY_HEIGHT
+from render import WIDTH as PROXY_WIDTH
+from world import load_show, scene_has_spatial_change
 
 ROOT = Path(__file__).resolve().parents[1]
-PROMPT_KEYS = (
-    "characterImage",
-    "stillOpening",
-    "spatialBlockout",
-    "spatialFaces",
-    "spatialBackdrop",
-    "sceneVideo",
-    "sceneDialogue",
-    "scenePerson",
-    "scenePerformance",
-    "scenePerformanceExpression",
-    "sceneMotion",
-    "sceneCameraLocked",
-    "sceneSound",
-    "sceneSoundLabel",
-    "sceneSoundBedPresent",
-    "sceneSoundBedFaint",
-    "sceneSoundSpace",
-    "sceneSoundEvents",
-    "sceneSoundMusicNone",
-    "sceneSoundMusicDescribed",
-)
-PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
-# Qwen-Image-Edit-Plus has two identity slots beside the shot. Matches IDENTITY_FACE_LIMIT.
-MAX_QWEN_REFS = 2
-# Identity faces are off. A clothes shot does not also attach the empty-space plate.
-FACE_PASS = False
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
-QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit.json"
 SPATIAL_QWEN_WORKFLOW_PATH = ROOT / "workflows" / "qwen_image_edit_spatial.json"
-PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT_DIR = ROOT / ".comfyui" / "input"
 COMFYUI_URL = "http://127.0.0.1:8188"
+_nvidia_smi_ok: bool | None = None
+
 NVIDIA_QUERY_FIELDS = [
     "name",
     "memory.used",
@@ -119,6 +78,7 @@ NVIDIA_QUERY_FIELDS = [
     "clocks_throttle_reasons.hw_power_brake_slowdown",
     "clocks_throttle_reasons.sw_thermal_slowdown",
 ]
+
 THROTTLE_LABELS = {
     "clocks_throttle_reasons.sw_power_cap": "power cap (hit TGP)",
     "clocks_throttle_reasons.hw_slowdown": "hardware slowdown",
@@ -126,8 +86,6 @@ THROTTLE_LABELS = {
     "clocks_throttle_reasons.hw_power_brake_slowdown": "power brake",
     "clocks_throttle_reasons.sw_thermal_slowdown": "thermal (software)",
 }
-_nvidia_smi_ok: bool | None = None
-
 
 def load_dotenv() -> None:
     env_path = ROOT / ".env"
@@ -140,10 +98,8 @@ def load_dotenv() -> None:
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
-
 
 def format_duration(seconds: float) -> str:
     seconds = max(0.0, seconds)
@@ -156,7 +112,6 @@ def format_duration(seconds: float) -> str:
         return f"{minutes}m {secs:02d}s"
     return f"{seconds:.1f}s"
 
-
 def format_bytes(n: int) -> str:
     value = float(max(0, n))
     for unit in ("B", "KB", "MB", "GB"):
@@ -167,10 +122,8 @@ def format_bytes(n: int) -> str:
         value /= 1024
     return f"{value:.1f} GB"
 
-
 def format_gb(n_bytes: int) -> str:
     return f"{n_bytes / (1024 ** 3):.1f} GB"
-
 
 def _parse_number(raw: str) -> float | None:
     text = str(raw).strip()
@@ -181,14 +134,12 @@ def _parse_number(raw: str) -> float | None:
     except ValueError:
         return None
 
-
 def fetch_comfy_stats() -> dict | None:
     try:
         with urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3) as res:
             return json.loads(res.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
         return None
-
 
 def parse_comfy_gpu(stats: dict | None) -> dict | None:
     devices = (stats or {}).get("devices") or []
@@ -205,7 +156,6 @@ def parse_comfy_gpu(stats: dict | None) -> dict | None:
         "torch_vram_total": int(device.get("torch_vram_total") or 0),
         "torch_vram_free": int(device.get("torch_vram_free") or 0),
     }
-
 
 def nvidia_smi_snapshot() -> dict | None:
     global _nvidia_smi_ok
@@ -259,7 +209,6 @@ def nvidia_smi_snapshot() -> dict | None:
         "idle": str(raw.get("clocks_throttle_reasons.gpu_idle", "")).strip().lower() == "active",
     }
 
-
 def windows_shared_gpu_bytes() -> int | None:
     """Peak Shared Usage across GPU adapters (Windows). nvidia-smi does not expose this."""
     if os.name != "nt":
@@ -291,13 +240,11 @@ def windows_shared_gpu_bytes() -> int | None:
     except ValueError:
         return None
 
-
 def nvidia_vram_mib() -> float | None:
     snap = nvidia_smi_snapshot()
     if not snap or not snap.get("vram_used"):
         return None
     return float(snap["vram_used"]) / (1024.0 * 1024.0)
-
 
 class GpuMonitor:
     def __init__(self) -> None:
@@ -363,7 +310,6 @@ class GpuMonitor:
             "peak_shared_bytes": max(shared_vals) if shared_vals else None,
         }
 
-
 def snapshot_line(snapshot: dict) -> str:
     parts: list[str] = []
     source = snapshot.get("nv") or snapshot.get("comfy") or {}
@@ -377,7 +323,6 @@ def snapshot_line(snapshot: dict) -> str:
     if nv.get("throttles"):
         parts.append("throttle: " + ", ".join(nv["throttles"]))
     return " | ".join(parts) if parts else "GPU stats unavailable"
-
 
 def resolution_advice(summary: dict, width: int, height: int, frames: int) -> str:
     total = summary.get("total") or 0
@@ -402,7 +347,6 @@ def resolution_advice(summary: dict, width: int, height: int, frames: int) -> st
         f"A moderate resolution bump from {width}x{height} / {frames} frames may be feasible; "
         "raise one axis at a time and watch peak VRAM."
     )
-
 
 def log_gpu_summary(summary: dict, width: int, height: int, frames: int) -> None:
     print(
@@ -441,7 +385,6 @@ def log_gpu_summary(summary: dict, width: int, height: int, frames: int) -> None
         print("  Throttle: none observed (sampled during this scene)", flush=True)
     print(f"  Resolution: {resolution_advice(summary, width, height, frames)}", flush=True)
 
-
 def graph_meta(graph: dict) -> dict:
     width, height, length = latent_size(graph)
     steps = None
@@ -470,7 +413,6 @@ def graph_meta(graph: dict) -> dict:
         ),
     }
 
-
 def execution_seconds_from_history(item: dict | None) -> float | None:
     messages = ((item or {}).get("status") or {}).get("messages") or []
     start = None
@@ -493,7 +435,6 @@ def execution_seconds_from_history(item: dict | None) -> float | None:
         delta /= 1000.0
     return max(0.0, delta)
 
-
 def free_comfy_models() -> None:
     payload = json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8")
     req = urllib.request.Request(
@@ -507,7 +448,6 @@ def free_comfy_models() -> None:
         print("Unloaded idle ComfyUI models so the next stage can fit in VRAM.", flush=True)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         print(f"Could not unload ComfyUI models ({exc}); continuing.", flush=True)
-
 
 def queue_prompt(prompt_graph: dict) -> str:
     payload = json.dumps({"prompt": prompt_graph}).encode("utf-8")
@@ -523,7 +463,6 @@ def queue_prompt(prompt_graph: dict) -> str:
     if node_errors:
         raise RuntimeError(f"ComfyUI rejected the workflow: {json.dumps(node_errors)}")
     return body["prompt_id"]
-
 
 def wait_for_output(
     prompt_id: str,
@@ -591,15 +530,12 @@ def wait_for_output(
         time.sleep(2)
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish in time")
 
-
 def _output_prefix(filename: str) -> str:
     return str(filename or "")
-
 
 def _has_output_prefixes(files: list[dict], prefixes: list[str]) -> bool:
     names = [_output_prefix(info.get("filename", "")) for info in files]
     return all(any(name.startswith(f"{prefix}_") for name in names) for prefix in prefixes)
-
 
 def output_named(files: list[dict], prefix: str) -> dict:
     """Pick the SaveImage whose filename starts with this prefix."""
@@ -613,44 +549,11 @@ def output_named(files: list[dict], prefix: str) -> dict:
         raise RuntimeError(f"Expected one {prefix} image, got {names}")
     return matches[0]
 
-
-def kept_pass_path(dest: Path, label: str) -> Path:
-    """Blockouts stay beside the still. Other passes go in inputs/<stem>/."""
-    if label == "blockout":
-        return dest.with_name(f"{dest.stem}_{label}{dest.suffix}")
-    path = still_inputs_dir(dest) / f"{label}{dest.suffix}"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def still_log_path(dest: Path) -> Path:
     return still_inputs_dir(dest) / "log.json"
 
-
 def still_inputs_dir(dest: Path) -> Path:
     return dest.parent / "inputs" / dest.stem
-
-
-def load_start_landmark_records(dest: Path) -> list[dict] | None:
-    """End frames copy start landmark sent flags. Missing start log means None."""
-    if not dest.stem.endswith("_end"):
-        return None
-    start_dest = dest.with_name(dest.name.replace("_end", "_start", 1))
-    log_path = still_log_path(start_dest)
-    if not log_path.is_file():
-        return None
-    try:
-        payload = json.loads(log_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    for item in payload.get("passes") or []:
-        if not isinstance(item, dict):
-            continue
-        landmarks = item.get("landmarks")
-        if isinstance(landmarks, list):
-            return landmarks
-    return None
-
 
 def begin_generation_log(dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -664,47 +567,6 @@ def begin_generation_log(dest: Path) -> None:
     )
     print(f"  Log {still_log_path(dest)}", flush=True)
 
-
-def append_generation_log(
-    dest: Path,
-    pass_name: str,
-    prompt: str,
-    images: list[tuple[str, Path | None]],
-    people: list[dict] | None = None,
-    landmarks: list[dict] | None = None,
-    row_depth_ratio: float | None = None,
-) -> None:
-    log_path = still_log_path(dest)
-    if not log_path.is_file():
-        begin_generation_log(dest)
-    payload = json.loads(log_path.read_text(encoding="utf-8"))
-    inputs = still_inputs_dir(dest)
-    inputs.mkdir(parents=True, exist_ok=True)
-    recorded: list[dict] = []
-    for role, source in images:
-        if source is not None and not isinstance(source, Path):
-            source = Path(source)
-        if source is None or not source.is_file():
-            recorded.append({"role": role, "missing": True})
-            continue
-        copied = inputs / f"{pass_name}_{re.sub(r'[^a-z0-9]+', '_', role.lower()).strip('_') or 'image'}{source.suffix.lower() or '.png'}"
-        shutil.copy2(source, copied)
-        recorded.append({"role": role, "source": str(source), "file": copied.name})
-    entry = {"pass": pass_name, "prompt": prompt, "images": recorded}
-    if people:
-        entry["people"] = people
-        if row_depth_ratio is not None:
-            entry["rowDepthRatio"] = row_depth_ratio
-            depths = [float(item.get("depth") or 0) for item in people]
-            nearest = min(depths) if depths else 0.0
-            farthest = max(depths) if depths else 0.0
-            entry["depthRatio"] = round(farthest / nearest, 3) if nearest > 0 else 0
-    if landmarks:
-        entry["landmarks"] = landmarks
-    payload.setdefault("passes", []).append(entry)
-    log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-
 def download_output(file_info: dict, dest: Path) -> None:
     filename = file_info["filename"]
     subfolder = file_info.get("subfolder", "")
@@ -716,242 +578,10 @@ def download_output(file_info: dict, dest: Path) -> None:
     with urllib.request.urlopen(f"{COMFYUI_URL}/view?{query}") as res, dest.open("wb") as handle:
         shutil.copyfileobj(res, handle)
 
-
-def require_text(obj: dict, key: str, where: str) -> str:
-    value = obj.get(key)
-    text = value.strip() if isinstance(value, str) else ""
-    if not text:
-        raise SystemExit(f"{where} is missing {key}")
-    return text
-
-
 def stable_seed(*parts: object) -> int:
     """Return a reproducible unsigned 32-bit seed for one render identity."""
     key = "|".join(str(part) for part in parts).encode("utf-8")
     return int.from_bytes(hashlib.blake2s(key, digest_size=4).digest(), "big")
-
-
-def render_prompt(template: str, values: dict[str, str]) -> str:
-    unused = set(values)
-
-    def repl(match: re.Match[str]) -> str:
-        key = match.group(1)
-        if key not in values:
-            known = ", ".join(sorted(values)) or "(none)"
-            raise SystemExit(f"Unknown prompt placeholder {{{key}}}. Known: {known}")
-        unused.discard(key)
-        return values[key]
-
-    rendered = PLACEHOLDER.sub(repl, template).strip()
-    if unused:
-        missing = ", ".join(f"{{{key}}}" for key in sorted(unused))
-        raise SystemExit(
-            f"prompts template never uses {missing}. Those fields are dropped, so Qwen/LTX "
-            "never see the actual scene. Add the placeholders to the template."
-        )
-    if not rendered:
-        raise SystemExit("Rendered prompt is empty")
-    return rendered
-
-
-def show_prompt(show: dict, key: str, values: dict[str, str]) -> str:
-    return render_prompt(show["prompts"][key], values)
-
-
-def _sound_clause(text: str) -> str:
-    """Trim trailing punctuation and capitalize the first letter for a sentence body."""
-    cleaned = text.strip().rstrip(".,; ").strip()
-    if not cleaned:
-        return cleaned
-    return cleaned[0].upper() + cleaned[1:]
-
-
-def compile_scene_sound_sentence(
-    show: dict,
-    scene: dict,
-    location: dict,
-    *,
-    include_music: bool = True,
-) -> str:
-    """Sound block from location.soundscape + scene.sound.
-
-    Separate sentences (label, bed, space, events, optional music). All connective
-    wording comes from prompts.json. Missing sound data is a hard error.
-    """
-    soundscape = location.get("soundscape")
-    if not isinstance(soundscape, dict):
-        raise SystemExit(
-            f"scene {scene.get('sceneNumber')}: location {location.get('id')!r} "
-            "is missing soundscape"
-        )
-    ambience = str(soundscape.get("ambience") or "").strip()
-    space = str(soundscape.get("space") or "").strip()
-    if not ambience or not space:
-        raise SystemExit(
-            f"scene {scene.get('sceneNumber')}: location {location.get('id')!r} "
-            "soundscape needs non-empty ambience and space"
-        )
-    sound = scene.get("sound")
-    if not isinstance(sound, dict):
-        raise SystemExit(f"scene {scene.get('sceneNumber')} is missing sound")
-    events = "; ".join(
-        _clause(event.get("text"))
-        for event in sound.get("events") or []
-        if isinstance(event, dict) and _clause(event.get("text"))
-    )
-    if not events:
-        raise SystemExit(f"scene {scene.get('sceneNumber')} sound.events is required")
-    bed = sound.get("bed")
-    if bed == "present":
-        bed_key = "sceneSoundBedPresent"
-    elif bed == "faint":
-        bed_key = "sceneSoundBedFaint"
-    else:
-        raise SystemExit(
-            f"scene {scene.get('sceneNumber')} sound.bed must be present or faint"
-        )
-    music_phrase = ""
-    if include_music:
-        music = sound.get("music")
-        if not isinstance(music, dict) or "kind" not in music:
-            raise SystemExit(f"scene {scene.get('sceneNumber')} sound.music is required")
-        kind = music["kind"]
-        if kind == "none":
-            music_phrase = show["prompts"]["sceneSoundMusicNone"]
-        elif kind == "described":
-            description = str(music.get("description") or "").strip()
-            if not description:
-                raise SystemExit(
-                    f"scene {scene.get('sceneNumber')} sound.music.description is required"
-                )
-            music_phrase = show_prompt(
-                show,
-                "sceneSoundMusicDescribed",
-                {"description": _sound_clause(description)},
-            )
-        else:
-            raise SystemExit(
-                f"scene {scene.get('sceneNumber')} sound.music.kind must be none or described"
-            )
-    label = show_prompt(show, "sceneSoundLabel", {})
-    bed_phrase = show_prompt(show, bed_key, {"ambience": _sound_clause(ambience)})
-    space_phrase = show_prompt(
-        show, "sceneSoundSpace", {"space": _sound_clause(space)}
-    )
-    events_phrase = show_prompt(
-        show, "sceneSoundEvents", {"events": _sound_clause(events)}
-    )
-    return show_prompt(
-        show,
-        "sceneSound",
-        {
-            "label": label,
-            "bedPhrase": bed_phrase,
-            "spacePhrase": space_phrase,
-            "eventsPhrase": events_phrase,
-            "musicPhrase": music_phrase,
-        },
-    )
-
-
-def _clause(text: object) -> str:
-    """Authored text as a clause: collapsed whitespace, no trailing punctuation."""
-    return " ".join(str(text or "").split()).rstrip(".,;: ")
-
-
-def still_places(still_path: Path) -> dict[str, str]:
-    """characterId -> the place words the start still used for that person."""
-    log_path = still_log_path(still_path)
-    if not log_path.is_file():
-        return {}
-    payload = json.loads(log_path.read_text(encoding="utf-8"))
-    for item in payload.get("passes") or []:
-        people = item.get("people") if isinstance(item, dict) else None
-        if isinstance(people, list):
-            return {
-                str(person["characterId"]): str(person["place"])
-                for person in people
-                if isinstance(person, dict) and person.get("characterId") and person.get("place")
-            }
-    return {}
-
-
-def compile_scene_action(show: dict, scene: dict, places: dict[str, str]) -> str:
-    """Dialogue, each performance, non-character motion, then a locked camera.
-
-    People are named the way the start still placed and described them, so LTX
-    can find them in the first frame. Character ids mean nothing to it.
-    """
-    number = scene.get("sceneNumber")
-
-    def person(character_id: str) -> str:
-        if character_id not in places:
-            raise SystemExit(
-                f"scene {number}: the start still log does not place {character_id}. "
-                "Rerun content:frames for this scene."
-            )
-        body = _clause(show["characters"][character_id]["body"])
-        return show_prompt(show, "scenePerson", {"place": places[character_id], "body": body})
-
-    parts: list[str] = []
-    dialogue = scene.get("dialogue")
-    if dialogue:
-        parts.append(
-            show_prompt(
-                show,
-                "sceneDialogue",
-                {
-                    "person": person(str(scene["speakerId"])),
-                    "delivery": _clause(dialogue["delivery"]),
-                    "line": " ".join(str(dialogue["line"]).split()),
-                },
-            )
-        )
-    performances = scene.get("performances") or {}
-    for character_id in scene.get("characterIds") or []:
-        performance = performances[character_id]
-        parts.append(
-            show_prompt(
-                show,
-                "scenePerformance",
-                {"person": person(character_id), "action": _clause(performance["action"])},
-            )
-        )
-        if performance.get("expression"):
-            parts.append(
-                show_prompt(
-                    show,
-                    "scenePerformanceExpression",
-                    {"expression": _clause(performance["expression"])},
-                )
-            )
-    if scene.get("motion"):
-        parts.append(show_prompt(show, "sceneMotion", {"motion": _clause(scene["motion"])}))
-    if not camera_moves(scene):
-        parts.append(show_prompt(show, "sceneCameraLocked", {}))
-    return " ".join(parts)
-
-
-def compile_ltx_prompt(
-    show: dict,
-    scene: dict,
-    location: dict,
-    *,
-    places: dict[str, str] | None = None,
-    include_music: bool = True,
-) -> str:
-    """Shared LTX prompt for plain, depth, and depth-dialogue graphs.
-
-    Action first (dialogue, performances, motion, camera), then authored sound.
-    `places` comes from the start still log; scenes with people need it.
-    """
-    action = compile_scene_action(show, scene, places or {})
-    visual = show_prompt(show, "sceneVideo", {"action": action})
-    sound = compile_scene_sound_sentence(
-        show, scene, location, include_music=include_music
-    )
-    return f"{visual} {sound}".strip()
-
 
 def write_clip_generation_log(
     dest: Path,
@@ -992,7 +622,6 @@ def write_clip_generation_log(
     ]
     log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-
 def write_solid_png(path: Path, color: tuple[int, int, int], width: int = 768, height: int = 1360) -> None:
     pixel = bytes(color)
     raw = b"".join(b"\x00" + (pixel * width) for _ in range(height))
@@ -1005,239 +634,12 @@ def write_solid_png(path: Path, color: tuple[int, int, int], width: int = 768, h
         b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
     )
 
-
-def write_black_png(path: Path, width: int = 768, height: int = 1360) -> None:
-    write_solid_png(path, (0, 0, 0), width, height)
-
-
-def ensure_blank_png() -> str:
-    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / "blank-768x1360.png"
-    if not dest.is_file():
-        write_black_png(dest)
-    return dest.name
-
-
-def ensure_neutral_canvas() -> str:
-    """Light canvas for shots with no identity. A black or wireframe image stays in the edit."""
-    COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = COMFY_INPUT_DIR / "neutral-canvas-768x1360.png"
-    if not dest.is_file():
-        write_solid_png(dest, (210, 210, 210))
-    return dest.name
-
-
-def _backdrop_color(raw: object, where: str) -> list[int]:
-    if not isinstance(raw, list) or len(raw) != 3:
-        raise SystemExit(f"{where} must be three numbers")
-    color: list[int] = []
-    for channel in raw:
-        if isinstance(channel, bool) or not isinstance(channel, (int, float)):
-            raise SystemExit(f"{where} must be three numbers")
-        number = int(channel)
-        if number < 0 or number > 255:
-            raise SystemExit(f"{where} must be between 0 and 255")
-        color.append(number)
-    return color
-
-
-def load_show(path: Path) -> dict:
-    show = load_json(path)
-    show_id = require_text(show, "id", path.name)
-    expected_id = show_id_for_script(path)
-    if show_id != expected_id:
-        raise SystemExit(f"{path.name}: id {show_id!r} must match {expected_id!r}")
-    require_text(show, "title", path.name)
-    characters = show.get("characters")
-    if not isinstance(characters, dict) or not characters:
-        raise SystemExit(f"{path.name} is missing characters")
-    from body_parts import validate_show_parts
-
-    validate_show_parts(show)
-    cleaned_chars: dict[str, dict] = {}
-    for cid, character in characters.items():
-        if not isinstance(character, dict):
-            raise SystemExit(f"characters[{cid!r}] must be an object")
-        cleaned_chars[str(cid)] = {
-            "id": str(cid),
-            "body": require_text(character, "body", f"characters.{cid}.body"),
-            "attributes": character["attributes"],
-        }
-        if isinstance(character.get("proxy"), dict):
-            cleaned_chars[str(cid)]["proxy"] = character["proxy"]
-    show["characters"] = cleaned_chars
-    if "locationCharacters" in show:
-        raise SystemExit(
-            f"{path.name} still has locationCharacters. Replace that object with locations "
-            "(location text only) and put characterIds on each scene."
-        )
-    locations = show.get("locations")
-    if not isinstance(locations, dict) or not locations:
-        raise SystemExit(f"{path.name} is missing locations")
-    cleaned_locs: dict[str, dict] = {}
-    for loc_id, loc in locations.items():
-        if not isinstance(loc, dict):
-            raise SystemExit(f"locations[{loc_id!r}] must be an object")
-        backdrop = loc.get("backdrop")
-        if not isinstance(backdrop, dict):
-            raise SystemExit(f"locations[{loc_id!r}] is missing backdrop")
-        where = f"locations[{loc_id!r}].backdrop"
-        cleaned_locs[str(loc_id)] = {
-            "id": str(loc_id),
-            "promptBlock": require_text(loc, "promptBlock", f"locations[{loc_id!r}]"),
-            "backdrop": {
-                "sky": require_text(backdrop, "sky", where),
-                "skyColor": _backdrop_color(backdrop.get("skyColor"), f"{where}.skyColor"),
-                "ground": require_text(backdrop, "ground", where),
-                "groundColor": _backdrop_color(backdrop.get("groundColor"), f"{where}.groundColor"),
-                "surround": require_text(backdrop, "surround", where),
-                "surroundColor": _backdrop_color(backdrop.get("surroundColor"), f"{where}.surroundColor"),
-            },
-            "soundscape": loc.get("soundscape"),
-            "spatial": loc.get("spatial"),
-        }
-    show["locations"] = cleaned_locs
-    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    if not isinstance(prompts, dict):
-        raise SystemExit(f"{PROMPTS_PATH} must contain a JSON object")
-    show["prompts"] = {key: require_text(prompts, key, "prompts") for key in PROMPT_KEYS}
-    show["landmarkMinScreenFraction"] = load_landmark_min_screen_fraction(prompts)
-    show["partMinPixelHeight"] = load_part_min_pixel_height(prompts)
-    show["partMinScreenFraction"] = load_part_min_screen_fraction(prompts)
-    show["rowDepthRatio"] = load_row_depth_ratio(prompts)
-    episodes = show.get("episodes")
-    if not isinstance(episodes, list) or not episodes:
-        raise SystemExit(f"{path.name} is missing episodes")
-    cleaned_eps: list[dict] = []
-    for index, episode in enumerate(episodes):
-        if not isinstance(episode, dict):
-            raise SystemExit(f"episodes[{index}] must be an object")
-        if "episodeNumber" not in episode:
-            raise SystemExit(f"episodes[{index}] is missing episodeNumber")
-        ep_num = int(episode["episodeNumber"])
-        scenes = episode.get("scenes")
-        if not isinstance(scenes, list) or not scenes:
-            raise SystemExit(f"episode {ep_num} is missing scenes")
-        cleaned_scenes: list[dict] = []
-        for scene_index, scene in enumerate(scenes, start=1):
-            if not isinstance(scene, dict):
-                raise SystemExit(f"episode {ep_num} has a non-object scene")
-            scene_label = f"episode {ep_num} scene {scene.get('sceneNumber')}"
-            scene_number = int(scene["sceneNumber"])
-            if scene_number != scene_index:
-                raise SystemExit(
-                    f"{scene_label} is out of sequence; expected sceneNumber {scene_index}"
-                )
-            if scene.get("locationCharacterId"):
-                raise SystemExit(f"{scene_label} uses locationCharacterId; rename it to locationId")
-            loc_id = require_text(scene, "locationId", scene_label)
-            if loc_id not in cleaned_locs:
-                known = ", ".join(sorted(cleaned_locs))
-                raise SystemExit(f"Unknown locationId {loc_id!r}. Known: {known}")
-            character_ids = [str(cid) for cid in (scene.get("characterIds") or []) if cid]
-            for cid in character_ids:
-                if cid not in cleaned_chars:
-                    raise SystemExit(f"{scene_label} names unknown character {cid!r}")
-            speaker_id = scene.get("speakerId")
-            if speaker_id:
-                speaker_id = str(speaker_id)
-                if speaker_id not in character_ids:
-                    raise SystemExit(
-                        f"{scene_label} speakerId {speaker_id!r} is not on camera"
-                    )
-            else:
-                speaker_id = None
-            if scene.get("motionMode"):
-                raise SystemExit(
-                    f"{scene_label} still has motionMode; every shot is generated by LTX"
-                )
-            if scene.get("coverageReferenceSceneNumber") is not None or scene.get(
-                "focusTargetId"
-            ):
-                raise SystemExit(
-                    f"{scene_label} still has coverageReferenceSceneNumber or "
-                    "focusTargetId; geometry comes from this shot's camera and timeline"
-                )
-            camera = scene.get("camera")
-            if not isinstance(camera, dict) or not camera.get("keyframes"):
-                raise SystemExit(f"{scene_label} requires camera.keyframes")
-            if any(key in camera for key in ("position", "endPosition", "endLookAt")):
-                raise SystemExit(
-                    f"{scene_label} still has a two-sample camera; "
-                    "put poses on camera.keyframes"
-                )
-            time_range = scene.get("timeRangeSeconds")
-            if (
-                not isinstance(time_range, list)
-                or len(time_range) != 2
-            ):
-                raise SystemExit(f"{scene_label} requires timeRangeSeconds [start, end]")
-            duration_seconds = float(time_range[1]) - float(time_range[0])
-            if duration_seconds <= 0:
-                raise SystemExit(f"{scene_label} timeRangeSeconds must increase")
-            cleaned = {
-                    "sceneNumber": scene_number,
-                    "locationId": loc_id,
-                    "storyBeat": require_text(scene, "storyBeat", scene_label),
-                    "characterIds": character_ids,
-                    "speakerId": speaker_id,
-                    "timeRangeSeconds": [float(time_range[0]), float(time_range[1])],
-                    "camera": camera,
-                    "performances": scene.get("performances") or {},
-                    "dialogue": scene.get("dialogue"),
-                    "motion": scene.get("motion"),
-                    "sound": scene.get("sound"),
-                    "durationSeconds": duration_seconds,
-                }
-            if scene.get("requiresParts") is not None:
-                cleaned["requiresParts"] = scene["requiresParts"]
-            cleaned_scenes.append(cleaned)
-        cleaned_eps.append(
-            {
-                "episodeNumber": ep_num,
-                "title": require_text(episode, "title", f"episode {ep_num}"),
-                "isFree": bool(episode.get("isFree")),
-                "coinCost": int(episode.get("coinCost") or 0),
-                "spatialTimeline": episode.get("spatialTimeline"),
-                "scenes": cleaned_scenes,
-                "_allScenes": cleaned_scenes,
-            }
-        )
-    show["episodes"] = cleaned_eps
-    return show
-
-
-def resolve_location(show: dict, scene: dict) -> dict:
-    return show["locations"][scene["locationId"]]
-
-
-def resolve_scene_characters(show: dict, scene: dict) -> list[dict]:
-    resolved: list[dict] = []
-    for character_id in scene["characterIds"]:
-        image_path = character_image_path(show["id"], character_id)
-        if not present(image_path):
-            raise SystemExit(
-                f"Missing character still {image_path}. Run `pnpm run content:frames` "
-                "so identity portraits exist before scene stills."
-            )
-        resolved.append({"id": character_id, "image_path": image_path})
-    return resolved
-
-
 def present(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 1024
-
-
-def scene_needs_end_still(episode: dict, scene: dict, config: dict | None = None) -> bool:
-    """Generate scene_XX_end.png only when renderer endStill is enabled."""
-    cfg = config if config is not None else load_renderer_config()
-    return bool(cfg.get("endStill")) and scene_has_spatial_change(episode, scene)
-
 
 def clone_workflow(workflow_template: dict) -> dict:
     raw = workflow_template["prompt"] if "prompt" in workflow_template else workflow_template
     return json.loads(json.dumps(raw))
-
 
 def inject_seed(graph: dict, seed: int) -> None:
     for node in graph.values():
@@ -1250,7 +652,6 @@ def inject_seed(graph: dict, seed: int) -> None:
         elif class_type == "KSampler":
             inputs["seed"] = seed
 
-
 def stage_start_still(image_path: Path, *, fit_clip: bool = False) -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / image_path.name
@@ -1261,13 +662,11 @@ def stage_start_still(image_path: Path, *, fit_clip: bool = False) -> str:
         shutil.copy2(image_path, dest)
     return dest.name
 
-
 def stage_named_image(image_path: Path, prefix: str) -> str:
     COMFY_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMFY_INPUT_DIR / f"{prefix}_{image_path.name}"
     shutil.copy2(image_path, dest)
     return dest.name
-
 
 def inject_start_frame(graph: dict, image_name: str, strength: float | None = None) -> None:
     width, height, length = latent_size(graph)
@@ -1316,136 +715,6 @@ def inject_start_frame(graph: dict, image_name: str, strength: float | None = No
     if isinstance(sampler, dict):
         sampler.setdefault("inputs", {})["latent_image"] = ["24", 0]
 
-
-def inject_qwen_character_canvas(graph: dict) -> None:
-    inject_qwen_image_slots(graph, [(ensure_blank_png(), "Blank canvas")])
-
-
-_FACE_PASS_NODES = ("20", "21", "22", "23", "24", "25", "30", "31", "70")
-
-
-def _save_blockout_pass(graph: dict) -> None:
-    """Keep the image from the first sampler when a face pass replaces it."""
-    graph["32"] = {
-        "inputs": {
-            "filename_prefix": "reelshort_blockout",
-            "images": ["11", 0],
-        },
-        "class_type": "SaveImage",
-        "_meta": {"title": "Blockout still"},
-    }
-
-
-def _disable_face_pass(graph: dict) -> None:
-    save = graph.get("12")
-    if isinstance(save, dict):
-        save.setdefault("inputs", {})["images"] = ["11", 0]
-    for node_id in _FACE_PASS_NODES:
-        graph.pop(node_id, None)
-
-
-def structure_pictures(
-    pictures: list[str],
-    start: int = 1,
-    people_count: int | None = None,
-) -> str:
-    """One sentence per guide. The same words for every scene."""
-    lines = []
-    for index, title in enumerate(pictures, start=start):
-        if title == "Clothes":
-            lines.append(f"Picture {index} shows each person's colors.")
-        elif title == "Depth":
-            lines.append(f"Picture {index} is depth: brighter is closer, black is empty space.")
-        elif title == "Edges":
-            lines.append(f"Picture {index} is outlines.")
-        elif title == "Pose":
-            lines.append(
-                f"Picture {index} is an OpenPose skeleton of those same people, on black. Match each joint."
-            )
-        elif title == "Backdrop":
-            lines.append(
-                f"Picture {index} is flat sky, ground, and surround colors; "
-                "the black shapes are the structures."
-            )
-        else:
-            raise KeyError(title)
-    return " ".join(lines)
-
-
-_GUIDE_NODES = (("40", "image2"), ("41", "image3"))
-
-
-def inject_qwen_spatial_refs(
-    graph: dict,
-    characters: list[dict],
-    lead_name: str,
-    mask_name: str | None,
-    guides: list[tuple[str, str]] | None = None,
-    lead_title: str = "Depth",
-    backdrop_name: str | None = None,
-) -> None:
-    """Picture 1 is the depth. People shots then pass the pose and the place edges."""
-    depth = graph.get("6")
-    if not isinstance(depth, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the depth loader")
-    depth.setdefault("inputs", {})["image"] = lead_name
-    depth["_meta"] = {"title": lead_title}
-    blockout_encoder = _qwen_encoder(graph, "Blockout instruction")
-    if blockout_encoder is None:
-        raise RuntimeError("Spatial Qwen workflow is missing the blockout instruction")
-    blockout_inputs = blockout_encoder.setdefault("inputs", {})
-    blockout_inputs["image1"] = ["6", 0]
-    for node_id, image_key in _GUIDE_NODES:
-        blockout_inputs.pop(image_key, None)
-        graph.pop(node_id, None)
-    for (node_id, image_key), (image_name, title) in zip(_GUIDE_NODES, guides or []):
-        graph[node_id] = {
-            "inputs": {"image": image_name},
-            "class_type": "LoadImage",
-            "_meta": {"title": title},
-        }
-        blockout_inputs[image_key] = [node_id, 0]
-    slot_titles = {"image1": lead_title}
-    for (node_id, image_key), (_image_name, title) in zip(_GUIDE_NODES, guides or []):
-        slot_titles[image_key] = title
-    # The empty-space plate is black on the person. As a reference latent it copies
-    # that black over the garment. Clothes shots keep the cutout as the color latent.
-    if "Clothes" in slot_titles.values():
-        backdrop_name = None
-    if backdrop_name is not None:
-        blockout_encoder["class_type"] = "TextEncodeQwenBackdrop"
-        graph["42"] = {
-            "inputs": {"image": backdrop_name},
-            "class_type": "LoadImage",
-            "_meta": {"title": "Backdrop"},
-        }
-        slot = "image3" if "image3" not in blockout_inputs else "image4"
-        blockout_inputs[slot] = ["42", 0]
-        slot_titles[slot] = "Backdrop"
-    if not characters or mask_name is None:
-        _disable_face_pass(graph)
-        return
-    if "20" not in graph or "70" not in graph:
-        raise RuntimeError("Spatial Qwen workflow is missing the face pass")
-    graph["20"].setdefault("inputs", {})["image"] = mask_name
-    face = _qwen_encoder(graph, "Face instruction")
-    if face is None:
-        raise RuntimeError("Spatial Qwen workflow is missing the face instruction")
-    face_inputs = face.setdefault("inputs", {})
-    face_inputs["image1"] = ["11", 0]
-    slots = (("24", "image2"), ("25", "image3"))
-    for node_id, image_key in slots:
-        face_inputs.pop(image_key, None)
-        graph.pop(node_id, None)
-    for (node_id, image_key), character in zip(slots, characters[:MAX_QWEN_REFS]):
-        graph[node_id] = {
-            "inputs": {"image": stage_start_still(character["image_path"])},
-            "class_type": "LoadImage",
-            "_meta": {"title": f"Character reference ({character['id']})"},
-        }
-        face_inputs[image_key] = [node_id, 0]
-
-
 def _qwen_encoder(graph: dict, title: str) -> dict | None:
     for node in graph.values():
         if not isinstance(node, dict) or node.get("class_type") not in {
@@ -1456,7 +725,6 @@ def _qwen_encoder(graph: dict, title: str) -> dict | None:
         if str((node.get("_meta") or {}).get("title", "")) == title:
             return node
     return None
-
 
 def inject_qwen_prompt(graph: dict, prompt: str, title: str = "Positive instruction") -> None:
     target = _qwen_encoder(graph, title)
@@ -1472,239 +740,6 @@ def inject_qwen_prompt(graph: dict, prompt: str, title: str = "Positive instruct
     if target is None:
         raise RuntimeError(f"Could not find the Qwen {title} node")
     target.setdefault("inputs", {})["prompt"] = prompt
-
-
-def _sync_structure_encoder(graph: dict, positive: dict) -> None:
-    structure = _qwen_encoder(graph, "Structure instruction")
-    if structure is None:
-        return
-    inputs = structure.setdefault("inputs", {})
-    for key in ("image1", "image2", "image3"):
-        inputs.pop(key, None)
-    slot = 1
-    for key in ("image1", "image2", "image3"):
-        link = positive.get("inputs", {}).get(key)
-        if not link:
-            continue
-        loader = graph.get(str(link[0]))
-        loader_title = ""
-        if isinstance(loader, dict):
-            loader_title = str((loader.get("_meta") or {}).get("title", ""))
-        if "projection" in loader_title.lower() or "blocking" in loader_title.lower():
-            continue
-        inputs[f"image{slot}"] = link
-        slot += 1
-
-
-def identity_face_groups(mask_path: Path, characters: list[dict]) -> list[list[dict]]:
-    """Visible faces from previs, in paint order, split into the edit node's slots.
-
-    The manifest is written by previs. It lists people whose face points at the
-    camera, not the first names in the scene.
-    """
-    manifest = mask_path.with_suffix(".json")
-    if not manifest.is_file():
-        return []
-    ids = json.loads(manifest.read_text(encoding="utf-8"))
-    by_id = {item["id"]: item for item in characters}
-    groups: list[list[dict]] = []
-    batch: list[dict] = []
-    for character_id in ids:
-        character = by_id.get(character_id)
-        individual = mask_path.with_name(f"{mask_path.stem}_{character_id}.png")
-        if character is None or not present(individual) or pose_image_is_blank(individual):
-            continue
-        batch.append({**character, "mask_path": individual})
-        if len(batch) == MAX_QWEN_REFS:
-            groups.append(batch)
-            batch = []
-    if batch:
-        groups.append(batch)
-    return groups
-
-
-def stage_combined_mask(group: list[dict], label: str) -> str:
-    """One mask for this pass, so a portrait is painted only onto its own head."""
-    paths = [Path(item["mask_path"]) for item in group]
-    combined = Image.open(paths[0]).convert("RGB")
-    for path in paths[1:]:
-        combined = ImageChops.lighter(combined, Image.open(path).convert("RGB"))
-    destination = paths[0].with_name(f"{paths[0].stem}_pass.png")
-    combined.save(destination)
-    try:
-        return stage_named_image(destination, label)
-    finally:
-        destination.unlink(missing_ok=True)
-
-
-def head_in_view(show: dict, episode: dict, scene: dict, character_id: str, time_seconds: float) -> bool:
-    """True when this camera can see the top of that person."""
-    from spatial_previs import camera_at, episode_character_state, point_in_view
-
-    state = episode_character_state(episode, character_id, time_seconds)
-    position = state.get("position")
-    if not isinstance(position, list) or len(position) < 2:
-        return True
-    character = (show.get("characters") or {}).get(character_id) or {}
-    proxy = character.get("proxy") if isinstance(character, dict) else None
-    height = 1.72
-    if isinstance(proxy, dict) and proxy.get("heightMeters"):
-        height = float(proxy["heightMeters"])
-    head = (float(position[0]), float(position[1]), height * 0.9)
-    return point_in_view(head, camera_at(scene, time_seconds))
-
-
-def still_prompt(
-    pictures: list[str],
-    *,
-    people: str = "",
-    landmarks: str = "",
-    setting: str = "",
-    people_count: int | None = None,
-) -> str:
-    """One still prompt for every shot. A slot is omitted when it is empty.
-
-    Order: opening, picture legend, keep, people, landmarks, setting.
-    The legend is the only part that follows which pictures are attached.
-    """
-    opening = require_text(
-        json.loads(PROMPTS_PATH.read_text(encoding="utf-8")),
-        "stillOpening",
-        "prompts",
-    )
-    parts = [
-        opening.rstrip(),
-        structure_pictures(pictures, people_count=people_count),
-        "Keep the shape, position, and occlusion from the pictures.",
-    ]
-    if people:
-        parts.append(people.rstrip())
-    if landmarks:
-        parts.append(landmarks.rstrip())
-    if setting:
-        parts.append(f"Behind and around: {setting.rstrip()}")
-    return " ".join(parts)
-
-
-def face_prompt_for(
-    show: dict,
-    values: dict,
-    group: list[dict],
-) -> str:
-    return show_prompt(
-        show,
-        "spatialFaces",
-        {
-            "characterCount": values["characterCount"],
-            "characterIds": values["characterIds"],
-            "referenceMap": "; ".join(
-                f"Picture {index} = the face of {character['id']} only"
-                for index, character in enumerate(group, start=2)
-            ),
-        },
-    )
-
-
-def _face_pass_reads_loaded_shot(graph: dict) -> None:
-    """A later pass edits the still on disk. It does not run the blockout again."""
-    face = _qwen_encoder(graph, "Face instruction")
-    if face is None:
-        raise RuntimeError("Spatial Qwen workflow is missing the face instruction")
-    face.setdefault("inputs", {})["image1"] = ["6", 0]
-    graph["22"]["inputs"]["pixels"] = ["6", 0]
-
-
-def pose_image_is_blank(path: Path) -> bool:
-    with Image.open(path) as image:
-        extrema = image.convert("RGB").getextrema()
-    return all(channel[1] == 0 for channel in extrema)
-
-
-def empty_space_mask(plate: Image.Image) -> Image.Image:
-    """White where the backdrop plate painted empty space."""
-    red, green, blue = plate.convert("RGB").split()
-    peak = ImageChops.lighter(ImageChops.lighter(red, green), blue)
-    return peak.point(lambda value: 255 if value > 8 else 0)
-
-
-def strip_invented_backdrop(still_path: Path, backdrop_path: Path, dest: Path) -> Path:
-    """Put the backdrop plate onto empty pixels so the invented place is gone."""
-    still = Image.open(still_path).convert("RGB")
-    plate = Image.open(backdrop_path).convert("RGB")
-    if plate.size != still.size:
-        plate = plate.resize(still.size, Image.Resampling.NEAREST)
-    mask = empty_space_mask(plate)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    Image.composite(plate, still, mask).save(dest)
-    return dest
-
-
-def write_empty_mask(backdrop_path: Path, dest: Path) -> Path:
-    plate = Image.open(backdrop_path).convert("RGB")
-    empty_space_mask(plate).convert("RGB").save(dest)
-    return dest
-
-
-def spatial_still_pictures(
-    *,
-    has_characters: bool,
-    depth_path: Path,
-    clothes_path: Path,
-    pose_path: Path,
-    edge_path: Path,
-) -> list[tuple[Path, str]]:
-    """Depth, then the clothes cutout, the pose if clothes is missing, or the edges."""
-    use_clothes = (
-        has_characters
-        and present(clothes_path)
-        and not pose_image_is_blank(clothes_path)
-    )
-    use_pose = has_characters and present(pose_path) and not pose_image_is_blank(pose_path)
-    if use_clothes:
-        return [
-            (depth_path, "Depth"),
-            (clothes_path, "Clothes"),
-            (edge_path, "Edges"),
-        ]
-    if use_pose:
-        return [
-            (depth_path, "Depth"),
-            (pose_path, "Pose"),
-            (edge_path, "Edges"),
-        ]
-    return [
-        (depth_path, "Depth"),
-        (edge_path, "Edges"),
-    ]
-
-
-def inject_qwen_image_slots(graph: dict, refs: list[tuple[str, str]]) -> None:
-    if not refs:
-        raise RuntimeError("Qwen-Image-Edit needs at least one reference image")
-    extra_ids = ("13", "14")
-    image_keys = ("image2", "image3")
-    encoder = _qwen_encoder(graph, "Positive instruction")
-    if encoder is None:
-        raise RuntimeError("Could not find TextEncodeQwenImageEditPlus in qwen_image_edit.json")
-    load_node = graph.get("6")
-    if not isinstance(load_node, dict):
-        raise RuntimeError("Could not find character LoadImage node 6 in qwen_image_edit.json")
-    load_node.setdefault("inputs", {})["image"] = refs[0][0]
-    load_node["_meta"] = {"title": refs[0][1]}
-    encoder_inputs = encoder.setdefault("inputs", {})
-    encoder_inputs["image1"] = ["6", 0]
-    for extra_id, image_key in zip(extra_ids, image_keys):
-        encoder_inputs.pop(image_key, None)
-        graph.pop(extra_id, None)
-    for extra_id, image_key, (image_name, title) in zip(extra_ids, image_keys, refs[1:]):
-        graph[extra_id] = {
-            "inputs": {"image": image_name},
-            "class_type": "LoadImage",
-            "_meta": {"title": title},
-        }
-        encoder_inputs[image_key] = [extra_id, 0]
-    _sync_structure_encoder(graph, encoder)
-
 
 def latent_size(graph: dict) -> tuple[int, int, int]:
     for node in graph.values():
@@ -1723,7 +758,6 @@ def latent_size(graph: dict) -> tuple[int, int, int]:
             return PROXY_WIDTH, PROXY_HEIGHT, 1
     raise RuntimeError("Could not find a latent size in the ComfyUI workflow")
 
-
 def workflow_frame_rate(graph: dict) -> float:
     for node in graph.values():
         if not isinstance(node, dict):
@@ -1733,7 +767,6 @@ def workflow_frame_rate(graph: dict) -> float:
             if rate:
                 return float(rate)
     return 24.0
-
 
 def inject_scene_length(graph: dict, duration_seconds: float | None = None, length: int | None = None) -> int:
     if length is None:
@@ -1755,7 +788,6 @@ def inject_scene_length(graph: dict, duration_seconds: float | None = None, leng
             inputs["frames_number"] = length
     return length
 
-
 def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
     raw = workflow["prompt"] if "prompt" in workflow else workflow
     graph = json.loads(json.dumps(raw))
@@ -1772,7 +804,6 @@ def inject_prompt(workflow: dict, prompt: str, api_key: str) -> dict:
                 node["inputs"]["enhance_prompt"] = False
             return graph
     raise RuntimeError("Could not find a text-conditioning node in the ComfyUI workflow")
-
 
 def inject_dialogue_multimodal_guider(graph: dict) -> None:
     """Strengthen joint audio/video coherence for speaking shots."""
@@ -1816,7 +847,6 @@ def inject_dialogue_multimodal_guider(graph: dict) -> None:
         "class_type": "MultimodalGuider",
         "_meta": {"title": "Dialogue audio-video coherence"},
     }
-
 
 def execute_queued_graph(
     graph: dict,
@@ -1867,295 +897,6 @@ def execute_queued_graph(
     print(f"  Wrote {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
     log_gpu_summary(monitor.summarize(), meta["width"], meta["height"], meta["length"])
 
-
-def inject_backdrop_followup(graph: dict, still_name: str, mask_name: str, backdrop_name: str) -> None:
-    """Second pass: keep people from the still, fill only empty pixels from the plate."""
-    for node_id in ("7", "9", "10", "11", "24", "25", "40", "41", "42"):
-        graph.pop(node_id, None)
-    still = graph.get("6")
-    if not isinstance(still, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the still loader")
-    still.setdefault("inputs", {})["image"] = still_name
-    still["_meta"] = {"title": "Stripped still"}
-    mask = graph.get("20")
-    if not isinstance(mask, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the empty-space mask loader")
-    mask.setdefault("inputs", {})["image"] = mask_name
-    mask["_meta"] = {"title": "Empty space"}
-    encode = graph.get("22")
-    if not isinstance(encode, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the still encoder")
-    encode.setdefault("inputs", {})["pixels"] = ["6", 0]
-    encoder = graph.get("70")
-    if not isinstance(encoder, dict):
-        raise RuntimeError("Spatial Qwen workflow is missing the backdrop instruction")
-    encoder["class_type"] = "TextEncodeQwenBackdrop"
-    encoder["_meta"] = {"title": "Backdrop instruction"}
-    inputs = encoder.setdefault("inputs", {})
-    inputs["image1"] = ["6", 0]
-    for key in ("image2", "image3", "image4"):
-        inputs.pop(key, None)
-    graph["42"] = {
-        "inputs": {"image": backdrop_name},
-        "class_type": "LoadImage",
-        "_meta": {"title": "Backdrop"},
-    }
-    inputs["image2"] = ["42", 0]
-    sampler = graph.get("30")
-    if isinstance(sampler, dict):
-        sampler["_meta"] = {"title": "Empty space"}
-    save = graph.get("12")
-    if isinstance(save, dict):
-        save.setdefault("inputs", {})["images"] = ["31", 0]
-
-
-def render_backdrop_followup(
-    show: dict,
-    location: dict,
-    dest: Path,
-    still_path: Path,
-    mask_path: Path,
-    backdrop_path: Path,
-    seed: int,
-    mode: str,
-) -> None:
-    print("  Backdrop pass", flush=True)
-    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
-    graph = clone_workflow(workflow)
-    inject_seed(graph, seed)
-    prompt = show_prompt(
-        show,
-        "spatialBackdrop",
-        {
-            "structurePictures": structure_pictures(["Backdrop"], start=2),
-        },
-    )
-    inject_backdrop_followup(
-        graph,
-        stage_named_image(still_path, "shot"),
-        stage_named_image(mask_path, "empty"),
-        stage_named_image(backdrop_path, "backdrop"),
-    )
-    inject_qwen_prompt(graph, prompt, "Backdrop instruction")
-    append_generation_log(
-        dest,
-        "backdrop",
-        prompt,
-        [
-            ("People", still_path),
-            ("Empty mask", mask_path),
-            ("Backdrop", backdrop_path),
-        ],
-    )
-    print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=f"{mode} backdrop")
-
-
-def render_identity_followup(
-    show: dict,
-    values: dict,
-    dest: Path,
-    group: list[dict],
-    seed: int,
-    mode: str,
-) -> None:
-    """Paint the next faces onto the still. The blockout sampler is not an output."""
-    names = ", ".join(item["id"] for item in group)
-    print(f"  Face pass: {names}", flush=True)
-    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
-    graph = clone_workflow(workflow)
-    inject_seed(graph, seed)
-    still_name = stage_named_image(dest, "shot")
-    mask_name = stage_combined_mask(group, "faces")
-    prompt = face_prompt_for(show, values, group)
-    inject_qwen_prompt(graph, prompt, "Face instruction")
-    inject_qwen_spatial_refs(graph, group, still_name, mask_name)
-    _face_pass_reads_loaded_shot(graph)
-    append_generation_log(
-        dest,
-        "faces",
-        prompt,
-        [("Shot", dest), *[(item["id"], item.get("image_path")) for item in group]],
-    )
-    print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode)
-
-
-def render_spatial_still(
-    show: dict,
-    scene: dict,
-    location: dict,
-    dest: Path,
-    depth_path: Path,
-    mask_path: Path,
-    pose_path: Path,
-    edge_path: Path,
-    seed: int,
-    mode: str,
-    episode: dict | None = None,
-) -> None:
-    """Generate one still from the depth. People shots also pass the pose."""
-    backdrop_path = depth_path.with_name(depth_path.name.replace("_depth.png", "_backdrop.png"))
-    missing = [path for path in (depth_path, edge_path) if not present(path)]
-    if missing:
-        raise SystemExit(
-            f"Missing previs guide {missing[0]}. Run `pnpm run content:previs` first."
-        )
-    characters = resolve_scene_characters(show, scene)
-    clothes_path = pose_path.with_name(pose_path.name.replace("_pose.png", "_clothes.png"))
-    chosen = spatial_still_pictures(
-        has_characters=bool(characters),
-        depth_path=depth_path,
-        clothes_path=clothes_path,
-        pose_path=pose_path,
-        edge_path=edge_path,
-    )
-    pictures = [
-        (stage_named_image(path, title.lower()), title) for path, title in chosen
-    ]
-    titles = [title for _name, title in pictures]
-    attach_backdrop = "Clothes" not in titles
-    if not present(backdrop_path):
-        raise SystemExit(
-            f"Missing previs guide {backdrop_path}. Run `pnpm run content:previs` first."
-        )
-    character_ids = scene["characterIds"]
-    time_seconds = float(scene["timeRangeSeconds"][1 if dest.stem.endswith("_end") else 0])
-    shown = (
-        landmark_screen_fractions(show, episode, scene, time_seconds)
-        if episode is not None
-        else None
-    )
-    people_path = clothes_path if present(clothes_path) else None
-    camera = camera_at(scene, time_seconds)
-    landmarks, landmark_log = describe_landmarks(
-        location,
-        camera,
-        people_path,
-        shown,
-        min_screen_fraction=show["landmarkMinScreenFraction"],
-        start_records=load_start_landmark_records(dest),
-    )
-    setting = visible_setting_line(location, backdrop_path, landmarks.lower())
-    legend = titles + (["Backdrop"] if attach_backdrop else [])
-    people_entries = (
-        gather_visible_people(
-            show,
-            episode,
-            scene,
-            time_seconds,
-            shot_label="end" if dest.stem.endswith("_end") else "start",
-        )
-        if episode is not None and "Clothes" in titles
-        else []
-    )
-    people_sentence, people_log = describe_people(
-        people_entries,
-        min_part_height=show["partMinPixelHeight"],
-        row_depth_ratio=show["rowDepthRatio"],
-        min_part_screen_fraction=show["partMinScreenFraction"],
-    )
-    blockout_prompt = show_prompt(
-        show,
-        "spatialBlockout",
-        {
-            "stillPrompt": still_prompt(
-                legend,
-                people=people_sentence,
-                landmarks=landmarks,
-                setting=setting,
-                people_count=len(people_entries) if "Clothes" in titles else None,
-            ),
-        },
-    )
-    face_values = {
-        "characterCount": str(len(character_ids)),
-        "characterIds": ", ".join(character_ids) or "none",
-    }
-    groups: list[list[dict]] = []
-    first: list[dict] = []
-    mask_name = None
-    face_prompt = None
-    if FACE_PASS and characters:
-        groups = identity_face_groups(mask_path, characters)
-        first = groups[0] if groups else []
-        mask_name = stage_combined_mask(first, "faces") if first else None
-        face_prompt = face_prompt_for(show, face_values, first) if first else None
-    workflow = json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8"))
-    graph = clone_workflow(workflow)
-    inject_seed(graph, seed)
-    inject_qwen_prompt(graph, blockout_prompt, "Blockout instruction")
-    inject_qwen_spatial_refs(
-        graph,
-        first,
-        pictures[0][0],
-        mask_name,
-        pictures[1:],
-        lead_title=pictures[0][1],
-        backdrop_name=stage_named_image(backdrop_path, "backdrop") if attach_backdrop else None,
-    )
-    begin_generation_log(dest)
-    logged = [(title, path) for path, title in chosen]
-    if attach_backdrop:
-        logged.append(("Backdrop", backdrop_path))
-    append_generation_log(
-        dest,
-        "blockout",
-        blockout_prompt,
-        logged,
-        people_log,
-        landmark_log,
-        row_depth_ratio=show.get("rowDepthRatio"),
-    )
-    passes: list[tuple[str, Path]] = []
-    if face_prompt is not None and "70" in graph:
-        inject_qwen_prompt(graph, face_prompt, "Face instruction")
-        _save_blockout_pass(graph)
-        passes.append(("reelshort_blockout", kept_pass_path(dest, "blockout")))
-        print(
-            f"  Face pass 1: {', '.join(item['id'] for item in first)}",
-            flush=True,
-        )
-    print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode, also=passes or None)
-    for index, group in enumerate(groups[1:], start=2):
-        previous = kept_pass_path(dest, f"face{index - 1}")
-        shutil.copy2(dest, previous)
-        print(f"  Kept {previous}", flush=True)
-        render_identity_followup(
-            show,
-            face_values,
-            dest,
-            group,
-            seed + index - 1,
-            f"{mode} face pass {index}",
-        )
-
-
-def run_qwen_image(
-    workflow_template: dict,
-    dest: Path,
-    prompt: str,
-    mode: str,
-    inject_images,
-    seed: int,
-) -> None:
-    graph = clone_workflow(workflow_template)
-    inject_qwen_prompt(graph, prompt)
-    inject_seed(graph, seed)
-    inject_images(graph)
-    begin_generation_log(dest)
-    blank = COMFY_INPUT_DIR / "blank-768x1360.png"
-    append_generation_log(
-        dest,
-        "character",
-        prompt,
-        [("Blank canvas", blank if blank.is_file() else None)],
-    )
-    print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode)
-
-
 def confirm_vram_released(label: str, *, max_mib: float = 4096.0) -> float | None:
     """After /free, sample nvidia-smi and warn if Depth Anything may still be resident."""
     time.sleep(1.0)
@@ -2173,57 +914,234 @@ def confirm_vram_released(label: str, *, max_mib: float = 4096.0) -> float | Non
     return used
 
 
-def generate_show(
-    show: dict,
-    workflow_template: dict,
-    stage: str,
-    partial: bool = False,
-    force: bool = False,
-    seed_override: int | None = None,
+def append_generation_log(dest: Path, pass_name: str, prompt: str, images: list[tuple[str, Path]], details: dict) -> None:
+    """Record a pass: its prompt, a copy of each picture, and why each description was sent or not."""
+    log_path = still_log_path(dest)
+    if not log_path.is_file():
+        begin_generation_log(dest)
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    inputs = still_inputs_dir(dest)
+    recorded = []
+    for role, source in images:
+        copied = inputs / f"{pass_name}_{role.lower()}{source.suffix.lower()}"
+        shutil.copy2(source, copied)
+        recorded.append({"role": role, "source": str(source), "file": copied.name})
+    payload.setdefault("passes", []).append({"pass": pass_name, "prompt": prompt, "images": recorded, **details})
+    log_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+# Qwen spatial graph: node 6 is picture 1, nodes 40-42 are pictures 2-4, all
+# into one four-picture encoder. The identity face pass is not used.
+_PICTURE_NODES = (("40", "image2"), ("41", "image3"), ("42", "image4"))
+_FACE_PASS_NODES = ("20", "21", "22", "23", "24", "25", "30", "31", "70")
+
+
+def qwen_pass(
+    dest: Path, prompt: str, pictures: list[tuple[str, Path]], seed: int, mode: str, keep: tuple[Path, Path] | None = None
 ) -> None:
+    """One Qwen-Image-Edit draw from up to four pictures. The first sets the canvas size.
+
+    ``keep`` is (image, mask): the image's pixels where the mask is black are
+    kept exactly, and only the white area is drawn.
+    """
+    graph = clone_workflow(json.loads(SPATIAL_QWEN_WORKFLOW_PATH.read_text(encoding="utf-8")))
+    inject_seed(graph, seed)
+    encoder = graph["7"]
+    encoder["class_type"] = "TextEncodeQwenBackdrop"
+    inputs = encoder.setdefault("inputs", {})
+    inputs["prompt"] = prompt
+    staged = [(stage_named_image(path, f"{dest.stem}_{title.lower()}"), title) for title, path in pictures]
+    graph["6"]["inputs"]["image"] = staged[0][0]
+    graph["6"]["_meta"] = {"title": staged[0][1]}
+    inputs["image1"] = ["6", 0]
+    for node_id, key in _PICTURE_NODES:
+        inputs.pop(key, None)
+        graph.pop(node_id, None)
+    for (node_id, key), (name, title) in zip(_PICTURE_NODES, staged[1:]):
+        graph[node_id] = {"inputs": {"image": name}, "class_type": "LoadImage", "_meta": {"title": title}}
+        inputs[key] = [node_id, 0]
+    graph["12"]["inputs"]["images"] = ["11", 0]
+    for node_id in _FACE_PASS_NODES:
+        graph.pop(node_id, None)
+    if keep is not None:
+        image, mask = keep
+        graph["51"] = {"inputs": {"image": stage_named_image(image, f"{dest.stem}_keep")}, "class_type": "LoadImage"}
+        graph["52"] = {"inputs": {"pixels": ["51", 0], "vae": ["3", 0]}, "class_type": "VAEEncode"}
+        graph["53"] = {"inputs": {"image": stage_named_image(mask, f"{dest.stem}_draw")}, "class_type": "LoadImage"}
+        graph["54"] = {"inputs": {"image": ["53", 0], "channel": "red"}, "class_type": "ImageToMask"}
+        graph["55"] = {"inputs": {"samples": ["52", 0], "mask": ["54", 0]}, "class_type": "SetLatentNoiseMask"}
+        graph["10"]["inputs"]["latent_image"] = ["55", 0]
+    print(f"  Prompt: {prompt}", flush=True)
+    print(f"  Graph seed {seed}", flush=True)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+    if keep is not None:
+        # The sampler works in latent space; put the kept pixels back exactly.
+        drawn = Image.open(dest).convert("RGB")
+        kept = Image.open(keep[0]).convert("RGB").resize(drawn.size)
+        hold = Image.open(keep[1]).convert("L").resize(drawn.size).point(lambda value: 255 - value)
+        Image.composite(kept, drawn, hold).save(dest)
+
+
+# Each person or prop is drawn alone from its own plate; landmarks and empty space are drawn in the shot.
+_PLATE_FOLDER = {"character": "characters", "prop": "props"}
+# Pixels of a pasted entity this close to its edge are redrawn, so it sits in the shot.
+_BLEND_PIXELS = 3
+
+
+def paste_drawn(color: Path, drawn: list[tuple[Path, Path, list[float]]], dest: Path, draw_mask: Path) -> Path:
+    """The shot's color guide with each drawn entity put back where, and only where, the shot shows it.
+
+    ``draw_mask`` is white wherever the shot still has to be drawn: everything
+    but the pasted entities, plus a thin band at their edges.
+    """
+    from scipy import ndimage
+
+    shot = Image.open(color).convert("RGB")
+    held = np.zeros((shot.height, shot.width), dtype=bool)
+    for picture, mask, crop in drawn:
+        x0, y0, x1, y1 = crop
+        size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
+        layer = Image.new("RGB", shot.size)
+        layer.paste(Image.open(picture).convert("RGB").resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
+        visible_here = Image.open(mask).convert("L")
+        shot = Image.composite(layer, shot, visible_here)
+        held |= np.asarray(visible_here) > 127
+    shot.save(dest)
+    held = ndimage.binary_erosion(held, iterations=_BLEND_PIXELS)
+    Image.fromarray(np.where(held, 0, 255).astype(np.uint8)).save(draw_mask)
+    return dest
+
+
+def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
+    """One scene still: each visible person and prop drawn alone, pasted into the shot, the rest drawn around them.
+
+    A drawn entity sees only its own guides (the shot camera magnified onto it),
+    its plate, and its own words, so it never borrows another's description and
+    is drawn at full size however far away it is. The shot pass keeps the pasted
+    pixels and draws only the space around them.
+    """
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    observation = load_observation(*ids, label)
+    guide = lambda kind: guide_path(*ids, label, kind)
+    begin_generation_log(dest)
+    inputs = still_inputs_dir(dest)
+    drawn = []
+    for entity_id, entry in observation["entities"].items():
+        if "crop" not in entry:
+            continue
+        files = [
+            ("Depth", guide(f"drawn_{entity_id}_depth")),
+            ("OwnColor", guide(f"drawn_{entity_id}_color")),
+            ("Edges", guide(f"drawn_{entity_id}_edges")),
+            ("Appearance", OUTPUT_DIR / "plates" / show["id"] / _PLATE_FOLDER[entry["kind"]] / entity_id / "plate.png"),
+        ]
+        missing = [str(path) for _title, path in files if not present(path)]
+        if missing:
+            raise SystemExit(f"Missing {missing[0]}. Run `pnpm run content:previs` (and content:plates) first.")
+        prompt = drawn_prompt(show, scene, entry["kind"], entity_id, [title for title, _path in files])
+        picture = inputs / f"drawn_{entity_id}.png"
+        print(f"  Drawn alone: {entity_id}", flush=True)
+        qwen_pass(picture, prompt, files, stable_seed(seed, "drawn", entity_id), f"Qwen {entry['kind']} ({entity_id})")
+        append_generation_log(dest, f"drawn_{entity_id}", prompt, files, {"id": entity_id, "kind": entry["kind"]})
+        drawn.append((picture, guide(f"drawn_{entity_id}_mask"), entry["crop"]))
+    draw_mask = inputs / "draw_mask.png"
+    composite = paste_drawn(guide("color"), drawn, inputs / "composite.png", draw_mask)
+    files = [("Depth", guide("depth")), ("Composite", composite), ("Edges", guide("edges"))]
+    prompt, details = still_prompt(show, scene, observation, [title for title, _path in files])
+    keep = (composite, draw_mask) if drawn else None
+    qwen_pass(dest, prompt, files, seed, f"Qwen scene still ({label})", keep)
+    append_generation_log(dest, "still", prompt, files, details)
+
+
+def scene_needs_end_still(episode: dict, scene: dict, config: dict) -> bool:
+    """scene_XX_end.png exists only when prompts.endStill is true and the shot changes."""
+    return bool(config.get("endStill")) and scene_has_spatial_change(episode, scene)
+
+
+def generate_frames(show: dict, episode: dict, scene: dict, force: bool, seed: int, renderer: dict) -> bool:
+    """Previs this scene, stop on a script/scene mismatch, then draw the still(s)."""
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    targets = [("start", start_still_path(*ids))]
+    if scene_needs_end_still(episode, scene, renderer):
+        targets.append(("end", end_still_path(*ids)))
+    if all(present(path) for _label, path in targets) and not force:
+        print(f"  Skipped (already present): {targets[0][1]}", flush=True)
+        return False
+    errors = current_previs(show, episode, scene)
+    if errors is None:
+        errors, _written = previs_episode(show, episode, scene["sceneNumber"])
+    else:
+        print("  Previs is current; reusing its guides.", flush=True)
+    if errors:
+        raise SystemExit("The script does not match its 3D scene:\n- " + "\n- ".join(errors))
+    for label, path in targets:
+        if force or not present(path):
+            render_still(show, episode, scene, label, path, seed)
+    return True
+
+
+def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: dict, use_depth: bool) -> Path:
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    still = start_still_path(*ids)
+    dest = clip_path(*ids)
+    prompt = ltx_prompt(show, scene, load_observation(*ids, "start"))
+    wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
+    graph = inject_prompt(load_json(wf_path), prompt, os.environ.get("LTXV_API_KEY", ""))
+    start, finish = (float(value) for value in scene["timeRangeSeconds"])
+    length = inject_scene_length(graph, duration_seconds=finish - start)
+    inject_seed(graph, seed)
+    start_strength = float(renderer["ltxStartStrength"])
+    ic_strength = float(renderer["ltxIcLoRAStrength"])
+    number = int(scene["sceneNumber"])
+    if use_depth:
+        control = control_depth_mp4_path(*ids)
+        if not present(control):
+            raise SystemExit(f"Missing control depth {control}. Depth pass should have written it.")
+        inject_depth_ltx_graph(
+            graph,
+            length=length,
+            still_name=stage_fit_still(still, f"ltx_start_s{number:02d}.png"),
+            depth_name=stage_control_video(control, f"ltx_depth_s{number:02d}.mp4"),
+            start_strength=start_strength,
+            ic_strength=ic_strength,
+        )
+    else:
+        if scene.get("speakerId"):
+            inject_dialogue_multimodal_guider(graph)
+        inject_start_frame(graph, stage_start_still(still, fit_clip=True), strength=start_strength)
+    if os.environ.get("LTX_TILED_VAE", "").strip() in {"1", "true", "yes"}:
+        node = graph.get("8")
+        if isinstance(node, dict) and node.get("class_type") == "VAEDecode":
+            node["class_type"] = "VAEDecodeTiled"
+            node.setdefault("inputs", {}).update({"tile_size": 512, "overlap": 64})
+    graph["10"]["inputs"]["filename_prefix"] = f"reelshort_{show['id']}_e{episode['episodeNumber']}_s{number:02d}"
+    write_clip_generation_log(
+        dest, prompt=prompt, graph_name=graph_name, seed=seed, still_path=still, enhance_prompt=False
+    )
+    print(f"  Prompt: {prompt}", flush=True)
+    print(
+        f"  Graph={graph_name} depth={use_depth} seed={seed} i2v={start_strength} "
+        f"ic={ic_strength if use_depth else 'n/a'} size={CLIP_WIDTH}x{CLIP_HEIGHT} frames={length}",
+        flush=True,
+    )
+    execute_queued_graph(graph, dest, prefer="video", mode=f"LTX scene {number:02d}")
+    free_comfy_models()
+    return dest
+
+
+def generate_show(show: dict, stage: str, partial: bool = False, force: bool = False, seed_override: int | None = None) -> None:
     show_id = show["id"]
     started = time.time()
-    generated = 0
-    skipped = 0
     renderer = load_renderer_config()
-
-    if stage == "frames":
-        for character_id, character in show["characters"].items():
-            dest = character_image_path(show_id, character_id)
-            print(f"Queued character {character_id}...", flush=True)
-            if present(dest):
-                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
-                skipped += 1
-                continue
-            prompt = show_prompt(
-                show,
-                "characterImage",
-                {
-                    "description": character_appearance_text(character),
-                },
-            )
-            run_qwen_image(
-                workflow_template,
-                dest,
-                prompt,
-                f"Qwen character ({character_id})",
-                inject_qwen_character_canvas,
-                stable_seed(show_id, "character", character_id),
-            )
-            generated += 1
-
     for episode in show["episodes"]:
-        episode_number = episode["episodeNumber"]
-        spatial_errors = validate_spatial_episode(show, episode)
-        if spatial_errors:
-            raise SystemExit("Spatial validation failed:\n- " + "\n- ".join(spatial_errors))
-        manifest = manifest_path(show_id, episode_number)
+        number = episode["episodeNumber"]
+        manifest = manifest_path(show_id, number)
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_text(
             json.dumps(
                 {
                     "series": show_id,
-                    "episodeNumber": episode_number,
+                    "episodeNumber": number,
                     "title": episode["title"],
                     "isFree": episode["isFree"],
                     "coinCost": episode["coinCost"],
@@ -2232,289 +1150,90 @@ def generate_show(
             ),
             encoding="utf-8",
         )
-        episode_started = time.time()
-        scene_files: list[Path] = []
-        episode_generated = 0
-        episode_skipped = 0
-        pending_video: list[dict] = []
 
+        def seed(scene: dict, kind: str) -> int:
+            return seed_override if seed_override is not None else stable_seed(show_id, number, scene["sceneNumber"], kind)
+
+        if stage == "frames":
+            for scene in episode["scenes"]:
+                print(f"Scene {scene['sceneNumber']:02d} still...", flush=True)
+                generate_frames(show, episode, scene, force, seed(scene, "frame"), renderer)
+            continue
+
+        pending = []
         for scene in episode["scenes"]:
-            scene_number = scene["sceneNumber"]
-            scene_label = f"episode {episode_number} scene {scene_number}"
-            still_path = start_still_path(show_id, episode_number, scene_number)
-            end_path = end_still_path(show_id, episode_number, scene_number)
-            video_path = clip_path(show_id, episode_number, scene_number)
-            dest = still_path if stage == "frames" else video_path
-            location = resolve_location(show, scene)
-            names = ", ".join(scene["characterIds"])
-            print(f"Queued {show_id}/{episode_number} scene {scene_number} ({stage})...", flush=True)
-            needs_end_still = scene_needs_end_still(episode, scene, renderer)
-            spatial = scene_has_spatial_change(episode, scene)
-            depth_control = spatial and scene_depth_control_enabled(
-                show_id, episode_number, scene_number, renderer
-            )
-            frame_outputs_present = present(still_path) and (
-                not needs_end_still or present(end_path)
-            )
-            output_present = frame_outputs_present if stage == "frames" else present(dest)
-            if output_present and not force:
-                print(f"  Skipped (already present): {dest} ({format_bytes(dest.stat().st_size)})", flush=True)
-                if stage == "video":
-                    scene_files.append(dest)
-                episode_skipped += 1
-                skipped += 1
+            ids = (show_id, number, scene["sceneNumber"])
+            if present(clip_path(*ids)) and not force:
+                print(f"Scene {scene['sceneNumber']:02d}: skipped (already present)", flush=True)
                 continue
-            if stage == "video" and not present(still_path):
+            if not present(start_still_path(*ids)):
                 raise SystemExit(
-                    f"Missing start still {still_path}. Run `pnpm run content:frames`, review the PNGs, "
-                    "then rerun `pnpm run content:generate`. Delete a PNG and rerun content:frames to retry it."
+                    f"Missing start still {start_still_path(*ids)}. Run `pnpm run content:frames`, review it, then rerun."
                 )
-            if stage == "frames":
-                if not scene.get("camera"):
-                    raise SystemExit(f"{scene_label} requires camera")
-                generate_episode_previs(show, episode, scene_number)
-                seed = (
-                    seed_override
-                    if seed_override is not None
-                    else stable_seed(show_id, episode_number, scene_number, "frame")
-                )
-                if not present(still_path) or force:
-                    render_spatial_still(
-                        show,
-                        scene,
-                        location,
-                        still_path,
-                        guide_path(show_id, episode_number, scene_number, "start", "depth"),
-                        guide_path(show_id, episode_number, scene_number, "start", "faces"),
-                        guide_path(show_id, episode_number, scene_number, "start", "pose"),
-                        guide_path(show_id, episode_number, scene_number, "start", "edges"),
-                        seed,
-                        f"Qwen scene still ({names or 'environment'} @ {location['id']})",
-                        episode,
-                    )
-                if needs_end_still and (not present(end_path) or force):
-                    render_spatial_still(
-                        show,
-                        scene,
-                        location,
-                        end_path,
-                        guide_path(show_id, episode_number, scene_number, "end", "depth"),
-                        guide_path(show_id, episode_number, scene_number, "end", "faces"),
-                        guide_path(show_id, episode_number, scene_number, "end", "pose"),
-                        guide_path(show_id, episode_number, scene_number, "end", "edges"),
-                        seed,
-                        f"Qwen spatial end guide ({names or 'environment'} @ {location['id']})",
-                        episode,
-                    )
-                episode_generated += 1
-                generated += 1
-            else:
-                pending_video.append(
-                    {
-                        "scene": scene,
-                        "still_path": still_path,
-                        "video_path": video_path,
-                        "location": location,
-                        "names": names,
-                        "spatial": spatial,
-                        "depth_control": depth_control,
-                    }
-                )
-
-        if stage == "video" and pending_video:
-            # Depth pass first for every depth-controlled scene, then unload before LTX.
-            depth_scenes = [item for item in pending_video if item["depth_control"]]
-            for item in depth_scenes:
-                print(
-                    f"  Depth pass for scene {item['scene']['sceneNumber']} "
-                    f"(controlDepth={renderer['controlDepth']})...",
-                    flush=True,
-                )
-                ensure_control_depth(
-                    show_id,
-                    episode_number,
-                    item["scene"],
-                    force=force,
-                    config=renderer,
-                    queue_prompt=queue_prompt,
-                    free_comfy_models=free_comfy_models,
-                    comfy_url=COMFYUI_URL,
-                    sample_vram_mib=nvidia_vram_mib,
-                )
-            if depth_scenes:
-                free_comfy_models()
-                confirm_vram_released("Depth Anything unload")
-
-            for item in pending_video:
-                scene = item["scene"]
-                scene_number = scene["sceneNumber"]
-                still_path = item["still_path"]
-                dest = item["video_path"]
-                location = item["location"]
-                names = item["names"]
-                spatial = item["spatial"]
-                use_depth = item["depth_control"]
-                if spatial and not use_depth:
-                    print("  depth control disabled by override", flush=True)
-                wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
-                workflow = load_json(wf_path)
-                prompt = compile_ltx_prompt(
-                    show, scene, location, places=still_places(still_path)
-                )
-                seed = (
-                    seed_override
-                    if seed_override is not None
-                    else stable_seed(show_id, episode_number, scene_number, "video")
-                )
-                enhance_prompt = False
-                graph = inject_prompt(workflow, prompt, os.environ.get("LTXV_API_KEY", ""))
-                length = inject_scene_length(graph, duration_seconds=scene["durationSeconds"])
-                inject_seed(graph, seed)
-                start_strength = float(renderer["ltxStartStrength"])
-                ic_strength = float(renderer["ltxIcLoRAStrength"])
-                if use_depth:
-                    control = control_depth_mp4_path(show_id, episode_number, scene_number)
-                    if not present(control):
-                        raise SystemExit(
-                            f"Missing control depth {control}. Depth pass should have written it."
-                        )
-                    still_name = stage_fit_still(
-                        still_path, f"ltx_start_s{int(scene_number):02d}.png"
-                    )
-                    depth_name = stage_control_video(
-                        control, f"ltx_depth_s{int(scene_number):02d}.mp4"
-                    )
-                    inject_depth_ltx_graph(
-                        graph,
-                        length=length,
-                        still_name=still_name,
-                        depth_name=depth_name,
-                        start_strength=start_strength,
-                        ic_strength=ic_strength,
-                    )
-                    mode = f"depth-IC ({names or 'environment'} @ {location['id']})"
-                else:
-                    if scene.get("speakerId"):
-                        inject_dialogue_multimodal_guider(graph)
-                    inject_start_frame(
-                        graph,
-                        stage_start_still(still_path, fit_clip=True),
-                        strength=start_strength,
-                    )
-                    mode = f"I2V ({names or 'environment'} @ {location['id']})"
-                if os.environ.get("LTX_TILED_VAE", "").strip() in {"1", "true", "yes"}:
-                    node = graph.get("8")
-                    if isinstance(node, dict) and node.get("class_type") == "VAEDecode":
-                        node["class_type"] = "VAEDecodeTiled"
-                        node.setdefault("inputs", {})["tile_size"] = 512
-                        node["inputs"]["overlap"] = 64
-                        print("  Using VAEDecodeTiled (tile_size=512)", flush=True)
-                graph["10"]["inputs"]["filename_prefix"] = (
-                    f"reelshort_{show_id}_e{episode_number}_s{int(scene_number):02d}"
-                )
-                write_clip_generation_log(
-                    dest,
-                    prompt=prompt,
-                    graph_name=graph_name,
-                    seed=seed,
-                    still_path=still_path,
-                    enhance_prompt=enhance_prompt,
-                )
-                print(
-                    f"  Graph={graph_name} spatial={spatial} depth={use_depth} seed={seed} "
-                    f"i2v={start_strength} ic={ic_strength if use_depth else 'n/a'} "
-                    f"size={CLIP_WIDTH}x{CLIP_HEIGHT} frames={length}",
-                    flush=True,
-                )
-                ltx_started = time.time()
-                execute_queued_graph(graph, dest, prefer="video", mode=mode)
-                print(f"  LTX wall {time.time() - ltx_started:.1f}s", flush=True)
-                free_comfy_models()
-                scene_files.append(dest)
-                episode_generated += 1
-                generated += 1
-
-        if stage == "video" and not partial:
-            episode_mp4 = episode_video_path(show_id, episode_number)
-            # Keep skipped scenes in concat order.
-            ordered = [
-                clip_path(show_id, episode_number, scene["sceneNumber"])
-                for scene in episode["scenes"]
-            ]
-            if all(present(path) for path in ordered):
-                concat_videos(
-                    ordered,
-                    episode_mp4,
-                    loudness_target_lufs=renderer.get("episodeLoudnessTargetLufs"),
-                )
-                print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
-        print(
-            f"Episode {show_id}/{episode_number} {stage} finished in {format_duration(time.time() - episode_started)}"
-            f" ({episode_generated} generated, {episode_skipped} skipped)",
-            flush=True,
-        )
-
+            spatial = scene_has_spatial_change(episode, scene)
+            use_depth = spatial and scene_depth_control_enabled(*ids, renderer)
+            if spatial and not use_depth:
+                print(f"Scene {scene['sceneNumber']:02d}: depth control disabled by override", flush=True)
+            pending.append((scene, use_depth))
+        depth_scenes = [scene for scene, use_depth in pending if use_depth]
+        for scene in depth_scenes:
+            print(f"Depth pass for scene {scene['sceneNumber']:02d}...", flush=True)
+            ensure_control_depth(
+                show_id,
+                number,
+                scene,
+                force=force,
+                config=renderer,
+                queue_prompt=queue_prompt,
+                free_comfy_models=free_comfy_models,
+                comfy_url=COMFYUI_URL,
+                sample_vram_mib=nvidia_vram_mib,
+            )
+        if depth_scenes:
+            free_comfy_models()
+            confirm_vram_released("Depth Anything unload")
+        for scene, use_depth in pending:
+            print(f"Scene {scene['sceneNumber']:02d} clip...", flush=True)
+            generate_clip(show, episode, scene, seed(scene, "video"), renderer, use_depth)
+        ordered = [clip_path(show_id, number, scene["sceneNumber"]) for scene in episode["scenes"]]
+        if not partial and all(present(path) for path in ordered):
+            episode_mp4 = episode_video_path(show_id, number)
+            concat_videos(ordered, episode_mp4, loudness_target_lufs=renderer.get("episodeLoudnessTargetLufs"))
+            print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     if stage == "frames":
         print(
-            f"Stills for {show_id} are in {OUTPUT_DIR / 'frames' / show_id}. "
-            "Review characters/, then each episode's scene_*_start.png. "
-            "Replace a file by hand, or delete it and rerun `pnpm run content:frames`. "
-            "When they look right, run `pnpm run content:generate`.",
+            f"Stills for {show_id} are in {OUTPUT_DIR / 'frames' / show_id}. Review each scene_*_start.png; "
+            "delete one and rerun `pnpm run content:frames` to redraw it. Then run `pnpm run content:generate`.",
             flush=True,
         )
-    print(
-        f"Show {show_id} {stage} finished in {format_duration(time.time() - started)}"
-        f" ({generated} generated, {skipped} skipped)",
-        flush=True,
-    )
+    print(f"Show {show_id} {stage} finished in {format_duration(time.time() - started)}", flush=True)
 
 
 def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
     renderer = load_renderer_config()
     for show in shows:
-        show_id = show["id"]
-        if stage == "frames":
-            for character_id in show["characters"]:
-                if not present(character_image_path(show_id, character_id)):
+        for episode in show["episodes"]:
+            for scene in episode["scenes"]:
+                ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+                if stage == "video":
+                    needed = [clip_path(*ids)]
+                else:
+                    needed = [start_still_path(*ids)]
+                    if scene_needs_end_still(episode, scene, renderer):
+                        needed.append(end_still_path(*ids))
+                if not all(present(path) for path in needed):
                     return True
-            for episode in show["episodes"]:
-                episode_number = episode["episodeNumber"]
-                for scene in episode["scenes"]:
-                    scene_number = scene["sceneNumber"]
-                    if not present(start_still_path(show_id, episode_number, scene_number)):
-                        return True
-                    if scene_needs_end_still(episode, scene, renderer) and not present(
-                        end_still_path(show_id, episode_number, scene_number)
-                    ):
-                        return True
-        else:
-            for episode in show["episodes"]:
-                episode_number = episode["episodeNumber"]
-                for scene in episode["scenes"]:
-                    dest = clip_path(show_id, episode_number, scene["sceneNumber"])
-                    if not present(dest):
-                        return True
     return False
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Render show stills (Qwen-Image-Edit) or videos (LTX) via ComfyUI."
-    )
+    parser = argparse.ArgumentParser(description="Render scene stills (Qwen-Image-Edit) or clips (LTX) via ComfyUI.")
     parser.add_argument("--stage", choices=("frames", "video"), default="video")
     parser.add_argument("--show", help="Render only this show id")
     parser.add_argument("--episode", type=int, help="Render only this episode number")
     parser.add_argument("--scene", type=int, help="Render only this scene number (requires --episode)")
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Regenerate an existing selected scene (requires --scene)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        help="Override the deterministic seed for one selected scene (requires --scene)",
-    )
+    parser.add_argument("--force", action="store_true", help="Regenerate an existing selected scene (requires --scene)")
+    parser.add_argument("--seed", type=int, help="Override the deterministic seed for one selected scene (requires --scene)")
     args = parser.parse_args()
     if args.scene is not None and args.episode is None:
         parser.error("--scene requires --episode")
@@ -2525,77 +1244,35 @@ def main() -> None:
     if args.seed is not None and not 0 <= args.seed <= 2**32 - 1:
         parser.error("--seed must be between 0 and 4294967295")
     load_dotenv()
-    if args.stage == "frames":
-        workflow_path = QWEN_WORKFLOW_PATH
-        if not workflow_path.is_file():
-            raise SystemExit(f"Missing ComfyUI workflow: {workflow_path}")
-        workflow_template = load_json(workflow_path)
-    else:
-        for path in (
-            LTX_WORKFLOW_PATH,
-            ROOT / "workflows" / "ltx_gemma_api_depth.json",
-            ROOT / "workflows" / "ltx_gemma_api_depth_dialogue.json",
-        ):
-            if not path.is_file():
-                raise SystemExit(f"Missing ComfyUI workflow: {path}")
-        workflow_template = load_json(LTX_WORKFLOW_PATH)
     scripts = discover_show_scripts(args.show)
     if not scripts:
-        target = f" for show {args.show!r}" if args.show else ""
-        raise SystemExit(f"No show JSON files found{target}")
+        raise SystemExit(f"No show JSON files found{f' for show {args.show!r}' if args.show else ''}")
     shows = [load_show(path) for path in scripts]
     for show in shows:
         if args.episode is not None:
-            show["episodes"] = [
-                episode
-                for episode in show["episodes"]
-                if episode["episodeNumber"] == args.episode
-            ]
+            show["episodes"] = [episode for episode in show["episodes"] if episode["episodeNumber"] == args.episode]
             if not show["episodes"]:
                 raise SystemExit(f"Show {show['id']!r} has no episode {args.episode}")
         if args.scene is not None:
-            scenes = [
-                scene
-                for scene in show["episodes"][0]["scenes"]
-                if scene["sceneNumber"] == args.scene
-            ]
+            scenes = [scene for scene in show["episodes"][0]["scenes"] if scene["sceneNumber"] == args.scene]
             if not scenes:
-                raise SystemExit(
-                    f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}"
-                )
+                raise SystemExit(f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}")
             show["episodes"][0]["scenes"] = scenes
-    needs_comfy = args.force or stage_needs_comfy(shows, args.stage)
-    if needs_comfy:
+    if args.force or stage_needs_comfy(shows, args.stage):
         if args.stage == "video" and not os.environ.get("LTXV_API_KEY"):
             raise SystemExit("Missing LTXV_API_KEY in content-pipeline/.env")
         try:
             urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3)
         except urllib.error.URLError as exc:
-            raise SystemExit(
-                f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`."
-            ) from exc
+            raise SystemExit(f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`.") from exc
         free_comfy_models()
         idle = GpuMonitor()
         idle.sample()
-        print(
-            f"ComfyUI ready at {COMFYUI_URL} | stage={args.stage} | idle {snapshot_line(idle.samples[0])}",
-            flush=True,
-        )
+        print(f"ComfyUI ready at {COMFYUI_URL} | stage={args.stage} | idle {snapshot_line(idle.samples[0])}", flush=True)
     else:
-        print(
-            f"All scene files already present | stage={args.stage} | skipping ComfyUI",
-            flush=True,
-        )
-    for show, script_path in zip(shows, scripts):
-        print(f"{'Stills' if args.stage == 'frames' else 'Videos'} from {script_path}", flush=True)
-        generate_show(
-            show,
-            workflow_template,
-            args.stage,
-            partial=args.scene is not None,
-            force=args.force,
-            seed_override=args.seed,
-        )
+        print(f"All scene files already present | stage={args.stage} | skipping ComfyUI", flush=True)
+    for show in shows:
+        generate_show(show, args.stage, partial=args.scene is not None, force=args.force, seed_override=args.seed)
 
 
 if __name__ == "__main__":

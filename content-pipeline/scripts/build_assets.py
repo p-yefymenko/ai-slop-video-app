@@ -1,7 +1,7 @@
-"""Draw location plates, or mesh plates that have already been reviewed.
+"""Draw plates for every landmark, prop, and character, or mesh reviewed plates.
 
 ``--episode``, ``--scene``, and ``--seed`` are accepted so ``content:render``
-can forward the same arguments. They do not change which locations are built.
+can forward the same arguments. They do not change what is built.
 ``content:render`` meshes only. It does not draw plates.
 """
 
@@ -19,7 +19,7 @@ from mesh_io import TRIANGLE_BUDGET, require_triangle_budget  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     export_credits,
-    write_location_plates,
+    write_plates,
 )
 from pipeline_paths import (  # noqa: E402
     OUTPUT_DIR,
@@ -31,7 +31,7 @@ from pipeline_paths import (  # noqa: E402
 
 def main() -> None:
     load_content_env()
-    parser = argparse.ArgumentParser(description="Draw location plates, or mesh reviewed plates.")
+    parser = argparse.ArgumentParser(description="Draw plates, or mesh reviewed plates.")
     parser.add_argument(
         "--stage",
         choices=("plates", "meshes"),
@@ -69,7 +69,7 @@ def main() -> None:
     if args.stage == "plates":
         for script in scripts:
             show = json.loads(script.read_text(encoding="utf-8"))
-            plates = write_location_plates(
+            plates = write_plates(
                 show,
                 generate_asset_plate,
                 refresh=args.force or args.refresh,

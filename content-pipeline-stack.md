@@ -1,10 +1,10 @@
 # Content pipeline stack
 
-A show is one authored JSON file. The pipeline turns that file into a vertical episode on a local GPU. Geometry, blocking, and cameras are deterministic. Image and video models only paint and animate what the blockout already decided.
+A show is one authored JSON file. The pipeline turns that file into a vertical episode on a local GPU. The script describes a physical world: every character, landmark, and prop is a generated mesh, placed by the timeline. Previs renders that world from each shot's camera, and the script is checked against the render. Image and video models only paint and animate what the render shows.
 
-Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen, TRELLIS.2, Pixal3D, and LTX run through ComfyUI at `http://127.0.0.1:8188`. Florence-2 runs in that same virtualenv through Transformers, not through ComfyUI.
+Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen, TRELLIS.2, Pixal3D, and LTX run through ComfyUI at `http://127.0.0.1:8188`.
 
-Depth-control research notes (not the live path): [docs/ltx-depth-control-spike.md](docs/ltx-depth-control-spike.md), [docs/ltx-depth-gate.md](docs/ltx-depth-gate.md). Gate runners live under `content-pipeline/scripts/experiments/` and are not part of the pipeline.
+Depth-control research notes (not the live path): [docs/ltx-depth-control-spike.md](docs/ltx-depth-control-spike.md), [docs/ltx-depth-gate.md](docs/ltx-depth-gate.md).
 
 ## Machine
 
@@ -18,116 +18,90 @@ Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipelin
 
 | Path | Role |
 | --- | --- |
-| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. A character has `body` (always sent: build, skin) and `attributes` tagged with body parts. Age is a face-tagged attribute. A still sends an attribute only when any of its parts is at least `partMinPixelHeight` tall and covers at least `partMinScreenFraction` of the frame. Every location has `soundscape` (`ambience` + `space`). Every scene has `sound` (`events`, `bed`, `music`). |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates, plus renderer values: `stillOpening`, `rowDepthRatio`, `landmarkMinScreenFraction`, `partMinPixelHeight`, `partMinScreenFraction`, `endStill` (default `false`), `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `cameraTravelWarnThreshold`, `sceneRenderOptions`, `depthVideo` (native previs depth export only), LTX sound sentence templates (`sceneSound*`), `soundLint` word lists, and `episodeLoudnessTargetLufs` (pre-concat loudness normalize). Not show content. |
+| `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. |
+| `content-pipeline/prompts.json` | Shared Qwen and LTX templates and renderer numbers: `visibleMinShare` and one minimum size per purpose: `visibleMinPixels` (named in a still), `onScreenMinPixels` (on screen: needs a performance, can move, can make a sound), `speakerFaceMinPixels` (can lip-sync), `rowDepthRatio`, `endStill`, `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `sceneRenderOptions`, the `scene*` LTX templates, `soundLint`, and `episodeLoudnessTargetLufs`. Not show content. |
 | `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
 
-`spatialTimeline` is the physical source of truth: measured locations, character and prop keyframes, and a camera path per shot. Scene length is `timeRangeSeconds`. Prompt-only scenes are invalid.
+### The world
 
-Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `content-pipeline/scripts/coords.py` is the only converter. The stage viewer reads Y-up and does not convert.
+Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `content-pipeline/scripts/coords.py` is the only converter.
+
+- **Entities.** A character (`body`, `attributes`, `heightMeters`), a landmark (`position`, `size`, `appearance`, per location), and a prop (`appearance`, `size`) are all the same thing: one generated, plate-colored mesh, fitted into its size, with named regions. A character's regions are body parts; anything else has one region, `whole`. A whole place seen from far away (a hanging citadel) is one landmark the size of the location.
+- **Timeline.** Every character and every prop has a track in every episode, starting at 0. A keyframe puts it in a location at a position, or off stage (`locationId: null`). A prop is held (`heldByCharacterId`, `heldInHand`) or placed. A character's body faces `lookAtId` when set, else `bodyYawDegrees`.
+- **Presence.** Who is in a shot is never written down. `world.entities_at` lists everything whose track puts it in the scene's location at that moment. Nobody despawns.
+- **Visibility.** `observe.observe` renders one moment and measures, per entity and region, `visible` (pixels that are the front surface) and `extent` (pixels the region would cover with nothing in front, not even the same body). A region is visible when `visible ≥ visibleMinPixels` and `visible ≥ visibleMinShare × extent`. Each purpose has its own minimum size and shares the hidden-share test: named in a still (`visibleMinPixels`), on screen at all (`onScreenMinPixels`), large enough to lip-sync (`speakerFaceMinPixels`). A face seen from behind covers its full extent but shows a sliver, so it is not visible. That one test decides what a still names, and every check below.
+
+`pnpm run content:validate` checks every show script's shape and references (TypeScript, zod). Every `content:*` stage runs it first and stops on an error. It does not decide what is visible; previs does. A high authored camera travel+rotation score (threshold **20**) and sound lint print warnings and do not fail.
 
 ## Stages
 
-`content:render` runs meshes, clay previs, stills, and clips in that order. It does not draw plates and it does not pause for review. Plates are a separate step so those pictures can be kept or redrawn before meshing.
+`content:render` runs meshes, previs, stills, and clips in that order. It does not draw plates and it does not pause for review. Plates are a separate step so those pictures can be kept or redrawn before meshing.
 
 ```text
 script.json
     │
-    ├─ content:plates      Qwen-Image-Edit-2511          plates
-    ├─ content:assets      TRELLIS.2 / Pixal3D           meshes
-    ├─ content:landmarks   Florence-2                    positions in the script
-    ├─ content:previs      moderngl                      clay playblast + guides
-    ├─ content:frames      Qwen-Image-Edit-2511          portraits + start stills
+    ├─ content:plates      Qwen-Image-Edit-2511          one plate per landmark, prop, character
+    ├─ content:assets      TRELLIS.2 / Pixal3D           one mesh per plate
+    ├─ content:previs      moderngl                      render, guides, observations, script checks
+    ├─ content:frames      Qwen-Image-Edit-2511          scene start stills
     └─ content:generate    Depth Anything → LTX-2.3      control depth + scene clips + episode cut
 ```
 
-Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show’s generated files aside and keeps the reviewed character portraits.
-
-`pnpm run content:validate` checks every show script. Errors fail the command. Missing `locations.*.soundscape` or `scenes[].sound` (or any required sub-field) is an error. The schema is strict: every character on camera has a performance and nobody else does, `dialogue` exists exactly when `speakerId` does, sound sources must exist in the scene, a body sound comes from a part its performance moves, and visual text may not name a character. Every `content:*` pipeline stage runs this validation first and stops on an error. A high authored camera travel+rotation score (threshold **20**, same formula as `camera_travel_score`) prints a **warning** and does not fail. Sound lint also warns (does not fail) when a speaking scene's bed is not `faint`, when `sound.events` is empty-ish, or when `music.kind` is `none` but ambience/events contain music-related words from `prompts.json` `soundLint`. The camera-travel warning text notes that scene types like scene 04 (low travel, weak depth follow) are not predicted by this score.
+Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show's generated files aside.
 
 ### 1. Plates — Qwen-Image-Edit-2511
 
-`content:plates` draws and stops. ComfyUI must be running.
+`content:plates` draws and stops. ComfyUI must be running. A landmark or prop is one isolated object (`landmarkPlate`). A character is one full-body plate from `body` plus every attribute (`characterPlate`). Landmarks and props that share appearance and size are drawn once. Output: `output/plates/<show>/<location>/<landmark>/`, `.../props/<prop>/`, `.../characters/<character>/`.
 
-An empty location is one 1024×1024 picture of the place, prompted as a movie set (`output/plates/<show>/<locationId>/plate.png`). A location with people is one isolated object per landmark. A character is one full-body plate from `body` plus every attribute. Landmarks that share appearance and size are drawn once.
-
-Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The attached image is a blank canvas the prompt tells the model to ignore.
+Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0.
 
 ### 2. Meshes — TRELLIS.2 and Pixal3D
 
-`content:assets` turns each reviewed plate into one mesh. A missing plate stops the build. It does not draw.
+`content:assets` turns each reviewed plate into one mesh. A missing plate stops the build. Every mesh keeps the plate's color on its vertices (the TRELLIS.2 texture stage, painted onto the mesh).
 
-| Subject | Model | Surface |
+| Subject | Model | Why |
 | --- | --- | --- |
-| Empty location, landmark | TRELLIS.2 int8 | Untextured. Fitted uniformly into `sizeMeters` or the landmark `size`. |
-| Character | Pixal3D int8 | Front matches the plate. Plate color is stored on each vertex. Fitted to standing height. Front faces schema +Y (body yaw 0). |
+| Landmark, prop | TRELLIS.2 shape + texture | Built in its own upright frame. An object plate is drawn from slightly above; pixel alignment would tilt the object by that angle. Fitted uniformly into `size`, base center at its position. |
+| Character | Pixal3D shape + texture | The plate is a frontal, eye-level photo, so pixel alignment makes the front match it. Front turned to schema +Y, fitted to `heightMeters`, then the body cleanup (thin side sheets dropped, small holes capped, a proportion warning). |
 
-Both remove the background with BiRefNet, condition with DINOv3, and run a shape cascade at 1024 through the TRELLIS.2 shape VAE. Pixal3D adds a texture VAE and MoGe so the projected features line up with the photo. ComfyUI’s DecimateMesh caps the mesh. The default limit is 10,000,000 triangles. A character mesh already under that limit is left as generated. Small openings on character meshes are covered with new triangles on the vertices already around the hole.
+Both remove the background with BiRefNet, condition with DINOv3, and run the shape cascade at 1024. ComfyUI's DecimateMesh caps the mesh (default 10,000,000 triangles).
 
-A missing character mesh falls back to a volume in previs. That volume is left out of the edge guide.
+### 3. Previs — no diffusion model
 
-### 3. Landmark positions — Florence-2
+`content:previs` needs every mesh the script names and stops with the list of missing ones. Per shot it samples the timeline at 8 fps. Every sample is measured for the checks; only the start and end samples also read back depth and plate color and label the empty space, because only they become guides. Each sample is one GPU draw of every entity into clay, plate color, entity/region ids, and depth (`render.py`), plus a coverage draw for each region large enough to matter. A floor is drawn as ground when the camera is inside the location's bounds.
 
-`content:landmarks` runs after an empty location’s mesh exists. It is not part of `content:render`. ComfyUI does not need to be running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
+Every scene is rendered even when one fails; the stage ends with the full list of mismatches. The checks (`checks.py`), all with the one visibility measurement:
 
-It shades the mesh from known cameras, asks Florence-2-large where each landmark name is, and writes `position` into the script. A location with people already has those positions, so it is skipped. A position already set is kept unless `--force` is passed.
+- anyone on screen at any sample has a performance (`parts: []` for stillness), and every performance belongs to someone on screen;
+- every part a performance moves is on screen at some moment of the shot;
+- an `expression` is only on a face visible in the start frame (the speaker must have one; zod checks that);
+- the speaker's face shows at least `speakerFaceMinPixels` (enough to lip-sync), and every `sound.events[].source` is on screen in the start frame;
+- the camera is never inside a mesh.
 
-### 4. Clay previs — no diffusion model
+Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `blockout.mp4` (8 fps), `start.png`, `end.png`, `scene.json` (every entity's mesh and pose per sample, for the viewer), and `guides/`.
 
-`content:previs` renders the timeline with moderngl. One GPU draw produces the shaded clay frame and its depth buffer. People and cameras stay on the script marks.
-
-An empty location draws its one mesh, and the camera stays where it was authored. A location with people draws an open floor plus one mesh per landmark, placed at the script position and fitted to that landmark’s size.
-
-Output is 768×1360. The playblast is 8 fps. Per scene: `output/previs/<show>/<episode>/scene_XX/blockout.mp4`, `start.png`, `end.png`, and `guides/`. Every scene is joined into `output/previs/<show>/<episode>/blockout.mp4`. A scene still missing leaves the episode file untouched.
-
-On the **start** frame, previs checks the script's references against the render. Each `performances.<id>.parts` entry must be on screen and at least 5 px wide at LTX's output. A face that passes the face-attribute gate (`partMinPixelHeight`, `partMinScreenFraction`) must have `performances.<id>.expression`, and a face that does not pass it must not. The speaker's face must be on screen. Each `sound.events[].source` must be on screen: a character part by the part render, a landmark by the rule a still uses to name it, a prop by its mesh's share of the frame. Explicit `requiresParts` still checks every playblast frame. The expression goes into the still as one more face-tagged attribute of that person.
-
-Guides are written for the **start** and **end** of every scene (end guides are for review; `content:frames` does not generate end stills when `endStill` is false). Additional clip-rate guides:
-
-| Guide | What it is |
+| Guide (`start_*` and `end_*`) | What it is |
 | --- | --- |
-| `guides/clay_24fps.mp4` | Clay playblast resampled to LTX size/rate (448×768, 24 fps, `8n+1` frames). Input to Depth Anything. |
-| `guides/control_depth.mp4` | Written by `content:generate` (not previs): Depth Anything on `clay_24fps.mp4`. |
-| `guides/depth_video.mp4` (+ `guides/depth_video/`) | Native inverse (or linear) camera depth at clip rate. Still exported for review and experiments. **Unused by `content:generate`.** |
+| `depth` | Camera-forward depth. Near is bright, empty space black. |
+| `edges` | Where depth jumps or a surface meets empty space. |
+| `color` | Every entity in flat plate colors, empty space in the location's flat sky, ground, and surround colors. |
+| `drawn_<id>_depth`, `_edges`, `_color` | One visible person or prop drawn alone: the shot camera magnified onto their whole body, so pose and turn are the shot's at full resolution, even past the frame edge. |
+| `drawn_<id>_mask` | Where it is visible in the shot. |
+| `observation.json` | Per entity, region pixels `[visible, extent]`, screen x, depth, and each person's crop window. |
+| `clay_24fps.mp4` | Clay at LTX size and rate, for shots whose camera or people move. Input to Depth Anything. |
+| `control_depth.mp4` | Written by `content:generate`: Depth Anything on `clay_24fps.mp4`. |
 
-Per-frame start/end guides:
+### 4. Scene stills — Qwen-Image-Edit-2511
 
-| Guide | What it is |
-| --- | --- |
-| `depth` | Camera-forward depth. Near surfaces are bright. Empty space is black. Character meshes stay in this map, so position and occlusion are fixed. |
-| `clothes` | Those character meshes from this camera, the place cut away. Cloth, skin, and hair are each one flat color taken from the plate. A small stain takes the color around it. A landmark or prop in front of a person leaves that pixel black, so the cutout matches depth occlusion. |
-| `edges` | Outlines where depth jumps or a surface meets empty space. Character meshes stay in this map when they are in frame. The capsule fallback does not. |
-| `pose` | OpenPose skeleton, used only when the clothes cutout is missing. |
-| `backdrop` | Empty space from this camera in flat sky, ground, and surround color. Landmarks, props, and people are black. The open floor keeps the ground color. |
-| `faces` | Head masks for people whose face points at the camera, plus a JSON list of those ids. |
-| `parts` | JSON: per `characterId`, visible pixels, width, and height per body part. Face and eyes are the front half of the head in mesh-local space (schema +Y), cut at the head band's bounding-box center on the forward axis. Eyes are the height band 0.86–0.91 of standing height on that front half. Same depth test as clothes. |
-| `normal` | Surface normals. Written for review. |
+`content:frames` runs previs for each scene first, unless `guides/previs_record.json` shows the guides were made from the same script, meshes, settings, and previs code, and stops on a mismatch. Each still is drawn in passes with `workflows/qwen_image_edit_spatial.json` (768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0, from noise, the four-picture `TextEncodeQwenBackdrop` encoder):
 
-### 5. Scene stills — Qwen-Image-Edit-2511
+1. **One pass per visible person and prop.** Pictures: its depth, colors, and edges (the shot camera magnified onto it), plus its plate as the appearance reference. Words: only its own. A person gets `body`, every attribute, and their expression; a prop its appearance. Each is drawn whole, so a figure the shot shows a sliver of is still dressed, nothing borrows another's description, and size in the shot does not matter.
+2. **Composite.** Each drawn picture is scaled back to its crop window and pasted into the `color` guide only where `drawn_<id>_mask` shows it.
+3. **The shot, inpainted.** Pictures: depth, the composite, edges. The pasted pixels are kept exactly; only the rest of the frame (and a 3-pixel band at each pasted edge, so it sits in the shot) is drawn. Words: `stillOpening`, the legend, the count of people, the visible landmarks, and "Behind and around:" with the visible sky, ground, and surround.
 
-`content:frames` talks only to the ComfyUI HTTP API. It generates character portraits first, then each scene **start** still. With `endStill: false` in `prompts.json` (the default), it does **not** write `scene_XX_end.png`. Previs end guides remain on disk for review only.
+A description is sent when any region it depends on is visible; trailing plate instructions such as "a single object" are dropped. Names and ids are never sent. `output/frames/<show>/<episode>/inputs/scene_XX_start/` keeps every pass's prompt and pictures, each drawn picture, `composite.png`, and `draw_mask.png`.
 
-Portraits use `workflows/qwen_image_edit.json`: same Lightning settings, 768×1360, from `body` plus every attribute, on a blank canvas. The template keeps a plain shirt and no costume. They land in `output/frames/<show>/characters/<id>.png`.
-
-Scene stills use `workflows/qwen_image_edit_spatial.json` at 768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0. The sampler starts from noise. The shaded clay frame is not an input. CFG 1 has no negative channel, so the blockout still does not use “do not” sentences. ControlNet is not used. Surface normals are written for review and are not sent to Qwen. Clothes and the empty-space plate are never reference latents in the same pass.
-
-Picture order:
-
-- **Shot with a clothes cutout.** Depth, then the clothes cutout, then edges. All three are reference latents on `TextEncodeQwenImageEditPlus`, so garment color is copied and the outlines are kept. The empty-space plate is not attached: it is black where the person stands, and a reference latent would paint that black over the cloth.
-- **Shot with people and no clothes cutout.** Depth, pose, edges, plus the empty-space plate as picture 4. The encoder switches to the local `TextEncodeQwenBackdrop` node.
-- **Empty shot.** Depth and edges, plus the empty-space plate as picture 3. Same `TextEncodeQwenBackdrop` encoder.
-
-Every shot uses one prompt skeleton, filled by `still_prompt` in `generate_batch.py` and the people builder in `still_people.py`. `spatialBlockout` in `prompts.json` is `{stillPrompt}`. Order: `stillOpening` from `prompts.json`, a legend for each attached picture, one keep sentence hardcoded in `still_prompt` (“Keep the shape, position, and occlusion from the pictures.”), the people sentence on a clothes shot, the visible landmark appearances, then “Behind and around:” and the sky, ground, and surround this camera shows. An empty slot is left out, including “No people.” Pose and empty shots omit the people sentence. A scene performance's `expression` joins that person's face-tagged attributes. Character names and ids are not sent to Qwen. The log may keep `characterId`.
-
-On a clothes shot, the people sentence is built from `body`, visible `attributes`, and blocking geometry: depth order, screen side, and occlusion. Visible people are counted in a number word. Each visible person is `{position}: {body, attributes…}` joined with commas. A still sends an attribute only when any of its tagged parts is at least `partMinPixelHeight` tall **and** covers at least `partMinScreenFraction` of the frame (`prompts.json`; one pair of numbers for every part). Age is a face-tagged attribute, so a 10 px face or a 21 px grazing sliver does not receive “52 years old”. If `body` is missing for a visible character, that person's text is left out and the log warns with their id. The log records each part's pixel height and screen fraction, each attribute sent or dropped, and which condition failed when it was dropped. Figures farther than `nearest_depth * rowDepthRatio` (`prompts.json`, 1.5) stand in a row behind, left to right, each with their own line, but only when at least two people qualify. Each other person is named by screen side; “in the foreground” is added only when that behind group exists. A figure whose visible fraction is below the cutoff is partly hidden. The log records `rowDepthRatio` and the farthest/nearest depth ratio once per frame. Character names and ids are not sent. Hair and feet on a distant figure still come from the clothes cutout when their text is dropped.
-
-A landmark mesh is named when its visible front surface covers at least `landmarkMinScreenFraction` of the frame (`prompts.json`, 0.008). The log records each landmark, whether it was sent, its screen fraction, and the skip reason if it was left out. Trailing plate instructions such as “a single object” or “no walls” are dropped from landmark appearance and from the backdrop sky, ground, and surround lines. The script text itself is not edited.
-
-Prompt logs and the attached pictures are written to `output/frames/<show>/<episode>/inputs/scene_XX_start/`. The blockout pass in `log.json` records `people` and `landmarks` the same way: each entry says whether it was sent, and the skip reason if it was left out. The episode folder keeps `scene_XX_start.png` only (no end still when `endStill` is false).
-
-Identity face painting exists in the spatial graph and is off (`FACE_PASS = False`). LTX never receives a character portrait.
-
-### 6. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
+### 5. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
 
 `content:generate` animates each reviewed start still. Clip geometry is shared (`clip_spec.py`): **448×768**, **24 fps**, length **`8n+1`** for the scene duration. Stills are center-cropped and resized through `fit_to_clip` before LTX.
 
@@ -135,9 +109,9 @@ Identity face painting exists in the spatial graph and is off (`FACE_PASS = Fals
 
 | Scene | Graph | Control |
 | --- | --- | --- |
-| Spatial change (camera/blocking moves) | `workflows/ltx_gemma_api_depth.json`, or `ltx_gemma_api_depth_dialogue.json` when `speakerId` is set | Start still + Depth Anything control video through the union IC-LoRA |
+| Spatial change (camera or someone in the location moves) | `workflows/ltx_gemma_api_depth.json`, or `ltx_gemma_api_depth_dialogue.json` when `speakerId` is set | Start still + Depth Anything control video through the union IC-LoRA |
 | No spatial change | `workflows/ltx_gemma_api.json` | Start still only (plain image-to-video) |
-| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph even when the scene is spatial; logs `depth control disabled by override` |
+| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph; logs `depth control disabled by override` |
 
 **Depth Anything pass (spatial scenes, before LTX)**
 
@@ -145,8 +119,6 @@ Identity face painting exists in the spatial graph and is off (`FACE_PASS = Fals
 2. Run Video Depth Anything (`video_depth_anything_vits.pth`, small) via ComfyUI-Video-Depth-Anything.
 3. Write `guides/control_depth.mp4` (H.264 + silent AAC).
 4. Unload Comfy models (`/free`) before queuing LTX.
-
-Native `guides/depth_video.mp4` is not read by this stage.
 
 | Setting | Value |
 | --- | --- |
@@ -160,7 +132,7 @@ Native `guides/depth_video.mp4` is not read by this stage.
 | IC-LoRA strength | `ltxIcLoRAStrength` (default **1.0**) on spatial/depth graphs |
 | End frame guide | Not used. No `LTXVAddGuide` end still. |
 | Dialogue | When `speakerId` is set on the plain graph, or on the depth-dialogue graph, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
-| Prompt | Shared path `compile_ltx_prompt`: `sceneVideo` (continue from the still; then `sceneDialogue` for the speaker, `scenePerformance` and `scenePerformanceExpression` per person, `sceneMotion`, and `sceneCameraLocked` when the camera pose does not change). People are named by `scenePerson`: the place the start still's log recorded for them plus their `body`, never a character id, because LTX only sees the frame then labeled sound sentences from `location.soundscape` + `scene.sound` using `sceneSound*` templates in `prompts.json` (label → bed → space → events → music). Distilled CFG 1: positive descriptions only; no negative-prompt reliance. `GemmaAPITextEncode` runs with `enhance_prompt: false` (encodes the authored text; does not rewrite it). |
+| Prompt | `describe.ltx_prompt`: `sceneVideo` (continue from the still; then `sceneDialogue` for the speaker, `scenePerformance` and `scenePerformanceExpression` per performance, `sceneMotion`, and `sceneCameraLocked` when the camera pose does not change). People are named by `scenePerson`: where the start frame's observation places them plus their `body`, never a character id, because LTX only sees the frame. Then labeled sound sentences from `location.soundscape` + `scene.sound` using `sceneSound*` templates in `prompts.json` (label → bed → space → events → music). Distilled CFG 1: positive descriptions only; no negative-prompt reliance. `GemmaAPITextEncode` runs with `enhance_prompt: false` (encodes the authored text; does not rewrite it). |
 | Log | Final LTX prompt, graph name, seed, and `enhance_prompt` land in `output/generate/<show>/<episode>/inputs/scene_XX/log.json`. |
 | Mux | Video Helper Suite, H.264, CRF 19, with the decoded LTX audio. |
 
@@ -199,11 +171,11 @@ Local nodes:
 - `content:setup-comfy` copies `content-pipeline/comfy_nodes/reelshort_ltx` — accept Gemma API embeddings that are already projected
 - `content:comfy` copies `content-pipeline/comfy_nodes/qwen_backdrop.py` — `TextEncodeQwenBackdrop`, a four-image Qwen edit encoder used when the empty-space plate is attached
 
-`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs. The rest load Florence-2. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:asset-deps` installs trimesh and moderngl into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs. Do not install `content-pipeline/requirements.txt` into that virtualenv.
 
 ## Stage viewer
 
-`pnpm run view -- --show <id>` serves `content-pipeline/viewer` at `http://127.0.0.1:5174`. It is Vite and Three.js. It loads location meshes, vertex-colored character meshes, and scene cameras as glTF Y-up. Orbit is the god camera. Scene camera locks to the authored lens and plays the timeline.
+`pnpm run view -- --show <id>` serves `content-pipeline/viewer` at `http://127.0.0.1:5174`. It is Vite and Three.js. It loads every landmark, prop, and character mesh. A scene replays previs's `scene.json`: each entity's pose per sample and the camera, glTF Y-up. Orbit is the god camera. Scene camera locks to the authored lens and plays the timeline.
 
 ## Resolutions
 

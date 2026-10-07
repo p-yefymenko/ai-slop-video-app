@@ -1,6 +1,7 @@
 /**
- * Authoring check for ShowScript JSON. Renderer geometry that needs the
- * camera basis (intersection, projection) stays in spatial_previs.py.
+ * Authoring check for ShowScript JSON: shape and references only. Anything that
+ * needs the meshes and the camera (what is visible, camera distance to a mesh)
+ * is checked by content:previs against the rendered world.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -50,8 +51,6 @@ export const CAMERA_TRAVEL_WARN_THRESHOLD = 20;
 const SNAKE_ID = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const STANCES = ["standing", "sitting", "kneeling", "walking"] as const;
-const BUILDS = ["slim", "average", "broad"] as const;
 const BED_LEVELS = ["present", "faint"] as const;
 
 const PROMPTS_PATH = path.resolve(
@@ -137,9 +136,9 @@ function vec3(label: string, positive = false) {
 
 const locationLandmarkSchema = z
   .object({
-    position: vec3("position").optional(),
-    size: vec3("size", true).optional(),
-    appearance: text("appearance").optional(),
+    position: vec3("position"),
+    size: vec3("size", true),
+    appearance: text("appearance"),
   })
   .strict();
 
@@ -153,92 +152,58 @@ const stageGeometrySchema = z
   })
   .strict();
 
-const characterProxySchema = z
-  .object({
-    heightMeters: finiteNumber("proxy.heightMeters").refine(
-      (value) => value >= 1.2 && value <= 2.4,
-      "proxy.heightMeters must be a standing height from 1.2 to 2.4 meters",
-    ),
-    build: z.enum(BUILDS, {
-      required_error: "proxy.build is required",
-      invalid_type_error: `proxy.build must be ${BUILDS.join(", ")}`,
-    }),
-  })
-  .strict();
-
-const characterAttributeSchema = z
-  .object({
-    text: text("text"),
-    parts: z
-      .array(
-        z.string({
-          required_error: "part is required",
-          invalid_type_error: "part must be a string",
-        }),
-        {
-          required_error: "parts is required",
-          invalid_type_error: "parts must be an array",
-        },
-      )
-      .min(1, "empty parts"),
-  })
-  .strict();
-
-const characterPartRequirementSchema = z
-  .object({
-    characterId: text("characterId"),
-    part: z.string({
-      required_error: "part is required",
-      invalid_type_error: "part must be a string",
-    }),
-  })
-  .strict();
-
 const showCharacterSchema = z
   .object({
     body: text("body"),
-    attributes: z.array(characterAttributeSchema, {
+    attributes: z.array(text("attribute"), {
       required_error: "attributes is required",
       invalid_type_error: "attributes must be an array",
     }),
-    proxy: characterProxySchema.optional(),
+    heightMeters: finiteNumber("heightMeters").refine(
+      (value) => value >= 1.2 && value <= 2.4,
+      "heightMeters must be a standing height from 1.2 to 2.4 meters",
+    ),
   })
   .strict();
 
 const showPropSchema = z
   .object({
     appearance: text("appearance"),
-    sizeMeters: vec3("sizeMeters", true).optional(),
+    size: vec3("size", true),
   })
   .strict();
 
 const characterKeyframeSchema = z
   .object({
     timeSeconds: finiteNumber("timeSeconds"),
-    locationId: text("locationId"),
-    position: vec3("position"),
-    bodyYawDegrees: finiteNumber("bodyYawDegrees"),
+    locationId: text("locationId").nullable(),
+    position: vec3("position").optional(),
+    bodyYawDegrees: finiteNumber("bodyYawDegrees").optional(),
     lookAtId: text("lookAtId").optional(),
-    stance: z.enum(STANCES, {
-      required_error: "stance is required",
-      invalid_type_error: `stance must be ${STANCES.join(", ")}`,
-    }),
-    leftHandTargetId: text("leftHandTargetId").optional(),
-    rightHandTargetId: text("rightHandTargetId").optional(),
   })
   .strict();
 
-const propKeyframeSchema = z
-  .object({
-    timeSeconds: finiteNumber("timeSeconds"),
-    locationId: text("locationId"),
-    position: vec3("position").optional(),
-    heldByCharacterId: text("heldByCharacterId").optional(),
-    heldInHand: z.enum(["left", "right"], {
-      invalid_type_error: "heldInHand must be left or right",
-    }).optional(),
-  })
-  .strict();
+const propKeyframeSchema = z.union(
+  [
+    z
+      .object({
+        timeSeconds: finiteNumber("timeSeconds"),
+        heldByCharacterId: text("heldByCharacterId"),
+        heldInHand: z.enum(["left", "right"]),
+      })
+      .strict(),
+    z
+      .object({ timeSeconds: finiteNumber("timeSeconds"), locationId: text("locationId"), position: vec3("position") })
+      .strict(),
+    z.object({ timeSeconds: finiteNumber("timeSeconds"), locationId: z.null() }).strict(),
+  ],
+  {
+    errorMap: () => ({
+      message:
+        "prop keyframe must be { timeSeconds, heldByCharacterId, heldInHand }, { timeSeconds, locationId, position }, or { timeSeconds, locationId: null }",
+    }),
+  },
+);
 
 const cameraKeyframeSchema = z
   .object({
@@ -320,8 +285,7 @@ const performanceSchema = z
       .array(text("performance part"), {
         required_error: "parts is required",
         invalid_type_error: "parts must be an array",
-      })
-      .min(1, "parts needs at least one body part the action moves"),
+      }),
     expression: text("performance expression").optional(),
   })
   .strict();
@@ -370,10 +334,6 @@ const sceneSchema = z
       .positive("sceneNumber must be greater than 0"),
     locationId: text("locationId"),
     storyBeat: text("storyBeat"),
-    characterIds: z.array(text("characterIds"), {
-      required_error: "characterIds is required",
-      invalid_type_error: "characterIds must be an array",
-    }),
     speakerId: text("speakerId").optional(),
     timeRangeSeconds: z.tuple([finiteNumber("timeRangeSeconds start"), finiteNumber("timeRangeSeconds end")], {
       required_error: "timeRangeSeconds is required",
@@ -396,11 +356,6 @@ const sceneSchema = z
     dialogue: dialogueSchema.optional(),
     motion: text("motion").optional(),
     sound: sceneSoundSchema,
-    requiresParts: z
-      .array(characterPartRequirementSchema, {
-        invalid_type_error: "requiresParts must be an array",
-      })
-      .optional(),
   })
   .strict();
 
@@ -465,7 +420,6 @@ const showScriptSchema = z
         z.string(),
         z
           .object({
-            promptBlock: text("promptBlock"),
             backdrop: z
               .object({
                 sky: text("backdrop.sky"),
@@ -528,191 +482,108 @@ function samePoint(a: [number, number, number], b: [number, number, number]): bo
   return dx * dx + dy * dy + dz * dz < 1e-12;
 }
 
-function outsideStage(
-  position: [number, number, number],
-  location: ShowLocation,
-): boolean {
+function outsideStage(position: [number, number, number], location: ShowLocation): boolean {
   const [width, depth] = location.spatial.sizeMeters;
-  return (
-    Math.abs(position[0]) > width / 2 ||
-    Math.abs(position[1]) > depth / 2 ||
-    position[2] < 0
-  );
-}
-
-function locationHasPeople(show: ShowScript, locationId: string): boolean {
-  return show.episodes.some((episode) => {
-    if (episode.scenes.some((scene) => scene.locationId === locationId && scene.characterIds.length > 0)) {
-      return true;
-    }
-    return Object.values(episode.spatialTimeline.characterTracks).some((track) =>
-      track.some((frame) => frame.locationId === locationId),
-    );
-  });
+  return Math.abs(position[0]) > width / 2 || Math.abs(position[1]) > depth / 2 || position[2] < 0;
 }
 
 function checkPartId(issues: ScriptIssue[], path: string, part: string) {
   if (!BODY_PART_SET.has(part)) {
-    issues.push({
-      path,
-      message: `unknown part id ${JSON.stringify(part)}`,
-    });
+    issues.push({ path, message: `unknown part id ${JSON.stringify(part)}` });
   }
-}
-
-function checkCharacterAttributes(
-  issues: ScriptIssue[],
-  characterId: string,
-  character: ShowScript["characters"][string],
-) {
-  if (!character.body?.trim()) {
-    issues.push({
-      path: `characters.${characterId}.body`,
-      message: "missing body",
-    });
-  }
-  character.attributes.forEach((attribute, attributeIndex) => {
-    const partsPath = `characters.${characterId}.attributes[${attributeIndex}].parts`;
-    if (attribute.parts.length === 0) {
-      issues.push({
-        path: partsPath,
-        message: "empty parts",
-      });
-      return;
-    }
-    attribute.parts.forEach((part, partIndex) => {
-      checkPartId(issues, `${partsPath}[${partIndex}]`, part);
-    });
-  });
 }
 
 function checkSnakeId(issues: ScriptIssue[], path: string, id: string, label: string) {
   if (!SNAKE_ID.test(id)) {
-    issues.push({
-      path,
-      message: `${label} ${JSON.stringify(id)} must be lowercase snake_case`,
-    });
+    issues.push({ path, message: `${label} ${JSON.stringify(id)} must be lowercase snake_case` });
   }
 }
 
-function checkIncreasingTimes(
+/** Keyframes increase, the first is at 0, and none is past the episode end. */
+function checkTrackTimes(
   issues: ScriptIssue[],
   path: string,
   frames: Array<{ timeSeconds: number }>,
+  durationSeconds: number,
 ) {
-  for (let index = 1; index < frames.length; index += 1) {
-    if (frames[index].timeSeconds <= frames[index - 1].timeSeconds) {
+  if (frames.length && frames[0].timeSeconds !== 0) {
+    issues.push({
+      path: `${path}[0].timeSeconds`,
+      message: "a track starts at 0, so it says where this is for the whole episode",
+    });
+  }
+  frames.forEach((frame, index) => {
+    if (index > 0 && frame.timeSeconds <= frames[index - 1].timeSeconds) {
+      issues.push({ path: `${path}[${index}].timeSeconds`, message: "keyframe times must increase" });
+    }
+    if (frame.timeSeconds < 0 || frame.timeSeconds > durationSeconds + 1e-6) {
       issues.push({
         path: `${path}[${index}].timeSeconds`,
-        message: "keyframe times must increase",
+        message: `time ${frame.timeSeconds} is outside 0..${durationSeconds}`,
       });
     }
-  }
+  });
 }
 
-function targetExists(
-  show: ShowScript,
-  locationId: string,
-  targetId: string,
-): boolean {
-  if (targetId in show.characters || targetId in (show.props ?? {})) {
-    return true;
-  }
-  const location = show.locations[locationId];
-  return Boolean(location && targetId in location.spatial.landmarks);
-}
-
-function checkTarget(
-  issues: ScriptIssue[],
-  path: string,
-  targetId: string | undefined,
-  locationId: string,
-  show: ShowScript,
-) {
-  if (!targetId || !(locationId in show.locations)) {
+function checkCharacterFrame(issues: ScriptIssue[], path: string, frame: CharacterSpatialKeyframe, show: ShowScript) {
+  if (frame.locationId === null) {
+    for (const key of ["position", "bodyYawDegrees", "lookAtId"] as const) {
+      if (frame[key] !== undefined) {
+        issues.push({ path: `${path}.${key}`, message: "an off-stage keyframe (locationId null) has no pose" });
+      }
+    }
     return;
-  }
-  if (!targetExists(show, locationId, targetId)) {
-    issues.push({
-      path,
-      message: `${JSON.stringify(targetId)} must be a character, a prop, or a landmark in ${JSON.stringify(locationId)}`,
-    });
-  }
-}
-
-function checkCharacterFrame(
-  issues: ScriptIssue[],
-  path: string,
-  frame: CharacterSpatialKeyframe,
-  show: ShowScript,
-  durationSeconds: number,
-) {
-  if (frame.timeSeconds < 0 || frame.timeSeconds > durationSeconds + 1e-6) {
-    issues.push({
-      path: `${path}.timeSeconds`,
-      message: `time ${frame.timeSeconds} is outside 0..${durationSeconds}`,
-    });
   }
   const location = show.locations[frame.locationId];
   if (!location) {
-    issues.push({
-      path: `${path}.locationId`,
-      message: `unknown location ${JSON.stringify(frame.locationId)}`,
-    });
+    issues.push({ path: `${path}.locationId`, message: `unknown location ${JSON.stringify(frame.locationId)}` });
     return;
   }
-  if (outsideStage(frame.position, location)) {
+  if (!frame.position) {
+    issues.push({ path: `${path}.position`, message: "position is required in a location" });
+  } else if (outsideStage(frame.position, location)) {
     issues.push({
       path: `${path}.position`,
       message: `position ${JSON.stringify(frame.position)} is outside ${frame.locationId}`,
     });
   }
-  checkTarget(issues, `${path}.lookAtId`, frame.lookAtId, frame.locationId, show);
-  checkTarget(issues, `${path}.leftHandTargetId`, frame.leftHandTargetId, frame.locationId, show);
-  checkTarget(issues, `${path}.rightHandTargetId`, frame.rightHandTargetId, frame.locationId, show);
+  if (frame.bodyYawDegrees === undefined) {
+    issues.push({ path: `${path}.bodyYawDegrees`, message: "bodyYawDegrees is required in a location" });
+  }
+  const target = frame.lookAtId;
+  if (
+    target &&
+    !(target in show.characters) &&
+    !(target in (show.props ?? {})) &&
+    !(target in location.spatial.landmarks)
+  ) {
+    issues.push({
+      path: `${path}.lookAtId`,
+      message: `${JSON.stringify(target)} must be a character, a prop, or a landmark in ${JSON.stringify(frame.locationId)}`,
+    });
+  }
 }
 
-function checkPropFrame(
-  issues: ScriptIssue[],
-  path: string,
-  frame: PropSpatialKeyframe,
-  show: ShowScript,
-  durationSeconds: number,
-) {
-  if (frame.timeSeconds < 0 || frame.timeSeconds > durationSeconds + 1e-6) {
-    issues.push({
-      path: `${path}.timeSeconds`,
-      message: `time ${frame.timeSeconds} is outside 0..${durationSeconds}`,
-    });
+function checkPropFrame(issues: ScriptIssue[], path: string, frame: PropSpatialKeyframe, show: ShowScript) {
+  if ("heldByCharacterId" in frame) {
+    if (!(frame.heldByCharacterId in show.characters)) {
+      issues.push({
+        path: `${path}.heldByCharacterId`,
+        message: `unknown character ${JSON.stringify(frame.heldByCharacterId)}`,
+      });
+    }
+    return;
+  }
+  if (frame.locationId === null) {
+    return;
   }
   const location = show.locations[frame.locationId];
   if (!location) {
-    issues.push({
-      path: `${path}.locationId`,
-      message: `unknown location ${JSON.stringify(frame.locationId)}`,
-    });
-  } else if (frame.position && outsideStage(frame.position, location)) {
+    issues.push({ path: `${path}.locationId`, message: `unknown location ${JSON.stringify(frame.locationId)}` });
+  } else if ("position" in frame && outsideStage(frame.position, location)) {
     issues.push({
       path: `${path}.position`,
       message: `position ${JSON.stringify(frame.position)} is outside ${frame.locationId}`,
-    });
-  }
-  if (!frame.position && !frame.heldByCharacterId) {
-    issues.push({
-      path,
-      message: "prop keyframe needs position or heldByCharacterId",
-    });
-  }
-  if (frame.heldInHand && !frame.heldByCharacterId) {
-    issues.push({
-      path: `${path}.heldInHand`,
-      message: "heldInHand requires heldByCharacterId",
-    });
-  }
-  if (frame.heldByCharacterId && !(frame.heldByCharacterId in show.characters)) {
-    issues.push({
-      path: `${path}.heldByCharacterId`,
-      message: `unknown character ${JSON.stringify(frame.heldByCharacterId)}`,
     });
   }
 }
@@ -731,186 +602,7 @@ function checkCameraFrame(
     });
   }
   if (samePoint(frame.position, frame.lookAt)) {
-    issues.push({
-      path: `${path}.lookAt`,
-      message: "lookAt must differ from position",
-    });
-  }
-}
-
-const CAMERA_MESH_MIN_METERS = 1.5;
-const DEFAULT_STANDING_HEIGHT = 1.72;
-
-function lerp(start: number, finish: number, amount: number): number {
-  return start + (finish - start) * amount;
-}
-
-function lerpVec(start: [number, number, number], finish: [number, number, number], amount: number): [number, number, number] {
-  return [lerp(start[0], finish[0], amount), lerp(start[1], finish[1], amount), lerp(start[2], finish[2], amount)];
-}
-
-function distanceToAabb(
-  point: [number, number, number],
-  low: [number, number, number],
-  high: [number, number, number],
-): number {
-  const dx = Math.max(low[0] - point[0], 0, point[0] - high[0]);
-  const dy = Math.max(low[1] - point[1], 0, point[1] - high[1]);
-  const dz = Math.max(low[2] - point[2], 0, point[2] - high[2]);
-  return Math.hypot(dx, dy, dz);
-}
-
-function sampleKeyedVec(
-  frames: Array<{ timeSeconds: number }>,
-  timeSeconds: number,
-  read: (frame: { timeSeconds: number }) => [number, number, number],
-): [number, number, number] {
-  const ordered = [...frames].sort((left, right) => left.timeSeconds - right.timeSeconds);
-  if (timeSeconds <= ordered[0].timeSeconds) {
-    return read(ordered[0]);
-  }
-  const last = ordered[ordered.length - 1];
-  if (timeSeconds >= last.timeSeconds) {
-    return read(last);
-  }
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const before = ordered[index];
-    const after = ordered[index + 1];
-    if (timeSeconds < before.timeSeconds || timeSeconds > after.timeSeconds) {
-      continue;
-    }
-    const span = after.timeSeconds - before.timeSeconds;
-    const amount = span <= 1e-6 ? 0 : (timeSeconds - before.timeSeconds) / span;
-    return lerpVec(read(before), read(after), amount);
-  }
-  return read(last);
-}
-
-function sampleCharacter(
-  track: CharacterSpatialKeyframe[],
-  timeSeconds: number,
-): { position: [number, number, number]; stance: string; locationId: string } {
-  const ordered = [...track].sort((left, right) => left.timeSeconds - right.timeSeconds);
-  const first = ordered[0];
-  const last = ordered[ordered.length - 1];
-  if (timeSeconds <= first.timeSeconds) {
-    return { position: first.position, stance: first.stance, locationId: first.locationId };
-  }
-  if (timeSeconds >= last.timeSeconds) {
-    return { position: last.position, stance: last.stance, locationId: last.locationId };
-  }
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const before = ordered[index];
-    const after = ordered[index + 1];
-    if (timeSeconds < before.timeSeconds || timeSeconds > after.timeSeconds) {
-      continue;
-    }
-    if (before.locationId !== after.locationId) {
-      const pick = timeSeconds < after.timeSeconds ? before : after;
-      return { position: pick.position, stance: pick.stance, locationId: pick.locationId };
-    }
-    const span = after.timeSeconds - before.timeSeconds;
-    const amount = span <= 1e-6 ? 0 : (timeSeconds - before.timeSeconds) / span;
-    return {
-      position: lerpVec(before.position, after.position, amount),
-      stance: before.stance,
-      locationId: before.locationId,
-    };
-  }
-  return { position: last.position, stance: last.stance, locationId: last.locationId };
-}
-
-function characterHeightMeters(show: ShowScript, characterId: string, stance: string): number {
-  const standing = show.characters[characterId]?.proxy?.heightMeters ?? DEFAULT_STANDING_HEIGHT;
-  if (stance === "sitting") {
-    return standing * (1.35 / DEFAULT_STANDING_HEIGHT);
-  }
-  if (stance === "kneeling") {
-    return standing * (1.18 / DEFAULT_STANDING_HEIGHT);
-  }
-  return standing;
-}
-
-function characterRadiusMeters(show: ShowScript, characterId: string): number {
-  const build = show.characters[characterId]?.proxy?.build ?? "average";
-  const factor = build === "slim" ? 0.85 : build === "broad" ? 1.15 : 1;
-  return 0.22 * factor;
-}
-
-function checkCameraMeshClearance(
-  issues: ScriptIssue[],
-  show: ShowScript,
-  episode: ShowEpisode,
-  scene: ScriptScene,
-  scenePath: string,
-) {
-  const [start, finish] = scene.timeRangeSeconds;
-  const times = new Set<number>([start, finish]);
-  for (const frame of scene.camera.keyframes) {
-    if (frame.timeSeconds >= start - 1e-6 && frame.timeSeconds <= finish + 1e-6) {
-      times.add(frame.timeSeconds);
-    }
-  }
-  const tracks = episode.spatialTimeline.characterTracks;
-  for (const characterId of scene.characterIds) {
-    for (const frame of tracks[characterId] ?? []) {
-      if (frame.timeSeconds >= start - 1e-6 && frame.timeSeconds <= finish + 1e-6) {
-        times.add(frame.timeSeconds);
-      }
-    }
-  }
-  const location = show.locations[scene.locationId];
-  const landmarks = location?.spatial.landmarks ?? {};
-  for (const moment of [...times].sort((left, right) => left - right)) {
-    const camera = sampleKeyedVec(scene.camera.keyframes, moment, (frame) => {
-      const pose = frame as SpatialCameraKeyframe;
-      return pose.position;
-    });
-    for (const characterId of scene.characterIds) {
-      const track = tracks[characterId];
-      if (!track?.length) {
-        continue;
-      }
-      const state = sampleCharacter(track, moment);
-      if (state.locationId !== scene.locationId) {
-        continue;
-      }
-      const radius = characterRadiusMeters(show, characterId);
-      const height = characterHeightMeters(show, characterId, state.stance);
-      const [px, py, pz] = state.position;
-      const distance = distanceToAabb(
-        camera,
-        [px - radius, py - radius, pz],
-        [px + radius, py + radius, pz + height],
-      );
-      if (distance < CAMERA_MESH_MIN_METERS) {
-        issues.push({
-          path: `${scenePath}.camera`,
-          message: `scene ${scene.sceneNumber}: camera is ${distance.toFixed(2)}m from ${characterId} at ${moment}s; keep at least ${CAMERA_MESH_MIN_METERS}m from every mesh`,
-        });
-      }
-    }
-    if (!locationHasPeople(show, scene.locationId)) {
-      continue;
-    }
-    for (const [landmarkId, landmark] of Object.entries(landmarks)) {
-      if (!landmark.position || !landmark.size) {
-        continue;
-      }
-      const [px, py, pz] = landmark.position;
-      const [width, depth, height] = landmark.size;
-      const distance = distanceToAabb(
-        camera,
-        [px - width / 2, py - depth / 2, pz],
-        [px + width / 2, py + depth / 2, pz + height],
-      );
-      if (distance < CAMERA_MESH_MIN_METERS) {
-        issues.push({
-          path: `${scenePath}.camera`,
-          message: `scene ${scene.sceneNumber}: camera is ${distance.toFixed(2)}m from ${landmarkId} at ${moment}s; keep at least ${CAMERA_MESH_MIN_METERS}m from every mesh`,
-        });
-      }
-    }
+    issues.push({ path: `${path}.lookAt`, message: "lookAt must differ from position" });
   }
 }
 
@@ -918,19 +610,13 @@ function vecLength(v: readonly [number, number, number]): number {
   return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
-function vecSub(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number],
-): [number, number, number] {
+function vecSub(a: readonly [number, number, number], b: readonly [number, number, number]): [number, number, number] {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 }
 
-/** Same formula as `camera_travel_score` in spatial_previs.py. */
+/** Authored camera travel and rotation across consecutive keyframes. */
 export function cameraTravelScore(scene: ScriptScene): number {
   const keyframes = scene.camera.keyframes;
-  if (keyframes.length < 2) {
-    return 0;
-  }
   let travel = 0;
   for (let i = 0; i < keyframes.length - 1; i++) {
     const a = keyframes[i]!;
@@ -938,9 +624,7 @@ export function cameraTravelScore(scene: ScriptScene): number {
     travel += vecLength(vecSub(b.position, a.position));
     travel += 0.5 * vecLength(vecSub(b.lookAt, a.lookAt));
     travel += 0.02 * Math.abs(b.verticalFovDegrees - a.verticalFovDegrees);
-    const ra = a.rollDegrees ?? 0;
-    const rb = b.rollDegrees ?? 0;
-    let roll = (rb - ra + 180) % 360;
+    let roll = ((b.rollDegrees ?? 0) - (a.rollDegrees ?? 0) + 180) % 360;
     if (roll < 0) {
       roll += 360;
     }
@@ -966,33 +650,13 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
       message: `id ${JSON.stringify(show.id)} must match ${source.showIdLabel} ${JSON.stringify(source.showId)}`,
     });
   }
-
   for (const characterId of Object.keys(show.characters)) {
     checkSnakeId(issues, `characters.${characterId}`, characterId, "character id");
-    checkCharacterAttributes(issues, characterId, show.characters[characterId]);
   }
   for (const [locationId, location] of Object.entries(show.locations)) {
     checkSnakeId(issues, `locations.${locationId}`, locationId, "location id");
-    const occupied = locationHasPeople(show, locationId);
-    for (const [landmarkId, landmark] of Object.entries(location.spatial.landmarks)) {
-      const landmarkPath = `locations.${locationId}.spatial.landmarks.${landmarkId}`;
-      checkSnakeId(issues, landmarkPath, landmarkId, "landmark id");
-      if (occupied) {
-        if (!landmark.position) {
-          issues.push({ path: `${landmarkPath}.position`, message: "position is required" });
-        }
-        if (!landmark.size) {
-          issues.push({ path: `${landmarkPath}.size`, message: "size is required" });
-        }
-        if (!landmark.appearance) {
-          issues.push({ path: `${landmarkPath}.appearance`, message: "appearance is required" });
-        }
-      } else if (landmark.size || landmark.appearance) {
-        issues.push({
-          path: landmarkPath,
-          message: "size and appearance belong on a location that has people",
-        });
-      }
+    for (const landmarkId of Object.keys(location.spatial.landmarks)) {
+      checkSnakeId(issues, `locations.${locationId}.spatial.landmarks.${landmarkId}`, landmarkId, "landmark id");
     }
   }
   for (const propId of Object.keys(show.props ?? {})) {
@@ -1003,111 +667,71 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   show.episodes.forEach((episode, episodeIndex) => {
     const episodePath = `episodes[${episodeIndex}]`;
     if (seenEpisodes.has(episode.episodeNumber)) {
-      issues.push({
-        path: `${episodePath}.episodeNumber`,
-        message: `duplicate episode number ${episode.episodeNumber}`,
-      });
+      issues.push({ path: `${episodePath}.episodeNumber`, message: `duplicate episode number ${episode.episodeNumber}` });
     }
     seenEpisodes.add(episode.episodeNumber);
 
     const { durationSeconds, characterTracks, propTracks } = episode.spatialTimeline;
-    for (const [characterId, track] of Object.entries(characterTracks)) {
-      const trackPath = `${episodePath}.spatialTimeline.characterTracks.${characterId}`;
-      if (!(characterId in show.characters)) {
+    const tracksPath = `${episodePath}.spatialTimeline`;
+    for (const characterId of Object.keys(show.characters)) {
+      if (!(characterId in characterTracks)) {
         issues.push({
-          path: trackPath,
-          message: `unknown character ${JSON.stringify(characterId)}`,
+          path: `${tracksPath}.characterTracks.${characterId}`,
+          message: "every character has a track; use locationId null while they are off stage",
         });
       }
-      checkIncreasingTimes(issues, trackPath, track);
-      track.forEach((frame, frameIndex) => {
-        checkCharacterFrame(issues, `${trackPath}[${frameIndex}]`, frame, show, durationSeconds);
-      });
+    }
+    for (const propId of Object.keys(show.props ?? {})) {
+      if (!(propId in propTracks)) {
+        issues.push({
+          path: `${tracksPath}.propTracks.${propId}`,
+          message: "every prop has a track; use locationId null while it is off stage",
+        });
+      }
+    }
+    for (const [characterId, track] of Object.entries(characterTracks)) {
+      const trackPath = `${tracksPath}.characterTracks.${characterId}`;
+      if (!(characterId in show.characters)) {
+        issues.push({ path: trackPath, message: `unknown character ${JSON.stringify(characterId)}` });
+      }
+      checkTrackTimes(issues, trackPath, track, durationSeconds);
+      track.forEach((frame, frameIndex) => checkCharacterFrame(issues, `${trackPath}[${frameIndex}]`, frame, show));
     }
     for (const [propId, track] of Object.entries(propTracks)) {
-      const trackPath = `${episodePath}.spatialTimeline.propTracks.${propId}`;
+      const trackPath = `${tracksPath}.propTracks.${propId}`;
       if (!(propId in (show.props ?? {}))) {
-        issues.push({
-          path: trackPath,
-          message: `prop ${JSON.stringify(propId)} is not declared on the show. Add props.${propId}.`,
-        });
+        issues.push({ path: trackPath, message: `prop ${JSON.stringify(propId)} is not declared. Add props.${propId}.` });
       }
-      checkIncreasingTimes(issues, trackPath, track);
-      track.forEach((frame, frameIndex) => {
-        checkPropFrame(issues, `${trackPath}[${frameIndex}]`, frame, show, durationSeconds);
-      });
+      checkTrackTimes(issues, trackPath, track, durationSeconds);
+      track.forEach((frame, frameIndex) => checkPropFrame(issues, `${trackPath}[${frameIndex}]`, frame, show));
     }
 
     episode.scenes.forEach((scene, sceneIndex) => {
       const scenePath = `${episodePath}.scenes[${sceneIndex}]`;
       if (scene.sceneNumber !== sceneIndex + 1) {
-        issues.push({
-          path: `${scenePath}.sceneNumber`,
-          message: `expected sceneNumber ${sceneIndex + 1}`,
-        });
+        issues.push({ path: `${scenePath}.sceneNumber`, message: `expected sceneNumber ${sceneIndex + 1}` });
       }
       if (!(scene.locationId in show.locations)) {
-        issues.push({
-          path: `${scenePath}.locationId`,
-          message: `unknown location ${JSON.stringify(scene.locationId)}`,
-        });
+        issues.push({ path: `${scenePath}.locationId`, message: `unknown location ${JSON.stringify(scene.locationId)}` });
       }
       const [start, finish] = scene.timeRangeSeconds;
       if (!(finish > start)) {
-        issues.push({
-          path: `${scenePath}.timeRangeSeconds`,
-          message: "time range must increase",
-        });
+        issues.push({ path: `${scenePath}.timeRangeSeconds`, message: "time range must increase" });
       } else if (start < -1e-6 || finish > durationSeconds + 1e-6) {
         issues.push({
           path: `${scenePath}.timeRangeSeconds`,
           message: `range ${start}..${finish} is outside the episode duration 0..${durationSeconds}`,
         });
       }
-      for (const characterId of scene.characterIds) {
-        if (!(characterId in show.characters)) {
-          issues.push({
-            path: `${scenePath}.characterIds`,
-            message: `unknown character ${JSON.stringify(characterId)}`,
-          });
-        }
-      }
-      checkPerformances(issues, show, episode, scene, scenePath);
-      if (scene.speakerId && !scene.characterIds.includes(scene.speakerId)) {
-        issues.push({
-          path: `${scenePath}.speakerId`,
-          message: `${JSON.stringify(scene.speakerId)} is not in characterIds`,
-        });
-      }
+      checkPerformances(issues, show, scene, scenePath);
       checkSceneSoundWarnings(issues, show, scene, scenePath, soundLint);
-      (scene.requiresParts ?? []).forEach((requirement, requirementIndex) => {
-        const requirementPath = `${scenePath}.requiresParts[${requirementIndex}]`;
-        if (!(requirement.characterId in show.characters)) {
-          issues.push({
-            path: `${requirementPath}.characterId`,
-            message: `unknown character ${JSON.stringify(requirement.characterId)}`,
-          });
-        } else if (!scene.characterIds.includes(requirement.characterId)) {
-          issues.push({
-            path: `${requirementPath}.characterId`,
-            message: `${JSON.stringify(requirement.characterId)} is not in characterIds`,
-          });
+      scene.camera.keyframes.forEach((frame, frameIndex) => {
+        const path = `${scenePath}.camera.keyframes[${frameIndex}]`;
+        if (frameIndex > 0 && frame.timeSeconds <= scene.camera.keyframes[frameIndex - 1].timeSeconds) {
+          issues.push({ path: `${path}.timeSeconds`, message: "keyframe times must increase" });
         }
-        checkPartId(issues, `${requirementPath}.part`, requirement.part);
+        checkCameraFrame(issues, path, frame, start, finish);
       });
-      checkIncreasingTimes(issues, `${scenePath}.camera.keyframes`, scene.camera.keyframes);
-      if (finish > start) {
-        scene.camera.keyframes.forEach((frame, frameIndex) => {
-          checkCameraFrame(
-            issues,
-            `${scenePath}.camera.keyframes[${frameIndex}]`,
-            frame,
-            start,
-            finish,
-          );
-        });
-        checkCameraMeshClearance(issues, show, episode, scene, scenePath);
-      }
       const travel = cameraTravelScore(scene);
       if (travel > CAMERA_TRAVEL_WARN_THRESHOLD) {
         issues.push({
@@ -1129,9 +753,6 @@ function checkSceneSoundWarnings(
   soundLint: SoundLintConfig,
 ) {
   const sound = scene.sound;
-  if (!sound) {
-    return;
-  }
   if (scene.speakerId && sound.bed !== "faint") {
     issues.push({
       path: `${scenePath}.sound.bed`,
@@ -1149,8 +770,7 @@ function checkSceneSoundWarnings(
     }
   });
   if (sound.music.kind === "none") {
-    const location = show.locations[scene.locationId];
-    const ambience = location?.soundscape.ambience ?? "";
+    const ambience = show.locations[scene.locationId]?.soundscape.ambience ?? "";
     const hitAmbience = containsMusicWord(ambience, soundLint.musicConflictWords);
     if (hitAmbience) {
       issues.push({
@@ -1159,10 +779,7 @@ function checkSceneSoundWarnings(
         severity: "warning",
       });
     }
-    const hitEvents = containsMusicWord(
-      sound.events.map((event) => event.text).join(" "),
-      soundLint.musicConflictWords,
-    );
+    const hitEvents = containsMusicWord(sound.events.map((event) => event.text).join(" "), soundLint.musicConflictWords);
     if (hitEvents) {
       issues.push({
         path: `${scenePath}.sound.music`,
@@ -1174,35 +791,30 @@ function checkSceneSoundWarnings(
 }
 
 /**
- * Structure only. Whether parts, faces, and sources are on screen is a 3D
- * question that previs answers from the render.
+ * References and structure. Who is visible, and whether each part, face, and
+ * source is on screen, is answered by content:previs from the render.
  */
-function checkPerformances(
-  issues: ScriptIssue[],
-  show: ShowScript,
-  episode: ShowEpisode,
-  scene: ScriptScene,
-  scenePath: string,
-) {
+function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
   const performances = scene.performances ?? {};
-  for (const characterId of scene.characterIds) {
-    if (!(characterId in performances)) {
-      issues.push({
-        path: `${scenePath}.performances.${characterId}`,
-        message: "every character on camera needs a performance; LTX invents motion it is not given",
-      });
-    }
-  }
-  // LTX sees pixels, not this script's ids. People are placed for it from the
-  // still, and gaze comes from lookAtId, so visual text must not name anyone.
+  // The video model sees pixels, not ids. People are placed for it from the
+  // start frame, and gaze comes from lookAtId, so visual text must not name anyone.
   const namesSomeone = (value: string | undefined) =>
-    Object.keys(show.characters).find((id) =>
-      new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""),
-    );
+    Object.keys(show.characters).find((id) => new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""));
   const visualText: [string, string | undefined][] = [[`${scenePath}.motion`, scene.motion]];
   for (const [characterId, performance] of Object.entries(performances)) {
-    visualText.push([`${scenePath}.performances.${characterId}.action`, performance.action]);
-    visualText.push([`${scenePath}.performances.${characterId}.expression`, performance.expression]);
+    const path = `${scenePath}.performances.${characterId}`;
+    if (!(characterId in show.characters)) {
+      issues.push({ path, message: `unknown character ${JSON.stringify(characterId)}` });
+    }
+    visualText.push([`${path}.action`, performance.action], [`${path}.expression`, performance.expression]);
+    const seen = new Set<string>();
+    performance.parts.forEach((part, partIndex) => {
+      checkPartId(issues, `${path}.parts[${partIndex}]`, part);
+      if (seen.has(part)) {
+        issues.push({ path: `${path}.parts[${partIndex}]`, message: `duplicate part ${JSON.stringify(part)}` });
+      }
+      seen.add(part);
+    });
   }
   for (const [path, value] of visualText) {
     const named = namesSomeone(value);
@@ -1213,49 +825,34 @@ function checkPerformances(
       });
     }
   }
-  for (const [characterId, performance] of Object.entries(performances)) {
-    const path = `${scenePath}.performances.${characterId}`;
-    if (!scene.characterIds.includes(characterId)) {
-      issues.push({ path, message: `${JSON.stringify(characterId)} is not in characterIds` });
+  if (scene.speakerId) {
+    const speaker = performances[scene.speakerId];
+    if (!speaker) {
+      issues.push({ path: `${scenePath}.speakerId`, message: "the speaker needs a performance" });
+    } else if (!speaker.expression) {
+      issues.push({
+        path: `${scenePath}.performances.${scene.speakerId}.expression`,
+        message: "the speaker needs an expression; the still must show the mouth ready to speak (lips slightly parted)",
+      });
     }
-    const seen = new Set<string>();
-    performance.parts.forEach((part, partIndex) => {
-      checkPartId(issues, `${path}.parts[${partIndex}]`, part);
-      if (seen.has(part)) {
-        issues.push({
-          path: `${path}.parts[${partIndex}]`,
-          message: `duplicate part ${JSON.stringify(part)}`,
-        });
-      }
-      seen.add(part);
-    });
-  }
-  if (scene.speakerId && !scene.dialogue) {
-    issues.push({ path: `${scenePath}.dialogue`, message: "required when speakerId is set" });
-  }
-  if (scene.dialogue && !scene.speakerId) {
+    if (!scene.dialogue) {
+      issues.push({ path: `${scenePath}.dialogue`, message: "required when speakerId is set" });
+    }
+  } else if (scene.dialogue) {
     issues.push({ path: `${scenePath}.dialogue`, message: "dialogue needs a speakerId" });
   }
   const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
-  const tracked = episode.spatialTimeline.propTracks ?? {};
   scene.sound.events.forEach((event, eventIndex) => {
     const path = `${scenePath}.sound.events[${eventIndex}].source`;
     const source = event.source;
     if ("characterId" in source) {
-      if (!scene.characterIds.includes(source.characterId)) {
-        issues.push({
-          path: `${path}.characterId`,
-          message: `${JSON.stringify(source.characterId)} is not in characterIds`,
-        });
-        return;
-      }
       checkPartId(issues, `${path}.part`, source.part);
       const moves = performances[source.characterId]?.parts ?? [];
       const speaks = source.characterId === scene.speakerId && source.part === "face";
       if (!moves.includes(source.part) && !speaks) {
         issues.push({
           path: `${path}.part`,
-          message: `${source.characterId}'s ${source.part} makes this sound, but performances.${source.characterId}.parts does not move it; LTX voices the sound and leaves the part still`,
+          message: `${source.characterId}'s ${source.part} makes this sound, but performances.${source.characterId}.parts does not move it; the video model voices the sound and leaves the part still`,
         });
       }
     } else if ("landmarkId" in source) {
@@ -1265,11 +862,8 @@ function checkPerformances(
           message: `unknown landmark ${JSON.stringify(source.landmarkId)} in location ${JSON.stringify(scene.locationId)}`,
         });
       }
-    } else if (!(source.propId in tracked)) {
-      issues.push({
-        path: `${path}.propId`,
-        message: `prop ${JSON.stringify(source.propId)} has no propTracks entry in this episode`,
-      });
+    } else if (!(source.propId in (show.props ?? {}))) {
+      issues.push({ path: `${path}.propId`, message: `unknown prop ${JSON.stringify(source.propId)}` });
     }
   });
 }

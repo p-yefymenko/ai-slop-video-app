@@ -20,6 +20,4 @@ Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 is MIT. BiRefNet removes the plate
 
 Mixamo is not a source. Its terms restrict automated download. People in previs are clay mannequins.
 
-`pnpm run content:landmarks` runs after an empty location's mesh exists. It shades that mesh from known cameras, asks Florence-2 where each landmark name is, and writes `position` into `shows/<id>/script.json`. It skips a location that has people, because those positions, sizes, and appearances are already in the script. Review images land in `output/landmarks/<show>/<locationId>/`. A landmark that already has a position is left alone unless `--force` is set. A landmark the model does not find stays empty. ComfyUI does not need to be running. If ComfyUI is holding the GPU, Florence-2 can run out of memory.
-
-`pnpm run content:asset-deps` installs trimesh, moderngl, transformers, timm, and einops into the ComfyUI Python. trimesh is what glTF and OBJ files need. moderngl draws clay previs. transformers, timm, and einops load Florence-2 for landmark coordinates. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:asset-deps` installs trimesh and moderngl into the ComfyUI Python. trimesh is what glTF and OBJ files need. moderngl draws previs. Do not install `content-pipeline/requirements.txt` into that virtualenv.

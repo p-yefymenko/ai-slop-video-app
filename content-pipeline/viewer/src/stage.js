@@ -103,67 +103,25 @@ export class Stage {
     this._frameView(box);
   }
 
-  async showScene(scene, modelUrl) {
+  /**
+   * Replay the world previs rendered: every mesh once, posed from each sample.
+   * Between samples position, yaw, and camera are interpolated.
+   */
+  async showScene(scene) {
     this.clear();
     this.shot = scene;
-    if (modelUrl) this.root.add(await this._load(modelUrl));
-    for (const landmark of scene.landmarks || []) {
-      if (!landmark.position) continue;
-      if (landmark.model) {
-        const object = await this._load(`/pipeline/output/${landmark.model}`);
-        object.position.set(landmark.position[0], landmark.position[1], landmark.position[2]);
-        this.root.add(object);
-        this.root.add(
-          this._label(
-            landmark.id,
-            "show",
-            landmark.position[0],
-            landmark.position[1] + 0.8,
-            landmark.position[2],
-          ),
-        );
-        continue;
-      }
-      const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35, 12, 8),
-        new THREE.MeshStandardMaterial({ color: 0x7eb6d9 }),
-      );
-      marker.position.set(landmark.position[0], landmark.position[1], landmark.position[2]);
-      this.root.add(marker);
-      this.root.add(
-        this._label(
-          landmark.id,
-          "show",
-          landmark.position[0],
-          landmark.position[1] + 0.8,
-          landmark.position[2],
-        ),
-      );
-    }
+    this.entities = new Map();
     this.characters = new Map();
-    for (const character of scene.characters || []) {
-      const height = Number(character.proxy?.heightMeters) || 1.72;
-      const build = character.proxy?.build || "average";
-      const radius = 0.22 * ({ slim: 0.85, average: 1, broad: 1.15 }[build] || 1);
-      const mesh = new THREE.Mesh(
-        new THREE.CapsuleGeometry(radius, Math.max(height - radius * 2, 0.2), 4, 8),
-        new THREE.MeshStandardMaterial({ color: 0xd9c7b0, roughness: 0.7 }),
-      );
-      mesh.position.y = height / 2;
+    for (const [id, spec] of Object.entries(scene.models || {})) {
       const holder = new THREE.Group();
-      holder.add(mesh);
-      holder.add(this._label(character.id, "show", 0, height + 0.15, 0));
+      holder.add(await this._load(`/pipeline/output/${spec.model}`));
+      if (spec.kind !== "landmark") {
+        const height = new THREE.Box3().setFromObject(holder).max.y;
+        holder.add(this._label(id, "show", 0, height + 0.15, 0));
+      }
       this.root.add(holder);
-      this.characters.set(character.id, holder);
-    }
-    this.props = [];
-    for (const prop of scene.props || []) {
-      const object = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.3, 0.3),
-        new THREE.MeshStandardMaterial({ color: 0xc4a484 }),
-      );
-      this.root.add(object);
-      this.props.push({ spec: prop, object });
+      this.entities.set(id, holder);
+      if (spec.kind === "character") this.characters.set(id, holder);
     }
     this.setMode("god");
     this.setTime((scene.timeRangeSeconds || [0, 0])[0]);
@@ -185,41 +143,35 @@ export class Stage {
   setTime(timeSeconds) {
     this.clock = timeSeconds;
     if (!this.shot) return;
-    const camera = sampleCamera(this.shot.camera?.keyframes || [], timeSeconds);
-    if (camera) {
-      this.shotCamera.position.set(...camera.position);
-      this.shotCamera.up.set(0, 1, 0);
+    const { before, after, amount } = bracket(this.shot.frames || [], timeSeconds);
+    if (!before) return;
+    const camera = after ? mixCamera(before.camera, after.camera, amount) : before.camera;
+    this.shotCamera.position.set(...camera.position);
+    this.shotCamera.up.set(0, 1, 0);
+    this.shotCamera.lookAt(...camera.lookAt);
+    const roll = Number(camera.rollDegrees) || 0;
+    if (roll) {
+      const axis = new THREE.Vector3(...camera.lookAt).sub(this.shotCamera.position).normalize();
+      this.shotCamera.up.applyAxisAngle(axis, THREE.MathUtils.degToRad(roll));
       this.shotCamera.lookAt(...camera.lookAt);
-      const roll = Number(camera.rollDegrees) || 0;
-      if (roll) {
-        const axis = new THREE.Vector3(...camera.lookAt).sub(this.shotCamera.position).normalize();
-        this.shotCamera.up.applyAxisAngle(axis, THREE.MathUtils.degToRad(roll));
-      }
-      this.shotCamera.fov = Number(camera.verticalFovDegrees) || 40;
-      this.shotCamera.updateProjectionMatrix();
-      this.shotCamera.updateMatrixWorld();
     }
-    for (const [id, holder] of this.characters || []) {
-      const character = (this.shot.characters || []).find((item) => item.id === id);
-      const frame = sampleTrack(character?.keyframes || [], timeSeconds);
-      if (!frame?.position) continue;
-      holder.position.set(frame.position[0], frame.position[1], frame.position[2]);
-      holder.rotation.y = Math.PI - THREE.MathUtils.degToRad(Number(frame.bodyYawDegrees) || 0);
+    this.shotCamera.fov = Number(camera.verticalFovDegrees) || 40;
+    this.shotCamera.updateProjectionMatrix();
+    this.shotCamera.updateMatrixWorld();
+    const next = new Map((after?.entities || []).map((item) => [item.id, item]));
+    const present = new Set();
+    for (const item of before.entities) {
+      const holder = this.entities?.get(item.id);
+      if (!holder) continue;
+      const later = next.get(item.id);
+      const position = later ? mix(item.position, later.position, amount) : item.position;
+      const yaw = later ? mixAngle(item.yawDegrees, later.yawDegrees, amount) : item.yawDegrees;
+      holder.position.set(position[0], position[1], position[2]);
+      // Schema yaw turns +Y toward +X around Z up; in glTF that is -yaw around Y.
+      holder.rotation.y = -THREE.MathUtils.degToRad(yaw);
+      present.add(item.id);
     }
-    for (const prop of this.props || []) {
-      const frame = sampleTrack(prop.spec.keyframes || [], timeSeconds);
-      if (frame?.position) {
-        prop.object.position.set(frame.position[0], frame.position[1], frame.position[2]);
-        prop.object.visible = true;
-      } else if (frame?.heldByCharacterId && this.characters?.has(frame.heldByCharacterId)) {
-        const holder = this.characters.get(frame.heldByCharacterId);
-        prop.object.position.copy(holder.position);
-        prop.object.position.y += 1.1;
-        prop.object.visible = true;
-      } else {
-        prop.object.visible = false;
-      }
-    }
+    for (const [id, holder] of this.entities || []) holder.visible = present.has(id);
     this._updateFrustum();
     if (this.onTime) this.onTime(timeSeconds);
   }
@@ -394,32 +346,30 @@ function colorMeshByParts(root) {
   });
 }
 
-function sampleTrack(keyframes, timeSeconds) {
-  if (!keyframes.length) return null;
-  const frames = [...keyframes].sort((a, b) => a.timeSeconds - b.timeSeconds);
-  if (timeSeconds <= frames[0].timeSeconds) return frames[0];
-  if (timeSeconds >= frames[frames.length - 1].timeSeconds) return frames[frames.length - 1];
-  for (let index = 0; index < frames.length - 1; index += 1) {
-    const before = frames[index];
-    const after = frames[index + 1];
-    if (timeSeconds < before.timeSeconds || timeSeconds > after.timeSeconds) continue;
-    const span = Math.max(after.timeSeconds - before.timeSeconds, 1e-6);
-    const amount = (timeSeconds - before.timeSeconds) / span;
-    if (!before.position || !after.position) return before;
-    const sampled = {
-      ...before,
-      position: before.position.map((value, axis) => value + (after.position[axis] - value) * amount),
-    };
-    if (before.lookAt && after.lookAt) {
-      sampled.lookAt = before.lookAt.map((value, axis) => value + (after.lookAt[axis] - value) * amount);
-    }
-    return sampled;
-  }
-  return frames[0];
+function bracket(frames, timeSeconds) {
+  if (!frames.length) return { before: null, after: null, amount: 0 };
+  let index = 0;
+  while (index < frames.length - 1 && frames[index + 1].timeSeconds <= timeSeconds) index += 1;
+  const before = frames[index];
+  const after = frames[index + 1] || null;
+  if (!after) return { before, after: null, amount: 0 };
+  const span = Math.max(after.timeSeconds - before.timeSeconds, 1e-6);
+  return { before, after, amount: Math.min(Math.max((timeSeconds - before.timeSeconds) / span, 0), 1) };
 }
 
-function sampleCamera(keyframes, timeSeconds) {
-  const frame = sampleTrack(keyframes, timeSeconds);
-  if (!frame?.position || !frame.lookAt) return frame;
-  return frame;
+function mix(a, b, amount) {
+  return a.map((value, axis) => value + (b[axis] - value) * amount);
+}
+
+function mixAngle(a, b, amount) {
+  return a + ((((b - a + 180) % 360) + 360) % 360 - 180) * amount;
+}
+
+function mixCamera(a, b, amount) {
+  return {
+    position: mix(a.position, b.position, amount),
+    lookAt: mix(a.lookAt, b.lookAt, amount),
+    verticalFovDegrees: a.verticalFovDegrees + (b.verticalFovDegrees - a.verticalFovDegrees) * amount,
+    rollDegrees: mixAngle(a.rollDegrees || 0, b.rollDegrees || 0, amount),
+  };
 }
