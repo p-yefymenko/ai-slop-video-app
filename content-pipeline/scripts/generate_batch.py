@@ -50,7 +50,7 @@ from pipeline_paths import (
 from previs import current_previs, load_observation, previs_episode
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
-from world import load_show, plate_path, scene_has_spatial_change
+from world import load_show, look_path, scene_has_spatial_change
 
 ROOT = Path(__file__).resolve().parents[1]
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -1029,8 +1029,20 @@ def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], 
     return dest
 
 
+def paint_order(observation: dict) -> list[str]:
+    """Drawn entities, farthest first, so a nearer one is laid over a farther one.
+
+    Solid overlaps are already cut by each ``shown`` mask; the order decides what
+    has no surface to cut by: fire in front of a person behind it. An entity seen
+    only through its effects (no pixel of its own) counts as farthest.
+    """
+    drawn = [(entity_id, entry) for entity_id, entry in observation["entities"].items() if "crop" in entry]
+    drawn.sort(key=lambda item: -(item[1].get("depth") or float("inf")))
+    return [entity_id for entity_id, _entry in drawn]
+
+
 def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
-    """One scene still: everything in the shot drawn alone and pasted in, the empty space drawn around it.
+    """One scene still: everything in the shot drawn alone with its effects and pasted in, the empty space drawn around it.
 
     A drawn entity sees only its own guides (the shot camera magnified onto it),
     its plate, and its own words, so it never borrows another's description and
@@ -1043,14 +1055,13 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
     begin_generation_log(dest)
     inputs = still_inputs_dir(dest)
     drawn = []
-    for entity_id, entry in observation["entities"].items():
-        if "crop" not in entry:
-            continue
+    for entity_id in paint_order(observation):
+        entry = observation["entities"][entity_id]
         files = [
             ("Depth", guide(f"drawn_{entity_id}_depth")),
             ("OwnColor", guide(f"drawn_{entity_id}_color")),
             ("Edges", guide(f"drawn_{entity_id}_edges")),
-            ("Appearance", plate_path(show, entry["kind"], entity_id, scene["locationId"])),
+            ("Appearance", look_path(show, entry["kind"], entity_id, scene["locationId"])),
         ]
         missing = [str(path) for _title, path in files if not present(path)]
         if missing:

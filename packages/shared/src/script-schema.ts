@@ -134,11 +134,22 @@ function vec3(label: string, positive = false) {
   });
 }
 
+const effectSchema = z
+  .object({
+    appearance: text("appearance"),
+    size: vec3("size", true),
+    offset: vec3("offset"),
+  })
+  .strict();
+
+const effectsSchema = z.array(effectSchema, { invalid_type_error: "effects must be an array" }).optional();
+
 const locationLandmarkSchema = z
   .object({
     position: vec3("position"),
     size: vec3("size", true),
     appearance: text("appearance"),
+    effects: effectsSchema,
   })
   .strict();
 
@@ -163,6 +174,7 @@ const showCharacterSchema = z
       (value) => value >= 1.2 && value <= 2.4,
       "heightMeters must be a standing height from 1.2 to 2.4 meters",
     ),
+    effects: effectsSchema,
   })
   .strict();
 
@@ -170,6 +182,7 @@ const showPropSchema = z
   .object({
     appearance: text("appearance"),
     size: vec3("size", true),
+    effects: effectsSchema,
   })
   .strict();
 
@@ -420,6 +433,9 @@ const showScriptSchema = z
         z.string(),
         z
           .object({
+            look: z
+              .object({ materials: text("look.materials"), light: text("look.light") })
+              .strict(),
             backdrop: z
               .object({
                 sky: text("backdrop.sky"),
@@ -641,6 +657,20 @@ function cameraTravelWarnMessage(score: number, threshold: number): string {
   );
 }
 
+// Words for something that is not a solid surface. A mesh built from them would
+// turn fire into a solid shape in every depth guide; they belong in `effects`.
+const EFFECT_WORDS = /\b(fire\w*|flames?|flaming|smoke|smoking|smoulder\w*|smolder\w*|steam\w*|sparks?|embers?|mist|fog|glow\w*|burning|ablaze|lightning)\b/i;
+
+function checkSolid(issues: ScriptIssue[], path: string, value: string) {
+  const found = EFFECT_WORDS.exec(value);
+  if (found) {
+    issues.push({
+      path,
+      message: `${JSON.stringify(found[0])} is not a solid surface and would be built into the mesh; describe it in effects`,
+    });
+  }
+}
+
 function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   const issues: ScriptIssue[] = [];
   const soundLint = loadSoundLint();
@@ -650,17 +680,25 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
       message: `id ${JSON.stringify(show.id)} must match ${source.showIdLabel} ${JSON.stringify(source.showId)}`,
     });
   }
-  for (const characterId of Object.keys(show.characters)) {
+  for (const [characterId, character] of Object.entries(show.characters)) {
     checkSnakeId(issues, `characters.${characterId}`, characterId, "character id");
+    checkSolid(issues, `characters.${characterId}.body`, character.body);
+    character.attributes.forEach((attribute, index) =>
+      checkSolid(issues, `characters.${characterId}.attributes[${index}]`, attribute),
+    );
   }
   for (const [locationId, location] of Object.entries(show.locations)) {
     checkSnakeId(issues, `locations.${locationId}`, locationId, "location id");
-    for (const landmarkId of Object.keys(location.spatial.landmarks)) {
-      checkSnakeId(issues, `locations.${locationId}.spatial.landmarks.${landmarkId}`, landmarkId, "landmark id");
+    checkSolid(issues, `locations.${locationId}.look.materials`, location.look.materials);
+    for (const [landmarkId, landmark] of Object.entries(location.spatial.landmarks)) {
+      const path = `locations.${locationId}.spatial.landmarks.${landmarkId}`;
+      checkSnakeId(issues, path, landmarkId, "landmark id");
+      checkSolid(issues, `${path}.appearance`, landmark.appearance);
     }
   }
-  for (const propId of Object.keys(show.props ?? {})) {
+  for (const [propId, prop] of Object.entries(show.props ?? {})) {
     checkSnakeId(issues, `props.${propId}`, propId, "prop id");
+    checkSolid(issues, `props.${propId}.appearance`, prop.appearance);
     // One object is written once: worn for the whole show it is part of the
     // character's look; a prop is a separate mesh the timeline places.
     const words = propId.split("_");

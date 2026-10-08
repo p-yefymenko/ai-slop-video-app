@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -53,6 +54,7 @@ def show_with(tracks: dict, props: dict | None = None, prop_tracks: dict | None 
         "props": props or {},
         "locations": {
             "room": {
+                "look": {"materials": "worn gray stone", "light": "soft overcast daylight"},
                 "backdrop": {
                     "sky": "a gray sky",
                     "skyColor": [40, 48, 64],
@@ -136,6 +138,17 @@ class EntityTests(unittest.TestCase):
         self.patch.stop()
         self.temp.cleanup()
 
+    def test_an_effect_is_a_box_on_its_host_and_never_in_the_world(self) -> None:
+        here = show_with({"ada": [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0}]})
+        flame = {"appearance": "white-gold flames", "size": [1, 1, 2], "offset": [0, 0, 0.5]}
+        here["locations"]["room"]["spatial"]["landmarks"]["bench"]["effects"] = [flame]
+        entities = world.entities_at(here, here["episodes"][0], scene(), 0)
+        self.assertEqual([e.id for e in entities], ["bench", "ada", "floor"], "an effect is never rendered or measured")
+        box = world.effect_entity(entities[0], 0)
+        low, high = box.bounds()
+        np.testing.assert_allclose(low, [-0.5, 1.5, 0.5])
+        np.testing.assert_allclose(high, [0.5, 2.5, 2.5])
+
     def test_presence_comes_from_the_timeline(self) -> None:
         here = show_with({"ada": [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0}]})
         ids = [e.id for e in world.entities_at(here, here["episodes"][0], scene(), 0)]
@@ -203,6 +216,7 @@ class DescribeTests(unittest.TestCase):
         show = show_with({})
         prompt = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
         self.assertIn("One object, alone", prompt)
+        self.assertIn("The light: soft overcast daylight, the same on everything in the shot.", prompt)
         self.assertIn("One stone bench.", prompt)
 
     def test_the_shot_prompt_names_no_object_only_the_setting(self) -> None:
@@ -220,6 +234,7 @@ class DescribeTests(unittest.TestCase):
         self.assertNotIn("bench", prompt)
         self.assertNotIn("52 years old", prompt)
         self.assertIn("A gray sky.", prompt)
+        self.assertIn("The light: soft overcast daylight", prompt)
         self.assertIn("stone paving", prompt.lower(), "any pixel of the ground in the shot is said")
         self.assertNotIn("open fields", prompt)
 
@@ -231,6 +246,19 @@ class DescribeTests(unittest.TestCase):
         prompt = ltx_prompt(show, shot, start)
         self.assertIn("In the center, adult woman, brown skin: waits.", prompt)
         self.assertIn("No music plays.", prompt)
+        start["effects"] = [{"id": "bench", "appearance": "white-gold flames", "guide": "effect_bench_0"}]
+        self.assertIn("Moving all through the take: white-gold flames.", ltx_prompt(show, shot, start))
+
+    def test_an_effect_is_drawn_with_its_host(self) -> None:
+        show = show_with({})
+        bench = show["locations"]["room"]["spatial"]["landmarks"]["bench"]
+        bench["effects"] = [{"appearance": "white-gold flames", "size": [1, 1, 1], "offset": [0, 0, 1]}]
+        prompt = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
+        self.assertIn("One stone bench, white-gold flames.", prompt)
+        plate = world.plate_path(show, "landmark", "bench", "room")
+        self.assertEqual(world.look_path(show, "landmark", "bench", "room"), plate.with_name("look.png"))
+        del bench["effects"]
+        self.assertEqual(world.look_path(show, "landmark", "bench", "room"), plate)
 
 
 class CheckTests(unittest.TestCase):
@@ -273,10 +301,45 @@ class RenderTests(unittest.TestCase):
             extent = coverage(person, camera)[0][face]
             self.assertEqual(passes(shown, extent, 250), expected, (position, shown, extent))
 
+    def test_fire_in_front_hides_a_face_from_the_checks_but_not_from_the_shot(self) -> None:
+        try:
+            import moderngl  # noqa: F401
+            from render import render
+        except Exception as exc:  # pragma: no cover - machine without a GPU context
+            self.skipTest(f"no GPU context: {exc}")
+        from observe import _seen_through_effects
+
+        vertices, faces = column()
+        mesh = world._region_mesh("box", vertices, faces, None, __import__("body_parts").part_ids_for_vertices(vertices))
+        person = world.Entity("ada", "character", mesh, (0.0, 0.0, 0.0), 0.0, BODY_PARTS)
+        flame = {"appearance": "flames", "size": [1.0, 0.2, 2.0], "offset": [0, 0, 0]}
+        pebble = world._region_mesh("pebble", vertices * 0.01, faces, None, np.zeros(len(vertices), dtype=np.int16))
+        ring = world.Entity("ring", "landmark", pebble, (0.0, 1.0, 0.0), 0.0, ("whole",), (flame,))
+        camera = {"position": [0, 3, 1.6], "lookAt": [0, 0, 1.5], "verticalFovDegrees": 30}
+        frame = render([person, ring], camera)
+        face = BODY_PARTS.index("face") + 1
+        self.assertGreater(int(np.count_nonzero((frame.entity == 1) & (frame.region == face))), 0, "in the shot")
+        seen = _seen_through_effects([person, ring], camera, frame)
+        self.assertEqual(int(np.count_nonzero((seen.entity == 1) & (seen.region == face))), 0, "hidden behind the fire")
+
 
 
 
 class PasteTests(unittest.TestCase):
+    def test_drawings_are_laid_far_to_near(self) -> None:
+        from generate_batch import paint_order
+
+        seen = {
+            "entities": {
+                "ring": {"kind": "landmark", "depth": 6.0, "crop": [0, 0, 1, 1]},
+                "man_behind": {"kind": "character", "depth": 7.5, "crop": [0, 0, 1, 1]},
+                "flames_only": {"kind": "landmark", "depth": None, "crop": [0, 0, 1, 1]},
+                "near": {"kind": "character", "depth": 2.0, "crop": [0, 0, 1, 1]},
+                "sky": {"kind": "backdrop", "pixels": [10, 10]},
+            }
+        }
+        self.assertEqual(paint_order(seen), ["flames_only", "man_behind", "ring", "near"])
+
     def test_a_drawing_lands_only_where_the_shot_shows_its_subject(self) -> None:
         from PIL import Image
 
@@ -310,7 +373,7 @@ class WindowTests(unittest.TestCase):
         from previs import crop_window
 
         with patch("render.screen_box", lambda _entity, _camera: box):
-            return crop_window(None, {})
+            return crop_window(SimpleNamespace(effects=()), {})
 
     def test_a_person_cut_by_the_frame_edge_is_drawn_whole(self) -> None:
         from render import HEIGHT, WIDTH

@@ -12,7 +12,7 @@ import re
 
 from observe import in_shot
 from render import WIDTH
-from world import camera_moves, character_appearance_text, clause, descriptions, settings
+from world import camera_moves, character_appearance_text, clause, definition, descriptions, settings
 
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 PICTURE_LEGEND = {
@@ -109,12 +109,17 @@ def setting_sentences(show: dict, scene: dict, observation: dict) -> str:
     return " ".join(said)
 
 
+def _light(show: dict, scene: dict) -> str:
+    """The location's one light, said in every pass of a still, so separately drawn things match."""
+    return template("stillLight", {"light": clause(show["locations"][scene["locationId"]]["look"]["light"])})
+
+
 def _legend(pictures: list[str]) -> str:
     return " ".join(PICTURE_LEGEND[title].format(n=number) for number, title in enumerate(pictures, start=1))
 
 
 def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: list[str]) -> str:
-    """One person, prop, or landmark drawn whole and alone, from its own guides and only its own words.
+    """One person, prop, or landmark drawn whole and alone, with its effects, from its own guides and only its own words.
 
     The shot keeps only the part of it the camera shows, so nothing here depends
     on what is visible.
@@ -127,12 +132,14 @@ def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: l
             words.append(clause(expression))
     else:
         subject = "One object, alone"
-        words = descriptions(show, scene, kind, entity_id)[0][:1]
+        words = list(descriptions(show, scene, kind, entity_id)[0][:1])
+    words += [clause(effect["appearance"]) for effect in definition(show, kind, entity_id, scene["locationId"]).get("effects") or ()]
     parts = [
         clause(settings()["stillOpening"]) + ".",
         _legend(pictures),
         f"Keep the shape, pose, and turn from the pictures. {subject}, on a plain light gray background.",
         _sentence(", ".join(words)),
+        _light(show, scene),
     ]
     return " ".join(part for part in parts if part)
 
@@ -146,6 +153,7 @@ def still_prompt(show: dict, scene: dict, observation: dict, pictures: list[str]
         "Keep the shape, position, and occlusion from the pictures.",
         "Everything standing in the shot is already painted; draw only what is around it." if drawn else "",
         f"Behind and around: {setting}" if setting else "",
+        _light(show, scene),
     ]
     return " ".join(part for part in parts if part), {"drawn": drawn, "setting": setting}
 
@@ -206,6 +214,9 @@ def ltx_prompt(show: dict, scene: dict, start: dict) -> str:
             parts.append(template("scenePerformanceExpression", {"expression": clause(performance["expression"])}))
     if scene.get("motion"):
         parts.append(template("sceneMotion", {"motion": clause(scene["motion"])}))
+    effects = list(dict.fromkeys(clause(effect["appearance"]) for effect in start.get("effects") or []))
+    if effects:
+        parts.append(template("sceneEffects", {"effects": "; ".join(effects)}))
     if not camera_moves(scene):
         parts.append(template("sceneCameraLocked", {}))
     visual = template("sceneVideo", {"action": " ".join(parts)})

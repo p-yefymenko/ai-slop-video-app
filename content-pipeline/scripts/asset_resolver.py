@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from asset_generate import generate_asset_mesh, plate_is_ready, plate_prompt
+from asset_generate import generate_asset_mesh, object_text, plate_is_ready, plate_prompt
 from asset_sources import materialize_mesh
 from coords import schema_to_gltf
 from mesh_io import (
@@ -58,6 +58,8 @@ class AssetRequest:
     character_id: str | None = None
     prop_id: str | None = None
     position: tuple[float, float, float] | None = None
+    # Appearances of its effects (fire, smoke). Never in the plate or mesh; drawn into ``look.png``.
+    effects: tuple[str, ...] = ()
 
     @property
     def shared(self) -> bool:
@@ -300,11 +302,14 @@ def write_plates(
     output_dir: Path = OUTPUT_DIR,
     refresh: bool = False,
     offline: bool = False,
+    look_writer=None,
 ) -> list[Path]:
     """Draw each entity's plate and leave the mesh for a later step.
 
     A redrawn plate drops the mesh that was built from the previous picture.
     Landmarks and props with the same appearance and size share one picture.
+    An entity with effects also gets ``look.png``, its plate with the effects
+    drawn in: what every still draws it from. The mesh never sees it.
     """
     show_id = str(show["id"])
     plates: list[Path] = []
@@ -326,6 +331,7 @@ def write_plates(
                 _discard_mesh(output_dir, show_id, request)
             print(f"  {request.label}: reuses {source[1]}", flush=True)
             plates.append(plate)
+            _write_look(request, plate, look_writer, refresh=refresh, offline=offline)
             continue
         if not current:
             if offline:
@@ -338,9 +344,30 @@ def write_plates(
             )
         print(f"  {request.label}: {plate}", flush=True)
         plates.append(plate)
+        _write_look(request, plate, look_writer, refresh=refresh, offline=offline)
         if request.shared:
             shared[digest] = (plate, request.label)
     return plates
+
+
+def _write_look(request: AssetRequest, plate: Path, look_writer, *, refresh: bool, offline: bool) -> None:
+    look = plate.with_name("look.png")
+    meta_path = plate.with_name("look.json")
+    if not request.effects:
+        for path in (look, meta_path):
+            if path.is_file():
+                path.unlink()
+        return
+    # Its identity is the plate's pixels and the effects' words.
+    digest = hashlib.sha256(plate.read_bytes() + json.dumps(list(request.effects)).encode("utf-8")).hexdigest()
+    if plate_is_ready(look) and _read_json(meta_path, {}).get("lookHash") == digest and not refresh:
+        print(f"  {request.label}: {look}", flush=True)
+        return
+    if offline or look_writer is None:
+        raise RuntimeError(f"{request.consumer_id}: no look picture at {look}")
+    look_writer(plate, list(request.effects), look)
+    meta_path.write_text(json.dumps({"lookHash": digest, "effects": list(request.effects)}, indent=2), encoding="utf-8")
+    print(f"  {request.label}: {look}", flush=True)
 
 
 def _ids(request: AssetRequest) -> dict:
@@ -366,9 +393,10 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                     label=f"{location_id}/{landmark_id}",
                     size=_vec3(landmark["size"]),
                     location_id=location_id,
-                    appearance=" ".join(landmark["appearance"].split()),
+                    appearance=object_text(landmark["appearance"], location["look"]["materials"]),
                     landmark_id=landmark_id,
                     position=_vec3(landmark["position"]),
+                    effects=_effects(landmark),
                 )
             )
     for prop_id, prop in (show.get("props") or {}).items():
@@ -380,6 +408,7 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 location_id="props",
                 appearance=" ".join(prop["appearance"].split()),
                 prop_id=prop_id,
+                effects=_effects(prop),
             )
         )
     for character_id, character in show["characters"].items():
@@ -392,9 +421,14 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 location_id="characters",
                 appearance=character_appearance_text(character),
                 character_id=character_id,
+                effects=_effects(character),
             )
         )
     return requests
+
+
+def _effects(definition: dict) -> tuple[str, ...]:
+    return tuple(" ".join(effect["appearance"].split()) for effect in definition.get("effects") or ())
 
 
 def description_hash(request: AssetRequest) -> str:

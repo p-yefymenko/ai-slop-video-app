@@ -18,20 +18,37 @@ alwaysApply: false
  */
 
 export type ShowCharacter = {
-  /** Build and skin, visible from every side. Sent whenever any part of them shows. */
+  /** Build and skin. Also how the video prompt points at this person. */
   body: string;
   /**
-   * One clause per detail, tagged with the parts it lives on. Age goes on
-   * "face", eye color on "eyes", a tattoo on "neck". A still sends a clause
-   * only when one of its parts is visible in that camera.
+   * One plain clause per detail: age, hair, clothes, scars. Every still draws
+   * the whole person from `body` plus these, from the camera's angle, and keeps
+   * only what the shot shows; you never think about what is visible.
    */
-  attributes: { text: string; parts: BodyPart[] }[];
+  attributes: string[];
   /** Standing height in meters. The mesh is fitted to it. */
   heightMeters: number;
+  effects?: Effect[];
 };
 
 /** `[X right, Y forward, Z up]` in meters. */
 export type Vec3 = [number, number, number];
+
+/**
+ * Fire, smoke, steam, sparks, glow: anything that is not a solid surface.
+ * Never write it into `appearance`, `body`, or an attribute (validation rejects
+ * flame, smoke, glow, and the like there): a mesh would turn it into a solid
+ * shape. A fire ring's appearance is the stone ring and its bowl; the flames
+ * are an effect. Every still draws the object with its effects, which may
+ * land only in the effect's box; the video animates them freely.
+ */
+export type Effect = {
+  appearance: string;
+  /** The box it fills, `[width X, depth Y, height Z]`. */
+  size: Vec3;
+  /** Base center of the box relative to the object's base center, turned with it. */
+  offset: Vec3;
+};
 
 export type LocationLandmark = {
   /** Base center. */
@@ -39,12 +56,13 @@ export type LocationLandmark = {
   /** `[width X, depth Y, height Z]`. The mesh is fitted into this box. */
   size: Vec3;
   /**
-   * One object, alone: no people, camera, or surrounding place. Qwen draws it,
-   * TRELLIS.2 meshes it, and a still names it whenever it is visible.
-   * A place seen from far away (a hanging citadel, a ship at sea) is one
-   * landmark as large as the location.
+   * One solid object, alone: no people, camera, surrounding place, or effects.
+   * Qwen draws it, TRELLIS.2 meshes it, and every still that shows any of it
+   * draws it alone from that picture. A place seen from far away (a hanging
+   * citadel, a ship at sea) is one landmark as large as the location.
    */
   appearance: string;
+  effects?: Effect[];
 };
 
 export type StageGeometry = {
@@ -57,6 +75,14 @@ export type StageGeometry = {
 };
 
 export type ShowLocation = {
+  /**
+   * One look shared by everything here. Each object and person is drawn alone,
+   * so only these shared words make them belong to one place. `materials` (no
+   * effects) is added to every landmark's plate: write a landmark's shape and
+   * parts in its `appearance`, not a material that fights this one. `light` is
+   * added to every pass of every still here.
+   */
+  look: { materials: string; light: string };
   /** What fills empty space: sky, ground inside the location, and the horizon beyond, each with a flat color. */
   backdrop: {
     sky: string; skyColor: [number, number, number];
@@ -249,6 +275,7 @@ export type ShowProp = {
    */
   appearance: string;
   size: Vec3;
+  effects?: Effect[];
 };
 
 export type ShowScript = {

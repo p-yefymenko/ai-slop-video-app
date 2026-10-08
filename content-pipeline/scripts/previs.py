@@ -34,7 +34,7 @@ from pipeline_paths import (
     scene_description_path,
 )
 from render import HEIGHT, WIDTH, render
-from world import camera_at, entities_at, load_show, required_meshes, scene_has_spatial_change
+from world import camera_at, effect_entity, entities_at, load_show, required_meshes, scene_has_spatial_change
 
 BLOCKOUT_FPS = 8
 # Plate color is banded across nearby shades; one band is one flat area.
@@ -167,7 +167,7 @@ DRAWN_ALONE = ("character", "prop", "landmark")
 
 
 def crop_window(entity, camera: dict) -> list[float] | None:
-    """A frame-shaped window around the whole entity, so it is always drawn whole.
+    """A frame-shaped window around the whole entity and its effects, so it is always drawn whole.
 
     A person cut by the frame edge is still a whole person in its window (the
     window may run past the frame); the shot keeps only what it shows. Only an
@@ -176,10 +176,12 @@ def crop_window(entity, camera: dict) -> list[float] | None:
     """
     from render import screen_box
 
-    box = screen_box(entity, camera)
-    if box is None:
+    parts = [entity, *(effect_entity(entity, number) for number in range(len(entity.effects)))]
+    boxes = [box for box in (screen_box(part, camera) for part in parts) if box is not None]
+    if not boxes:
         return None
-    x0, y0, x1, y1 = box
+    x0, y0 = min(box[0] for box in boxes), min(box[1] for box in boxes)
+    x1, y1 = max(box[2] for box in boxes), max(box[3] for box in boxes)
     if min(x1, WIDTH) <= max(x0, 0.0) or min(y1, HEIGHT) <= max(y0, 0.0):
         return None
     height = max((y1 - y0) * 1.06, (x1 - x0) * 1.06 * HEIGHT / WIDTH, 16.0)
@@ -197,19 +199,28 @@ def crop_window(entity, camera: dict) -> list[float] | None:
 
 # A drawn outline may differ from the mesh by this much (hair, cloth), and is softened over it.
 SHOWN_GROW_PIXELS = 4
+# Flames and smoke spill past their box, and fade out over a wider edge.
+EFFECT_GROW_PIXELS = 8
 
 
-def shown_mask(frame, entities, index: int, alone) -> Image.Image:
+def shown_mask(frame, entities, index: int, alone, effects=()) -> Image.Image:
     """Soft mask of where the shot shows this entity: its rendered silhouette, grown a
-    little so the drawing's own hair and cloth edges survive, minus what is in front.
+    little so the drawing's own hair and cloth edges survive, plus the boxes of its
+    effects (``effects``: each box rendered alone), minus what is in front.
 
-    A drawing can never land outside it, whatever was drawn.
+    A drawing can never land outside it, whatever was drawn. The entity does not
+    hide its own effects: its drawing already has them in front of or behind it.
     """
     from scipy import ndimage
 
-    silhouette = ndimage.binary_dilation(np.isfinite(alone.depth), iterations=SHOWN_GROW_PIXELS)
-    shown = silhouette & ~hidden_mask(frame, entities, index, alone)
-    soft = ndimage.gaussian_filter(shown.astype(np.float32), sigma=1.0)
+    def part(render_alone, grow: int, sigma: float) -> np.ndarray:
+        inside = ndimage.binary_dilation(np.isfinite(render_alone.depth), iterations=grow)
+        shown = inside & ~hidden_mask(frame, entities, index, render_alone)
+        return ndimage.gaussian_filter(shown.astype(np.float32), sigma=sigma)
+
+    soft = part(alone, SHOWN_GROW_PIXELS, 1.0)
+    for effect in effects:
+        soft = np.maximum(soft, part(effect, EFFECT_GROW_PIXELS, 3.0))
     return Image.fromarray(np.rint(np.clip(soft, 0, 1) * 255).astype(np.uint8))
 
 
@@ -234,8 +245,9 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
     """Scene guides, and for each person, prop, and landmark in the shot its own guides, drawn alone.
 
     The crop is the same camera magnified onto its part of the frame, so pose and
-    turn are exactly the shot's. ``drawn_<id>_shown`` is where the shot shows it,
-    the only place its drawing may land.
+    turn are exactly the shot's. ``drawn_<id>_shown`` is where the shot shows it
+    and its effects, the only place its drawing may land. The guides show only
+    its solid mesh: an effect is drawn from its look picture and words.
     """
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
     location = show["locations"][scene["locationId"]]
@@ -246,8 +258,13 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         guide_path(*ids, label, "edges"): edge_image(frame.depth),
         guide_path(*ids, label, "color"): color_image(frame, entities, labels, location["backdrop"]),
     }
+    observation["effects"] = []
     for index, entity in enumerate(entities):
-        if entity.kind not in DRAWN_ALONE or not in_shot(observation, entity.id):
+        if entity.kind not in DRAWN_ALONE:
+            continue
+        effects = [render([effect_entity(entity, number)], camera) for number in range(len(entity.effects))]
+        seen = [bool(np.isfinite(effect.depth).any()) for effect in effects]
+        if not in_shot(observation, entity.id) and not any(seen):
             continue
         crop = crop_window(entity, camera)
         if crop is None:
@@ -257,8 +274,12 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         images[guide_path(*ids, label, f"{prefix}_depth")] = depth_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_edges")] = edge_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_color")] = color_image(alone, [entity], None, None)
-        images[guide_path(*ids, label, f"{prefix}_shown")] = shown_mask(frame, entities, index, render([entity], camera))
+        shown = shown_mask(frame, entities, index, render([entity], camera), effects)
+        images[guide_path(*ids, label, f"{prefix}_shown")] = shown
         observation["entities"][entity.id]["crop"] = crop
+        observation["effects"] += [
+            {"id": entity.id, "appearance": effect["appearance"]} for effect, visible in zip(entity.effects, seen) if visible
+        ]
     for path, image in images.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         image.save(path)

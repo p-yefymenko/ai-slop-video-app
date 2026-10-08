@@ -181,6 +181,8 @@ class Entity:
     offset: Vec3
     yaw_degrees: float
     regions: tuple[str, ...]
+    # Fire, smoke, glow: the script's ``effects``, never part of the mesh.
+    effects: tuple[dict, ...] = ()
 
     def to_world(self, local: np.ndarray) -> np.ndarray:
         yaw = math.radians(self.yaw_degrees)
@@ -283,8 +285,23 @@ def mesh_path(show: dict, kind: str, entity_id: str, location_id: str | None = N
 
 
 def plate_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
-    """The picture an entity is drawn from: how it looks."""
+    """The picture its mesh is built from: the solid entity alone, without effects."""
     return asset_dir(show, "plates", kind, entity_id, location_id) / "plate.png"
+
+
+def definition(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> dict:
+    """The script's entry for a character, prop, or landmark."""
+    if kind == "character":
+        return show["characters"][entity_id]
+    if kind == "prop":
+        return show["props"][entity_id]
+    return show["locations"][location_id]["spatial"]["landmarks"][entity_id]
+
+
+def look_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
+    """The picture a still draws it from: its plate, with its effects drawn in when it has any."""
+    plate = plate_path(show, kind, entity_id, location_id)
+    return plate.with_name("look.png") if definition(show, kind, entity_id, location_id).get("effects") else plate
 
 
 def required_meshes(show: dict) -> list[Path]:
@@ -350,6 +367,7 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
                 tuple(float(v) for v in landmark["position"]),
                 0.0,
                 WHOLE,
+                tuple(landmark.get("effects") or ()),
             )
         )
     people: dict[str, Entity] = {}
@@ -364,6 +382,7 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
             tuple(float(v) for v in state["position"]),
             yaw,
             BODY_PARTS,
+            tuple(show["characters"][cid].get("effects") or ()),
         )
     found.extend(people.values())
     for pid, state in props.items():
@@ -378,10 +397,33 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
             offset, yaw = tuple(float(v) for v in state["position"]), 0.0
         else:
             continue
-        found.append(Entity(pid, "prop", load_mesh(mesh_path(show, "prop", pid), body=False), offset, yaw, WHOLE))
+        effects = tuple(show["props"][pid].get("effects") or ())
+        found.append(Entity(pid, "prop", load_mesh(mesh_path(show, "prop", pid), body=False), offset, yaw, WHOLE, effects))
     if camera_inside(camera_at(scene, time_seconds), spatial["sizeMeters"]):
         found.append(Entity(FLOOR_ID, "floor", _floor_mesh(spatial["sizeMeters"]), (0.0, 0.0, 0.0), 0.0, WHOLE))
     return found
+
+
+def effect_entity(host: Entity, index: int) -> Entity:
+    """One of the host's effects as the box it fills, placed and turned with the host.
+
+    It is never in ``entities_at``: nothing renders, measures, or collides with
+    it. Only the still uses its outline: the host's drawing, effect included,
+    may land there.
+    """
+    effect = host.effects[index]
+    (width, depth, height), (x, y, z) = effect["size"], effect["offset"]
+    corners = np.array(
+        [[x + sx * width / 2, y + sy * depth / 2, z + sz * height] for sz in (0, 1) for sy in (-1, 1) for sx in (-1, 1)],
+        dtype=np.float64,
+    )
+    faces = np.array(
+        [[0, 2, 1], [1, 2, 3], [4, 5, 6], [5, 7, 6], [0, 1, 4], [1, 5, 4],
+         [2, 6, 3], [3, 6, 7], [0, 4, 2], [2, 4, 6], [1, 3, 5], [3, 7, 5]],
+        dtype=np.uint32,
+    )
+    box = _region_mesh(f"effect:{host.id}:{index}:{effect['size']}:{effect['offset']}", corners, faces, None, np.zeros(8, dtype=np.int16))
+    return Entity(f"{host.id}_effect_{index}", "effect", box, host.offset, host.yaw_degrees, WHOLE)
 
 
 def plate_clause(text: str) -> str:

@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_generate import generate_asset_plate  # noqa: E402
+from asset_generate import generate_asset_plate, generate_look_plate  # noqa: E402
 from mesh_io import TRIANGLE_BUDGET, require_triangle_budget  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
@@ -74,6 +74,7 @@ def main() -> None:
                 generate_asset_plate,
                 refresh=args.force or args.refresh,
                 offline=args.offline,
+                look_writer=generate_look_plate,
             )
             print(f"{show_id_for_script(script)}: {len(plates)} plates")
         print("Review the plates, then run `pnpm run content:assets`.")

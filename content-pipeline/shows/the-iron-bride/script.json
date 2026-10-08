@@ -79,6 +79,10 @@
   },
   "locations": {
     "sky_forge_exterior": {
+      "look": {
+        "materials": "black forged iron, soot-streaked",
+        "light": "ash-dimmed storm light from above and an orange molten glow from far below"
+      },
       "backdrop": {
         "sky": "storm ash, slag-gold fire in the clouds, and broken sky-chains",
         "skyColor": [
@@ -127,6 +131,10 @@
       }
     },
     "sun_well_court": {
+      "look": {
+        "materials": "rain-wet black basalt and dark forged iron, worn smooth",
+        "light": "cold blue-gray storm light from above, a rain-wet sheen on every surface"
+      },
       "backdrop": {
         "sky": "storm sky of ash and blue-black cloud",
         "skyColor": [
@@ -163,9 +171,24 @@
             "size": [
               2.2,
               2.2,
-              1.2
+              0.55
             ],
-            "appearance": "One low circular stone fire ring with a bowl of white-gold flame, a single object, no courtyard."
+            "appearance": "One low circular ring of stone blocks around an empty iron bowl, a single object, no courtyard.",
+            "effects": [
+              {
+                "appearance": "tall white-gold flames rising from the iron bowl",
+                "size": [
+                  1.1,
+                  1.1,
+                  1.3
+                ],
+                "offset": [
+                  0,
+                  0,
+                  0.35
+                ]
+              }
+            ]
           },
           "anvil_altar": {
             "position": [
@@ -204,7 +227,7 @@
               0.8,
               4.2
             ],
-            "appearance": "One twisted marble column standing alone, no base building and no second column."
+            "appearance": "One twisted stone column standing alone, no base building and no second column."
           },
           "gate_column_r": {
             "position": [
@@ -217,7 +240,7 @@
               0.8,
               4.2
             ],
-            "appearance": "One twisted marble column standing alone, no base building and no second column."
+            "appearance": "One twisted stone column standing alone, no base building and no second column."
           }
         }
       },
@@ -322,7 +345,7 @@
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                0,
+                1.3,
                 6,
                 0
               ],
@@ -333,7 +356,7 @@
               "timeSeconds": 45,
               "locationId": "sun_well_court",
               "position": [
-                0,
+                1.3,
                 6,
                 0
               ],
@@ -344,7 +367,7 @@
               "timeSeconds": 47,
               "locationId": "sun_well_court",
               "position": [
-                0,
+                1.3,
                 7.4,
                 0
               ],
@@ -355,7 +378,7 @@
               "timeSeconds": 60,
               "locationId": "sun_well_court",
               "position": [
-                0,
+                1.3,
                 7.4,
                 0
               ],
@@ -414,7 +437,7 @@
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                1.9,
+                3.2,
                 6.6,
                 0
               ],
@@ -425,7 +448,7 @@
               "timeSeconds": 45,
               "locationId": "sun_well_court",
               "position": [
-                1.9,
+                3.2,
                 6.6,
                 0
               ],
@@ -436,7 +459,7 @@
               "timeSeconds": 47,
               "locationId": "sun_well_court",
               "position": [
-                2.5,
+                3.8,
                 7.9,
                 0
               ],
@@ -447,7 +470,7 @@
               "timeSeconds": 60,
               "locationId": "sun_well_court",
               "position": [
-                2.5,
+                3.8,
                 7.9,
                 0
               ],
@@ -588,10 +611,6 @@
             "nira": {
               "action": "stands motionless in the line of nobles, watching",
               "parts": []
-            },
-            "kesh": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
             }
           },
           "motion": "White-gold fire stands in the well like a blade, flickering",
@@ -612,140 +631,6 @@
         },
         {
           "sceneNumber": 3,
-          "locationId": "sun_well_court",
-          "storyBeat": "The condemned bride is seen before she is allowed a voice.",
-          "timeRangeSeconds": [
-            4,
-            6
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 4,
-                "position": [
-                  -1.1,
-                  -0.25,
-                  1.49
-                ],
-                "lookAt": [
-                  -1.4,
-                  -2,
-                  1.32
-                ],
-                "verticalFovDegrees": 24
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "stands silent; she slowly lifts her chin and her jaw tightens, her gaze steady",
-              "parts": [
-                "face",
-                "neck"
-              ],
-              "expression": "fear held under hard defiance: jaw set, brows low and level, eyes glassy but unblinking, lips pressed together"
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "the iron collar creaks softly as she lifts her chin",
-                "source": {
-                  "characterId": "sela",
-                  "part": "neck"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 4,
-          "locationId": "sun_well_court",
-          "storyBeat": "The well proves it can unmake a body, so the threat is physical.",
-          "timeRangeSeconds": [
-            6,
-            8
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 6,
-                "position": [
-                  0,
-                  -7.2,
-                  1.8
-                ],
-                "lookAt": [
-                  0,
-                  4.5,
-                  2.4
-                ],
-                "verticalFovDegrees": 44
-              },
-              {
-                "timeSeconds": 8,
-                "position": [
-                  0,
-                  -5.8,
-                  2.4
-                ],
-                "lookAt": [
-                  0,
-                  4.5,
-                  4
-                ],
-                "verticalFovDegrees": 38
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "stands still under guard, breathing slowly",
-              "parts": []
-            },
-            "tomas": {
-              "action": "stands still, watching her",
-              "parts": []
-            },
-            "vardan": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "nira": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "kesh": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "rhel": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            }
-          },
-          "motion": "A column of white fire punches from the well into the storm",
-          "sound": {
-            "events": [
-              {
-                "text": "a column of fire punches upward with a roaring blast and crackling heat",
-                "source": {
-                  "landmarkId": "sun_well"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 5,
           "locationId": "sun_well_court",
           "storyBeat": "The outsider and the last prince are spatially trapped in front of the priesthood.",
           "timeRangeSeconds": [
@@ -849,7 +734,7 @@
           }
         },
         {
-          "sceneNumber": 6,
+          "sceneNumber": 4,
           "locationId": "sun_well_court",
           "storyBeat": "The high priest sentences her in front of his wall of rank.",
           "speakerId": "vardan",
@@ -867,7 +752,7 @@
                   1.68
                 ],
                 "lookAt": [
-                  0.0,
+                  1.3,
                   6.0,
                   1.71
                 ],
@@ -906,183 +791,7 @@
           }
         },
         {
-          "sceneNumber": 7,
-          "locationId": "sun_well_court",
-          "storyBeat": "The prince is forced to answer while still standing in the priest's eyeline.",
-          "timeRangeSeconds": [
-            15,
-            17
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 15,
-                "position": [
-                  2.4,
-                  -6,
-                  1.58
-                ],
-                "lookAt": [
-                  0.75,
-                  0.4,
-                  1.48
-                ],
-                "verticalFovDegrees": 42
-              }
-            ]
-          },
-          "performances": {
-            "tomas": {
-              "action": "stands rigid, jaw locked, nostrils flaring under the priest's stare, coat whipping in the wind",
-              "parts": [
-                "torso"
-              ]
-            },
-            "vardan": {
-              "action": "stands motionless, waiting, eyes fixed on him",
-              "parts": [
-                "eyes"
-              ],
-              "expression": "cold patience: lids half lowered, mouth a flat line lifting faintly at one corner in contempt"
-            },
-            "nira": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "kesh": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "rhel": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "torn coat fabric flutters in the well wind",
-                "source": {
-                  "characterId": "tomas",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 8,
-          "locationId": "sun_well_court",
-          "storyBeat": "Tomas claims her house is still alive, which is treason if he is wrong.",
-          "speakerId": "tomas",
-          "timeRangeSeconds": [
-            17,
-            22
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 17.0,
-                "position": [
-                  1.6,
-                  1.4,
-                  1.62
-                ],
-                "lookAt": [
-                  1.3,
-                  -2.2,
-                  1.6
-                ],
-                "verticalFovDegrees": 50
-              }
-            ]
-          },
-          "performances": {
-            "tomas": {
-              "action": "leans toward the priests, urgent, chest heaving",
-              "parts": [
-                "torso"
-              ],
-              "expression": "urgent and pleading: brows raised, lips parted mid-breath"
-            }
-          },
-          "dialogue": {
-            "line": "She is the last Voss. You cannot burn a living house.",
-            "delivery": "strained, loud; urgent, clear articulation"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "coat cloth rustles with his urgent breath",
-                "source": {
-                  "characterId": "tomas",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 9,
-          "locationId": "sun_well_court",
-          "storyBeat": "The priesthood answers the claim with a hand, not a debate.",
-          "timeRangeSeconds": [
-            22,
-            24
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 22,
-                "position": [
-                  2.65,
-                  3.35,
-                  1.18
-                ],
-                "lookAt": [
-                  1.9,
-                  6.6,
-                  1.08
-                ],
-                "verticalFovDegrees": 22
-              }
-            ]
-          },
-          "performances": {
-            "kesh": {
-              "action": "slowly closes his armored gauntlet into a fist at chest height; his body stays motionless",
-              "parts": [
-                "hands"
-              ],
-              "expression": "flat, dutiful contempt: eyes hooded, mouth a thin hard line"
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "the gauntlet closes with a heavy iron clack",
-                "source": {
-                  "characterId": "kesh",
-                  "part": "hands"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 10,
+          "sceneNumber": 5,
           "locationId": "sun_well_court",
           "storyBeat": "The marshal erases House Voss in public so the well can take her.",
           "speakerId": "nira",
@@ -1143,7 +852,7 @@
           }
         },
         {
-          "sceneNumber": 11,
+          "sceneNumber": 6,
           "locationId": "sun_well_court",
           "storyBeat": "Sela walks toward the machine that is supposed to kill her.",
           "timeRangeSeconds": [
@@ -1219,7 +928,7 @@
           }
         },
         {
-          "sceneNumber": 12,
+          "sceneNumber": 7,
           "locationId": "sun_well_court",
           "storyBeat": "The well answers her blood before she speaks.",
           "timeRangeSeconds": [
@@ -1286,192 +995,7 @@
           }
         },
         {
-          "sceneNumber": 13,
-          "locationId": "sun_well_court",
-          "storyBeat": "She turns the sentence back on the priesthood.",
-          "speakerId": "sela",
-          "timeRangeSeconds": [
-            33,
-            38
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 33,
-                "position": [
-                  -0.25,
-                  7.7,
-                  1.66
-                ],
-                "lookAt": [
-                  0,
-                  2.2,
-                  1.48
-                ],
-                "verticalFovDegrees": 28
-              }
-            ]
-          },
-          "performances": {
-            "vardan": {
-              "action": "stands rigid in the foreground",
-              "parts": [
-                "torso"
-              ]
-            },
-            "sela": {
-              "action": "holds her ground, chin level, eyes locked on him",
-              "parts": [
-                "face",
-                "neck"
-              ],
-              "expression": "calm certainty: level unblinking gaze, jaw quietly set"
-            }
-          },
-          "dialogue": {
-            "line": "Then the well will refuse you.",
-            "delivery": "low, final; quiet, certain, no blink"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "the iron collar ticks as she holds her ground",
-                "source": {
-                  "characterId": "sela",
-                  "part": "neck"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 14,
-          "locationId": "sun_well_court",
-          "storyBeat": "The fire fails to take her, so the machine has chosen.",
-          "timeRangeSeconds": [
-            38,
-            40
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 38,
-                "position": [
-                  1.05,
-                  0.91,
-                  0.34
-                ],
-                "lookAt": [
-                  0,
-                  2.8,
-                  0.25
-                ],
-                "verticalFovDegrees": 48
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "stands motionless in the fire, the wrap hem stirring in the heat",
-              "parts": [
-                "legs"
-              ]
-            },
-            "nira": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "rhel": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            }
-          },
-          "motion": "White-gold flames lick around her bare feet",
-          "sound": {
-            "events": [
-              {
-                "text": "fire hisses and pops around bare feet without burning",
-                "source": {
-                  "landmarkId": "sun_well"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 15,
-          "locationId": "sun_well_court",
-          "storyBeat": "Vardan names the political cost of a well that will not kill her.",
-          "speakerId": "vardan",
-          "timeRangeSeconds": [
-            40,
-            45
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 40,
-                "position": [
-                  2.63,
-                  4.52,
-                  1.62
-                ],
-                "lookAt": [
-                  0,
-                  6,
-                  1.62
-                ],
-                "verticalFovDegrees": 15
-              }
-            ]
-          },
-          "performances": {
-            "vardan": {
-              "action": "bares his teeth as he speaks, precise",
-              "parts": [
-                "face"
-              ],
-              "expression": "fury breaking through ceremony: brows crushed down, nostrils flared, lips parted over clenched teeth"
-            },
-            "nira": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "rhel": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            }
-          },
-          "dialogue": {
-            "line": "If it spares her, it names her empress.",
-            "delivery": "harsh, rising"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "breath tears through clenched teeth over still armor",
-                "source": {
-                  "characterId": "vardan",
-                  "part": "face"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 16,
+          "sceneNumber": 8,
           "locationId": "sun_well_court",
           "storyBeat": "The wall of rank breaks, proving they believed the well would obey them.",
           "timeRangeSeconds": [
@@ -1537,176 +1061,6 @@
                 "source": {
                   "characterId": "nira",
                   "part": "torso"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 17,
-          "locationId": "sun_well_court",
-          "storyBeat": "She offers them the same death they wrote for her.",
-          "speakerId": "sela",
-          "timeRangeSeconds": [
-            47,
-            52
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 47,
-                "position": [
-                  0,
-                  6.32,
-                  2.64
-                ],
-                "lookAt": [
-                  0,
-                  2.4,
-                  1.5
-                ],
-                "verticalFovDegrees": 26
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "holds still as the glowing collar pulses at her throat; the corners of her mouth lift toward a smile",
-              "parts": [
-                "face",
-                "neck"
-              ],
-              "expression": "cold, lethal calm: steady unblinking eyes, the corners of her mouth lifting toward a smile"
-            },
-            "tomas": {
-              "action": "stands still, watching her",
-              "parts": []
-            }
-          },
-          "dialogue": {
-            "line": "Then kneel. Or burn.",
-            "delivery": "soft, lethal; almost a smile, no shout"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "the glowing collar hums with a low slag-gold vibration",
-                "source": {
-                  "characterId": "sela",
-                  "part": "neck"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 18,
-          "locationId": "sun_well_court",
-          "storyBeat": "The last prince realizes he crowned her by defending her.",
-          "timeRangeSeconds": [
-            52,
-            55
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 52,
-                "position": [
-                  1.06,
-                  -0.41,
-                  1.62
-                ],
-                "lookAt": [
-                  1.3,
-                  -2.2,
-                  1.5
-                ],
-                "verticalFovDegrees": 22
-              }
-            ]
-          },
-          "performances": {
-            "tomas": {
-              "action": "stands frozen, staring; his chest jerks as his lips part on a sharp caught breath, and his face slowly opens from shock into awe",
-              "parts": [
-                "face",
-                "torso"
-              ],
-              "expression": "shock breaking into awe: eyes widening, brows lifting, lips parting"
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "coat fabric settles as his breath catches",
-                "source": {
-                  "characterId": "tomas",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 19,
-          "locationId": "sky_forge_exterior",
-          "storyBeat": "The citadel's chains fail, so her claim can drop the kingdom.",
-          "timeRangeSeconds": [
-            55,
-            60
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 55,
-                "position": [
-                  38,
-                  -92,
-                  48
-                ],
-                "lookAt": [
-                  0,
-                  22,
-                  58
-                ],
-                "verticalFovDegrees": 58
-              },
-              {
-                "timeSeconds": 60,
-                "position": [
-                  28,
-                  -74,
-                  64
-                ],
-                "lookAt": [
-                  0,
-                  18,
-                  72
-                ],
-                "verticalFovDegrees": 52
-              }
-            ]
-          },
-          "performances": {},
-          "motion": "Sky-chains above the citadel snap, throwing gold sparks into the storm",
-          "sound": {
-            "events": [
-              {
-                "text": "sky-chains snap with sharp metal cracks and gold sparks hiss into the storm",
-                "source": {
-                  "landmarkId": "citadel"
                 }
               }
             ],

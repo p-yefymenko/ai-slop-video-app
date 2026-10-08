@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from render import HEIGHT, WIDTH, camera_basis, coverage, render
-from world import camera_at, entities_at, settings
+from world import camera_at, effect_entity, entities_at, settings
 
 BACKDROP = ("sky", "ground", "surround")
 
@@ -94,6 +94,22 @@ def backdrop_labels(camera: dict, frame, entities, size) -> np.ndarray:
     return labels
 
 
+def _seen_through_effects(entities, camera, frame):
+    """The frame as the checks see it: fire, smoke, or steam in front hides what is behind.
+
+    Effects are never in the guides, the clay, or the depth video; only what
+    counts as visible accounts for them. Without effects this is the frame.
+    """
+    boxes = [effect_entity(entity, number) for entity in entities for number in range(len(entity.effects))]
+    if not boxes:
+        return frame
+    blocked = render([*entities, *boxes], camera, full=False)
+    hidden = blocked.entity > len(entities)
+    blocked.entity[hidden] = 0
+    blocked.region[hidden] = 0
+    return blocked
+
+
 def observe(show: dict, episode: dict, scene: dict, time_seconds: float, full: bool = True):
     """Render this moment and measure it. Returns (observation, frame, backdrop labels, entities).
 
@@ -104,8 +120,10 @@ def observe(show: dict, episode: dict, scene: dict, time_seconds: float, full: b
     camera = camera_at(scene, time_seconds)
     entities = entities_at(show, episode, scene, time_seconds)
     frame = render(entities, camera, full=full)
-    codes = frame.entity.astype(np.int32) * 256 + frame.region
+    seen = _seen_through_effects(entities, camera, frame)
+    codes = seen.entity.astype(np.int32) * 256 + seen.region
     counts = np.bincount(codes.ravel(), minlength=256 * (len(entities) + 1))
+    # In shot at all (drawn into the still) counts what is behind an effect too.
     shown_total = np.bincount(frame.entity.ravel(), minlength=len(entities) + 1)
     if full:
         x_sum = np.bincount(frame.entity.ravel(), weights=np.tile(np.arange(WIDTH, dtype=np.float64), HEIGHT), minlength=len(entities) + 1)

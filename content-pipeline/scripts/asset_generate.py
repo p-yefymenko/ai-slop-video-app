@@ -32,6 +32,15 @@ UPSAMPLE_RESOLUTION = 1024
 PIXAL3D_PAD = 1.1
 
 
+def object_text(appearance: str, materials: str) -> str:
+    """A landmark's own words plus its location's shared materials."""
+    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
+    template = prompts.get("landmarkMaterials")
+    if not isinstance(template, str) or "{materials}" not in template:
+        raise RuntimeError(f"{PROMPTS_PATH} is missing a landmarkMaterials template with {{materials}}")
+    return f"{' '.join(appearance.split())} {template.replace('{materials}', ' '.join(materials.split()))}"
+
+
 def plate_prompt(appearance: str, *, character: bool = False) -> str:
     """A character, or one isolated object (a landmark or a prop)."""
     prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
@@ -293,6 +302,32 @@ def _paint_plate_texture(graph: dict, seed: int) -> None:
         "inputs": {"mesh": ["22", 0], "voxel_colors": ["36", 0]},
     }
     graph["23"]["inputs"]["mesh"] = ["37", 0]
+
+
+def look_prompt(effects: list[str]) -> str:
+    """The plate as it looks in the show: the same object, with its effects added."""
+    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
+    template = prompts.get("lookPlate")
+    if not isinstance(template, str) or "{effects}" not in template:
+        raise RuntimeError(f"{PROMPTS_PATH} is missing a lookPlate template with {{effects}}")
+    return template.replace("{effects}", "; ".join(" ".join(text.split()) for text in effects))
+
+
+def generate_look_plate(plate: Path, effects: list[str], dest: Path) -> Path:
+    """Write ``look.png``: the reviewed plate with its effects drawn in. ComfyUI must be running."""
+    from generate_batch import clone_workflow, execute_queued_graph, free_comfy_models, stable_seed, stage_named_image
+
+    prompt = look_prompt(effects)
+    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
+    graph["6"]["inputs"]["image"] = stage_named_image(plate, "asset_look_source")
+    graph["7"]["inputs"]["prompt"] = prompt
+    graph["10"]["inputs"]["seed"] = stable_seed("look", prompt)
+    try:
+        free_comfy_models()
+        execute_queued_graph(graph, dest, prefer="image", mode="Qwen look plate")
+    except urllib.error.URLError as exc:
+        raise RuntimeError(_comfy_unreachable()) from exc
+    return dest
 
 
 def plate_is_ready(path: Path) -> bool:

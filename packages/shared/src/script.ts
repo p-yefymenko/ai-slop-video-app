@@ -38,9 +38,25 @@ export type ShowCharacter = {
   attributes: string[];
   /** Standing height in meters. The generated mesh is fitted to it. */
   heightMeters: number;
+  effects?: Effect[];
 };
 
 export type Vec3 = [number, number, number];
+
+/**
+ * Fire, smoke, steam, sparks, glow: something that is not a solid surface. It
+ * is never part of a mesh, a depth guide, or a check. Every still draws it with
+ * its object (from the object's look picture, which adds its effects) and lets
+ * it land only in its box; the video animates it freely. An `appearance` describes only the solid object.
+ */
+export type Effect = {
+  /** What it looks like, e.g. "white-gold flames rising from the bowl". */
+  appearance: string;
+  /** Box `[width X, depth Y, height Z]` in meters it fills. */
+  size: Vec3;
+  /** Base center of the box, meters, relative to the object's base center and turned with it. */
+  offset: Vec3;
+};
 
 /** One generated object of a location, placed at its position and fitted into its size. */
 export type LocationLandmark = {
@@ -49,11 +65,13 @@ export type LocationLandmark = {
   /** Box `[width X, depth Y, height Z]` in meters the mesh is fitted into. */
   size: Vec3;
   /**
-   * What this one object looks like. Drawn as an isolated plate, meshed, and
-   * named in a still whenever it is visible. A whole place seen from far away
-   * (a citadel, a ship) is one landmark the size of the location.
+   * What this one solid object looks like, without fire, smoke, or other
+   * effects (those are `effects`). Drawn as an isolated plate, meshed, and drawn
+   * alone into every still that shows any of it. A whole place seen from far
+   * away (a citadel, a ship) is one landmark the size of the location.
    */
   appearance: string;
+  effects?: Effect[];
 };
 
 /**
@@ -64,6 +82,7 @@ export type ShowProp = {
   appearance: string;
   /** Box `[width X, depth Y, height Z]` in meters. */
   size: Vec3;
+  effects?: Effect[];
 };
 
 export type StageGeometry = {
@@ -126,7 +145,24 @@ export type SceneSound = {
   music: SceneMusic;
 };
 
+/**
+ * One look for everything in a location, said once so its objects cannot drift
+ * apart: each object is drawn alone, and only these shared words make them
+ * belong to the same place.
+ */
+export type LocationLook = {
+  /**
+   * What the place is built of, e.g. "rain-wet black basalt and dark forged
+   * iron". Added to every landmark's plate, so it is also in the mesh: no
+   * effects here. A landmark's own `appearance` gives its shape and parts.
+   */
+  materials: string;
+  /** The light on everything in a shot here, e.g. "cold blue storm light from above, wet sheen". */
+  light: string;
+};
+
 export type ShowLocation = {
+  look: LocationLook;
   /** What to paint where the camera sees no mesh. */
   backdrop: LocationBackdrop;
   soundscape: LocationSoundscape;

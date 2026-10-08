@@ -269,6 +269,13 @@ class AssetTests(unittest.TestCase):
         self.assertIn("TRELLIS.2", text)
         self.assertIn("demo/room/bench", text)
 
+    def test_a_landmark_plate_carries_its_location_materials(self) -> None:
+        from asset_resolver import collect_requests
+
+        (request,) = [r for r in collect_requests(self._show()) if r.landmark_id]
+        self.assertIn("Built of worn gray stone, like everything else in its place.", request.appearance)
+        self.assertIn("Built of worn gray stone", plate_prompt(request.appearance))
+
     def test_plates_stop_before_the_mesh(self) -> None:
         show = self._show()
         drawn: list[Path] = []
@@ -293,6 +300,32 @@ class AssetTests(unittest.TestCase):
         write_plates(show, writer, output_dir=self.output, refresh=True)
         self.assertEqual(len(drawn), 2)
         self.assertFalse(mesh.exists())
+
+    def test_an_entity_with_effects_gets_a_look_picture_beside_its_plate(self) -> None:
+        show = self._show()
+        landmark = next(iter(show["locations"]["room"]["spatial"]["landmarks"].values()))
+        landmark["effects"] = [{"appearance": "white-gold flames", "size": [1, 1, 1], "offset": [0, 0, 1]}]
+        looks: list[tuple[Path, list[str]]] = []
+
+        def writer(appearance: str, raw_dir: Path, character: bool = False) -> Path:
+            del appearance, character
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            (raw_dir / "plate.png").write_bytes(b"x" * 2048)
+            return raw_dir / "plate.png"
+
+        def look_writer(plate: Path, effects: list[str], dest: Path) -> Path:
+            looks.append((plate, effects))
+            dest.write_bytes(b"y" * 2048)
+            return dest
+
+        (plate,) = write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
+        self.assertTrue(plate.with_name("look.png").is_file())
+        self.assertEqual(looks, [(plate, ["white-gold flames"])])
+        write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
+        self.assertEqual(len(looks), 1, "an unchanged plate and effects keep their look")
+        del landmark["effects"]
+        write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
+        self.assertFalse(plate.with_name("look.png").exists())
 
     def test_mesh_step_requires_a_reviewed_plate(self) -> None:
         with self.assertRaises(RuntimeError) as caught:
@@ -445,6 +478,7 @@ class AssetTests(unittest.TestCase):
             "characters": {},
             "locations": {
                 "room": {
+                    "look": {"materials": "worn gray stone", "light": "soft overcast daylight"},
                     "spatial": {
                         "sizeMeters": [8.0, 10.0, 4.0],
                         "landmarks": {

@@ -25,6 +25,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     },
     locations: {
       room: {
+        look: { materials: "worn gray stone", light: "soft overcast daylight" },
         backdrop: {
           sky: "a gray sky",
           skyColor: [40, 48, 64],
@@ -303,6 +304,26 @@ test("rejects an object written both as an attribute and as a prop", () => {
     iron_collar: [{ timeSeconds: 0, heldByCharacterId: "ada", heldInHand: "left" }],
   };
   assert.match(messages(show), /characters\.ada\.attributes\[3\]: describes prop "iron_collar"/);
+});
+
+test("an effect is never part of a solid appearance", () => {
+  const show = minimalShow();
+  show.locations.room.spatial.landmarks.bench.appearance = "One stone fire ring with a bowl of white-gold flame";
+  show.characters.ada.attributes.push("glowing eyes");
+  const report = messages(show);
+  assert.match(report, /landmarks\.bench\.appearance: "fire" is not a solid surface/);
+  assert.match(report, /characters\.ada\.attributes\[3\]: "glowing" is not a solid surface/);
+});
+
+test("accepts effects on a landmark, a prop, and a character", () => {
+  const flame = { appearance: "white-gold flames", size: [0.8, 0.8, 1] as [number, number, number], offset: [0, 0, 0.4] as [number, number, number] };
+  const show = minimalShow({ props: { lamp: { appearance: "One iron lamp", size: [0.2, 0.2, 0.3], effects: [flame] } } });
+  show.locations.room.spatial.landmarks.bench.appearance = "One low stone ring around an empty iron bowl";
+  show.locations.room.spatial.landmarks.bench.effects = [flame];
+  show.characters.ada.effects = [{ ...flame, appearance: "breath fogging in the cold" }];
+  show.episodes[0].spatialTimeline.propTracks = { lamp: [{ timeSeconds: 0, locationId: null }] };
+  const result = parseShowScript(show);
+  assert.ok(result.ok, result.ok ? "" : result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
 });
 
 test("rejects tagged attributes; a detail is plain text", () => {

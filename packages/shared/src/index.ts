@@ -68,10 +68,12 @@ export { BODY_PARTS } from "./script";
 export type {
   BodyPart,
   LocationBackdrop,
+  LocationLook,
   ScriptScene,
   ShowCharacter,
   ShowEpisode,
   ShowLocation,
+  Effect,
   ShowProp,
   ShowScript,
   SpatialCamera,
