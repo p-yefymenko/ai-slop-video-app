@@ -326,6 +326,30 @@ class RenderTests(unittest.TestCase):
 
 
 class PasteTests(unittest.TestCase):
+    def test_fire_the_matte_drops_is_cut_out_by_its_difference_from_the_background(self) -> None:
+        from PIL import Image
+
+        from generate_batch import paste_drawn
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            Image.new("RGB", (40, 80), (0, 0, 255)).save(root / "color.png")
+            drawing = Image.new("RGB", (40, 80), (200, 200, 200))  # plain background
+            drawing.paste((255, 170, 40), (10, 10, 20, 30))  # a flame
+            drawing.save(root / "drawn.png")
+            Image.new("L", (40, 80), 0).save(root / "matte.png")  # the object matte drops it
+            Image.new("L", (40, 80), 255).save(root / "shown.png")
+            Image.new("L", (40, 80), 255).save(root / "effects.png")
+            out = paste_drawn(
+                root / "color.png",
+                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 40.0, 80.0], root / "effects.png")],
+                root / "out.png",
+                root / "draw.png",
+            )
+            image = Image.open(out)
+            self.assertEqual(image.getpixel((15, 20)), (255, 170, 40), "the flame is laid in")
+            self.assertEqual(image.getpixel((30, 60)), (0, 0, 255), "its plain background is not")
+
     def test_drawings_are_laid_far_to_near(self) -> None:
         from generate_batch import paint_order
 
@@ -355,7 +379,7 @@ class PasteTests(unittest.TestCase):
             shown.save(root / "shown.png")
             out = paste_drawn(
                 root / "color.png",
-                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0])],
+                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0], None)],
                 root / "out.png",
                 root / "draw.png",
             )

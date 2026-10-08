@@ -1000,26 +1000,57 @@ def qwen_pass(
 _BLEND_PIXELS = 3
 
 
-def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], dest: Path, draw_mask: Path) -> Path:
+# Fire and smoke are cut out by how far they are from the drawing's plain background:
+# this close counts as background, and the cover reaches full over this much more.
+_EFFECT_BACKGROUND_DISTANCE = 12.0
+_EFFECT_RAMP_DISTANCE = 60.0
+
+
+def effect_alpha(picture: Image.Image) -> np.ndarray:
+    """Cover of an effect drawn on a plain background: opaque where it differs, clear where it does not.
+
+    An object matte cuts solid outlines and drops fire, smoke, and steam; on a
+    known plain background their own difference from it is their cover.
+    """
+    rgb = np.asarray(picture.convert("RGB"), dtype=np.float32)
+    border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
+    distance = np.linalg.norm(rgb - np.median(border, axis=0), axis=2)
+    return np.clip((distance - _EFFECT_BACKGROUND_DISTANCE) / _EFFECT_RAMP_DISTANCE, 0.0, 1.0)
+
+
+def paste_drawn(
+    color: Path, drawn: list[tuple[Path, Path, Path, list[float], Path | None]], dest: Path, draw_mask: Path
+) -> Path:
     """The shot's color guide with each drawn person, prop, and landmark laid in.
 
     Each drawing is scaled down into its window (never up: the window lies inside
     the frame) and blended by its own soft outline times where the shot shows it,
-    so nothing drawn can land where the 3D scene has no such thing. ``draw_mask``
-    is white wherever the shot still has to be drawn.
+    so nothing drawn can land where the 3D scene has no such thing. Inside its
+    effects' area (the fifth item, or None) the outline is also taken from the
+    drawing's difference from its background, which keeps the fire the matte drops.
+    ``draw_mask`` is white wherever the shot still has to be drawn.
     """
     from scipy import ndimage
 
     shot = Image.open(color).convert("RGB")
     held = np.zeros((shot.height, shot.width), dtype=np.float32)
-    for picture, matte, shown, crop in drawn:
+    for picture, matte, shown, crop, effects in drawn:
         x0, y0, x1, y1 = crop
         size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
-        layer = Image.new("RGB", shot.size)
-        alpha = Image.new("L", shot.size, 0)
-        layer.paste(Image.open(picture).convert("RGB").resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
-        alpha.paste(Image.open(matte).convert("L").resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
-        cover = np.asarray(alpha, dtype=np.float32) / 255.0
+        corner = (round(x0), round(y0))
+
+        def placed(image: Image.Image, mode: str) -> Image.Image:
+            canvas = Image.new(mode, shot.size, 0)
+            canvas.paste(image.convert(mode).resize(size, Image.Resampling.LANCZOS), corner)
+            return canvas
+
+        drawing = Image.open(picture)
+        layer = placed(drawing, "RGB")
+        cover = np.asarray(placed(Image.open(matte), "L"), dtype=np.float32) / 255.0
+        if effects is not None:
+            differs = placed(Image.fromarray(np.rint(effect_alpha(drawing) * 255).astype(np.uint8)), "L")
+            area = np.asarray(Image.open(effects).convert("L"), dtype=np.float32) / 255.0
+            cover = np.maximum(cover, np.asarray(differs, dtype=np.float32) / 255.0 * area)
         cover *= np.asarray(Image.open(shown).convert("L"), dtype=np.float32) / 255.0
         shot = Image.composite(layer, shot, Image.fromarray(np.rint(cover * 255).astype(np.uint8)))
         held = np.maximum(held, cover)
@@ -1074,7 +1105,8 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
             picture, prompt, files, stable_seed(seed, "drawn", entity_id), f"Qwen {entry['kind']} ({entity_id})", matte=matte
         )
         append_generation_log(dest, f"drawn_{entity_id}", prompt, files, {"id": entity_id, "kind": entry["kind"]})
-        drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"]))
+        effects = guide(f"drawn_{entity_id}_effects")
+        drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"], effects if effects.is_file() else None))
     draw_mask = inputs / "draw_mask.png"
     composite = paste_drawn(guide("color"), drawn, inputs / "composite.png", draw_mask)
     files = [("Depth", guide("depth")), ("Composite", composite), ("Edges", guide("edges"))]
