@@ -120,6 +120,43 @@ def face_schema_forward(vertices: np.ndarray) -> np.ndarray:
     return turned
 
 
+# A standing body's height spread is several times its width spread.
+LONG_AXIS_RATIO = 2.0
+
+
+def stand_upright(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Turn a standing body so its long axis is vertical, keeping which way it faces.
+
+    Pixal3D builds the body in the frame of the camera it estimates for the
+    plate, which looks slightly down at the person, so the mesh leans by that
+    angle. The plate is always a person standing straight with arms at their
+    sides, so the body's long axis (area-weighted, so dense hair does not pull
+    it) is head to feet. The turn is about a horizontal axis: yaw is unchanged.
+    """
+    points = np.asarray(vertices, dtype=np.float64)
+    triangles = np.asarray(faces, dtype=np.int64)
+    a, b, c = points[triangles[:, 0]], points[triangles[:, 1]], points[triangles[:, 2]]
+    area = np.linalg.norm(np.cross(b - a, c - a), axis=1) / 2.0
+    centers = (a + b + c) / 3.0
+    middle = (centers * area[:, None]).sum(axis=0) / area.sum()
+    spread = ((centers - middle) * area[:, None]).T @ (centers - middle)
+    values, vectors = np.linalg.eigh(spread)
+    if values[-1] < LONG_AXIS_RATIO * values[-2]:
+        return points.copy()  # no clear long axis (not a standing body): nothing to stand up
+    axis = vectors[:, -1]
+    if axis[2] < 0:
+        axis = -axis
+    up = np.array([0.0, 0.0, 1.0])
+    turn = np.cross(axis, up)
+    sine, cosine = np.linalg.norm(turn), float(axis @ up)
+    if sine < 1e-9:
+        return points.copy()
+    k = turn / sine
+    cross = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
+    rotation = np.eye(3) + sine * cross + (1 - cosine) * cross @ cross
+    return (points - middle) @ rotation.T + middle
+
+
 def cap_holes(
     vertices: np.ndarray,
     faces: np.ndarray,

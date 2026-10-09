@@ -39,8 +39,8 @@ export type Vec3 = [number, number, number];
  * Never write it into `appearance`, `body`, or an attribute (validation rejects
  * flame, smoke, glow, and the like there): a mesh would turn it into a solid
  * shape. A fire ring's appearance is the stone ring and its bowl; the flames
- * are an effect. Every still draws the object with its effects, which may
- * land only in the effect's box; the video animates them freely.
+ * are an effect. The box hides what is behind it: do not stand a speaker
+ * behind a fire. Every still adds the effect as light only inside its box.
  */
 export type Effect = {
   appearance: string;
@@ -142,7 +142,8 @@ export type SpatialCameraKeyframe = {
   lookAt: Vec3;
   /**
    * World/empty ~50–70; group ~40–55; single ~20–28; eye or mouth ECU ~12–18.
-   * A speaker needs a readable face: a group shot from 12m does not lip-sync.
+   * A speaker is shot like dialogue: a medium close-up, the face at least about
+   * an eighth of the frame height. A full figure from 12 m only smears the mouth.
    */
   verticalFovDegrees: number;
   /** Dutch. Omit or `0` for a level horizon. */

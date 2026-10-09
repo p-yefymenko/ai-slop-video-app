@@ -34,7 +34,7 @@ from depth_control import (
     stage_control_video,
     stage_fit_still,
 )
-from describe import drawn_prompt, ltx_prompt, still_prompt
+from describe import drawn_prompt, effect_prompt, ltx_prompt, still_prompt
 from ffmpeg_tools import concat_videos
 from pipeline_paths import (
     OUTPUT_DIR,
@@ -50,7 +50,7 @@ from pipeline_paths import (
 from previs import current_previs, load_observation, previs_episode
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
-from world import load_show, look_path, scene_has_spatial_change
+from world import load_show, look_path, plate_path, scene_has_spatial_change
 
 ROOT = Path(__file__).resolve().parents[1]
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -1000,41 +1000,43 @@ def qwen_pass(
 _BLEND_PIXELS = 3
 
 
-# Fire and smoke are cut out by how far they are from the drawing's plain background:
-# this close counts as background, and the cover reaches full over this much more.
-_EFFECT_BACKGROUND_DISTANCE = 12.0
-_EFFECT_RAMP_DISTANCE = 60.0
+def add_light(still: Path, lights: list[tuple[Path, Path, list[float]]]) -> None:
+    """Add each effect drawing to the finished still as light, only where the shot shows its effect.
 
-
-def effect_alpha(picture: Image.Image) -> np.ndarray:
-    """Cover of an effect drawn on a plain background: opaque where it differs, clear where it does not.
-
-    An object matte cuts solid outlines and drops fire, smoke, and steam; on a
-    known plain background their own difference from it is their cover.
+    Fire, sparks, and glow are light: drawn on pure black, black adds nothing
+    and a flame brightens what is behind it (screen blend), so nothing has to be
+    cut out. The drawing's border is its black level and is taken off first, so
+    a dim background cannot lift the shot.
     """
-    rgb = np.asarray(picture.convert("RGB"), dtype=np.float32)
-    border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
-    distance = np.linalg.norm(rgb - np.median(border, axis=0), axis=2)
-    return np.clip((distance - _EFFECT_BACKGROUND_DISTANCE) / _EFFECT_RAMP_DISTANCE, 0.0, 1.0)
+    shot = np.asarray(Image.open(still).convert("RGB"), dtype=np.float32) / 255.0
+    for picture, mask, crop in lights:
+        x0, y0, x1, y1 = crop
+        size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
+        drawing = np.asarray(Image.open(picture).convert("RGB"), dtype=np.float32) / 255.0
+        border = np.concatenate([drawing[0], drawing[-1], drawing[:, 0], drawing[:, -1]])
+        level = np.median(border, axis=0)
+        light = np.clip((drawing - level) / np.maximum(1.0 - level, 1e-3), 0.0, 1.0)
+        canvas = Image.new("RGB", (shot.shape[1], shot.shape[0]))
+        canvas.paste(Image.fromarray(np.rint(light * 255).astype(np.uint8)).resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
+        where = np.asarray(Image.open(mask).convert("L"), dtype=np.float32)[..., None] / 255.0
+        added = np.asarray(canvas, dtype=np.float32) / 255.0 * where
+        shot = 1.0 - (1.0 - shot) * (1.0 - added)
+    Image.fromarray(np.rint(np.clip(shot, 0, 1) * 255).astype(np.uint8)).save(still)
 
 
-def paste_drawn(
-    color: Path, drawn: list[tuple[Path, Path, Path, list[float], Path | None]], dest: Path, draw_mask: Path
-) -> Path:
+def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], dest: Path, draw_mask: Path) -> Path:
     """The shot's color guide with each drawn person, prop, and landmark laid in.
 
     Each drawing is scaled down into its window (never up: the window lies inside
     the frame) and blended by its own soft outline times where the shot shows it,
-    so nothing drawn can land where the 3D scene has no such thing. Inside its
-    effects' area (the fifth item, or None) the outline is also taken from the
-    drawing's difference from its background, which keeps the fire the matte drops.
-    ``draw_mask`` is white wherever the shot still has to be drawn.
+    so nothing drawn can land where the 3D scene has no such thing. ``draw_mask``
+    is white wherever the shot still has to be drawn.
     """
     from scipy import ndimage
 
     shot = Image.open(color).convert("RGB")
     held = np.zeros((shot.height, shot.width), dtype=np.float32)
-    for picture, matte, shown, crop, effects in drawn:
+    for picture, matte, shown, crop in drawn:
         x0, y0, x1, y1 = crop
         size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
         corner = (round(x0), round(y0))
@@ -1044,13 +1046,8 @@ def paste_drawn(
             canvas.paste(image.convert(mode).resize(size, Image.Resampling.LANCZOS), corner)
             return canvas
 
-        drawing = Image.open(picture)
-        layer = placed(drawing, "RGB")
+        layer = placed(Image.open(picture), "RGB")
         cover = np.asarray(placed(Image.open(matte), "L"), dtype=np.float32) / 255.0
-        if effects is not None:
-            differs = placed(Image.fromarray(np.rint(effect_alpha(drawing) * 255).astype(np.uint8)), "L")
-            area = np.asarray(Image.open(effects).convert("L"), dtype=np.float32) / 255.0
-            cover = np.maximum(cover, np.asarray(differs, dtype=np.float32) / 255.0 * area)
         cover *= np.asarray(Image.open(shown).convert("L"), dtype=np.float32) / 255.0
         shot = Image.composite(layer, shot, Image.fromarray(np.rint(cover * 255).astype(np.uint8)))
         held = np.maximum(held, cover)
@@ -1073,7 +1070,7 @@ def paint_order(observation: dict) -> list[str]:
 
 
 def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
-    """One scene still: everything in the shot drawn alone with its effects and pasted in, the empty space drawn around it.
+    """One scene still: everything in the shot drawn alone and pasted in, the empty space drawn around it, then effects as light.
 
     A drawn entity sees only its own guides (the shot camera magnified onto it),
     its plate, and its own words, so it never borrows another's description and
@@ -1086,13 +1083,14 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
     begin_generation_log(dest)
     inputs = still_inputs_dir(dest)
     drawn = []
+    lights = []
     for entity_id in paint_order(observation):
         entry = observation["entities"][entity_id]
         files = [
             ("Depth", guide(f"drawn_{entity_id}_depth")),
             ("OwnColor", guide(f"drawn_{entity_id}_color")),
             ("Edges", guide(f"drawn_{entity_id}_edges")),
-            ("Appearance", look_path(show, entry["kind"], entity_id, scene["locationId"])),
+            ("Appearance", plate_path(show, entry["kind"], entity_id, scene["locationId"])),
         ]
         missing = [str(path) for _title, path in files if not present(path)]
         if missing:
@@ -1105,8 +1103,17 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
             picture, prompt, files, stable_seed(seed, "drawn", entity_id), f"Qwen {entry['kind']} ({entity_id})", matte=matte
         )
         append_generation_log(dest, f"drawn_{entity_id}", prompt, files, {"id": entity_id, "kind": entry["kind"]})
-        effects = guide(f"drawn_{entity_id}_effects")
-        drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"], effects if effects.is_file() else None))
+        drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"]))
+        where = guide(f"drawn_{entity_id}_effects")
+        if where.is_file():
+            # Its effects: drawn alone in the same window as light on black, added after the shot.
+            files = [("Depth", guide(f"drawn_{entity_id}_depth")), ("Look", look_path(show, entry["kind"], entity_id, scene["locationId"]))]
+            prompt = effect_prompt(show, scene, entry["kind"], entity_id, [title for title, _path in files])
+            picture = inputs / f"drawn_{entity_id}_effects.png"
+            print(f"  Effects alone: {entity_id}", flush=True)
+            qwen_pass(picture, prompt, files, stable_seed(seed, "effects", entity_id), f"Qwen effects ({entity_id})")
+            append_generation_log(dest, f"drawn_{entity_id}_effects", prompt, files, {"id": entity_id})
+            lights.append((picture, where, entry["crop"]))
     draw_mask = inputs / "draw_mask.png"
     composite = paste_drawn(guide("color"), drawn, inputs / "composite.png", draw_mask)
     files = [("Depth", guide("depth")), ("Composite", composite), ("Edges", guide("edges"))]
@@ -1114,6 +1121,8 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
     keep = (composite, draw_mask) if drawn else None
     qwen_pass(dest, prompt, files, seed, f"Qwen scene still ({label})", keep)
     append_generation_log(dest, "still", prompt, files, details)
+    if lights:
+        add_light(dest, lights)
 
 
 def scene_needs_end_still(episode: dict, scene: dict, config: dict) -> bool:

@@ -203,31 +203,39 @@ SHOWN_GROW_PIXELS = 4
 EFFECT_GROW_PIXELS = 8
 
 
-def shown_mask(frame, entities, index: int, alone, effects=()) -> tuple[Image.Image, Image.Image | None]:
-    """Soft mask of where the shot shows this entity: its rendered silhouette, grown a
-    little so the drawing's own hair and cloth edges survive, plus the boxes of its
-    effects (``effects``: each box rendered alone), minus what is in front.
+def _soft(mask: np.ndarray, sigma: float) -> Image.Image:
+    from scipy import ndimage
 
-    A drawing can never land outside it, whatever was drawn. The entity does not
-    hide its own effects: its drawing already has them in front of or behind it.
-    Also returns the effects' part alone (None without effects): there the paste
-    cuts by colour, since no object matte can cut out fire or smoke.
+    soft = ndimage.gaussian_filter(mask.astype(np.float32), sigma=sigma)
+    return Image.fromarray(np.rint(np.clip(soft, 0, 1) * 255).astype(np.uint8))
+
+
+def shown_mask(frame, entities, index: int, alone) -> Image.Image:
+    """Soft mask of where the shot shows this entity: its rendered silhouette, grown a
+    little so the drawing's own hair and cloth edges survive, minus what is in front.
+
+    A drawing can never land outside it, whatever was drawn.
     """
     from scipy import ndimage
 
-    def part(render_alone, grow: int, sigma: float) -> np.ndarray:
-        inside = ndimage.binary_dilation(np.isfinite(render_alone.depth), iterations=grow)
-        shown = inside & ~hidden_mask(frame, entities, index, render_alone)
-        return ndimage.gaussian_filter(shown.astype(np.float32), sigma=sigma)
+    silhouette = ndimage.binary_dilation(np.isfinite(alone.depth), iterations=SHOWN_GROW_PIXELS)
+    return _soft(silhouette & ~hidden_mask(frame, entities, index, alone), 1.0)
 
-    def image(values: np.ndarray) -> Image.Image:
-        return Image.fromarray(np.rint(np.clip(values, 0, 1) * 255).astype(np.uint8))
 
-    soft = part(alone, SHOWN_GROW_PIXELS, 1.0)
-    if not effects:
-        return image(soft), None
-    effect_area = np.max([part(effect, EFFECT_GROW_PIXELS, 3.0) for effect in effects], axis=0)
-    return image(np.maximum(soft, effect_area)), image(effect_area)
+def effect_mask(frame, entities, boxes) -> Image.Image | None:
+    """Where the shot shows an entity's effect boxes, grown and softened, minus anything
+    solid in front (its own near rim too). None when none of them is in the shot.
+
+    The effect's light is added only here, so it cannot land where the 3D scene
+    has no such effect or where something solid stands in front of it.
+    """
+    from scipy import ndimage
+
+    shown = np.zeros(frame.entity.shape, dtype=bool)
+    for box in boxes:
+        inside = ndimage.binary_dilation(np.isfinite(box.depth), iterations=EFFECT_GROW_PIXELS)
+        shown |= inside & ~hidden_mask(frame, entities, -1, box)
+    return _soft(shown, 3.0) if shown.any() else None
 
 
 def hidden_mask(frame, entities, index: int, alone) -> np.ndarray:
@@ -251,9 +259,10 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
     """Scene guides, and for each person, prop, and landmark in the shot its own guides, drawn alone.
 
     The crop is the same camera magnified onto its part of the frame, so pose and
-    turn are exactly the shot's. ``drawn_<id>_shown`` is where the shot shows it
-    and its effects, the only place its drawing may land. The guides show only
-    its solid mesh: an effect is drawn from its look picture and words.
+    turn are exactly the shot's. ``drawn_<id>_shown`` is where the shot shows it,
+    the only place its drawing may land. ``drawn_<id>_effects`` is where the shot
+    shows its effects, the only place their light is added. The guides show only
+    the solid mesh: an effect is drawn from the look picture and its own words.
     """
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
     location = show["locations"][scene["locationId"]]
@@ -280,10 +289,10 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         images[guide_path(*ids, label, f"{prefix}_depth")] = depth_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_edges")] = edge_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_color")] = color_image(alone, [entity], None, None)
-        shown, effect_area = shown_mask(frame, entities, index, render([entity], camera), effects)
-        images[guide_path(*ids, label, f"{prefix}_shown")] = shown
-        if effect_area is not None:
-            images[guide_path(*ids, label, f"{prefix}_effects")] = effect_area
+        images[guide_path(*ids, label, f"{prefix}_shown")] = shown_mask(frame, entities, index, render([entity], camera))
+        light = effect_mask(frame, entities, effects)
+        if light is not None:
+            images[guide_path(*ids, label, f"{prefix}_effects")] = light
         observation["entities"][entity.id]["crop"] = crop
         observation["effects"] += [
             {"id": entity.id, "appearance": effect["appearance"]} for effect, visible in zip(entity.effects, seen) if visible

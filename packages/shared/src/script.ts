@@ -45,9 +45,10 @@ export type Vec3 = [number, number, number];
 
 /**
  * Fire, smoke, steam, sparks, glow: something that is not a solid surface. It
- * is never part of a mesh, a depth guide, or a check. Every still draws it with
- * its object (from the object's look picture, which adds its effects) and lets
- * it land only in its box; the video animates it freely. An `appearance` describes only the solid object.
+ * is never part of a mesh or a depth guide; for the checks its box hides what
+ * is behind it. Every still draws it alone, as light on black from its object's
+ * look picture, and adds it only where the shot shows its box; the video
+ * animates it freely. An `appearance` describes only the solid object.
  */
 export type Effect = {
   /** What it looks like, e.g. "white-gold flames rising from the bowl". */

@@ -30,6 +30,7 @@ from mesh_io import (
     read_schema_mesh,
     read_vertex_colors,
     require_triangle_budget,
+    stand_upright,
     standing_proportion_warning,
     write_schema_glb,
 )
@@ -44,7 +45,7 @@ PIXAL3D_PAGE = "https://github.com/TencentARC/Pixal3D"
 # Plate color sampled by Pixal3D and stored on each vertex.
 SURFACE = "vertex-color"
 # Character meshes cap small openings with new triangles. Objects keep theirs.
-CHARACTER_MESH_REPAIR = "cap-holes"
+CHARACTER_MESH_REPAIR = "upright-cap-holes"
 
 
 @dataclass
@@ -209,7 +210,7 @@ class AssetResolver:
         if colors is not None and len(colors) != len(vertices):
             colors = None
         if request.character_id:
-            vertices = face_schema_forward(vertices)
+            vertices = stand_upright(face_schema_forward(vertices), faces)
             write_schema_glb(directory / "model.precleanup.glb", vertices, faces, colors)
             vertices, faces, colors, lost_vertices, lost_triangles = drop_thin_side_protrusions(
                 vertices, faces, colors

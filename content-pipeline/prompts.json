@@ -1,6 +1,7 @@
 {
   "landmarkPlate": "One isolated object on a plain light gray background, cold and unlit: only the object itself, with no ground, sky, or scenery. Ignore the attached blank image and create only this object: {appearance}",
   "landmarkMaterials": "Built of {materials}, like everything else in its place.",
+  "effectDrawn": "Draw only its {effects}, exactly where they belong on it and at the same size as in picture 2, glowing on a pure black background. Draw nothing else: not the object itself, no floor, everything else pure black.",
   "lookPlate": "Picture 1 is one object. Keep it exactly as it is: the same shape, view, size in the picture, colors, and plain light gray background. Add only this to it: {effects}.",
   "characterPlate": "One adult standing full-body on a plain background, feet visible, arms at their sides, facing the camera. Solid unbroken skin and solid cloth, no holes, no lace, no mesh, no transparent fabric. Ignore the attached blank image and create only this person: {description}",
   "stillOpening": "Photorealistic vertical 9:16 film frame with real cloth and skin texture.",
@@ -8,7 +9,7 @@
   "rowDepthRatio": 1.5,
   "onScreenMinPixels": 50,
   "visibleMinShare": 0.25,
-  "speakerFaceMinPixels": 2500,
+  "speakerFaceMinPixels": 22000,
   "endStill": false,
   "ltxStartStrength": 0.7,
   "ltxIcLoRAStrength": 1.0,

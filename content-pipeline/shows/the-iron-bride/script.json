@@ -747,16 +747,16 @@
               {
                 "timeSeconds": 10.0,
                 "position": [
-                  0,
-                  -7.4,
-                  1.68
+                  0.55,
+                  3.77,
+                  1.77
                 ],
                 "lookAt": [
                   1.3,
-                  6.0,
-                  1.71
+                  6,
+                  1.69
                 ],
-                "verticalFovDegrees": 18
+                "verticalFovDegrees": 24
               }
             ]
           },
@@ -804,16 +804,16 @@
               {
                 "timeSeconds": 24.0,
                 "position": [
-                  -0.4,
-                  -6.2,
-                  1.7
+                  -1.69,
+                  4.45,
+                  1.61
                 ],
                 "lookAt": [
                   -1.8,
                   6.8,
-                  1.56
+                  1.53
                 ],
-                "verticalFovDegrees": 16
+                "verticalFovDegrees": 24
               }
             ]
           },
@@ -825,10 +825,6 @@
                 "torso"
               ],
               "expression": "open scorn: chin lifted, lips parted to speak"
-            },
-            "sela": {
-              "action": "stands still under guard, breathing slowly",
-              "parts": []
             }
           },
           "dialogue": {

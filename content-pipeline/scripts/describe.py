@@ -24,6 +24,7 @@ PICTURE_LEGEND = {
     ),
     "OwnColor": "Picture {n} is its colors.",
     "Appearance": "Picture {n} is how it looks: the same face, hair, skin, clothes, colors, and materials.",
+    "Look": "Picture {n} is how it looks with its effects.",
 }
 
 
@@ -119,7 +120,7 @@ def _legend(pictures: list[str]) -> str:
 
 
 def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: list[str]) -> str:
-    """One person, prop, or landmark drawn whole and alone, with its effects, from its own guides and only its own words.
+    """One person, prop, or landmark drawn whole and alone, solid parts only, from its own guides and only its own words.
 
     The shot keeps only the part of it the camera shows, so nothing here depends
     on what is visible.
@@ -133,7 +134,6 @@ def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: l
     else:
         subject = "One object, alone"
         words = list(descriptions(show, scene, kind, entity_id)[0][:1])
-    words += [clause(effect["appearance"]) for effect in definition(show, kind, entity_id, scene["locationId"]).get("effects") or ()]
     parts = [
         clause(settings()["stillOpening"]) + ".",
         _legend(pictures),
@@ -142,6 +142,13 @@ def drawn_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: l
         _light(show, scene),
     ]
     return " ".join(part for part in parts if part)
+
+
+def effect_prompt(show: dict, scene: dict, kind: str, entity_id: str, pictures: list[str]) -> str:
+    """Only an entity's effects, as light on pure black, in its own window: added to the shot as light."""
+    effects = definition(show, kind, entity_id, scene["locationId"]).get("effects") or ()
+    words = "; ".join(dict.fromkeys(clause(effect["appearance"]) for effect in effects))
+    return " ".join([_legend(pictures), template("effectDrawn", {"effects": words})])
 
 
 def still_prompt(show: dict, scene: dict, observation: dict, pictures: list[str], drawn: int) -> tuple[str, dict]:

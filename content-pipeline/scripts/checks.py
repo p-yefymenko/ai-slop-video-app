@@ -82,11 +82,14 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
             )
 
     speaker = scene.get("speakerId")
-    lip_sync = settings()["speakerFaceMinPixels"]
-    if speaker and not visible(start, speaker, ["face"], lip_sync):
+    # A talking face needs a talking shot: about an eighth of the frame height (a
+    # medium close-up). Smaller, the video model has a few pixels of mouth to speak with.
+    talking = settings()["speakerFaceMinPixels"]
+    if speaker and not visible(start, speaker, ["face"], talking):
         errors.append(
             f"{where}: speaker {speaker}'s face is {_numbers(start, speaker, 'face')} in the start frame; "
-            f"lip-sync needs at least {lip_sync} px of visible face."
+            f"a speaking face needs at least {talking} px (about an eighth of the frame height, a medium "
+            f"close-up). Bring the camera closer or use a longer lens."
         )
 
     for index, event in enumerate(scene["sound"]["events"]):

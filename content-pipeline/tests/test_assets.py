@@ -61,6 +61,23 @@ class CountingGenerator:
         return dest
 
 
+class UprightTests(unittest.TestCase):
+    def test_a_leaning_body_is_stood_up_without_turning_it(self) -> None:
+        from mesh_io import stand_upright
+
+        rings = [(x, y, z) for z in np.linspace(0, 1.8, 40) for x, y in ((0.2, 0), (0, 0.12), (-0.2, 0), (0, -0.12))]
+        body = np.array(rings, dtype=np.float64)
+        nose = len(body)
+        body = np.vstack([body, [[0.0, 0.2, 1.6]]])  # faces +Y
+        faces = np.array([[i, i + 1, i + 4] for i in range(len(rings) - 5)] + [[nose, nose - 1, nose - 2]])
+        lean = np.radians(12)
+        tilt = np.array([[1, 0, 0], [0, np.cos(lean), -np.sin(lean)], [0, np.sin(lean), np.cos(lean)]])
+        upright = stand_upright(body @ tilt.T, faces)
+        spine = upright[38 * 4] - upright[0]
+        self.assertLess(np.degrees(np.arctan2(np.hypot(spine[0], spine[1]), spine[2])), 1.0)
+        self.assertGreater(upright[nose, 1] - upright[38 * 4:39 * 4, 1].mean(), 0.1, "still faces +Y")
+
+
 class AssetTests(unittest.TestCase):
     def setUp(self) -> None:
         self._temp = tempfile.TemporaryDirectory()
@@ -429,7 +446,7 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(record["characterId"], "ada")
         self.assertEqual(record["meshModel"], "pixal3d")
         self.assertEqual(record["facing"], "schema-plus-y")
-        self.assertEqual(record["meshRepair"], "cap-holes")
+        self.assertEqual(record["meshRepair"], "upright-cap-holes")
         self.assertEqual(record["surface"], "vertex-color")
         self.assertIn("amber irises", record["title"])
         np.testing.assert_allclose(face_schema_forward(np.array([[0.2, -0.5, 1.0]])), [[-0.2, 0.5, 1.0]])

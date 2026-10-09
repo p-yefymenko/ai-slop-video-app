@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 import world  # noqa: E402
 from body_parts import BODY_PARTS  # noqa: E402
 from checks import check_scene  # noqa: E402
-from describe import drawn_prompt, ltx_prompt, people_places, still_prompt  # noqa: E402
+from describe import drawn_prompt, effect_prompt, ltx_prompt, people_places, still_prompt  # noqa: E402
 from mesh_io import write_schema_glb  # noqa: E402
 from observe import in_shot, passes, visible  # noqa: E402
 
@@ -253,8 +253,13 @@ class DescribeTests(unittest.TestCase):
         show = show_with({})
         bench = show["locations"]["room"]["spatial"]["landmarks"]["bench"]
         bench["effects"] = [{"appearance": "white-gold flames", "size": [1, 1, 1], "offset": [0, 0, 1]}]
-        prompt = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
-        self.assertIn("One stone bench, white-gold flames.", prompt)
+        solid = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
+        self.assertIn("One stone bench.", solid)
+        self.assertNotIn("flames", solid, "the solid drawing has no effects")
+        prompt = effect_prompt(show, scene(), "landmark", "bench", ["Depth", "Look"])
+        self.assertIn("Picture 2 is how it looks with its effects.", prompt)
+        self.assertIn("Draw only its white-gold flames", prompt)
+        self.assertIn("pure black", prompt)
         plate = world.plate_path(show, "landmark", "bench", "room")
         self.assertEqual(world.look_path(show, "landmark", "bench", "room"), plate.with_name("look.png"))
         del bench["effects"]
@@ -275,7 +280,7 @@ class CheckTests(unittest.TestCase):
         errors = "\n".join(check_scene(show, show["episodes"][0], shot, [(0.0, start, [])]))
         self.assertIn("parts names face, but their face is never visible in the shot (start: 1800 px visible of 42000 px)", errors)
         self.assertIn("expression is set, but their face is not visible", errors)
-        self.assertIn("speaker ada's face is 1800 px visible of 42000 px in the start frame; lip-sync needs at least", errors)
+        self.assertIn("speaker ada's face is 1800 px visible of 42000 px in the start frame; a speaking face needs at least", errors)
         self.assertIn("comes from bench, which is not visible", errors)
         absent = check_scene(show, show["episodes"][0], shot, [(0.0, observation({}), [])])
         self.assertTrue(any("performances.ada is set, but ada is never visible" in e for e in absent))
@@ -326,29 +331,27 @@ class RenderTests(unittest.TestCase):
 
 
 class PasteTests(unittest.TestCase):
-    def test_fire_the_matte_drops_is_cut_out_by_its_difference_from_the_background(self) -> None:
+    def test_an_effect_is_added_as_light_only_where_the_shot_shows_it(self) -> None:
         from PIL import Image
 
-        from generate_batch import paste_drawn
+        from generate_batch import add_light
 
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            Image.new("RGB", (40, 80), (0, 0, 255)).save(root / "color.png")
-            drawing = Image.new("RGB", (40, 80), (200, 200, 200))  # plain background
-            drawing.paste((255, 170, 40), (10, 10, 20, 30))  # a flame
-            drawing.save(root / "drawn.png")
-            Image.new("L", (40, 80), 0).save(root / "matte.png")  # the object matte drops it
-            Image.new("L", (40, 80), 255).save(root / "shown.png")
-            Image.new("L", (40, 80), 255).save(root / "effects.png")
-            out = paste_drawn(
-                root / "color.png",
-                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 40.0, 80.0], root / "effects.png")],
-                root / "out.png",
-                root / "draw.png",
-            )
-            image = Image.open(out)
-            self.assertEqual(image.getpixel((15, 20)), (255, 170, 40), "the flame is laid in")
-            self.assertEqual(image.getpixel((30, 60)), (0, 0, 255), "its plain background is not")
+            Image.new("RGB", (40, 80), (20, 30, 60)).save(root / "still.png")
+            fire = Image.new("RGB", (40, 80), (8, 8, 8))  # a dim, not quite black, background
+            fire.paste((255, 170, 40), (10, 10, 20, 30))
+            fire.paste((255, 170, 40), (10, 50, 20, 70))
+            fire.save(root / "fire.png")
+            where = Image.new("L", (40, 80), 0)
+            where.paste(255, (0, 0, 40, 40))  # only the upper half is the effect's box in the shot
+            where.save(root / "where.png")
+            add_light(root / "still.png", [(root / "fire.png", root / "where.png", [0.0, 0.0, 40.0, 80.0])])
+            image = Image.open(root / "still.png")
+            flame = image.getpixel((15, 20))
+            self.assertGreater(flame[0], 240, "a flame brightens the shot")
+            self.assertEqual(image.getpixel((30, 20)), (20, 30, 60), "its dim background adds nothing")
+            self.assertEqual(image.getpixel((15, 60)), (20, 30, 60), "outside its box nothing is added")
 
     def test_drawings_are_laid_far_to_near(self) -> None:
         from generate_batch import paint_order
@@ -379,7 +382,7 @@ class PasteTests(unittest.TestCase):
             shown.save(root / "shown.png")
             out = paste_drawn(
                 root / "color.png",
-                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0], None)],
+                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0])],
                 root / "out.png",
                 root / "draw.png",
             )
