@@ -137,12 +137,17 @@ def camera_moves(scene: dict) -> bool:
     )
 
 
-def scene_has_spatial_change(episode: dict, scene: dict) -> bool:
-    """The camera moves, or someone in this location moves or turns during the shot."""
+def scene_has_spatial_change(episode: dict, scene: dict, seen: set[str]) -> bool:
+    """The camera moves, or someone the camera sees (``seen``) moves or turns during the shot.
+
+    Someone moving out of shot does not change the shot.
+    """
     if camera_moves(scene):
         return True
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
-    for track in episode["spatialTimeline"]["characterTracks"].values():
+    for character_id, track in episode["spatialTimeline"]["characterTracks"].items():
+        if character_id not in seen:
+            continue
         first, last = character_state(track, start), character_state(track, finish)
         if scene["locationId"] not in (first["locationId"], last["locationId"]):
             continue

@@ -13,6 +13,7 @@
   "endStill": false,
   "ltxStartStrength": 0.7,
   "ltxIcLoRAStrength": 1.0,
+  "ltxSpatialUpscale": "x2",
   "controlDepth": "depthanything",
   "depthAnything": {
     "weights": "video_depth_anything_vits.pth",

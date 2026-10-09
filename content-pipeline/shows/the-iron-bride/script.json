@@ -253,19 +253,74 @@
   "episodes": [
     {
       "episodeNumber": 1,
-      "title": "The Sun-Well",
+      "title": "The Fire Knows Her",
       "isFree": true,
       "coinCost": 0,
       "spatialTimeline": {
-        "durationSeconds": 60,
+        "durationSeconds": 29,
         "characterTracks": {
           "sela": [
             {
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                -1.4,
-                -2,
+                0,
+                1.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan"
+            },
+            {
+              "timeSeconds": 2,
+              "locationId": "sun_well_court",
+              "position": [
+                0,
+                1.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan"
+            },
+            {
+              "timeSeconds": 4,
+              "locationId": "sun_well_court",
+              "position": [
+                0,
+                2.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan"
+            },
+            {
+              "timeSeconds": 12,
+              "locationId": "sun_well_court",
+              "position": [
+                0,
+                2.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "vardan"
+            },
+            {
+              "timeSeconds": 13,
+              "locationId": "sun_well_court",
+              "position": [
+                0,
+                3.15,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sun_well"
+            },
+            {
+              "timeSeconds": 18.5,
+              "locationId": "sun_well_court",
+              "position": [
+                0,
+                3.15,
                 0
               ],
               "bodyYawDegrees": 0,
@@ -275,65 +330,54 @@
               "timeSeconds": 29,
               "locationId": "sun_well_court",
               "position": [
-                -1.4,
-                -2,
+                0,
+                3.15,
                 0
               ],
               "bodyYawDegrees": 0,
               "lookAtId": "vardan"
-            },
-            {
-              "timeSeconds": 31,
-              "locationId": "sun_well_court",
-              "position": [
-                -0.4,
-                1,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "sun_well"
-            },
-            {
-              "timeSeconds": 38,
-              "locationId": "sun_well_court",
-              "position": [
-                0,
-                2.4,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "vardan"
-            },
-            {
-              "timeSeconds": 60,
-              "locationId": "sun_well_court",
-              "position": [
-                0,
-                2.4,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "sun_well"
             }
           ],
-          "tomas": [
+          "kesh": [
             {
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                -2.2,
+                0.25,
+                1.0,
                 0
               ],
               "bodyYawDegrees": 0,
-              "lookAtId": "vardan"
+              "lookAtId": "sela"
             },
             {
-              "timeSeconds": 60,
+              "timeSeconds": 2,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                -2.2,
+                0.25,
+                1.0,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sela"
+            },
+            {
+              "timeSeconds": 4,
+              "locationId": "sun_well_court",
+              "position": [
+                0.2,
+                1.9,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sela"
+            },
+            {
+              "timeSeconds": 29,
+              "locationId": "sun_well_court",
+              "position": [
+                0.2,
+                1.9,
                 0
               ],
               "bodyYawDegrees": 0,
@@ -345,44 +389,44 @@
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                6,
+                1.8,
+                5.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 45,
+              "timeSeconds": 16.5,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                6,
+                1.8,
+                5.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 47,
+              "timeSeconds": 18,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                7.4,
+                2.2,
+                6.0,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 60,
+              "timeSeconds": 29,
               "locationId": "sun_well_court",
               "position": [
-                1.3,
-                7.4,
+                2.2,
+                6.0,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             }
           ],
@@ -392,89 +436,43 @@
               "locationId": "sun_well_court",
               "position": [
                 -1.8,
-                6.8,
+                5.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 45,
+              "timeSeconds": 16.5,
               "locationId": "sun_well_court",
               "position": [
                 -1.8,
-                6.8,
+                5.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 47,
+              "timeSeconds": 18,
               "locationId": "sun_well_court",
               "position": [
-                -2.3,
-                8.1,
+                -2.2,
+                6.0,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 60,
+              "timeSeconds": 29,
               "locationId": "sun_well_court",
               "position": [
-                -2.3,
-                8.1,
+                -2.2,
+                6.0,
                 0
               ],
-              "bodyYawDegrees": 180,
-              "lookAtId": "sela"
-            }
-          ],
-          "kesh": [
-            {
-              "timeSeconds": 0,
-              "locationId": "sun_well_court",
-              "position": [
-                3.2,
-                6.6,
-                0
-              ],
-              "bodyYawDegrees": 180,
-              "lookAtId": "tomas"
-            },
-            {
-              "timeSeconds": 45,
-              "locationId": "sun_well_court",
-              "position": [
-                3.2,
-                6.6,
-                0
-              ],
-              "bodyYawDegrees": 180,
-              "lookAtId": "tomas"
-            },
-            {
-              "timeSeconds": 47,
-              "locationId": "sun_well_court",
-              "position": [
-                3.8,
-                7.9,
-                0
-              ],
-              "bodyYawDegrees": 180,
-              "lookAtId": "sela"
-            },
-            {
-              "timeSeconds": 60,
-              "locationId": "sun_well_court",
-              "position": [
-                3.8,
-                7.9,
-                0
-              ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             }
           ],
@@ -483,23 +481,51 @@
               "timeSeconds": 0,
               "locationId": "sun_well_court",
               "position": [
-                -3.4,
-                7.2,
+                -2.9,
+                6.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
             },
             {
-              "timeSeconds": 60,
+              "timeSeconds": 16.5,
               "locationId": "sun_well_court",
               "position": [
-                -3.6,
-                8,
+                -2.9,
+                6.4,
                 0
               ],
-              "bodyYawDegrees": 180,
+              "bodyYawDegrees": 0,
               "lookAtId": "sela"
+            },
+            {
+              "timeSeconds": 18,
+              "locationId": "sun_well_court",
+              "position": [
+                -3.3,
+                7.0,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sela"
+            },
+            {
+              "timeSeconds": 29,
+              "locationId": "sun_well_court",
+              "position": [
+                -3.3,
+                7.0,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "sela"
+            }
+          ],
+          "tomas": [
+            {
+              "timeSeconds": 0,
+              "locationId": null
             }
           ]
         },
@@ -508,8 +534,8 @@
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationId": "sky_forge_exterior",
-          "storyBeat": "The hanging citadel and burning sky establish a kingdom that can be dropped.",
+          "locationId": "sun_well_court",
+          "storyBeat": "The fire in the sun-well surges up, hungry, before anyone speaks.",
           "timeRangeSeconds": [
             0,
             2
@@ -518,6 +544,788 @@
             "keyframes": [
               {
                 "timeSeconds": 0,
+                "position": [
+                  1.5,
+                  2.9,
+                  0.95
+                ],
+                "lookAt": [
+                  0,
+                  4.5,
+                  0.95
+                ],
+                "verticalFovDegrees": 40
+              },
+              {
+                "timeSeconds": 2,
+                "position": [
+                  1.1,
+                  3.2,
+                  1.0
+                ],
+                "lookAt": [
+                  0,
+                  4.5,
+                  1.0
+                ],
+                "verticalFovDegrees": 38
+              }
+            ]
+          },
+          "performances": {},
+          "sound": {
+            "events": [
+              {
+                "text": "the flames roar up out of the iron bowl with a crackling rush",
+                "source": {
+                  "landmarkId": "sun_well"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "motion": "White-gold flames surge upward out of the bowl and lash sideways in the wind"
+        },
+        {
+          "sceneNumber": 2,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore the guard shoves the bride toward the fire.",
+          "timeRangeSeconds": [
+            2,
+            4
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 2,
+                "position": [
+                  3.2,
+                  1.1,
+                  1.3
+                ],
+                "lookAt": [
+                  0.1,
+                  1.5,
+                  1.0
+                ],
+                "verticalFovDegrees": 48
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "stumbles forward two steps, arms flung out for balance, bare feet skidding on the wet iron",
+              "parts": [
+                "arms",
+                "torso",
+                "legs",
+                "feet"
+              ]
+            },
+            "kesh": {
+              "action": "shoves her hard between the shoulder blades with both hands, then steps after her",
+              "parts": [
+                "arms",
+                "hands",
+                "torso",
+                "legs"
+              ]
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "bare feet skid and slap on wet iron",
+                "source": {
+                  "characterId": "sela",
+                  "part": "feet"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 3,
+          "locationId": "sun_well_court",
+          "storyBeat": "But the high priest orders her burned, so nobody can save her.",
+          "timeRangeSeconds": [
+            4,
+            6.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 4,
+                "position": [
+                  0.53,
+                  3.42,
+                  1.32
+                ],
+                "lookAt": [
+                  1.8,
+                  5.4,
+                  1.71
+                ],
+                "verticalFovDegrees": 24
+              }
+            ]
+          },
+          "performances": {
+            "vardan": {
+              "action": "leans forward over her, chin lifted, glaring down",
+              "parts": [
+                "face",
+                "torso"
+              ],
+              "expression": "cold contempt: brows level, eyes narrowed, lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "his plate armor creaks as he leans in",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "torso"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "vardan",
+          "dialogue": {
+            "line": "Burn the false bride.",
+            "delivery": "loud, flat, a command that expects no answer"
+          }
+        },
+        {
+          "sceneNumber": 4,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore the priestess mocks her: no one will mourn her house.",
+          "timeRangeSeconds": [
+            6.5,
+            8.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 6.5,
+                "position": [
+                  -0.53,
+                  3.42,
+                  1.61
+                ],
+                "lookAt": [
+                  -1.8,
+                  5.4,
+                  1.55
+                ],
+                "verticalFovDegrees": 24
+              }
+            ]
+          },
+          "performances": {
+            "nira": {
+              "action": "laughs once through her nose and tilts her head back, smirking",
+              "parts": [
+                "face",
+                "torso"
+              ],
+              "expression": "open scorn: chin lifted, one corner of the mouth up, lips slightly parted"
+            },
+            "rhel": {
+              "action": "stands behind her, smirking at the bride",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "her plate armor clinks as her shoulders shake with the laugh",
+                "source": {
+                  "characterId": "nira",
+                  "part": "torso"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "nira",
+          "dialogue": {
+            "line": "Nobody mourns a Voss.",
+            "delivery": "sneering, light, amused"
+          }
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "sun_well_court",
+          "storyBeat": "But the bride does not cry: her eyes go hard.",
+          "timeRangeSeconds": [
+            8.5,
+            10
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 8.5,
+                "position": [
+                  0.79,
+                  3.83,
+                  1.56
+                ],
+                "lookAt": [
+                  0,
+                  2.6,
+                  1.54
+                ],
+                "verticalFovDegrees": 14
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "her jaw tightens and her eyes lift to him and stop blinking",
+              "parts": [
+                "face",
+                "eyes"
+              ],
+              "expression": "fear crushed under resolve: jaw set, eyes wet but unblinking, lips closed"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a slow, controlled breath through her nose",
+                "source": {
+                  "characterId": "sela",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore she answers him with a dare.",
+          "timeRangeSeconds": [
+            10,
+            12
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 10,
+                "position": [
+                  1.27,
+                  4.58,
+                  1.56
+                ],
+                "lookAt": [
+                  0,
+                  2.6,
+                  1.5
+                ],
+                "verticalFovDegrees": 24
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "turns her head toward the fire, then back to him, chin rising",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "cold resolve: eyes steady on him, lips slightly parted to speak"
+            },
+            "kesh": {
+              "action": "stands behind her, watching her back",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "her iron collar clinks against her throat as she turns",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "sela",
+          "dialogue": {
+            "line": "Then watch me.",
+            "delivery": "quiet, flat, certain"
+          }
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore she plunges her hand into the sacred fire, and it does not burn her.",
+          "timeRangeSeconds": [
+            12,
+            15
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 12,
+                "position": [
+                  2.5,
+                  2.1,
+                  1.3
+                ],
+                "lookAt": [
+                  0,
+                  2.9,
+                  1.0
+                ],
+                "verticalFovDegrees": 42
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "steps up to the ring, pushes her right hand down into the flames, holds it there, then lifts it out unburned",
+              "parts": [
+                "arms",
+                "hands",
+                "torso",
+                "legs"
+              ]
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "the flames hiss and part around her hand",
+                "source": {
+                  "landmarkId": "sun_well"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "motion": "The white-gold flames bend away from her hand and curl around her fingers without touching the skin"
+        },
+        {
+          "sceneNumber": 8,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore the high priest flinches.",
+          "timeRangeSeconds": [
+            15,
+            16.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 15,
+                "position": [
+                  0.92,
+                  4.3,
+                  1.77
+                ],
+                "lookAt": [
+                  1.8,
+                  5.4,
+                  1.71
+                ],
+                "verticalFovDegrees": 24
+              }
+            ]
+          },
+          "performances": {
+            "vardan": {
+              "action": "his eyes widen and his head jerks back",
+              "parts": [
+                "face",
+                "eyes",
+                "neck"
+              ],
+              "expression": "shock breaking through contempt: brows rising, mouth starting to open"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "his breath catches sharply",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 9,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore the priests stumble back from her.",
+          "timeRangeSeconds": [
+            16.5,
+            18.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 16.5,
+                "position": [
+                  0.2,
+                  -3.2,
+                  3.2
+                ],
+                "lookAt": [
+                  -0.4,
+                  5.6,
+                  1.0
+                ],
+                "verticalFovDegrees": 56
+              }
+            ]
+          },
+          "performances": {
+            "vardan": {
+              "action": "stumbles back two steps, one hand rising to shield his face",
+              "parts": [
+                "arms",
+                "hands",
+                "legs",
+                "feet"
+              ]
+            },
+            "nira": {
+              "action": "stumbles back two steps, mouth falling open",
+              "parts": [
+                "face",
+                "legs",
+                "feet"
+              ]
+            },
+            "rhel": {
+              "action": "backs away two steps, hands lifting",
+              "parts": [
+                "hands",
+                "legs",
+                "feet"
+              ]
+            },
+            "sela": {
+              "action": "stands still at the ring, facing them",
+              "parts": []
+            },
+            "kesh": {
+              "action": "stands frozen, staring at her",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "armored boots scrape backward across the iron floor",
+                "source": {
+                  "characterId": "nira",
+                  "part": "feet"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 10,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore she names what the fire just proved.",
+          "timeRangeSeconds": [
+            18.5,
+            21
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 18.5,
+                "position": [
+                  1.32,
+                  4.86,
+                  1.06
+                ],
+                "lookAt": [
+                  0,
+                  3.15,
+                  1.5
+                ],
+                "verticalFovDegrees": 26
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "lifts her chin and looks down at him",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "calm triumph: eyes cool, a faint smile, lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "her iron collar chain rattles as she lifts her chin",
+                "source": {
+                  "characterId": "sela",
+                  "part": "neck"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "sela",
+          "dialogue": {
+            "line": "The well knows its empress.",
+            "delivery": "low, slow, every word placed"
+          }
+        },
+        {
+          "sceneNumber": 11,
+          "locationId": "sun_well_court",
+          "storyBeat": "But the high priest refuses to believe it.",
+          "timeRangeSeconds": [
+            21,
+            22.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 21,
+                "position": [
+                  0.88,
+                  4.29,
+                  2.57
+                ],
+                "lookAt": [
+                  2.2,
+                  6.0,
+                  1.71
+                ],
+                "verticalFovDegrees": 26
+              }
+            ]
+          },
+          "performances": {
+            "vardan": {
+              "action": "shakes his head once, staring up at her",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "disbelief: brows drawn together, eyes wide, lips parted"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a sharp, ragged breath",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "vardan",
+          "dialogue": {
+            "line": "Impossible.",
+            "delivery": "a hoarse whisper"
+          }
+        },
+        {
+          "sceneNumber": 12,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore she gives her first order.",
+          "timeRangeSeconds": [
+            22.5,
+            24
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 22.5,
+                "position": [
+                  0.9,
+                  4.31,
+                  1.56
+                ],
+                "lookAt": [
+                  0,
+                  3.15,
+                  1.5
+                ],
+                "verticalFovDegrees": 14
+              }
+            ]
+          },
+          "performances": {
+            "sela": {
+              "action": "her eyes narrow as she speaks",
+              "parts": [
+                "face",
+                "eyes"
+              ],
+              "expression": "absolute command: eyes hard and still, lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "she breathes out slowly before the word",
+                "source": {
+                  "characterId": "sela",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "sela",
+          "dialogue": {
+            "line": "Kneel.",
+            "delivery": "soft, cold, final"
+          }
+        },
+        {
+          "sceneNumber": 13,
+          "locationId": "sun_well_court",
+          "storyBeat": "Therefore the priests who came to burn her drop to their knees.",
+          "timeRangeSeconds": [
+            24,
+            26.5
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 24,
+                "position": [
+                  -0.4,
+                  -3.4,
+                  3.6
+                ],
+                "lookAt": [
+                  -0.4,
+                  5.9,
+                  0.6
+                ],
+                "verticalFovDegrees": 56
+              }
+            ]
+          },
+          "performances": {
+            "vardan": {
+              "action": "drops to one knee, head bowing",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            },
+            "nira": {
+              "action": "drops to one knee a beat after him, head bowing",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            },
+            "rhel": {
+              "action": "drops to both knees, hands on his thighs",
+              "parts": [
+                "torso",
+                "legs",
+                "hands"
+              ]
+            },
+            "sela": {
+              "action": "stands tall at the ring, watching them kneel",
+              "parts": []
+            },
+            "kesh": {
+              "action": "drops to one knee behind her",
+              "parts": [
+                "torso",
+                "legs"
+              ]
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "armored knees strike the iron floor one after another",
+                "source": {
+                  "characterId": "vardan",
+                  "part": "legs"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "described",
+              "description": "a single deep war drum hit"
+            }
+          }
+        },
+        {
+          "sceneNumber": 14,
+          "locationId": "sky_forge_exterior",
+          "storyBeat": "But far above, the hanging citadel wakes to the new empress.",
+          "timeRangeSeconds": [
+            26.5,
+            29
+          ],
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 26.5,
                 "position": [
                   72,
                   -128,
@@ -531,7 +1339,7 @@
                 "verticalFovDegrees": 55
               },
               {
-                "timeSeconds": 2,
+                "timeSeconds": 29,
                 "position": [
                   52,
                   -98,
@@ -547,17 +1355,10 @@
             ]
           },
           "performances": {},
-          "motion": "Ash streams across the hanging citadel above molten rivers",
           "sound": {
             "events": [
               {
-                "text": "sky-chains groan under the hanging weight",
-                "source": {
-                  "landmarkId": "citadel"
-                }
-              },
-              {
-                "text": "wind tears ash across the hanging iron",
+                "text": "a deep iron bell tolls across the storm",
                 "source": {
                   "landmarkId": "citadel"
                 }
@@ -565,506 +1366,11 @@
             ],
             "bed": "present",
             "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 2,
-          "locationId": "sun_well_court",
-          "storyBeat": "The sun-well is shown as a killing machine before anyone speaks.",
-          "timeRangeSeconds": [
-            2,
-            4
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 2,
-                "position": [
-                  0,
-                  -9.5,
-                  1.35
-                ],
-                "lookAt": [
-                  0,
-                  4.5,
-                  1.15
-                ],
-                "verticalFovDegrees": 32
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "stands still under guard, breathing slowly",
-              "parts": []
-            },
-            "tomas": {
-              "action": "stands still, watching her",
-              "parts": []
-            },
-            "vardan": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
-            },
-            "nira": {
-              "action": "stands motionless in the line of nobles, watching",
-              "parts": []
+              "kind": "described",
+              "description": "a low rising drone of brass"
             }
           },
-          "motion": "White-gold fire stands in the well like a blade, flickering",
-          "sound": {
-            "events": [
-              {
-                "text": "the fire surges upward with a deep furnace boom and rising crackle",
-                "source": {
-                  "landmarkId": "sun_well"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 3,
-          "locationId": "sun_well_court",
-          "storyBeat": "The outsider and the last prince are spatially trapped in front of the priesthood.",
-          "timeRangeSeconds": [
-            8,
-            10
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 8,
-                "position": [
-                  0,
-                  -8.8,
-                  1.72
-                ],
-                "lookAt": [
-                  0,
-                  2.4,
-                  1.3
-                ],
-                "verticalFovDegrees": 62
-              },
-              {
-                "timeSeconds": 10,
-                "position": [
-                  -1.1,
-                  -7.6,
-                  1.86
-                ],
-                "lookAt": [
-                  0,
-                  3,
-                  1.36
-                ],
-                "verticalFovDegrees": 58
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "stands close beside him, braced, shoulders tight",
-              "parts": [
-                "torso",
-                "arms"
-              ]
-            },
-            "tomas": {
-              "action": "stands at her side, chest heaving, hands loose at his sides",
-              "parts": [
-                "torso",
-                "hands"
-              ]
-            },
-            "vardan": {
-              "action": "holds the center of the priests' line, armor shifting as he settles his weight",
-              "parts": [
-                "torso"
-              ]
-            },
-            "nira": {
-              "action": "holds the line, shifting her stance on the iron floor",
-              "parts": [
-                "legs",
-                "feet"
-              ]
-            },
-            "kesh": {
-              "action": "holds the line, motionless",
-              "parts": [
-                "torso"
-              ]
-            },
-            "rhel": {
-              "action": "stands motionless at the end of the line, head high",
-              "parts": [
-                "face"
-              ]
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "armor plates shift",
-                "source": {
-                  "characterId": "vardan",
-                  "part": "torso"
-                }
-              },
-              {
-                "text": "boots grind on slag-gold iron",
-                "source": {
-                  "characterId": "nira",
-                  "part": "feet"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 4,
-          "locationId": "sun_well_court",
-          "storyBeat": "The high priest sentences her in front of his wall of rank.",
-          "speakerId": "vardan",
-          "timeRangeSeconds": [
-            10,
-            15
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 10.0,
-                "position": [
-                  0.55,
-                  3.77,
-                  1.77
-                ],
-                "lookAt": [
-                  1.3,
-                  6,
-                  1.69
-                ],
-                "verticalFovDegrees": 24
-              }
-            ]
-          },
-          "performances": {
-            "vardan": {
-              "action": "stands rigid at the center of the line and speaks without moving his body",
-              "parts": [
-                "face",
-                "torso"
-              ],
-              "expression": "cold ceremonial authority: brows level, lips parted to speak"
-            }
-          },
-          "dialogue": {
-            "line": "The sun-well takes a false bride tonight.",
-            "delivery": "low, ceremonial, cruel; still face, merciless articulation"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "armor settles as he holds still in the wind",
-                "source": {
-                  "characterId": "vardan",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 5,
-          "locationId": "sun_well_court",
-          "storyBeat": "The marshal erases House Voss in public so the well can take her.",
-          "speakerId": "nira",
-          "timeRangeSeconds": [
-            24,
-            29
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 24.0,
-                "position": [
-                  -1.69,
-                  4.45,
-                  1.61
-                ],
-                "lookAt": [
-                  -1.8,
-                  6.8,
-                  1.53
-                ],
-                "verticalFovDegrees": 24
-              }
-            ]
-          },
-          "performances": {
-            "nira": {
-              "action": "stands at the front of the line, chin lifted in scorn",
-              "parts": [
-                "face",
-                "torso"
-              ],
-              "expression": "open scorn: chin lifted, lips parted to speak"
-            }
-          },
-          "dialogue": {
-            "line": "House Voss died with the old emperor.",
-            "delivery": "sharp, dismissive; clipped, public scorn"
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "her plate armor creaks as she draws breath to speak",
-                "source": {
-                  "characterId": "nira",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "faint",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 6,
-          "locationId": "sun_well_court",
-          "storyBeat": "Sela walks toward the machine that is supposed to kill her.",
-          "timeRangeSeconds": [
-            29,
-            31
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 29,
-                "position": [
-                  -1.24,
-                  -0.19,
-                  0.3
-                ],
-                "lookAt": [
-                  -1.4,
-                  -2,
-                  0.48
-                ],
-                "verticalFovDegrees": 36
-              },
-              {
-                "timeSeconds": 31,
-                "position": [
-                  -2.15,
-                  2.05,
-                  0.36
-                ],
-                "lookAt": [
-                  -0.4,
-                  1,
-                  0.5
-                ],
-                "verticalFovDegrees": 34
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "walks forward at a steady, unhurried pace, the wrap swaying against her legs with each step",
-              "parts": [
-                "legs",
-                "feet"
-              ]
-            },
-            "tomas": {
-              "action": "stands still, watching her",
-              "parts": []
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "bare feet strike the iron floor in soft steps",
-                "source": {
-                  "characterId": "sela",
-                  "part": "feet"
-                }
-              },
-              {
-                "text": "wrap cloth brushes her legs",
-                "source": {
-                  "characterId": "sela",
-                  "part": "legs"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 7,
-          "locationId": "sun_well_court",
-          "storyBeat": "The well answers her blood before she speaks.",
-          "timeRangeSeconds": [
-            31,
-            33
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 31,
-                "position": [
-                  1.85,
-                  1.85,
-                  1.56
-                ],
-                "lookAt": [
-                  -0.4,
-                  1,
-                  1.55
-                ],
-                "verticalFovDegrees": 14
-              },
-              {
-                "timeSeconds": 33,
-                "position": [
-                  2.15,
-                  2.05,
-                  1.56
-                ],
-                "lookAt": [
-                  -0.29,
-                  1.4,
-                  1.55
-                ],
-                "verticalFovDegrees": 14
-              }
-            ]
-          },
-          "performances": {
-            "sela": {
-              "action": "holds perfectly still and does not blink; she swallows once, the collar shifting at her throat",
-              "parts": [
-                "eyes",
-                "neck"
-              ],
-              "expression": "wary wonder: eyes wide and unblinking, brows lifting, lips still"
-            }
-          },
-          "motion": "Forge-gold light flickers across her eyes",
-          "sound": {
-            "events": [
-              {
-                "text": "the iron collar scrapes faintly as she swallows",
-                "source": {
-                  "characterId": "sela",
-                  "part": "neck"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
-        },
-        {
-          "sceneNumber": 8,
-          "locationId": "sun_well_court",
-          "storyBeat": "The wall of rank breaks, proving they believed the well would obey them.",
-          "timeRangeSeconds": [
-            45,
-            47
-          ],
-          "camera": {
-            "keyframes": [
-              {
-                "timeSeconds": 45,
-                "position": [
-                  0,
-                  -5.4,
-                  1.72
-                ],
-                "lookAt": [
-                  0,
-                  6.6,
-                  1.4
-                ],
-                "verticalFovDegrees": 54
-              }
-            ]
-          },
-          "performances": {
-            "vardan": {
-              "action": "flinches back half a step with the others, then freezes, staring in shock",
-              "parts": [
-                "neck",
-                "arms"
-              ]
-            },
-            "nira": {
-              "action": "flinches back half a step with the others, then freezes, staring in shock",
-              "parts": [
-                "torso",
-                "legs"
-              ]
-            },
-            "kesh": {
-              "action": "flinches back half a step with the others, then freezes, staring in shock",
-              "parts": [
-                "torso",
-                "legs"
-              ]
-            },
-            "rhel": {
-              "action": "flinches back half a step with the others, then freezes, staring in shock",
-              "parts": [
-                "torso",
-                "legs"
-              ]
-            },
-            "sela": {
-              "action": "stands still under guard, breathing slowly",
-              "parts": []
-            }
-          },
-          "sound": {
-            "events": [
-              {
-                "text": "armor plates clatter as the priests flinch together",
-                "source": {
-                  "characterId": "nira",
-                  "part": "torso"
-                }
-              }
-            ],
-            "bed": "present",
-            "music": {
-              "kind": "none"
-            }
-          }
+          "motion": "Molten light floods the windows of the hanging citadel and its chains swing"
         }
       ]
     }

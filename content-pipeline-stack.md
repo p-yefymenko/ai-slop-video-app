@@ -107,15 +107,15 @@ Trailing plate instructions such as "a single object" are dropped. Names and ids
 
 ### 5. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
 
-`content:generate` animates each reviewed start still. Clip geometry is shared (`clip_spec.py`): **448×768**, **24 fps**, length **`8n+1`** for the scene duration. Stills are center-cropped and resized through `fit_to_clip` before LTX.
+`content:generate` animates each reviewed start still in two stages. Stage 1 generates the motion at **448×768** (`clip_spec.py`), **24 fps**, length **`8n+1`** for the scene duration. Stage 2 (`ltxSpatialUpscale`, `"x2"`; `null` turns it off) enlarges that latent with LTX's spatial upscaler (`ltx-2.3-spatial-upscaler-x2-1.1`), re-anchors the start still at **896×1536**, and refines it in the distilled model's short schedule (`_REFINE_SIGMAS`) on the plain model, so mouths, eyes, and skin are generated at the larger size while stage 1's motion stays. In a depth-controlled graph the guide frames are cropped off before stage 2. Clips are decoded tiled. It nearly fills a 16 GB card (it spills into shared memory) and takes about 2.5× as long as stage 1 alone.
 
 **Routing**
 
 | Scene | Graph | Control |
 | --- | --- | --- |
-| Spatial change (camera or someone in the location moves) | `workflows/ltx_gemma_api_depth.json`, or `ltx_gemma_api_depth_dialogue.json` when `speakerId` is set | Start still + Depth Anything control video through the union IC-LoRA |
-| No spatial change | `workflows/ltx_gemma_api.json` | Start still only (plain image-to-video) |
-| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph; logs `depth control disabled by override` |
+| The shot changes (the camera moves, or someone in shot moves or turns; decided by previs, `moves` in its record) and nobody speaks | `workflows/ltx_gemma_api_depth.json` | Start still + Depth Anything control video through the union IC-LoRA |
+| The shot does not change, or someone speaks | `workflows/ltx_gemma_api.json` | Start still only (plain image-to-video); a speaking shot adds the audio/video `MultimodalGuider`. Depth control holds every surface to the clay, and a clay face cannot talk, so a speaking shot is never depth-controlled. |
+| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph; logs `no depth control (disabled by override)` |
 
 **Depth Anything pass (spatial scenes, before LTX)**
 
@@ -130,7 +130,7 @@ Trailing plate instructions such as "a single object" are dropped. Names and ids
 | IC-LoRA (spatial) | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` via `LTXICLoRALoaderModelOnly` |
 | Video VAE / audio VAE | Matching LTX-2.3 distilled VAEs |
 | Text | `GemmaAPITextEncode` against a tiny safetensors stub that carries the API `model_id`. Local node `LTXAVUseProcessedAPIEmbeds` marks those embeddings as already projected to 6144 so they match the Q4 GGUF. |
-| Size / rate | 448×768, 24 fps, `8n+1` frames |
+| Size / rate | 448×768 stage 1, 896×1536 after stage 2, 24 fps, `8n+1` frames |
 | Sampler | Euler, 8 steps, LTX shift (max 2.05, base 0.95) |
 | Start frame | `LTXVImgToVideo` at `ltxStartStrength` (default **0.7**) |
 | IC-LoRA strength | `ltxIcLoRAStrength` (default **1.0**) on spatial/depth graphs |

@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, FPS, fit_to_clip, ltx_length_for_duration
+from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, FPS, clip_crop_box, fit_to_clip, ltx_length_for_duration
 from depth_control import (
     choose_ltx_workflow,
     ensure_control_depth,
@@ -47,10 +47,10 @@ from pipeline_paths import (
     manifest_path,
     start_still_path,
 )
-from previs import current_previs, load_observation, previs_episode
+from previs import current_previs, load_observation, previs_episode, shot_moves
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
-from world import load_show, look_path, plate_path, scene_has_spatial_change
+from world import load_show, look_path, plate_path
 
 ROOT = Path(__file__).resolve().parents[1]
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -1125,20 +1125,14 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
         add_light(dest, lights)
 
 
-def scene_needs_end_still(episode: dict, scene: dict, config: dict) -> bool:
-    """scene_XX_end.png exists only when prompts.endStill is true and the shot changes."""
-    return bool(config.get("endStill")) and scene_has_spatial_change(episode, scene)
+def scene_needs_end_still(show: dict, episode: dict, scene: dict, config: dict) -> bool:
+    """scene_XX_end.png exists only when prompts.endStill is true and the shot changes (from previs)."""
+    return bool(config.get("endStill")) and bool(shot_moves(show, episode, scene))
 
 
 def generate_frames(show: dict, episode: dict, scene: dict, force: bool, seed: int, renderer: dict) -> bool:
     """Previs this scene, stop on a script/scene mismatch, then draw the still(s)."""
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
-    targets = [("start", start_still_path(*ids))]
-    if scene_needs_end_still(episode, scene, renderer):
-        targets.append(("end", end_still_path(*ids)))
-    if all(present(path) for _label, path in targets) and not force:
-        print(f"  Skipped (already present): {targets[0][1]}", flush=True)
-        return False
     errors = current_previs(show, episode, scene)
     if errors is None:
         errors, _written = previs_episode(show, episode, scene["sceneNumber"])
@@ -1146,10 +1140,70 @@ def generate_frames(show: dict, episode: dict, scene: dict, force: bool, seed: i
         print("  Previs is current; reusing its guides.", flush=True)
     if errors:
         raise SystemExit("The script does not match its 3D scene:\n- " + "\n- ".join(errors))
+    targets = [("start", start_still_path(*ids))]
+    if scene_needs_end_still(show, episode, scene, renderer):
+        targets.append(("end", end_still_path(*ids)))
+    if all(present(path) for _label, path in targets) and not force:
+        print(f"  Skipped (already present): {targets[0][1]}", flush=True)
+        return False
     for label, path in targets:
         if force or not present(path):
             render_still(show, episode, scene, label, path, seed)
     return True
+
+
+# LTX's second stage: its spatial upscaler enlarges the finished low-resolution latent,
+# then the distilled model refines it in its own short schedule, so fine detail
+# (mouths, eyes, skin) is generated at the larger size while the motion from the
+# first stage stays.
+_SPATIAL_UPSCALERS = {
+    "x2": ("ltx-2.3-spatial-upscaler-x2-1.1.safetensors", 2.0),
+    "x1.5": ("ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors", 1.5),
+}
+_REFINE_SIGMAS = "0.909375, 0.725, 0.421875, 0.0"
+
+
+def inject_spatial_upscale(graph: dict, still: Path, factor: str, strength: float, seed: int, *, depth: bool) -> tuple[int, int]:
+    """Add stage 2 after the first sampler: upscale the video latent, re-anchor the start frame, refine.
+
+    In a depth-controlled graph the depth guide shaped stage 1; its guide frames
+    are cropped off first, and the refine runs on the plain model, which keeps
+    stage 1's motion in its short schedule.
+    """
+    name, scale = _SPATIAL_UPSCALERS[factor]
+    width, height = int(round(CLIP_WIDTH * scale / 32) * 32), int(round(CLIP_HEIGHT * scale / 32) * 32)
+    image = Image.open(still).convert("RGB")
+    sharp = image.crop(clip_crop_box(image.width, image.height)).resize((width, height), Image.Resampling.LANCZOS)
+    staged = COMFY_INPUT_DIR / f"ltx_start_{factor}_{still.name}"
+    sharp.save(staged)
+    graph["40"] = {"inputs": {"model_name": name}, "class_type": "LatentUpscaleModelLoader"}
+    video = ["28", 2] if depth else ["25", 0]
+    guider = ["17", 0]
+    if depth:
+        graph["49"] = {"inputs": {"max_shift": 2.05, "base_shift": 0.95, "model": ["11", 0], "latent": video}, "class_type": "ModelSamplingLTXV"}
+        graph["50"] = {"inputs": {"model": ["49", 0], "conditioning": ["28", 0]}, "class_type": "BasicGuider"}
+        guider = ["50", 0]
+    graph["41"] = {"inputs": {"samples": video, "upscale_model": ["40", 0], "vae": ["9", 0]}, "class_type": "LTXVLatentUpsampler"}
+    graph["42"] = {"inputs": {"image": staged.name}, "class_type": "LoadImage", "_meta": {"title": "Start frame, stage 2"}}
+    graph["43"] = {
+        "inputs": {"vae": ["9", 0], "image": ["42", 0], "latent": ["41", 0], "strength": strength, "bypass": False},
+        "class_type": "LTXVImgToVideoInplace",
+    }
+    graph["44"] = {"inputs": {"video_latent": ["43", 0], "audio_latent": ["25", 1]}, "class_type": "LTXVConcatAVLatent"}
+    graph["45"] = {"inputs": {"sigmas": _REFINE_SIGMAS}, "class_type": "ManualSigmas"}
+    graph["46"] = {"inputs": {"noise_seed": seed + 1}, "class_type": "RandomNoise"}
+    graph["47"] = {
+        "inputs": {"noise": ["46", 0], "guider": guider, "sampler": ["14", 0], "sigmas": ["45", 0], "latent_image": ["44", 0]},
+        "class_type": "SamplerCustomAdvanced",
+        "_meta": {"title": "Refine at the upscaled size"},
+    }
+    graph["48"] = {"inputs": {"av_latent": ["47", 0]}, "class_type": "LTXVSeparateAVLatent"}
+    graph["8"] = {
+        "inputs": {"samples": ["48", 0], "vae": ["9", 0], "tile_size": 512, "overlap": 64, "temporal_size": 64, "temporal_overlap": 8},
+        "class_type": "VAEDecodeTiled",
+    }
+    graph["26"]["inputs"]["samples"] = ["48", 1]
+    return width, height
 
 
 def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: dict, use_depth: bool) -> Path:
@@ -1181,7 +1235,12 @@ def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: d
         if scene.get("speakerId"):
             inject_dialogue_multimodal_guider(graph)
         inject_start_frame(graph, stage_start_still(still, fit_clip=True), strength=start_strength)
-    if os.environ.get("LTX_TILED_VAE", "").strip() in {"1", "true", "yes"}:
+
+    upscale = renderer.get("ltxSpatialUpscale")
+    if upscale:
+        size = inject_spatial_upscale(graph, still, upscale, start_strength, seed, depth=use_depth)
+        print(f"  Stage 2: {upscale} spatial upscale to {size[0]}x{size[1]}", flush=True)
+    elif os.environ.get("LTX_TILED_VAE", "").strip() in {"1", "true", "yes"}:
         node = graph.get("8")
         if isinstance(node, dict) and node.get("class_type") == "VAEDecode":
             node["class_type"] = "VAEDecodeTiled"
@@ -1242,10 +1301,15 @@ def generate_show(show: dict, stage: str, partial: bool = False, force: bool = F
                 raise SystemExit(
                     f"Missing start still {start_still_path(*ids)}. Run `pnpm run content:frames`, review it, then rerun."
                 )
-            spatial = scene_has_spatial_change(episode, scene)
-            use_depth = spatial and scene_depth_control_enabled(*ids, renderer)
+            spatial = shot_moves(show, episode, scene)
+            if spatial is None:
+                raise SystemExit(f"Scene {scene['sceneNumber']:02d} has no previs. Run `pnpm run content:frames` first.")
+            # Depth control holds every surface to the clay, and a clay face cannot
+            # talk: a shot where someone speaks is never depth-controlled.
+            use_depth = spatial and not scene.get("speakerId") and scene_depth_control_enabled(*ids, renderer)
             if spatial and not use_depth:
-                print(f"Scene {scene['sceneNumber']:02d}: depth control disabled by override", flush=True)
+                reason = "someone speaks" if scene.get("speakerId") else "disabled by override"
+                print(f"Scene {scene['sceneNumber']:02d}: no depth control ({reason})", flush=True)
             pending.append((scene, use_depth))
         depth_scenes = [scene for scene, use_depth in pending if use_depth]
         for scene in depth_scenes:
@@ -1291,7 +1355,7 @@ def stage_needs_comfy(shows: list[dict], stage: str) -> bool:
                     needed = [clip_path(*ids)]
                 else:
                     needed = [start_still_path(*ids)]
-                    if scene_needs_end_still(episode, scene, renderer):
+                    if scene_needs_end_still(show, episode, scene, renderer):
                         needed.append(end_still_path(*ids))
                 if not all(present(path) for path in needed):
                     return True

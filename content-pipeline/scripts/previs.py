@@ -352,12 +352,12 @@ def write_world(show, episode, scene, samples) -> Path:
     return destination
 
 
-def write_clay_24fps(show, episode, scene) -> Path | None:
+def write_clay_24fps(show, episode, scene, moves: bool) -> Path | None:
     """Clay at clip size and rate, the input Depth Anything turns into the control video."""
     from ffmpeg_tools import encode_rgb_frames
 
     path = clay_24fps_path(show["id"], episode["episodeNumber"], scene["sceneNumber"])
-    if not scene_has_spatial_change(episode, scene):
+    if not moves:
         path.unlink(missing_ok=True)
         return None
     start = float(scene["timeRangeSeconds"][0])
@@ -408,12 +408,22 @@ def render_scene(show: dict, episode: dict, scene: dict) -> tuple[list[str], lis
     video = blockout_video_path(show["id"], episode["episodeNumber"], scene["sceneNumber"])
     encode_rgb_frames(b"".join(image.tobytes() for image in clay), WIDTH, HEIGHT, BLOCKOUT_FPS, video)
     written += [video, write_world(show, episode, scene, samples)]
-    clay_24 = write_clay_24fps(show, episode, scene)
+    seen = {
+        entity_id
+        for _time, observation, _entities in samples
+        for entity_id, entry in observation["entities"].items()
+        if entry["kind"] == "character" and in_shot(observation, entity_id)
+    }
+    moves = scene_has_spatial_change(episode, scene, seen)
+    clay_24 = write_clay_24fps(show, episode, scene, moves)
     if clay_24:
         written.append(clay_24)
     errors = check_scene(show, episode, scene, samples)
     record = record_path(show, episode, scene)
-    record.write_text(json.dumps({"inputs": inputs_digest(show, episode, scene), "errors": errors}, indent=2), encoding="utf-8")
+    record.write_text(
+        json.dumps({"inputs": inputs_digest(show, episode, scene), "errors": errors, "moves": moves}, indent=2),
+        encoding="utf-8",
+    )
     return errors, written + [record]
 
 
@@ -433,6 +443,14 @@ def inputs_digest(show: dict, episode: dict, scene: dict) -> str:
     for name in ("world.py", "render.py", "observe.py", "checks.py", "previs.py", "body_parts.py", "../prompts.json"):
         digest.update((here / name).read_bytes())
     return digest.hexdigest()
+
+
+def shot_moves(show: dict, episode: dict, scene: dict) -> bool | None:
+    """Whether the shot changes (camera, or someone in it), from the last previs; None before any."""
+    record = record_path(show, episode, scene)
+    if not record.is_file():
+        return None
+    return bool(json.loads(record.read_text(encoding="utf-8")).get("moves"))
 
 
 def current_previs(show: dict, episode: dict, scene: dict) -> list[str] | None:

@@ -38,6 +38,8 @@ QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
 QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+# Stage 2 of LTX: enlarge the low-resolution latent, then refine it in a few steps.
+LTX_UPSCALERS = ("ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors")
 LTX_IC_LORA_REPO = "Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control"
 LTX_IC_LORA_FILE = "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"
 VIDEO_DEPTH_ANYTHING_REPO = "depth-anything/Video-Depth-Anything-Small"
@@ -168,6 +170,8 @@ def main() -> None:
     download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
     download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
     download(LTX_IC_LORA_REPO, LTX_IC_LORA_FILE, models / "loras" / LTX_IC_LORA_FILE, 100_000_000)
+    for name in LTX_UPSCALERS:
+        download(META_REPO, name, models / "latent_upscale_models" / name, 100_000_000)
     vda_dest = models / "videodepthanything" / VIDEO_DEPTH_ANYTHING_FILE
     download(
         VIDEO_DEPTH_ANYTHING_REPO,

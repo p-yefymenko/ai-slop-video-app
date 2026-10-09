@@ -19,7 +19,6 @@ PROMPTS_PATH = ROOT / "prompts.json"
 COMFY_INPUT = ROOT / ".comfyui" / "input"
 COMFY_OUTPUT = ROOT / ".comfyui" / "output"
 LTX_DEPTH_WF = ROOT / "workflows" / "ltx_gemma_api_depth.json"
-LTX_DEPTH_DIALOGUE_WF = ROOT / "workflows" / "ltx_gemma_api_depth_dialogue.json"
 LTX_PLAIN_WF = ROOT / "workflows" / "ltx_gemma_api.json"
 
 
@@ -31,7 +30,11 @@ def load_renderer_config(prompts: dict | None = None) -> dict:
         options = {}
     loudness = data.get("episodeLoudnessTargetLufs")
     loudness_target = float(loudness) if isinstance(loudness, (int, float)) else None
+    upscale = data.get("ltxSpatialUpscale")
+    if upscale not in (None, "x2", "x1.5"):
+        raise SystemExit(f'prompts.json ltxSpatialUpscale must be "x2", "x1.5", or null, not {upscale!r}')
     return {
+        "ltxSpatialUpscale": upscale,
         "endStill": bool(data.get("endStill", False)),
         "ltxStartStrength": float(data.get("ltxStartStrength", 0.7)),
         "ltxIcLoRAStrength": float(data.get("ltxIcLoRAStrength", 1.0)),
@@ -203,8 +206,6 @@ def inject_depth_ltx_graph(
 
 def choose_ltx_workflow(scene: dict, episode: dict, *, spatial: bool) -> tuple[Path, str]:
     if spatial:
-        if scene.get("speakerId"):
-            return LTX_DEPTH_DIALOGUE_WF, "ltx_gemma_api_depth_dialogue.json"
         return LTX_DEPTH_WF, "ltx_gemma_api_depth.json"
     return LTX_PLAIN_WF, "ltx_gemma_api.json"
 

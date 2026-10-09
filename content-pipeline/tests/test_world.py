@@ -108,6 +108,16 @@ BEHIND = {**FRONT, "face": [1800, 42000], "eyes": [900, 30000]}
 
 
 class TimelineTests(unittest.TestCase):
+    def test_only_movement_the_camera_sees_changes_the_shot(self) -> None:
+        drifting = [
+            {"timeSeconds": 0, "locationId": "room", "position": [3, 3, 0], "bodyYawDegrees": 0},
+            {"timeSeconds": 2, "locationId": "room", "position": [3.5, 3, 0], "bodyYawDegrees": 0},
+        ]
+        show = show_with({"ada": drifting})
+        episode = show["episodes"][0]
+        self.assertFalse(world.scene_has_spatial_change(episode, scene(), set()), "out of shot")
+        self.assertTrue(world.scene_has_spatial_change(episode, scene(), {"ada"}), "in shot")
+
     def test_walk_turn_and_location_change(self) -> None:
         track = [
             {"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 350},
@@ -328,6 +338,38 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(int(np.count_nonzero((seen.entity == 1) & (seen.region == face))), 0, "hidden behind the fire")
 
 
+
+
+class UpscaleTests(unittest.TestCase):
+    def test_the_upscale_setting_reaches_the_clip_stage(self) -> None:
+        from depth_control import load_renderer_config
+
+        self.assertEqual(load_renderer_config({"ltxSpatialUpscale": "x2"})["ltxSpatialUpscale"], "x2")
+        self.assertIsNone(load_renderer_config({})["ltxSpatialUpscale"])
+        with self.assertRaises(SystemExit):
+            load_renderer_config({"ltxSpatialUpscale": "x3"})
+
+    def test_stage_two_refines_the_upscaled_latent_and_decodes_it(self) -> None:
+        import json as _json
+
+        from PIL import Image
+
+        import generate_batch as gb
+
+        root = Path(__file__).resolve().parents[1]
+        for workflow, depth in (("ltx_gemma_api.json", False), ("ltx_gemma_api_depth.json", True)):
+            graph = gb.clone_workflow(_json.loads((root / "workflows" / workflow).read_text(encoding="utf-8")))
+            with tempfile.TemporaryDirectory() as folder, patch.object(gb, "COMFY_INPUT_DIR", Path(folder)):
+                still = Path(folder) / "still.png"
+                Image.new("RGB", (768, 1360), (90, 90, 90)).save(still)
+                size = gb.inject_spatial_upscale(graph, still, "x2", 0.7, 5, depth=depth)
+            self.assertEqual(size, (896, 1536))
+            self.assertEqual(graph["41"]["inputs"]["samples"], ["28", 2] if depth else ["25", 0], "guides cropped first")
+            self.assertEqual(graph["47"]["inputs"]["guider"], ["50", 0] if depth else ["17", 0])
+            if depth:
+                self.assertEqual(graph["49"]["inputs"]["model"], ["11", 0], "the refine has no depth guide")
+            self.assertEqual(graph["8"]["inputs"]["samples"], ["48", 0])
+            self.assertEqual(graph["26"]["inputs"]["samples"], ["48", 1])
 
 
 class PasteTests(unittest.TestCase):

@@ -5,6 +5,87 @@ alwaysApply: false
 ---
 
 /**
+ * HOW TO WRITE AN EPISODE PEOPLE KEEP WATCHING
+ *
+ * Measured on the reference (`packages/shared/src/reel-short-content-reference/
+ * return-of-the-wolf.mp4`): 197 s, 81 shots, median shot 2.3 s, 17 shots under
+ * 1 s, only 7 over 5 s. Roughly half the runtime is physical action; about 20
+ * spoken lines in total, each 2–6 words.
+ *
+ * 1. A chain, never a list. Write the beats first, joined only by "therefore"
+ *    or "but", never "and then". A beat that can be cut without breaking the
+ *    chain is cut. Reference: beasts stampede → therefore the werewolf lords
+ *    run → but a vampire lord blocks them → therefore they change and attack →
+ *    but he breaks all three → therefore the elders send a boy → but they call
+ *    the vampire weak → therefore the vampire mocks the boy → but the boy
+ *    catches his fist → therefore the vampire is thrown into a rock → therefore
+ *    the boy shrugs: "I only beat a weak vampire."
+ *
+ * 2. Episode shape (60–90 s):
+ *    - Hook, 0–3 s: danger already in motion, before any face or word (a
+ *      stampede, a scream, a blast, someone running). No calm establishing.
+ *    - Threat proof: the antagonist wins against someone who matters. The cost
+ *      is visible: a wound, a body thrown, a captive.
+ *    - Underdog: the protagonist is dismissed out loud. The status gap is said.
+ *    - Confrontation: two or three lines of insult, no more.
+ *    - Reversal: one physical moment flips status (catches the fist, does not
+ *      flinch, a hidden power). Shown in one shot, never explained.
+ *    - Payoff: the humiliation lands (thrown, forced to kneel); onlookers react.
+ *    - Button: a last line or image that is a punchline or opens a question.
+ *
+ * 3. Status, not feelings. Each scene answers "who is above whom right now, and
+ *    does it flip?". People act on status: mock, threaten, grab, interrupt,
+ *    kneel, laugh. Nobody explains feelings, history, or the rules of the world.
+ *
+ * 4. Lines are moves. 2–8 words, one line per shot: taunt, threat, insult,
+ *    order, boast, defiance, punchline. Bad: "The sun-well takes a false bride
+ *    tonight." (ceremony, nobody does anything to anybody). Good: "Kneel, or
+ *    burn." / "Another puppy came to die?" / "You're nothing." Every line is
+ *    answered by a reaction shot (a face, a gasp, a step back) before the next.
+ *
+ * 5. Action over talk. At least half the scenes have physical action: lunge,
+ *    strike, grab, shove, fall, throw, run, a power going off. A shot of people
+ *    standing and watching exists only as a 1–2 s reaction between moves.
+ *
+ * 6. Only what a camera sees. Every phrase in `action`, `expression`, `motion`,
+ *    and sound names a verb, the body part, and where it goes: "lunges forward
+ *    and seizes his wrist", "staggers back two steps, a hand on the bleeding
+ *    chest", not "asserts dominance", "is shaken", "radiates authority". No
+ *    abstractions (destiny, power, honor) and no metaphors ("like a blade").
+ *
+ * 7. Shot grammar. Cut between: a wide (rare, 1–2 s); a group or two-shot; a
+ *    medium close-up for every spoken line; an extreme close-up for the
+ *    wounding line or a power (eyes, teeth, a hand); inserts of hands, feet,
+ *    claws, weapons (1–2 s); low angle (camera low, looking up) for whoever has
+ *    power; high angle for whoever is beaten; over-the-shoulder for an exchange;
+ *    reaction shots. Never two consecutive shots with the same framing.
+ *
+ * 8. Durations: insert or reaction 1–2 s; action beat 2–3 s; a spoken line
+ *    2–4 s (only a line over ~8 words gets 5 s). Most scenes are 2–3 s, so a
+ *    60 s episode has about 20–30 scenes.
+ *
+ * What this pipeline can show (write for it, not against it):
+ * - Every person's mesh stands upright, so every shot starts with them
+ *   standing; the motion happens during the clip. Write actions that begin
+ *   standing: lunge, strike, recoil, stagger, fall, turn, grab. Never a shot
+ *   that starts kneeling, lying, or in mid-air.
+ * - Contact (a grab, a blow) happens inside one clip: put both people within
+ *   arm's reach at the start of the shot, and give each a performance that
+ *   describes the same contact from their side.
+ * - Fire, sparks, glow, steam, and mist are effects. Dark smoke is not yet.
+ * - No text is drawn: no name cards, no captions.
+ * - A speaker needs a medium close-up; previs rejects a talking face that is
+ *   too small. A shot where someone speaks has no depth guide, so keep its
+ *   camera simple.
+ *
+ * Before writing JSON, check: the beats read as a therefore/but chain; the
+ * first scene is moving danger with no line; at least half the scenes are
+ * action; every line is ≤ 8 words and a move, followed by a reaction; every
+ * performance has a verb, a body part, and a direction; no two consecutive
+ * scenes share a framing; the last scene is a punchline or a question.
+ */
+
+/**
  * Types from `packages/shared/src/script.ts`.
  * Comments are how to author any vertical microdrama, not a particular plot.
  *
@@ -153,9 +234,11 @@ export type SpatialCameraKeyframe = {
 export type SpatialCamera = {
   /**
    * Coverage of the same blocking, not a new scene. An episode needs all of:
-   * silent world open, character before they speak, proof of power (action/VFX),
-   * group or OTS dialogue, ECU on the wounding line, body/hand/foot insert,
-   * approach or fight. Heads may leave the frame.
+   * a moving-danger hook, proof of power on someone who matters, group or OTS
+   * dialogue, a medium close-up per line, an ECU on the wounding line or the
+   * power, hand/foot/weapon inserts, a low angle on whoever has power, a high
+   * angle on whoever is beaten, reactions, and a physical fight or reversal.
+   * Heads may leave the frame.
    * One keyframe is locked-off; more than one interpolates.
    * Everything the lens sees is in the shot: a wide of the court shows everyone
    * standing in it, so they all need performances.
@@ -169,9 +252,10 @@ export type ScriptScene = {
   /** Confrontation stays in the arena. Hook may be its exterior. */
   locationId: string;
   /**
-   * Cause and effect of this cut, written before prompts.
-   * Episode skeleton: hook (world + threat) → pressure (status as a group) →
-   * reversal → cliffhanger. Not framing, blocking, or camera.
+   * One link of the chain, written before anything else: after the first
+   * scene it starts with "Therefore" or "But" and says what someone does to
+   * someone and why it follows: "But the boy catches the vampire's fist." Not
+   * framing, blocking, camera, or a mood ("tension rises").
    */
   storyBeat: string;
   /**
@@ -179,7 +263,7 @@ export type ScriptScene = {
    * Their face must be visible in the start frame. Omit on silent spectacle.
    */
   speakerId?: string;
-  /** ~2s for world, inserts, and VFX; 3–6s for one spoken line. */
+  /** Insert or reaction 1–2 s; action 2–3 s; one spoken line 2–4 s (5 s only past ~8 words). */
   timeRangeSeconds: [number, number];
   /** Required. Prompt-only scenes are forbidden. */
   camera: SpatialCamera;
@@ -190,7 +274,11 @@ export type ScriptScene = {
    * a background line "stands motionless, watching her".
    */
   performances: Record<string, ScenePerformance>;
-  /** The spoken line. Required exactly when `speakerId` is set. */
+  /**
+   * The spoken line. Required exactly when `speakerId` is set. `line` is 2–8
+   * words and a move (taunt, threat, insult, order, boast, defiance, punchline).
+   * `delivery` is audible: "sneering, low and slow", "shouted, breaking".
+   */
   dialogue?: { line: string; delivery: string };
   /**
    * Motion that belongs to no character: fire, smoke, sparks, cloth, light.
@@ -213,9 +301,11 @@ export type ScriptScene = {
 
 export type ScenePerformance = {
   /**
-   * Visible motion for the whole take, positive and present tense:
-   * "slowly lifts her chin, jaw tightening". Never name a character; LTX only
-   * sees the frame. Say "him" / "her" and let lookAtId set the gaze.
+   * Visible motion for the whole take, positive and present tense: a verb, the
+   * body part, and where it goes. "lunges forward and seizes his wrist", "slowly
+   * lifts her chin, jaw tightening", not "asserts dominance". It starts from
+   * standing (the mesh pose). Never name a character; LTX only sees the frame.
+   * Say "him" / "her" and let lookAtId set the gaze.
    */
   action: string;
   /**
@@ -262,8 +352,9 @@ export type ShowEpisode = {
   coinCost: number;
   spatialTimeline: SpatialTimeline;
   /**
-   * One crisis, ~0–60s. Cut order: world → face → power proof → group pressure
-   * → ECU/reversal → cliffhanger. Do not open on a talking single.
+   * One crisis, ~60–90 s, ~20–30 scenes. Shape: moving-danger hook (no line)
+   * → threat proof → underdog dismissed → confrontation → physical reversal →
+   * payoff with reactions → button. Do not open on a talking single.
    */
   scenes: ScriptScene[];
 };
