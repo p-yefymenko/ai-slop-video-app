@@ -65,6 +65,21 @@ def describe_numbers(visible_px: int, extent_px: int | None) -> str:
     return f"{visible_px} px visible of {extent_px} px"
 
 
+def ground_depth(camera: dict, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Where each pixel's ray meets the ground plane (z=0) out to the horizon: (camera-forward
+    meters, inf above the horizon; world x; world y)."""
+    height, width = shape
+    position, right, up, forward, focal = camera_basis(camera, height)
+    ys, xs = np.indices((height, width))
+    vx = (xs + 0.5 - width / 2.0) / focal
+    vy = (height / 2.0 - (ys + 0.5)) / focal
+    ray = right[None, None, :] * vx[..., None] + up[None, None, :] * vy[..., None] + forward[None, None, :]
+    down = ray[..., 2] < -1e-4
+    t = np.where(down, -position[2] / np.where(down, ray[..., 2], -1.0), np.inf)
+    t = np.where(t > 0, t, np.inf)
+    return t, position[0] + np.where(np.isfinite(t), t, 0.0) * ray[..., 0], position[1] + np.where(np.isfinite(t), t, 0.0) * ray[..., 1]
+
+
 def backdrop_labels(camera: dict, frame, entities, size) -> np.ndarray:
     """0 where a landmark, prop, or person is, else 1 sky, 2 ground, 3 surround.
 
@@ -73,19 +88,10 @@ def backdrop_labels(camera: dict, frame, entities, size) -> np.ndarray:
     """
     from scipy import ndimage
 
-    height, width = frame.depth.shape
-    position, right, up, forward, focal = camera_basis(camera, height)
-    ys, xs = np.indices((height, width))
-    vx = (xs + 0.5 - width / 2.0) / focal
-    vy = (height / 2.0 - (ys + 0.5)) / focal
-    ray = right[None, None, :] * vx[..., None] + up[None, None, :] * vy[..., None] + forward[None, None, :]
-    down = ray[..., 2] < -1e-4
-    t = np.where(down, -position[2] / np.where(down, ray[..., 2], -1.0), np.inf)
-    hit = np.isfinite(t) & (t > 0)
-    hx = position[0] + np.where(hit, t, 0.0) * ray[..., 0]
-    hy = position[1] + np.where(hit, t, 0.0) * ray[..., 1]
+    t, hx, hy = ground_depth(camera, frame.depth.shape)
+    hit = np.isfinite(t)
     inside = hit & (np.abs(hx) <= size[0] / 2.0) & (np.abs(hy) <= size[1] / 2.0)
-    labels = np.full((height, width), 1, dtype=np.uint8)
+    labels = np.full(frame.depth.shape, 1, dtype=np.uint8)
     labels[hit & ~inside] = 3
     labels[inside] = 2
     floor = [index + 1 for index, entity in enumerate(entities) if entity.kind == "floor"]

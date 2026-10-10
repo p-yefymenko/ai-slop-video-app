@@ -135,6 +135,30 @@ def screen_box(entity, camera: dict, width: int = WIDTH, height: int = HEIGHT) -
     return float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())
 
 
+def height_band(entity, camera: dict, window: list[float], width: int = WIDTH, height: int = HEIGHT) -> tuple[float, float]:
+    """The slice of the entity's height that lands inside ``window`` (pixels), as fractions of it, 0 at its feet.
+
+    Every plate shows its whole entity upright from the front, so the same slice
+    of the plate is how the part a close shot shows looks.
+    """
+    position, right, up, forward, focal = camera_basis(camera, height)
+    local = entity.mesh.vertices[:: max(1, len(entity.mesh.vertices) // 200_000)]
+    points = entity.to_world(local) - position
+    depth = points @ forward
+    ahead = depth > NEAR
+    safe = np.where(ahead, depth, 1.0)
+    xs = width / 2 + focal * (points @ right) / safe
+    ys = height / 2 - focal * (points @ up) / safe
+    left, top, right_edge, bottom = window
+    inside = ahead & (xs >= left) & (xs <= right_edge) & (ys >= top) & (ys <= bottom)
+    if not inside.any():
+        return 0.0, 1.0
+    low, high = float(entity.mesh.low[2]), float(entity.mesh.high[2])
+    span = max(high - low, 1e-6)
+    z = local[inside, 2]
+    return max(0.0, (float(z.min()) - low) / span), min(1.0, (float(z.max()) - low) / span)
+
+
 @dataclass
 class Frame:
     clay: np.ndarray  # (H, W, 3) uint8, viewport gray where empty

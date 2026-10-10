@@ -36,6 +36,7 @@ def load_renderer_config(prompts: dict | None = None) -> dict:
     return {
         "ltxSpatialUpscale": upscale,
         "endStill": bool(data.get("endStill", False)),
+        "verifyAttempts": int(data.get("verifyAttempts", 3)),
         "ltxStartStrength": float(data.get("ltxStartStrength", 0.7)),
         "ltxIcLoRAStrength": float(data.get("ltxIcLoRAStrength", 1.0)),
         "controlDepth": str(data.get("controlDepth") or "depthanything"),

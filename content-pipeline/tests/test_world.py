@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+from PIL import Image
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -117,6 +119,23 @@ class TimelineTests(unittest.TestCase):
         episode = show["episodes"][0]
         self.assertFalse(world.scene_has_spatial_change(episode, scene(), set()), "out of shot")
         self.assertTrue(world.scene_has_spatial_change(episode, scene(), {"ada"}), "in shot")
+
+    def test_depth_control_only_where_the_clay_shows_the_shot(self) -> None:
+        standing = [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0}]
+        walking = [*standing, {"timeSeconds": 2, "locationId": "room", "position": [0.5, 0, 0], "bodyYawDegrees": 0}]
+        dolly = {"keyframes": [
+            {"timeSeconds": 0, "position": [0, -4, 1.5], "lookAt": [0, 0, 1.2], "verticalFovDegrees": 40},
+            {"timeSeconds": 2, "position": [0, -3, 1.5], "lookAt": [0, 0, 1.2], "verticalFovDegrees": 40},
+        ]}
+        still_episode = show_with({"ada": standing})["episodes"][0]
+        fits = lambda episode, **extra: world.depth_control_fits(episode, scene(**extra), {"ada"})
+        glance = {"ada": {"action": "glances aside", "parts": ["eyes", "face"]}}
+        wave = {"ada": {"action": "waves", "parts": ["arms", "hands"]}}
+        self.assertTrue(fits(still_episode, camera=dolly, performances=glance), "moving camera, still outline")
+        self.assertFalse(fits(still_episode, performances=glance), "locked camera: nothing for the clay to hold")
+        self.assertFalse(fits(still_episode, camera=dolly, performances=wave), "a clay arm cannot wave")
+        self.assertFalse(fits(show_with({"ada": walking})["episodes"][0], camera=dolly), "a clay body slides")
+        self.assertFalse(fits(still_episode, camera=dolly, performances=glance, speakerId="ada"), "a clay face cannot talk")
 
     def test_walk_turn_and_location_change(self) -> None:
         track = [
@@ -258,6 +277,17 @@ class DescribeTests(unittest.TestCase):
         self.assertIn("No music plays.", prompt)
         start["effects"] = [{"id": "bench", "appearance": "white-gold flames", "guide": "effect_bench_0"}]
         self.assertIn("Moving all through the take: white-gold flames.", ltx_prompt(show, shot, start))
+        empty = ltx_prompt(show, scene(), observation({}))
+        self.assertIn("Preserve its set, composition", empty)
+        self.assertNotIn("people", empty, "an empty shot never mentions people")
+
+    def test_an_action_points_only_at_what_the_start_frame_shows(self) -> None:
+        show = show_with({})
+        reach = {"ada": {"action": "reaches toward {target}", "parts": ["arms"], "target": "bench"}}
+        start = observation({"ada": FRONT})
+        self.assertIn("reaches toward the stone bench.", ltx_prompt(show, scene(performances=reach), start))
+        start["effects"] = [{"id": "bench", "appearance": "white-gold flames"}]
+        self.assertIn("reaches toward the white-gold flames.", ltx_prompt(show, scene(performances=reach), start))
 
     def test_an_effect_is_drawn_with_its_host(self) -> None:
         show = show_with({})
@@ -266,9 +296,10 @@ class DescribeTests(unittest.TestCase):
         solid = drawn_prompt(show, scene(), "landmark", "bench", ["Depth", "OwnColor", "Edges", "Appearance"])
         self.assertIn("One stone bench.", solid)
         self.assertNotIn("flames", solid, "the solid drawing has no effects")
-        prompt = effect_prompt(show, scene(), "landmark", "bench", ["Depth", "Look"])
+        prompt = effect_prompt(show, scene(), "landmark", "bench", ["Base", "Look"])
         self.assertIn("Picture 2 is how it looks with its effects.", prompt)
-        self.assertIn("Draw only its white-gold flames", prompt)
+        self.assertIn("Picture 1 is the object on pure black.", prompt)
+        self.assertIn("Add only its white-gold flames", prompt)
         self.assertIn("pure black", prompt)
         plate = world.plate_path(show, "landmark", "bench", "room")
         self.assertEqual(world.look_path(show, "landmark", "bench", "room"), plate.with_name("look.png"))
@@ -281,10 +312,12 @@ class CheckTests(unittest.TestCase):
         show = show_with({})
         start = observation({"ada": BEHIND})
         unlisted = check_scene(show, show["episodes"][0], scene(), [(0.0, start, [])])
-        self.assertTrue(any("ada is visible from 0s but has no performance" in e for e in unlisted))
+        self.assertFalse(any("ada" in e for e in unlisted), "someone caught by the camera without a performance holds still")
+        held = ltx_prompt(show, scene(), start)
+        self.assertIn("In the center, adult woman, brown skin: stands still", held)
         shot = scene(
             speakerId="ada",
-            performances={"ada": {"action": "talks", "parts": ["face"], "expression": "jaw set"}},
+            performances={"ada": {"action": "talks to {target}", "parts": ["face"], "expression": "jaw set", "target": "bench"}},
             sound={"events": [{"text": "a breath", "source": {"landmarkId": "bench"}}], "bed": "faint", "music": {"kind": "none"}},
         )
         errors = "\n".join(check_scene(show, show["episodes"][0], shot, [(0.0, start, [])]))
@@ -292,6 +325,7 @@ class CheckTests(unittest.TestCase):
         self.assertIn("expression is set, but their face is not visible", errors)
         self.assertIn("speaker ada's face is 1800 px visible of 42000 px in the start frame; a speaking face needs at least", errors)
         self.assertIn("comes from bench, which is not visible", errors)
+        self.assertIn("performances.ada.target is bench, which is not visible in the start frame", errors)
         absent = check_scene(show, show["episodes"][0], shot, [(0.0, observation({}), [])])
         self.assertTrue(any("performances.ada is set, but ada is never visible" in e for e in absent))
 
@@ -372,6 +406,49 @@ class UpscaleTests(unittest.TestCase):
             self.assertEqual(graph["26"]["inputs"]["samples"], ["48", 1])
 
 
+class VerifyTests(unittest.TestCase):
+    def test_a_failed_output_is_remade_with_a_new_seed_and_reported(self) -> None:
+        from generate_batch import verified
+
+        with tempfile.TemporaryDirectory() as folder:
+            dest = Path(folder) / "scene_01.mp4"
+            seeds: list[int] = []
+            answers = iter([["an invented person"], []])
+            problems = verified(seeds.append, lambda: next(answers), 7, dest, 3)
+            self.assertEqual(problems, [])
+            self.assertEqual(len(seeds), 2)
+            self.assertEqual(seeds[0], 7)
+            self.assertNotEqual(seeds[1], 7, "a retry never repeats the failed seed")
+            stuck = verified(seeds.append, lambda: ["an invented person"], 7, dest, 2)
+            self.assertEqual(stuck, ["an invented person"])
+            report = json.loads((Path(folder) / "inputs" / "scene_01" / "verify.json").read_text(encoding="utf-8"))
+            self.assertEqual(report, {"tries": 2, "problems": ["an invented person"]})
+
+    def test_a_person_where_the_scene_has_nobody_is_invented(self) -> None:
+        from unittest import mock
+
+        import verify
+
+        frame = Image.new("RGB", (40, 40))
+        expected = np.zeros((40, 40), dtype=bool)
+        expected[:, :20] = True
+        left, right = np.zeros_like(expected), np.zeros_like(expected)
+        left[5:35, 5:15] = True
+        right[5:35, 25:35] = True
+        with mock.patch.object(verify, "people", return_value=[left]):
+            self.assertEqual(verify.invented_people(frame, expected, 1), [])
+        with mock.patch.object(verify, "people", return_value=[left, right]):
+            found = verify.invented_people(frame, expected, 1)
+            self.assertIn("stands where the 3D scene has nobody", found[0])
+            self.assertIn("2 people in the picture, but the 3D scene has at most 1", found[1])
+            fire = np.zeros_like(expected)
+            fire[:, 22:] = True  # a tall flame the detector takes for a person
+            self.assertEqual(verify.invented_people(frame, expected, 1, fire), [], "nobody is judged inside fire")
+        leg = np.zeros_like(expected)
+        leg[20:35, 5:10] = True  # a part of the same person, found again
+        self.assertEqual(len(verify._distinct([left, leg])), 1, "one person is counted once")
+
+
 class PasteTests(unittest.TestCase):
     def test_an_effect_is_added_as_light_only_where_the_shot_shows_it(self) -> None:
         from PIL import Image
@@ -381,18 +458,26 @@ class PasteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             Image.new("RGB", (40, 80), (20, 30, 60)).save(root / "still.png")
-            fire = Image.new("RGB", (40, 80), (8, 8, 8))  # a dim, not quite black, background
+            base = Image.new("RGB", (40, 80), (0, 0, 0))
+            base.paste((90, 90, 100), (25, 10, 35, 30))  # its own stones, already pasted into the shot
+            base.save(root / "base.png")
+            fire = base.copy()
+            fire.paste((150, 120, 100), (25, 10, 35, 30))  # the stones re-lit by the fire, not a flame
             fire.paste((255, 170, 40), (10, 10, 20, 30))
             fire.paste((255, 170, 40), (10, 50, 20, 70))
             fire.save(root / "fire.png")
             where = Image.new("L", (40, 80), 0)
             where.paste(255, (0, 0, 40, 40))  # only the upper half is the effect's box in the shot
             where.save(root / "where.png")
-            add_light(root / "still.png", [(root / "fire.png", root / "where.png", [0.0, 0.0, 40.0, 80.0])])
+            solid = Image.new("L", (40, 80), 0)
+            solid.paste(255, (25, 10, 35, 30))  # where the stones are
+            solid.save(root / "solid.png")
+            add_light(root / "still.png", [(root / "fire.png", root / "base.png", root / "solid.png", root / "where.png", [0.0, 0.0, 40.0, 80.0])])
             image = Image.open(root / "still.png")
             flame = image.getpixel((15, 20))
             self.assertGreater(flame[0], 240, "a flame brightens the shot")
-            self.assertEqual(image.getpixel((30, 20)), (20, 30, 60), "its dim background adds nothing")
+            self.assertEqual(image.getpixel((30, 20)), (20, 30, 60), "what it redrew of itself adds nothing")
+            self.assertEqual(image.getpixel((5, 20)), (20, 30, 60), "black adds nothing")
             self.assertEqual(image.getpixel((15, 60)), (20, 30, 60), "outside its box nothing is added")
 
     def test_drawings_are_laid_far_to_near(self) -> None:
@@ -435,6 +520,87 @@ class PasteTests(unittest.TestCase):
             draw = Image.open(root / "draw.png")
             self.assertEqual(draw.getpixel((10, 20)), 0, "a laid-in pixel is kept")
             self.assertEqual(draw.getpixel((10, 35)), 255, "everything else is drawn by the shot")
+            self.assertEqual(json.loads((root / "coverage.json").read_text(encoding="utf-8")), {"drawn": 1.0})
+            half = Image.new("L", (40, 80), 0)
+            half.paste(255, (0, 0, 20, 80))  # the drawn subject stands beside where the mesh is
+            half.save(root / "matte.png")
+            paste_drawn(
+                root / "color.png",
+                [(root / "drawn.png", root / "matte.png", root / "shown.png", [0.0, 0.0, 20.0, 40.0])],
+                root / "out.png",
+                root / "draw.png",
+            )
+            self.assertLess(json.loads((root / "coverage.json").read_text(encoding="utf-8"))["drawn"], 0.85)
+
+    def test_the_matte_looks_only_where_the_mesh_is(self) -> None:
+        from generate_batch import REGION_GROW_PIXELS, mesh_region
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            depth = Image.new("RGB", (100, 100), (0, 0, 0))
+            depth.paste((120, 120, 120), (0, 30, 10, 90))  # only an arm at the window's edge
+            depth.save(root / "depth.png")
+            region = Image.open(mesh_region(root / "depth.png", root / "region.png"))
+            self.assertEqual(region.getpixel((5, 50)), 255)
+            self.assertEqual(region.getpixel((10 + REGION_GROW_PIXELS - 2, 50)), 255, "hair and cloth may reach past it")
+            self.assertEqual(region.getpixel((60, 50)), 0, "a whole person drawn beside it is not looked at")
+
+
+class ShotTests(unittest.TestCase):
+    """A shot's camera follows from the blocking: it frames its subject by construction."""
+
+    def setUp(self) -> None:
+        import math
+
+        self.math = math
+        tracks = {
+            "ada": [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0, "lookAtId": "bram"}],
+            "bram": [{"timeSeconds": 0, "locationId": "room", "position": [0, 3, 0], "bodyYawDegrees": 180, "lookAtId": "ada"}],
+        }
+        self.show = show_with(tracks)
+        self.show["characters"]["bram"] = dict(self.show["characters"]["ada"], heightMeters=1.8)
+
+    def frame(self, **shot):
+        from shots import frame_shot
+
+        return frame_shot(self.show, self.show["episodes"][0], scene(shot=shot))
+
+    def test_a_single_is_seen_along_its_gaze_with_the_head_in_frame(self) -> None:
+        from shots import PEOPLE_FOV, SIZES
+
+        pose = self.frame(type="single", subjects=["ada"], size="mcu")[0]
+        self.assertGreater(pose["position"][1], 0.5, "in front of her, toward whom she looks")
+        self.assertAlmostEqual(pose["position"][0], 0.0, places=3)
+        distance = self.math.dist(pose["position"], pose["lookAt"])
+        shown = 2 * distance * self.math.tan(self.math.radians(PEOPLE_FOV) / 2)
+        self.assertAlmostEqual(shown, SIZES["mcu"], places=2, msg="the frame's height shows the medium close-up band")
+        self.assertGreater(pose["lookAt"][2] + shown / 2, 1.7, "the top of the head is in frame")
+
+    def test_angle_side_and_move(self) -> None:
+        eye = self.frame(type="single", subjects=["ada"])[0]
+        low = self.frame(type="single", subjects=["ada"], angle="low")[0]
+        self.assertLess(low["position"][2], eye["position"][2], "a low angle looks up")
+        left = self.frame(type="single", subjects=["ada"], side="left")[0]
+        self.assertNotAlmostEqual(left["position"][0], 0.0, places=2, msg="a three-quarter view")
+        push = self.frame(type="single", subjects=["ada"], move="pushIn")
+        self.assertEqual(len(push), 2)
+        self.assertLess(self.math.dist(push[1]["position"], push[1]["lookAt"]), self.math.dist(push[0]["position"], push[0]["lookAt"]))
+
+    def test_over_the_shoulder_sits_behind_the_near_one(self) -> None:
+        pose = self.frame(type="overShoulder", subjects=["bram"], over="ada", size="mcu")[0]
+        self.assertLess(pose["position"][1], 0.0, "behind her, looking past her at him")
+        self.assertAlmostEqual(pose["lookAt"][1], 3.0, places=3)
+
+    def test_an_authored_camera_is_kept(self) -> None:
+        from shots import resolve_cameras
+
+        own = {"keyframes": [{"timeSeconds": 0, "position": [0, -5, 2], "lookAt": [0, 0, 1], "verticalFovDegrees": 50}]}
+        single = scene(shot={"type": "single", "subjects": ["ada"]})
+        del single["camera"]
+        self.show["episodes"][0]["scenes"] = [scene(shot={"type": "establishing"}, camera=own), single]
+        framed = resolve_cameras(self.show)["episodes"][0]["scenes"]
+        self.assertIs(framed[0]["camera"], own)
+        self.assertGreater(framed[1]["camera"]["keyframes"][0]["position"][1], 0.5, "framed from its subject")
 
 
 class WindowTests(unittest.TestCase):

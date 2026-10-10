@@ -28,19 +28,19 @@ Then either:
 
 ```bash
 pnpm run content:validate
-pnpm run content:render -- --show the-iron-bride --episode 1
+pnpm run content:render -- --show return-of-the-wolf --episode 1
 ```
 
 or the same four stages by hand, so you can inspect the clay blockout and stills:
 
 ```bash
 pnpm run content:validate
-pnpm run content:plates -- --show the-iron-bride
-pnpm run content:assets -- --show the-iron-bride
-pnpm run content:previs -- --show the-iron-bride --episode 1
-pnpm run view -- --show the-iron-bride
-pnpm run content:frames -- --show the-iron-bride --episode 1
-pnpm run content:generate -- --show the-iron-bride --episode 1
+pnpm run content:plates -- --show return-of-the-wolf
+pnpm run content:assets -- --show return-of-the-wolf
+pnpm run content:previs -- --show return-of-the-wolf --episode 1
+pnpm run view -- --show return-of-the-wolf
+pnpm run content:frames -- --show return-of-the-wolf --episode 1
+pnpm run content:generate -- --show return-of-the-wolf --episode 1
 ```
 
 Use `pnpm run view`, not `pnpm view` (that is pnpm’s package lookup). The viewer is `http://127.0.0.1:5174` and needs `--show`.
@@ -58,7 +58,7 @@ Useful flags (all stages accept them; plates and assets ignore `--episode` / `--
 Existing files are skipped unless `--force` is set on a selected scene. After a structural script rewrite, archive first:
 
 ```bash
-pnpm run content:archive -- the-iron-bride
+pnpm run content:archive -- return-of-the-wolf
 ```
 
 ## Where files live

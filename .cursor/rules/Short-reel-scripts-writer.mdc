@@ -49,9 +49,17 @@ alwaysApply: false
  *
  * 6. Only what a camera sees. Every phrase in `action`, `expression`, `motion`,
  *    and sound names a verb, the body part, and where it goes: "lunges forward
- *    and seizes his wrist", "staggers back two steps, a hand on the bleeding
- *    chest", not "asserts dominance", "is shaken", "radiates authority". No
- *    abstractions (destiny, power, honor) and no metaphors ("like a blade").
+ *    and seizes the wrist of {target}", "staggers back two steps, a hand on the
+ *    bleeding chest", not "asserts dominance", "is shaken", "radiates
+ *    authority". No abstractions (destiny, power, honor) and no metaphors
+ *    ("like a blade").
+ *    Visual text never points at anyone: no names and no pronouns (he, him,
+ *    his, she, her, they, them, it, someone). The video model sees only the
+ *    frame and shows whoever a word points at, so "glares down at her" with
+ *    nobody else in the shot makes it invent a woman. Write the body itself
+ *    ("the jaw tightens", "lifts the chin"). To aim an action at someone or
+ *    something in the start frame, set `target` and write `{target}`; gaze
+ *    comes from lookAtId. Someone who is not in the shot is never mentioned.
  *
  * 7. Shot grammar. Cut between: a wide (rare, 1–2 s); a group or two-shot; a
  *    medium close-up for every spoken line; an extreme close-up for the
@@ -75,8 +83,12 @@ alwaysApply: false
  * - Fire, sparks, glow, steam, and mist are effects. Dark smoke is not yet.
  * - No text is drawn: no name cards, no captions.
  * - A speaker needs a medium close-up; previs rejects a talking face that is
- *   too small. A shot where someone speaks has no depth guide, so keep its
- *   camera simple.
+ *   too small.
+ * - Meshes are rigid statues, so only a moving camera over people holding
+ *   still (faces and eyes may move) follows the 3D blocking exactly. A shot
+ *   where someone walks, turns, gestures, or speaks is animated from its still
+ *   and its words alone: keep its motion simple and its camera locked or
+ *   slow.
  *
  * Before writing JSON, check: the beats read as a therefore/but chain; the
  * first scene is moving danger with no line; at least half the scenes are
@@ -265,13 +277,28 @@ export type ScriptScene = {
   speakerId?: string;
   /** Insert or reaction 1–2 s; action 2–3 s; one spoken line 2–4 s (5 s only past ~8 words). */
   timeRangeSeconds: [number, number];
-  /** Required. Prompt-only scenes are forbidden. */
-  camera: SpatialCamera;
+  /**
+   * What the shot shows, as one of the tested shot types. For every shot of
+   * people the pipeline computes the camera from the blocking (who stands
+   * where, looking at whom), so the subject is always framed:
+   * - single: { subjects: [id], size: ecu|cu|mcu|medium|full } (speakers: mcu or cu)
+   * - group: { subjects: [ids…], size: mcu|medium|full|wide }
+   * - overShoulder: { subjects: [seen], over: nearId, size: cu|mcu|medium }
+   * - insert: { subjects: [id], part } for a body detail, or a prop or landmark
+   * - establishing: the place, with its own camera
+   * - action: { subjects, size: full|wide } or its own camera
+   * Plus angle: eye|low (power)|high (defeat), side: front|left|right
+   * (three-quarter), move: static|pushIn|pullOut. To change the view, change
+   * the blocking or the shot, never coordinates.
+   */
+  shot: SceneShot;
+  /** Only for establishing (required) and action (optional) shots. */
+  camera?: SpatialCamera;
   /**
    * One entry for everyone the camera sees at any moment of the shot, no more;
    * `{}` when nobody is visible. LTX invents motion it is not given (hands
    * drifting in, touching props), so even stillness is written as an action:
-   * a background line "stands motionless, watching her".
+   * a background line "stands motionless, watching".
    */
   performances: Record<string, ScenePerformance>;
   /**
@@ -301,13 +328,21 @@ export type ScriptScene = {
 
 export type ScenePerformance = {
   /**
-   * Visible motion for the whole take, positive and present tense: a verb, the
-   * body part, and where it goes. "lunges forward and seizes his wrist", "slowly
-   * lifts her chin, jaw tightening", not "asserts dominance". It starts from
-   * standing (the mesh pose). Never name a character; LTX only sees the frame.
-   * Say "him" / "her" and let lookAtId set the gaze.
+   * Visible motion for the whole take, positive and present tense, of this
+   * person's own body: a verb, the body part, and where it goes. "lunges
+   * forward and seizes {target} by the wrist", "slowly lifts the chin, jaw
+   * tightening", not "asserts dominance". It starts from standing (the mesh
+   * pose). No names and no pronouns: LTX only sees the frame and invents
+   * whoever a word points at. Another person or thing is only `{target}`;
+   * lookAtId sets the gaze.
    */
   action: string;
+  /**
+   * Who or what the action is aimed at, written `{target}` in the action: a
+   * character, prop, or landmark id. It must be in the start frame (previs
+   * checks); the clip prompt names it by where the frame shows it.
+   */
+  target?: string;
   /**
    * Body parts the action moves; `[]` when the action is stillness (a
    * background figure holding still). Each must be on screen at some moment

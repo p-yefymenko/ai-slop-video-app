@@ -16,7 +16,7 @@ Schema space is X right, Y forward, Z up. glTF is Y-up, and forward is -Z. `cont
 
 ## Models
 
-Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 is MIT. BiRefNet removes the plate background before the mesh pass. Generated meshes are recorded in `docs/CREDITS.md`.
+Qwen-Image-Edit-2511 is Apache-2.0. TRELLIS.2 is MIT. BiRefNet removes the plate background before the mesh pass. The output checks use torchvision's Mask R-CNN (BSD-3-Clause, COCO weights), YuNet (MIT), and SFace (Apache-2.0). Generated meshes are recorded in `docs/CREDITS.md`.
 
 Mixamo is not a source. Its terms restrict automated download. People in previs are clay mannequins.
 

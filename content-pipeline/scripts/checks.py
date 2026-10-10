@@ -3,9 +3,10 @@
 Every check uses ``observe.visible``, the same test a still uses to name
 something. A script passes only when what it says on camera is on camera:
 
-- anyone visible during the shot has a performance, and nobody else does;
+- every performance belongs to someone visible during the shot (anyone else the camera catches holds still);
 - every part a performance moves is visible at some moment of the shot;
 - an expression is drawn only on a face visible in the start frame;
+- whatever an action is aimed at (its target) is visible in the start frame;
 - the speaker's face is large enough to lip-sync in the start frame;
 - every sound source is visible in the start frame;
 - the camera is never inside a mesh.
@@ -54,13 +55,9 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
             if entry["kind"] == "character" and entity_id not in first_seen and on_screen(observation, entity_id):
                 first_seen[entity_id] = (time_seconds, observation)
 
+    # Someone the camera happens to catch who is not a subject and has no performance
+    # holds still (describe.ltx_prompt says so); the camera is framed, not authored.
     performances = scene.get("performances") or {}
-    for cid, (time_seconds, _observation) in first_seen.items():
-        if cid not in performances:
-            errors.append(
-                f"{where}: {cid} is visible from {time_seconds:g}s but has no performance, so the video "
-                f"model invents their motion. Add performances.{cid}, or move them or the camera."
-            )
     for cid, performance in performances.items():
         if cid not in first_seen:
             state = start["entities"].get(cid)
@@ -75,6 +72,13 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
                     f"{where}: performances.{cid}.parts names {part}, but their {part} is never visible "
                     f"in the shot (start: {_numbers(start, cid, part)}). Reframe, re-block, or change the action."
                 )
+        target = performance.get("target")
+        if target and not on_screen(start, target):
+            errors.append(
+                f"{where}: performances.{cid}.target is {target}, which is not visible in the start frame "
+                f"({_numbers(start, target)}); the video model would invent it. Frame it, or drop the target "
+                f"and keep the action to their own body."
+            )
         if performance.get("expression") and not on_screen(start, cid, ["face"]):
             errors.append(
                 f"{where}: performances.{cid}.expression is set, but their face is not visible in the start "

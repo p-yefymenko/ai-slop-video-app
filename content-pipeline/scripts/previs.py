@@ -21,7 +21,7 @@ from checks import check_scene
 from clip_spec import FPS as CLIP_FPS
 from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, clip_frame_count, fit_to_clip
 from coords import schema_to_gltf
-from observe import in_shot, observe
+from observe import ground_depth, in_shot, observe
 from pipeline_paths import (
     OUTPUT_DIR,
     blockout_video_path,
@@ -33,8 +33,8 @@ from pipeline_paths import (
     guide_path,
     scene_description_path,
 )
-from render import HEIGHT, WIDTH, render
-from world import camera_at, effect_entity, entities_at, load_show, required_meshes, scene_has_spatial_change
+from render import HEIGHT, WIDTH, height_band, render
+from world import camera_at, effect_entity, entities_at, load_show, required_meshes, depth_control_fits, scene_has_spatial_change
 
 BLOCKOUT_FPS = 8
 # Plate color is banded across nearby shades; one band is one flat area.
@@ -59,12 +59,22 @@ def load_observation(show_id: str, episode_number: int, scene_number: int, label
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def depth_image(depth: np.ndarray) -> Image.Image:
-    """Near surfaces are bright. Empty space is black."""
+def depth_image(depth: np.ndarray, beyond: np.ndarray | None = None) -> Image.Image:
+    """Near surfaces are bright. Empty space (sky) is black.
+
+    ``beyond`` is the depth of what lies past every mesh, the ground running on
+    to the horizon: it is shaded too, at its own distance, so the horizon is a
+    real edge and the ground past the floor is never read as empty space. The
+    shading spans the meshes' depths; anything farther is the darkest surface.
+    """
+    surfaces = np.isfinite(depth)
+    if beyond is not None:
+        depth = np.where(surfaces, depth, beyond)
     valid = np.isfinite(depth)
     gray = np.zeros(depth.shape, dtype=np.uint8)
     if valid.any():
-        near, far = np.percentile(depth[valid], 1), np.percentile(depth[valid], 99)
+        measured = depth[surfaces] if surfaces.any() else depth[valid]
+        near, far = np.percentile(measured, 1), np.percentile(measured, 99)
         normalized = np.clip((far - depth) / max(far - near, 1e-3), 0.0, 1.0)
         gray[valid] = np.rint(48.0 + normalized[valid] * 207.0).astype(np.uint8)
     return Image.fromarray(np.stack((gray,) * 3, axis=-1))
@@ -166,13 +176,15 @@ def color_image(frame, entities, labels: np.ndarray | None, backdrop: dict | Non
 DRAWN_ALONE = ("character", "prop", "landmark")
 
 
-def crop_window(entity, camera: dict) -> list[float] | None:
+def crop_window(entity, camera: dict, whole: bool = False) -> list[float] | None:
     """A frame-shaped window around the whole entity and its effects, so it is always drawn whole.
 
     A person cut by the frame edge is still a whole person in its window (the
     window may run past the frame); the shot keeps only what it shows. Only an
     entity bigger than the frame gets a frame-sized window over the part in view,
-    so a drawing is only ever scaled down into the shot, never up.
+    so a drawing is only ever scaled down into the shot, never up. ``whole`` keeps the whole window
+    anyway: effects are drawn onto their whole host, and soft light may be
+    scaled up.
     """
     from render import screen_box
 
@@ -185,7 +197,7 @@ def crop_window(entity, camera: dict) -> list[float] | None:
     if min(x1, WIDTH) <= max(x0, 0.0) or min(y1, HEIGHT) <= max(y0, 0.0):
         return None
     height = max((y1 - y0) * 1.06, (x1 - x0) * 1.06 * HEIGHT / WIDTH, 16.0)
-    if height <= HEIGHT:
+    if height <= HEIGHT or whole:
         width = height * WIDTH / HEIGHT
         left, top = (x0 + x1) / 2 - width / 2, (y0 + y1) / 2 - height / 2
     else:
@@ -201,6 +213,8 @@ def crop_window(entity, camera: dict) -> list[float] | None:
 SHOWN_GROW_PIXELS = 4
 # Flames and smoke spill past their box, and fade out over a wider edge.
 EFFECT_GROW_PIXELS = 8
+# A whole host drawn as the base of its effects may be at most this many frames tall.
+WHOLE_MAX_SCALE = 4.0
 
 
 def _soft(mask: np.ndarray, sigma: float) -> Image.Image:
@@ -267,10 +281,11 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
     location = show["locations"][scene["locationId"]]
     camera = observation["camera"]
+    beyond = ground_depth(camera, frame.depth.shape)[0]
     images = {
         clay_frame_path(*ids, label): Image.fromarray(frame.clay),
-        guide_path(*ids, label, "depth"): depth_image(frame.depth),
-        guide_path(*ids, label, "edges"): edge_image(frame.depth),
+        guide_path(*ids, label, "depth"): depth_image(frame.depth, beyond),
+        guide_path(*ids, label, "edges"): edge_image(np.where(np.isfinite(frame.depth), frame.depth, beyond)),
         guide_path(*ids, label, "color"): color_image(frame, entities, labels, location["backdrop"]),
     }
     observation["effects"] = []
@@ -279,10 +294,21 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
             continue
         effects = [render([effect_entity(entity, number)], camera) for number in range(len(entity.effects))]
         seen = [bool(np.isfinite(effect.depth).any()) for effect in effects]
-        if not in_shot(observation, entity.id) and not any(seen):
-            continue
         crop = crop_window(entity, camera)
-        if crop is None:
+        # Effects are added onto the host's own drawing. When the host is in shot that
+        # is its drawing in the shot's window, sharp. When only its effect is (the
+        # host below the frame, its flames rising into it), the host is drawn again
+        # whole, only as their base; a whole host far bigger than the frame (the
+        # camera almost inside its effect) gives no usable base, and its effects
+        # are not shown at all.
+        whole = crop
+        if any(seen) and not in_shot(observation, entity.id):
+            whole = crop_window(entity, camera, whole=True)
+            if whole is not None and (whole[3] - whole[1]) > HEIGHT * WHOLE_MAX_SCALE:
+                whole = None
+        if whole is None:
+            seen = [False] * len(seen)
+        if crop is None or (not in_shot(observation, entity.id) and not any(seen)):
             continue
         alone = render([entity], camera, crop=crop)
         prefix = f"drawn_{entity.id}"
@@ -290,10 +316,17 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         images[guide_path(*ids, label, f"{prefix}_edges")] = edge_image(alone.depth)
         images[guide_path(*ids, label, f"{prefix}_color")] = color_image(alone, [entity], None, None)
         images[guide_path(*ids, label, f"{prefix}_shown")] = shown_mask(frame, entities, index, render([entity], camera))
-        light = effect_mask(frame, entities, effects)
+        light = effect_mask(frame, entities, [effect for effect, visible in zip(effects, seen) if visible])
         if light is not None:
             images[guide_path(*ids, label, f"{prefix}_effects")] = light
+            if whole != crop:
+                host = render([entity], camera, crop=whole)
+                images[guide_path(*ids, label, f"{prefix}_whole_depth")] = depth_image(host.depth)
+                images[guide_path(*ids, label, f"{prefix}_whole_edges")] = edge_image(host.depth)
+                images[guide_path(*ids, label, f"{prefix}_whole_color")] = color_image(host, [entity], None, None)
+                observation["entities"][entity.id]["wholeCrop"] = whole
         observation["entities"][entity.id]["crop"] = crop
+        observation["entities"][entity.id]["band"] = [round(value, 3) for value in height_band(entity, camera, crop)]
         observation["effects"] += [
             {"id": entity.id, "appearance": effect["appearance"]} for effect, visible in zip(entity.effects, seen) if visible
         ]
@@ -352,12 +385,12 @@ def write_world(show, episode, scene, samples) -> Path:
     return destination
 
 
-def write_clay_24fps(show, episode, scene, moves: bool) -> Path | None:
-    """Clay at clip size and rate, the input Depth Anything turns into the control video."""
+def write_clay_24fps(show, episode, scene, depth_control: bool) -> Path | None:
+    """Clay at clip size and rate, the input Depth Anything turns into the control video. Only for a depth-controlled shot."""
     from ffmpeg_tools import encode_rgb_frames
 
     path = clay_24fps_path(show["id"], episode["episodeNumber"], scene["sceneNumber"])
-    if not moves:
+    if not depth_control:
         path.unlink(missing_ok=True)
         return None
     start = float(scene["timeRangeSeconds"][0])
@@ -369,6 +402,25 @@ def write_clay_24fps(show, episode, scene, moves: bool) -> Path | None:
     )
     encode_rgb_frames(raw, CLIP_WIDTH, CLIP_HEIGHT, CLIP_FPS, path, crf=14)
     return path
+
+
+# Where the outputs may show people: their silhouettes grown by this much. The
+# still is drawn from the start frame; a clip's people act and move within reach.
+STILL_PEOPLE_GROW_PIXELS = 16
+CLIP_PEOPLE_GROW_PIXELS = 96
+
+
+def people_mask(frames, grow: int) -> Image.Image:
+    """Where the 3D scene has a person in any of ``frames`` ((frame, entities) pairs), grown by ``grow`` pixels."""
+    from scipy import ndimage
+
+    found = np.zeros((HEIGHT, WIDTH), dtype=bool)
+    for frame, entities in frames:
+        people = [number + 1 for number, entity in enumerate(entities) if entity.kind == "character"]
+        found |= np.isin(frame.entity, people)
+    if found.any():
+        found = ndimage.binary_dilation(found, iterations=grow)
+    return Image.fromarray(found.astype(np.uint8) * 255)
 
 
 def _clear_guides(show, episode, scene) -> None:
@@ -391,12 +443,14 @@ def render_scene(show: dict, episode: dict, scene: dict) -> tuple[list[str], lis
     times = sample_times(start, finish)
     samples = []
     clay = []
+    seen_people = []
     written: list[Path] = []
     for time_seconds in times:
         label = "start" if time_seconds == times[0] else "end" if time_seconds == times[-1] else None
         observation, frame, labels, entities = observe(show, episode, scene, time_seconds, full=label is not None)
         samples.append((time_seconds, observation, entities))
         clay.append(frame.clay)
+        seen_people.append((frame, entities))
         if label:
             written += write_guides(show, episode, scene, label, observation, frame, labels, entities)
     seen = [
@@ -414,14 +468,24 @@ def render_scene(show: dict, episode: dict, scene: dict) -> tuple[list[str], lis
         for entity_id, entry in observation["entities"].items()
         if entry["kind"] == "character" and in_shot(observation, entity_id)
     }
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    for label, frames, grow in (("start", seen_people[:1], STILL_PEOPLE_GROW_PIXELS), ("clip", seen_people, CLIP_PEOPLE_GROW_PIXELS)):
+        path = guide_path(*ids, label, "people")
+        people_mask(frames, grow).save(path)
+        written.append(path)
+    people = max(
+        sum(1 for entity_id, entry in observation["entities"].items() if entry["kind"] == "character" and in_shot(observation, entity_id))
+        for _time, observation, _entities in samples
+    )
     moves = scene_has_spatial_change(episode, scene, seen)
-    clay_24 = write_clay_24fps(show, episode, scene, moves)
+    depth_control = depth_control_fits(episode, scene, seen)
+    clay_24 = write_clay_24fps(show, episode, scene, depth_control)
     if clay_24:
         written.append(clay_24)
     errors = check_scene(show, episode, scene, samples)
     record = record_path(show, episode, scene)
     record.write_text(
-        json.dumps({"inputs": inputs_digest(show, episode, scene), "errors": errors, "moves": moves}, indent=2),
+        json.dumps({"inputs": inputs_digest(show, episode, scene), "errors": errors, "moves": moves, "depthControl": depth_control, "people": people}, indent=2),
         encoding="utf-8",
     )
     return errors, written + [record]
@@ -451,6 +515,22 @@ def shot_moves(show: dict, episode: dict, scene: dict) -> bool | None:
     if not record.is_file():
         return None
     return bool(json.loads(record.read_text(encoding="utf-8")).get("moves"))
+
+
+def shot_depth_control(show: dict, episode: dict, scene: dict) -> bool | None:
+    """Whether the clay shows the shot as it plays (see ``depth_control_fits``), from the last previs; None before any."""
+    record = record_path(show, episode, scene)
+    if not record.is_file():
+        return None
+    return bool(json.loads(record.read_text(encoding="utf-8")).get("depthControl"))
+
+
+def shot_people(show: dict, episode: dict, scene: dict) -> int | None:
+    """The most people the camera sees at once during the shot, from the last previs; None before any."""
+    record = record_path(show, episode, scene)
+    if not record.is_file():
+        return None
+    return json.loads(record.read_text(encoding="utf-8")).get("people")
 
 
 def current_previs(show: dict, episode: dict, scene: dict) -> list[str] | None:

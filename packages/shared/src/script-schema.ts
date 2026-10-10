@@ -11,8 +11,11 @@ import { z } from "zod";
 
 import {
   BODY_PARTS,
+  SHOT_SIZES,
+  SHOT_TYPES,
   type CharacterSpatialKeyframe,
   type PropSpatialKeyframe,
+  type ScenePerformance,
   type ScriptScene,
   type ShowEpisode,
   type ShowLocation,
@@ -231,6 +234,19 @@ const cameraKeyframeSchema = z
   })
   .strict();
 
+const shotSchema = z
+  .object({
+    type: z.enum(SHOT_TYPES, { errorMap: () => ({ message: `shot.type must be one of ${SHOT_TYPES.join(", ")}` }) }),
+    subjects: z.array(text("shot subject")).optional(),
+    over: text("shot.over").optional(),
+    part: text("shot.part").optional(),
+    size: z.enum(SHOT_SIZES, { errorMap: () => ({ message: `shot.size must be one of ${SHOT_SIZES.join(", ")}` }) }).optional(),
+    angle: z.enum(["eye", "low", "high"]).optional(),
+    side: z.enum(["front", "left", "right"]).optional(),
+    move: z.enum(["static", "pushIn", "pullOut"]).optional(),
+  })
+  .strict();
+
 const locationSoundscapeSchema = z
   .object({
     ambience: text("soundscape.ambience").describe(
@@ -299,6 +315,7 @@ const performanceSchema = z
         required_error: "parts is required",
         invalid_type_error: "parts must be an array",
       }),
+    target: text("performance target").optional(),
     expression: text("performance expression").optional(),
   })
   .strict();
@@ -352,6 +369,7 @@ const sceneSchema = z
       required_error: "timeRangeSeconds is required",
       invalid_type_error: "timeRangeSeconds must be [start, end]",
     }),
+    shot: shotSchema,
     camera: z
       .object({
         keyframes: z
@@ -361,7 +379,8 @@ const sceneSchema = z
           })
           .min(1, "camera.keyframes needs at least one pose"),
       })
-      .strict(),
+      .strict()
+      .optional(),
     performances: z.record(performanceSchema, {
       required_error: "performances is required; use {} when no one is on camera",
       invalid_type_error: "performances must be an object keyed by characterId",
@@ -632,7 +651,7 @@ function vecSub(a: readonly [number, number, number], b: readonly [number, numbe
 
 /** Authored camera travel and rotation across consecutive keyframes. */
 export function cameraTravelScore(scene: ScriptScene): number {
-  const keyframes = scene.camera.keyframes;
+  const keyframes = scene.camera?.keyframes ?? [];
   let travel = 0;
   for (let i = 0; i < keyframes.length - 1; i++) {
     const a = keyframes[i]!;
@@ -655,6 +674,44 @@ function cameraTravelWarnMessage(score: number, threshold: number): string {
     `(Gate 3b: scene 01 scored 39.47 with follow 0.55; scenes 11/06 passed with travel ≤4.04 and ` +
     `follow ≥0.93; scene 04 scored only 2.44 with weak follow 0.686 — not explained by this score)`
   );
+}
+
+// Words that point at a person or thing. In a clip prompt they make the video
+// model show whoever they point at, in frame or not.
+const POINTING_WORDS =
+  /\b(he|him|his|himself|she|her|hers|herself|they|them|their|theirs|themselves|it|its|itself|someone|somebody|anyone|anybody|everyone|everybody)\b/i;
+
+function checkTarget(
+  issues: ScriptIssue[],
+  path: string,
+  characterId: string,
+  performance: ScenePerformance,
+  things: Set<string>,
+) {
+  const placeholders = [...performance.action.matchAll(/\{([^}]*)\}/g)].map((match) => match[1]);
+  if (placeholders.some((name) => name !== "target")) {
+    issues.push({ path: `${path}.action`, message: "the only placeholder an action may use is {target}" });
+  }
+  if (/[{}]/.test(performance.expression ?? "")) {
+    issues.push({ path: `${path}.expression`, message: "an expression has no placeholders; it describes only this face" });
+  }
+  if (performance.target === undefined) {
+    if (placeholders.includes("target")) {
+      issues.push({ path: `${path}.action`, message: "uses {target}, so the performance needs a target" });
+    }
+    return;
+  }
+  if (!placeholders.includes("target")) {
+    issues.push({ path: `${path}.target`, message: "the action must say where it is aimed, as {target}" });
+  }
+  if (performance.target === characterId) {
+    issues.push({ path: `${path}.target`, message: "an action is aimed at someone or something else" });
+  } else if (!things.has(performance.target)) {
+    issues.push({
+      path: `${path}.target`,
+      message: `unknown target ${JSON.stringify(performance.target)}: a character, prop, or landmark of this location`,
+    });
+  }
 }
 
 // Words for something that is not a solid surface. A mesh built from them would
@@ -775,15 +832,17 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
         });
       }
       checkPerformances(issues, show, scene, scenePath);
+      checkShot(issues, show, scene, scenePath);
       checkSceneSoundWarnings(issues, show, scene, scenePath, soundLint);
-      scene.camera.keyframes.forEach((frame, frameIndex) => {
+      const keyframes = scene.camera?.keyframes ?? [];
+      keyframes.forEach((frame, frameIndex) => {
         const path = `${scenePath}.camera.keyframes[${frameIndex}]`;
-        if (frameIndex > 0 && frame.timeSeconds <= scene.camera.keyframes[frameIndex - 1].timeSeconds) {
+        if (frameIndex > 0 && frame.timeSeconds <= keyframes[frameIndex - 1].timeSeconds) {
           issues.push({ path: `${path}.timeSeconds`, message: "keyframe times must increase" });
         }
         checkCameraFrame(issues, path, frame, start, finish);
       });
-      const travel = cameraTravelScore(scene);
+      const travel = scene.camera ? cameraTravelScore(scene) : 0;
       if (travel > CAMERA_TRAVEL_WARN_THRESHOLD) {
         issues.push({
           path: `${scenePath}.camera`,
@@ -794,6 +853,74 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
     });
   });
   return issues;
+}
+
+// Sizes each shot type may use, and how many subjects it frames.
+const SHOT_RULES: Record<ScriptScene["shot"]["type"], { sizes: string[]; subjects: [number, number] }> = {
+  single: { sizes: ["ecu", "cu", "mcu", "medium", "full"], subjects: [1, 1] },
+  group: { sizes: ["mcu", "medium", "full", "wide"], subjects: [2, 99] },
+  overShoulder: { sizes: ["cu", "mcu", "medium"], subjects: [1, 1] },
+  insert: { sizes: [], subjects: [1, 1] },
+  establishing: { sizes: [], subjects: [0, 0] },
+  action: { sizes: ["full", "wide"], subjects: [0, 99] },
+};
+
+/**
+ * A shot names what it shows, and every shot of people gets its camera from the
+ * blocking, so it frames its subjects by construction. Only an establishing or
+ * action shot may set its own camera.
+ */
+function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
+  const shot = scene.shot;
+  const path = `${scenePath}.shot`;
+  const rule = SHOT_RULES[shot.type];
+  const subjects = shot.subjects ?? [];
+  const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
+  const isCharacter = (id: string) => id in show.characters;
+  const things = (id: string) => isCharacter(id) || id in (show.props ?? {}) || id in landmarks;
+  const ownCamera = shot.type === "establishing" || (shot.type === "action" && scene.camera !== undefined);
+  if (scene.camera && !["establishing", "action"].includes(shot.type)) {
+    issues.push({ path: `${scenePath}.camera`, message: `a ${shot.type} shot gets its camera from its subjects; remove camera` });
+  }
+  if (shot.type === "establishing" && !scene.camera) {
+    issues.push({ path: `${scenePath}.camera`, message: "an establishing shot needs its own camera" });
+  }
+  if (!ownCamera && (subjects.length < Math.max(rule.subjects[0], 1) || subjects.length > rule.subjects[1])) {
+    issues.push({
+      path: `${path}.subjects`,
+      message: `a ${shot.type} shot frames ${rule.subjects[0] === rule.subjects[1] ? rule.subjects[0] : `${Math.max(rule.subjects[0], 1)} or more`} subject(s)`,
+    });
+  }
+  subjects.forEach((id, index) => {
+    if (isCharacter(id) && !(id in (scene.performances ?? {}))) {
+      issues.push({ path: `${path}.subjects[${index}]`, message: `${JSON.stringify(id)} is the shot's subject, so it needs a performance` });
+    }
+    const ok = shot.type === "insert" ? things(id) : isCharacter(id);
+    if (!ok) {
+      issues.push({ path: `${path}.subjects[${index}]`, message: `unknown ${shot.type === "insert" ? "character, prop, or landmark" : "character"} ${JSON.stringify(id)}` });
+    }
+  });
+  if (shot.size !== undefined && !rule.sizes.includes(shot.size)) {
+    issues.push({ path: `${path}.size`, message: `a ${shot.type} shot is ${rule.sizes.join(", ") || "not sized"}` });
+  }
+  if (shot.type === "overShoulder") {
+    if (!shot.over || !isCharacter(shot.over)) {
+      issues.push({ path: `${path}.over`, message: "an over-the-shoulder shot needs over: the character whose shoulder is in front" });
+    } else if (subjects.includes(shot.over)) {
+      issues.push({ path: `${path}.over`, message: "the near shoulder belongs to someone other than the subject" });
+    }
+  } else if (shot.over !== undefined) {
+    issues.push({ path: `${path}.over`, message: "only an over-the-shoulder shot has over" });
+  }
+  if (shot.type === "insert" && subjects.length === 1 && isCharacter(subjects[0])) {
+    if (!shot.part) {
+      issues.push({ path: `${path}.part`, message: "an insert of a character shows one part (hands, eyes, face, ...)" });
+    } else {
+      checkPartId(issues, `${path}.part`, shot.part);
+    }
+  } else if (shot.part !== undefined) {
+    issues.push({ path: `${path}.part`, message: "only an insert of a character has part" });
+  }
 }
 
 function checkSceneSoundWarnings(
@@ -852,12 +979,18 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
   const namesSomeone = (value: string | undefined) =>
     Object.keys(show.characters).find((id) => new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""));
   const visualText: [string, string | undefined][] = [[`${scenePath}.motion`, scene.motion]];
+  const things = new Set([
+    ...Object.keys(show.characters),
+    ...Object.keys(show.props ?? {}),
+    ...Object.keys(show.locations[scene.locationId]?.spatial.landmarks ?? {}),
+  ]);
   for (const [characterId, performance] of Object.entries(performances)) {
     const path = `${scenePath}.performances.${characterId}`;
     if (!(characterId in show.characters)) {
       issues.push({ path, message: `unknown character ${JSON.stringify(characterId)}` });
     }
     visualText.push([`${path}.action`, performance.action], [`${path}.expression`, performance.expression]);
+    checkTarget(issues, path, characterId, performance, things);
     const seen = new Set<string>();
     performance.parts.forEach((part, partIndex) => {
       checkPartId(issues, `${path}.parts[${partIndex}]`, part);
@@ -872,7 +1005,14 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     if (named) {
       issues.push({
         path,
-        message: `names character ${JSON.stringify(named)}; the video model only sees the frame, so say "him", "her", or "them" and let lookAtId set the gaze`,
+        message: `names character ${JSON.stringify(named)}; the video model only sees the frame. Aim the action with target and {target}, and let lookAtId set the gaze`,
+      });
+    }
+    const pronoun = POINTING_WORDS.exec(value ?? "");
+    if (pronoun) {
+      issues.push({
+        path,
+        message: `${JSON.stringify(pronoun[0])} points at someone or something; the video model invents whoever it cannot find in the frame. Describe only this body ("the jaw tightens"), aim at someone in the shot with target and {target}, and let lookAtId set the gaze`,
       });
     }
   }

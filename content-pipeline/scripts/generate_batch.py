@@ -47,7 +47,7 @@ from pipeline_paths import (
     manifest_path,
     start_still_path,
 )
-from previs import current_previs, load_observation, previs_episode, shot_moves
+from previs import current_previs, load_observation, previs_episode, shot_depth_control, shot_moves, shot_people
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
 from world import load_show, look_path, plate_path
@@ -978,16 +978,11 @@ def qwen_pass(
         graph["54"] = {"inputs": {"image": ["53", 0], "channel": "red"}, "class_type": "ImageToMask"}
         graph["55"] = {"inputs": {"samples": ["52", 0], "mask": ["54", 0]}, "class_type": "SetLatentNoiseMask"}
         graph["10"]["inputs"]["latent_image"] = ["55", 0]
-    also = None
-    if matte is not None:
-        graph["60"] = {"inputs": {"bg_removal_name": "birefnet.safetensors"}, "class_type": "LoadBackgroundRemovalModel"}
-        graph["61"] = {"inputs": {"bg_removal_model": ["60", 0], "image": ["11", 0]}, "class_type": "RemoveBackground"}
-        graph["62"] = {"inputs": {"mask": ["61", 0]}, "class_type": "MaskToImage"}
-        graph["63"] = {"inputs": {"filename_prefix": "reelshort_matte", "images": ["62", 0]}, "class_type": "SaveImage"}
-        also = [("reelshort_matte", matte)]
     print(f"  Prompt: {prompt}", flush=True)
     print(f"  Graph seed {seed}", flush=True)
-    execute_queued_graph(graph, dest, prefer="image", mode=mode, also=also)
+    execute_queued_graph(graph, dest, prefer="image", mode=mode)
+    if matte is not None:
+        write_matte(dest, pictures[0][1], matte)
     if keep is not None:
         # The sampler works in latent space; put the kept pixels back exactly.
         drawn = Image.open(dest).convert("RGB")
@@ -996,26 +991,93 @@ def qwen_pass(
         Image.composite(kept, drawn, hold).save(dest)
 
 
+# A drawing's hair and cloth may reach this far past its mesh.
+REGION_GROW_PIXELS = 16
+
+
+def mesh_region(depth: Path, dest: Path) -> Path:
+    """Where a drawing may hold its subject: the mesh in its depth guide (non-black), grown a little."""
+    from scipy import ndimage
+
+    solid = np.asarray(Image.open(depth).convert("L")) > 0
+    grown = ndimage.binary_dilation(solid, iterations=REGION_GROW_PIXELS) if solid.any() else solid
+    Image.fromarray(grown.astype(np.uint8) * 255).save(dest)
+    return dest
+
+
+def only_where_the_mesh_is(picture: Path, depth: Path, dest: Path) -> Path:
+    """The drawing with everything outside its mesh's region painted over in its own background color.
+
+    Background removal keeps the most prominent subject, and the model may draw
+    more than the mesh asks for (a whole person beside the arm that is in shot).
+    Painted over, the only subject left is the one the 3D scene puts there. The
+    paint is the drawing's own background (its median outside the region), so no
+    new edge appears that could be taken for part of the subject.
+    """
+    drawing = Image.open(picture).convert("RGB")
+    region = np.asarray(Image.open(mesh_region(depth, dest.with_name(dest.stem + "_region.png"))).resize(drawing.size)) > 127
+    pixels = np.asarray(drawing).copy()
+    outside = pixels[~region]
+    if len(outside):
+        pixels[~region] = np.median(outside, axis=0).astype(np.uint8)
+    Image.fromarray(pixels).save(dest)
+    return dest
+
+
+def write_matte(picture: Path, depth: Path, matte: Path) -> None:
+    """The drawing's soft outline (BiRefNet), looked for only where its mesh is."""
+    focused = only_where_the_mesh_is(picture, depth, matte.with_name(matte.stem + "_input.png"))
+    graph = {
+        "1": {"inputs": {"image": stage_named_image(focused, f"{picture.stem}_matte_input")}, "class_type": "LoadImage"},
+        "2": {"inputs": {"bg_removal_name": "birefnet.safetensors"}, "class_type": "LoadBackgroundRemovalModel"},
+        "3": {"inputs": {"bg_removal_model": ["2", 0], "image": ["1", 0]}, "class_type": "RemoveBackground"},
+        "4": {"inputs": {"mask": ["3", 0]}, "class_type": "MaskToImage"},
+        "5": {"inputs": {"filename_prefix": "reelshort_matte", "images": ["4", 0]}, "class_type": "SaveImage"},
+    }
+    outputs, _item = wait_for_output(queue_prompt(graph), prefer="image")
+    download_output(outputs[0], matte)
+
+
 # Pixels of a pasted entity this close to its edge are redrawn, so it sits in the shot.
 _BLEND_PIXELS = 3
 
 
-def add_light(still: Path, lights: list[tuple[Path, Path, list[float]]]) -> None:
-    """Add each effect drawing to the finished still as light, only where the shot shows its effect.
+def on_black(picture: Path, matte: Path, dest: Path) -> Path:
+    """A drawing cut out by its matte onto pure black: the base an effect pass adds light to."""
+    image = np.asarray(Image.open(picture).convert("RGB"), dtype=np.float32)
+    alpha = np.asarray(Image.open(matte).convert("L").resize(Image.open(picture).size), dtype=np.float32)[..., None] / 255.0
+    Image.fromarray(np.rint(image * alpha).astype(np.uint8)).save(dest)
+    return dest
 
-    Fire, sparks, and glow are light: drawn on pure black, black adds nothing
-    and a flame brightens what is behind it (screen blend), so nothing has to be
-    cut out. The drawing's border is its black level and is taken off first, so
-    a dim background cannot lift the shot.
+
+# Differences below this are the edit model's noise, not added light.
+LIGHT_NOISE = 0.05
+# Over the entity's own solid surface, only light this bright is a flame in front
+# of it; dimmer change there is the surface re-lit (a wet bowl glowing), and
+# adding that would turn the surface to glass.
+FLAME_LOW, FLAME_HIGH = 0.7, 0.9
+
+
+def add_light(still: Path, lights: list[tuple[Path, Path, Path, Path, list[float]]]) -> None:
+    """Add each effect to the finished still as light, only where the shot shows its effect.
+
+    An effect drawing is its entity's own drawing on black with the effect added.
+    The light is only what was added (the drawing minus its base), so whatever
+    solid it redrew cancels out, and a flame brightens what is behind it (screen
+    blend), so nothing has to be cut out. Over the entity itself (its base's
+    matte) only flame-bright light counts.
     """
     shot = np.asarray(Image.open(still).convert("RGB"), dtype=np.float32) / 255.0
-    for picture, mask, crop in lights:
+    for picture, base, solid, mask, crop in lights:
         x0, y0, x1, y1 = crop
         size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
-        drawing = np.asarray(Image.open(picture).convert("RGB"), dtype=np.float32) / 255.0
-        border = np.concatenate([drawing[0], drawing[-1], drawing[:, 0], drawing[:, -1]])
-        level = np.median(border, axis=0)
-        light = np.clip((drawing - level) / np.maximum(1.0 - level, 1e-3), 0.0, 1.0)
+        drawing = Image.open(picture).convert("RGB")
+        after = np.asarray(drawing, dtype=np.float32) / 255.0
+        before = np.asarray(Image.open(base).convert("RGB").resize(drawing.size, Image.Resampling.LANCZOS), dtype=np.float32) / 255.0
+        light = np.clip((after - before - LIGHT_NOISE) / (1.0 - LIGHT_NOISE), 0.0, 1.0)
+        body = np.asarray(Image.open(solid).convert("L").resize(drawing.size), dtype=np.float32)[..., None] / 255.0
+        flame = np.clip((after.max(axis=2, keepdims=True) - FLAME_LOW) / (FLAME_HIGH - FLAME_LOW), 0.0, 1.0)
+        light *= (1.0 - body) + body * flame
         canvas = Image.new("RGB", (shot.shape[1], shot.shape[0]))
         canvas.paste(Image.fromarray(np.rint(light * 255).astype(np.uint8)).resize(size, Image.Resampling.LANCZOS), (round(x0), round(y0)))
         where = np.asarray(Image.open(mask).convert("L"), dtype=np.float32)[..., None] / 255.0
@@ -1030,12 +1092,15 @@ def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], 
     Each drawing is scaled down into its window (never up: the window lies inside
     the frame) and blended by its own soft outline times where the shot shows it,
     so nothing drawn can land where the 3D scene has no such thing. ``draw_mask``
-    is white wherever the shot still has to be drawn.
+    is white wherever the shot still has to be drawn. ``coverage.json`` beside
+    ``dest`` says, per drawing, how much of where the shot shows it the drawing
+    actually filled (1 is all of it).
     """
     from scipy import ndimage
 
     shot = Image.open(color).convert("RGB")
     held = np.zeros((shot.height, shot.width), dtype=np.float32)
+    coverage: dict[str, float] = {}
     for picture, matte, shown, crop in drawn:
         x0, y0, x1, y1 = crop
         size = (max(1, round(x1 - x0)), max(1, round(y1 - y0)))
@@ -1047,11 +1112,15 @@ def paste_drawn(color: Path, drawn: list[tuple[Path, Path, Path, list[float]]], 
             return canvas
 
         layer = placed(Image.open(picture), "RGB")
-        cover = np.asarray(placed(Image.open(matte), "L"), dtype=np.float32) / 255.0
-        cover *= np.asarray(Image.open(shown).convert("L"), dtype=np.float32) / 255.0
+        where = np.asarray(Image.open(shown).convert("L"), dtype=np.float32) / 255.0
+        cover = np.asarray(placed(Image.open(matte), "L"), dtype=np.float32) / 255.0 * where
         shot = Image.composite(layer, shot, Image.fromarray(np.rint(cover * 255).astype(np.uint8)))
         held = np.maximum(held, cover)
+        core = where > 0.99
+        if core.any():
+            coverage[picture.stem] = round(float(cover[core].mean()), 3)
     shot.save(dest)
+    (dest.parent / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n", encoding="utf-8")
     kept = ndimage.binary_erosion(held > 0.5, iterations=_BLEND_PIXELS)
     Image.fromarray(np.where(kept, 0, 255).astype(np.uint8)).save(draw_mask)
     return dest
@@ -1067,6 +1136,37 @@ def paint_order(observation: dict) -> list[str]:
     drawn = [(entity_id, entry) for entity_id, entry in observation["entities"].items() if "crop" in entry]
     drawn.sort(key=lambda item: -(item[1].get("depth") or float("inf")))
     return [entity_id for entity_id, _entry in drawn]
+
+
+# A plate slice keeps this much extra height around the part the shot shows.
+REFERENCE_MARGIN = 0.04
+
+
+def plate_slice(plate: Path, band: list[float] | None, dest: Path) -> Path:
+    """The slice of a plate showing the same part of the entity a shot shows (``band``,
+    fractions of its height from the feet), so a close shot is drawn from a close
+    reference instead of a small figure in a whole-body picture. The plate itself when
+    the shot shows all of it.
+    """
+    if not band or (band[0] <= REFERENCE_MARGIN and band[1] >= 1 - REFERENCE_MARGIN):
+        return plate
+    image = Image.open(plate).convert("RGB")
+    pixels = np.asarray(image, dtype=np.float32)
+    border = np.concatenate([pixels[0], pixels[-1], pixels[:, 0], pixels[:, -1]])
+    figure = np.abs(pixels - np.median(border, axis=0)).max(axis=2) > 24
+    rows, columns = np.flatnonzero(figure.any(axis=1)), np.flatnonzero(figure.any(axis=0))
+    if not len(rows):
+        return plate
+    top, bottom = int(rows[0]), int(rows[-1]) + 1
+    tall = bottom - top
+    y0 = max(0, int(bottom - (band[1] + REFERENCE_MARGIN) * tall))
+    y1 = min(image.height, int(bottom - (band[0] - REFERENCE_MARGIN) * tall))
+    inside = np.flatnonzero(figure[y0:y1].any(axis=0))
+    x0, x1 = (int(inside[0]), int(inside[-1]) + 1) if len(inside) else (int(columns[0]), int(columns[-1]) + 1)
+    pad = int(REFERENCE_MARGIN * tall)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    image.crop((max(0, x0 - pad), y0, min(image.width, x1 + pad), y1)).save(dest)
+    return dest
 
 
 def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
@@ -1092,6 +1192,8 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
             ("Edges", guide(f"drawn_{entity_id}_edges")),
             ("Appearance", plate_path(show, entry["kind"], entity_id, scene["locationId"])),
         ]
+        if present(files[-1][1]):
+            files[-1] = ("Appearance", plate_slice(files[-1][1], entry.get("band"), inputs / f"drawn_{entity_id}_reference.png"))
         missing = [str(path) for _title, path in files if not present(path)]
         if missing:
             raise SystemExit(f"Missing {missing[0]}. Run `pnpm run content:previs` (and content:plates) first.")
@@ -1106,14 +1208,27 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
         drawn.append((picture, matte, guide(f"drawn_{entity_id}_shown"), entry["crop"]))
         where = guide(f"drawn_{entity_id}_effects")
         if where.is_file():
-            # Its effects: drawn alone in the same window as light on black, added after the shot.
-            files = [("Depth", guide(f"drawn_{entity_id}_depth")), ("Look", look_path(show, entry["kind"], entity_id, scene["locationId"]))]
+            # Its effects: added onto its own whole drawing, on black, in that drawing's
+            # window. Only what that pass adds is light, so the effect sits where the
+            # drawing (and so the mesh) is, and nothing solid it redraws can reach the shot.
+            window = entry["crop"]
+            if "wholeCrop" in entry:
+                window = entry["wholeCrop"]
+                files = [(title, guide(f"drawn_{entity_id}_whole_{kind}")) for title, kind in (("Depth", "depth"), ("OwnColor", "color"), ("Edges", "edges"))]
+                files.append(("Appearance", plate_path(show, entry["kind"], entity_id, scene["locationId"])))
+                prompt = drawn_prompt(show, scene, entry["kind"], entity_id, [title for title, _path in files])
+                picture, matte = inputs / f"drawn_{entity_id}_whole.png", inputs / f"drawn_{entity_id}_whole_matte.png"
+                print(f"  Drawn whole, for its effects: {entity_id}", flush=True)
+                qwen_pass(picture, prompt, files, stable_seed(seed, "whole", entity_id), f"Qwen whole ({entity_id})", matte=matte)
+                append_generation_log(dest, f"drawn_{entity_id}_whole", prompt, files, {"id": entity_id})
+            base = on_black(picture, matte, inputs / f"drawn_{entity_id}_dark.png")
+            files = [("Base", base), ("Look", look_path(show, entry["kind"], entity_id, scene["locationId"]))]
             prompt = effect_prompt(show, scene, entry["kind"], entity_id, [title for title, _path in files])
-            picture = inputs / f"drawn_{entity_id}_effects.png"
-            print(f"  Effects alone: {entity_id}", flush=True)
-            qwen_pass(picture, prompt, files, stable_seed(seed, "effects", entity_id), f"Qwen effects ({entity_id})")
+            lit = inputs / f"drawn_{entity_id}_effects.png"
+            print(f"  Effects on it: {entity_id}", flush=True)
+            qwen_pass(lit, prompt, files, stable_seed(seed, "effects", entity_id), f"Qwen effects ({entity_id})")
             append_generation_log(dest, f"drawn_{entity_id}_effects", prompt, files, {"id": entity_id})
-            lights.append((picture, where, entry["crop"]))
+            lights.append((lit, base, matte, where, window))
     draw_mask = inputs / "draw_mask.png"
     composite = paste_drawn(guide("color"), drawn, inputs / "composite.png", draw_mask)
     files = [("Depth", guide("depth")), ("Composite", composite), ("Edges", guide("edges"))]
@@ -1121,6 +1236,9 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
     keep = (composite, draw_mask) if drawn else None
     qwen_pass(dest, prompt, files, seed, f"Qwen scene still ({label})", keep)
     append_generation_log(dest, "still", prompt, files, details)
+    # The solid shot, before any light: what the people check looks at, since
+    # through fire a detector sees figures in the flames.
+    shutil.copyfile(dest, inputs / "solid.png")
     if lights:
         add_light(dest, lights)
 
@@ -1148,8 +1266,92 @@ def generate_frames(show: dict, episode: dict, scene: dict, force: bool, seed: i
         return False
     for label, path in targets:
         if force or not present(path):
-            render_still(show, episode, scene, label, path, seed)
+            verified(
+                lambda attempt_seed: render_still(show, episode, scene, label, path, attempt_seed),
+                lambda: still_problems(show, episode, scene, label, path),
+                seed,
+                path,
+                renderer["verifyAttempts"],
+            )
     return True
+
+
+def still_problems(show: dict, episode: dict, scene: dict, label: str, still: Path) -> list[str]:
+    """The still against its start frame (verify.check_still)."""
+    from verify import check_still
+
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    observation = load_observation(*ids, label)
+    faces = {
+        cid: (guide_path(*ids, label, f"drawn_{cid}_shown"), plate_path(show, "character", cid, scene["locationId"]))
+        for cid, entry in observation["entities"].items()
+        if entry["kind"] == "character" and "crop" in entry
+    }
+    # People and faces are judged on the solid shot: through added fire light a
+    # detector sees figures in the flames.
+    solid = still_inputs_dir(still) / "solid.png"
+    problems = check_still(solid if solid.is_file() else still, guide_path(*ids, label, "people"), faces)
+    coverage = json.loads((still_inputs_dir(still) / "coverage.json").read_text(encoding="utf-8"))
+    for name, share in coverage.items():
+        if share < DRAWN_MIN_COVERAGE:
+            problems.append(
+                f"{name.removeprefix('drawn_')} fills only {share:.0%} of where the shot shows it "
+                f"(needs {DRAWN_MIN_COVERAGE:.0%}); the drawing is not where its mesh is"
+            )
+    return problems
+
+
+# A drawing must fill this much of where the shot shows its entity.
+DRAWN_MIN_COVERAGE = 0.85
+
+
+def clip_problems(show: dict, episode: dict, scene: dict, clip: Path) -> list[str]:
+    """The clip against its shot (verify.check_clip)."""
+    from verify import check_clip
+
+    ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
+    people = fit_to_clip(Image.open(guide_path(*ids, "clip", "people")).convert("RGB"))
+    # Where the start frame has effects; the clip's flames rise and sway past
+    # their box, so the area is grown like the clip's acting room.
+    light = None
+    for label in ("start", "end"):
+        for path in guide_path(*ids, label, "people").parent.glob(f"{label}_drawn_*_effects.png"):
+            mask = np.asarray(Image.open(path).convert("L")) > 12
+            light = mask if light is None else light | mask
+    if light is not None:
+        from scipy import ndimage
+
+        light = ndimage.binary_dilation(light, iterations=CLIP_LIGHT_GROW_PIXELS)
+        light = fit_to_clip(Image.fromarray(light.astype(np.uint8) * 255).convert("RGB"))
+    return check_clip(clip, people, shot_people(show, episode, scene) or 0, light)
+
+
+# A clip's flames reach this far past where the start frame has them.
+CLIP_LIGHT_GROW_PIXELS = 48
+
+
+def verified(make, problems_of, seed: int, dest: Path, attempts: int) -> list[str]:
+    """Make an output, check it against the 3D scene, and remake it with a new seed while it fails.
+
+    A model's mistake is random; the same seed repeats it, another seed usually
+    does not. After ``attempts`` the last try is kept, and its problems are
+    written to ``inputs/<name>/verify.json`` and returned so the run can report it.
+    """
+    problems: list[str] = []
+    for attempt in range(max(1, attempts)):
+        make(seed if attempt == 0 else stable_seed(seed, "retry", attempt))
+        problems = problems_of()
+        if not problems:
+            break
+        print(f"  Check failed (try {attempt + 1} of {attempts}):\n    - " + "\n    - ".join(problems), flush=True)
+    report = still_inputs_dir(dest) / "verify.json"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps({"tries": attempt + 1, "problems": problems}, indent=2) + "\n", encoding="utf-8")
+    if problems:
+        print(f"  Kept with problems, see {report}", flush=True)
+    else:
+        print("  Check passed: matches its 3D scene.", flush=True)
+    return problems
 
 
 # LTX's second stage: its spatial upscaler enlarges the finished low-resolution latent,
@@ -1301,15 +1503,13 @@ def generate_show(show: dict, stage: str, partial: bool = False, force: bool = F
                 raise SystemExit(
                     f"Missing start still {start_still_path(*ids)}. Run `pnpm run content:frames`, review it, then rerun."
                 )
-            spatial = shot_moves(show, episode, scene)
-            if spatial is None:
+            fits = shot_depth_control(show, episode, scene)
+            if fits is None:
                 raise SystemExit(f"Scene {scene['sceneNumber']:02d} has no previs. Run `pnpm run content:frames` first.")
-            # Depth control holds every surface to the clay, and a clay face cannot
-            # talk: a shot where someone speaks is never depth-controlled.
-            use_depth = spatial and not scene.get("speakerId") and scene_depth_control_enabled(*ids, renderer)
-            if spatial and not use_depth:
-                reason = "someone speaks" if scene.get("speakerId") else "disabled by override"
-                print(f"Scene {scene['sceneNumber']:02d}: no depth control ({reason})", flush=True)
+            # Previs decides whether the clay shows the shot as it plays (world.depth_control_fits).
+            use_depth = fits and scene_depth_control_enabled(*ids, renderer)
+            if fits and not use_depth:
+                print(f"Scene {scene['sceneNumber']:02d}: no depth control (disabled by override)", flush=True)
             pending.append((scene, use_depth))
         depth_scenes = [scene for scene, use_depth in pending if use_depth]
         for scene in depth_scenes:
@@ -1330,7 +1530,14 @@ def generate_show(show: dict, stage: str, partial: bool = False, force: bool = F
             confirm_vram_released("Depth Anything unload")
         for scene, use_depth in pending:
             print(f"Scene {scene['sceneNumber']:02d} clip...", flush=True)
-            generate_clip(show, episode, scene, seed(scene, "video"), renderer, use_depth)
+            clip = clip_path(show_id, number, scene["sceneNumber"])
+            verified(
+                lambda attempt_seed: generate_clip(show, episode, scene, attempt_seed, renderer, use_depth),
+                lambda: clip_problems(show, episode, scene, clip),
+                seed(scene, "video"),
+                clip,
+                renderer["verifyAttempts"],
+            )
         ordered = [clip_path(show_id, number, scene["sceneNumber"]) for scene in episode["scenes"]]
         if not partial and all(present(path) for path in ordered):
             episode_mp4 = episode_video_path(show_id, number)

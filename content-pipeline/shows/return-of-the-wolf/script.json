@@ -1,0 +1,804 @@
+{
+  "id": "return-of-the-wolf",
+  "title": "Return of the Wolf (remake test)",
+  "characters": {
+    "nori": {
+      "body": "young man, slim athletic build, fair skin",
+      "attributes": [
+        "20 years old",
+        "tousled short blond hair",
+        "blue-gray irises",
+        "a long brown wool cloak fastened at the throat, bare-headed",
+        "a dark leather jerkin laced at the chest",
+        "a wide leather belt set with round iron studs",
+        "leather bracers",
+        "dark trousers and worn leather boots"
+      ],
+      "heightMeters": 1.8
+    },
+    "adam": {
+      "body": "old man, tall lean build, fair weathered skin",
+      "attributes": [
+        "62 years old",
+        "silver-white hair combed back into a low tail",
+        "a short white beard",
+        "gray-blue irises",
+        "a thick gray wolf-fur mantle over the shoulders",
+        "a cream linen tunic",
+        "a long gray-green wool coat",
+        "a brown leather belt"
+      ],
+      "heightMeters": 1.86
+    },
+    "ben": {
+      "body": "middle-aged man, tall broad build, tanned skin",
+      "attributes": [
+        "55 years old",
+        "long straight platinum-blond hair",
+        "clean-shaven",
+        "brown irises",
+        "a red-fox fur mantle over the shoulders",
+        "a cream silk robe with a gold-embroidered collar",
+        "a leather belt"
+      ],
+      "heightMeters": 1.84
+    },
+    "cora": {
+      "body": "older woman, tall slender build, pale skin",
+      "attributes": [
+        "58 years old",
+        "silver-white hair in a braided crown",
+        "pale gray irises",
+        "a white fur cape over the shoulders",
+        "a long cream lace gown",
+        "a small silver pendant"
+      ],
+      "heightMeters": 1.72
+    },
+    "ryan": {
+      "body": "adult man, tall lean build, very pale skin",
+      "attributes": [
+        "30 years old",
+        "long straight black hair",
+        "crimson irises",
+        "black spiked plate armor",
+        "a high crimson-lined collar",
+        "a long crimson cloak",
+        "black gauntlets"
+      ],
+      "heightMeters": 1.88
+    }
+  },
+  "locations": {
+    "ridge": {
+      "look": {
+        "materials": "wet gray granite, dark green moss, weathered pine bark",
+        "light": "soft overcast daylight, cool and misty"
+      },
+      "backdrop": {
+        "sky": "low gray overcast sky with drifting mist",
+        "skyColor": [
+          150,
+          160,
+          168
+        ],
+        "ground": "wet gray rock with moss and tufts of grass",
+        "groundColor": [
+          78,
+          84,
+          76
+        ],
+        "surround": "a deep pine-forest valley far below with a white waterfall and misty mountains",
+        "surroundColor": [
+          52,
+          70,
+          66
+        ]
+      },
+      "spatial": {
+        "sizeMeters": [
+          10,
+          10,
+          6
+        ],
+        "landmarks": {
+          "edge_rock": {
+            "position": [
+              1.6,
+              4.3,
+              0
+            ],
+            "size": [
+              1.4,
+              0.9,
+              0.7
+            ],
+            "appearance": "One low weathered granite boulder patched with moss, a single object."
+          }
+        }
+      },
+      "soundscape": {
+        "ambience": "steady wind over the ridge, the distant roar of a waterfall far below",
+        "space": "open air high above a valley, no echo"
+      }
+    },
+    "clearing": {
+      "look": {
+        "materials": "wet dark mud, flattened grass, rough pine bark",
+        "light": "soft overcast daylight, cool and misty"
+      },
+      "backdrop": {
+        "sky": "low gray overcast sky with drifting mist",
+        "skyColor": [
+          150,
+          160,
+          168
+        ],
+        "ground": "trampled wet mud with rain puddles and flattened grass",
+        "groundColor": [
+          70,
+          62,
+          52
+        ],
+        "surround": "a dense dark pine forest and misty mountains",
+        "surroundColor": [
+          40,
+          56,
+          48
+        ]
+      },
+      "spatial": {
+        "sizeMeters": [
+          24,
+          24,
+          10
+        ],
+        "landmarks": {
+          "fallen_pine": {
+            "position": [
+              0.8,
+              2.6,
+              0
+            ],
+            "size": [
+              6,
+              0.8,
+              0.8
+            ],
+            "appearance": "One fallen pine trunk lying on its side, bark peeling, a single object."
+          }
+        }
+      },
+      "soundscape": {
+        "ambience": "light rain on mud, wind in the pines",
+        "space": "an open clearing ringed by forest, a soft echo"
+      }
+    }
+  },
+  "episodes": [
+    {
+      "episodeNumber": 2,
+      "title": "The Masters",
+      "isFree": true,
+      "coinCost": 0,
+      "spatialTimeline": {
+        "durationSeconds": 39.6,
+        "characterTracks": {
+          "nori": [
+            {
+              "timeSeconds": 0,
+              "locationId": "ridge",
+              "position": [
+                0.2,
+                2.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "edge_rock"
+            },
+            {
+              "timeSeconds": 12.7,
+              "locationId": "ridge",
+              "position": [
+                0.2,
+                2.6,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "adam"
+            }
+          ],
+          "adam": [
+            {
+              "timeSeconds": 0,
+              "locationId": "ridge",
+              "position": [
+                -0.9,
+                1.1,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            },
+            {
+              "timeSeconds": 37.7,
+              "locationId": "ridge",
+              "position": [
+                -0.9,
+                1.1,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "edge_rock"
+            }
+          ],
+          "ben": [
+            {
+              "timeSeconds": 0,
+              "locationId": "ridge",
+              "position": [
+                -1.8,
+                0.7,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            }
+          ],
+          "cora": [
+            {
+              "timeSeconds": 0,
+              "locationId": "ridge",
+              "position": [
+                -0.4,
+                0.1,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            }
+          ],
+          "ryan": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "bodyYawDegrees": 180
+            }
+          ]
+        },
+        "propTracks": {}
+      },
+      "scenes": [
+        {
+          "sceneNumber": 1,
+          "locationId": "ridge",
+          "storyBeat": "Far above the battle, someone has been watching all along.",
+          "timeRangeSeconds": [
+            0.0,
+            5.9
+          ],
+          "shot": {
+            "type": "establishing"
+          },
+          "performances": {},
+          "sound": {
+            "events": [
+              {
+                "text": "a gust of wind hisses over the boulder",
+                "source": {
+                  "landmarkId": "edge_rock"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "position": [
+                  0.6,
+                  2.6,
+                  1.6
+                ],
+                "lookAt": [
+                  1.8,
+                  16,
+                  -4.5
+                ],
+                "verticalFovDegrees": 50,
+                "timeSeconds": 0.0
+              }
+            ]
+          },
+          "motion": "Mist drifts slowly through the valley below and the distant waterfall pours"
+        },
+        {
+          "sceneNumber": 2,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the student admits the vampire is strong.",
+          "timeRangeSeconds": [
+            5.9,
+            12.7
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "nori"
+            ],
+            "size": "mcu",
+            "angle": "low"
+          },
+          "performances": {
+            "nori": {
+              "action": "stares down into the valley, eyebrows rising",
+              "parts": [
+                "face",
+                "eyes"
+              ],
+              "expression": "awe: eyes wide, brows raised, lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a short impressed breath",
+                "source": {
+                  "characterId": "nori",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "nori",
+          "dialogue": {
+            "line": "Whoa. This vampire is so strong.",
+            "delivery": "quiet, impressed, half to himself"
+          }
+        },
+        {
+          "sceneNumber": 3,
+          "locationId": "ridge",
+          "storyBeat": "But the master scoffs: the vampire is nothing.",
+          "timeRangeSeconds": [
+            12.7,
+            18.1
+          ],
+          "shot": {
+            "type": "overShoulder",
+            "subjects": [
+              "adam"
+            ],
+            "over": "nori",
+            "size": "mcu"
+          },
+          "performances": {
+            "adam": {
+              "action": "tilts the head and smirks, unimpressed",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "amused contempt: one corner of the mouth up, lips slightly parted to speak"
+            },
+            "nori": {
+              "action": "stands motionless, listening",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a dry scoff through the nose",
+                "source": {
+                  "characterId": "adam",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "adam",
+          "dialogue": {
+            "line": "Strong? Just a low-level bloodsucker.",
+            "delivery": "dry, dismissive, almost bored"
+          }
+        },
+        {
+          "sceneNumber": 4,
+          "locationId": "ridge",
+          "storyBeat": "But the student protests: it beat three werewolves.",
+          "timeRangeSeconds": [
+            18.1,
+            21.8
+          ],
+          "shot": {
+            "type": "overShoulder",
+            "subjects": [
+              "nori"
+            ],
+            "over": "adam",
+            "size": "mcu"
+          },
+          "performances": {
+            "nori": {
+              "action": "shakes the head, insisting, brows lifting",
+              "parts": [
+                "face"
+              ],
+              "expression": "earnest disbelief: brows up, lips slightly parted to speak"
+            },
+            "adam": {
+              "action": "stands motionless, listening",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a quick indignant breath",
+                "source": {
+                  "characterId": "nori",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "nori",
+          "dialogue": {
+            "line": "But he beat all three werewolves!",
+            "delivery": "urgent, a little indignant"
+          }
+        },
+        {
+          "sceneNumber": 5,
+          "locationId": "clearing",
+          "storyBeat": "Therefore we see the vampire standing over the fallen.",
+          "timeRangeSeconds": [
+            21.8,
+            22.9
+          ],
+          "shot": {
+            "type": "action"
+          },
+          "performances": {
+            "ryan": {
+              "action": "stands still in the mud, the crimson cloak stirring",
+              "parts": []
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "rain patters on the fallen trunk and the mud",
+                "source": {
+                  "landmarkId": "fallen_pine"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "position": [
+                  0.0,
+                  -5.5,
+                  4.2
+                ],
+                "lookAt": [
+                  0.2,
+                  0.8,
+                  0.8
+                ],
+                "verticalFovDegrees": 32,
+                "timeSeconds": 21.8
+              }
+            ]
+          }
+        },
+        {
+          "sceneNumber": 6,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the second master sneers at the werewolves.",
+          "timeRangeSeconds": [
+            22.9,
+            26.5
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "ben"
+            ],
+            "size": "mcu",
+            "side": "left"
+          },
+          "performances": {
+            "ben": {
+              "action": "shakes the head slowly, lip curling",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "disgust: nose wrinkled, lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a scornful breath through the nose",
+                "source": {
+                  "characterId": "ben",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "ben",
+          "dialogue": {
+            "line": "A real disgrace for werewolves.",
+            "delivery": "scornful, slow"
+          }
+        },
+        {
+          "sceneNumber": 7,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the masters agree the human-world werewolves have fallen.",
+          "timeRangeSeconds": [
+            26.5,
+            29.1
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "ben"
+            ],
+            "size": "mcu",
+            "side": "right"
+          },
+          "performances": {
+            "ben": {
+              "action": "glances sideways and shrugs",
+              "parts": [
+                "face",
+                "torso"
+              ],
+              "expression": "weary scorn: lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "the wind tugs at their fur mantles",
+                "source": {
+                  "characterId": "ben",
+                  "part": "torso"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "ben",
+          "dialogue": {
+            "line": "The werewolves here have fallen so low.",
+            "delivery": "mocking, a theatrical sigh"
+          }
+        },
+        {
+          "sceneNumber": 8,
+          "locationId": "ridge",
+          "storyBeat": "But the student is unsure what they expect of him.",
+          "timeRangeSeconds": [
+            29.1,
+            31.4
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "nori"
+            ],
+            "size": "cu",
+            "side": "right"
+          },
+          "performances": {
+            "nori": {
+              "action": "glances from one master to the other",
+              "parts": [
+                "eyes",
+                "face"
+              ],
+              "expression": "uncertain: eyes moving, lips closed"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "a slow uneasy breath",
+                "source": {
+                  "characterId": "nori",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 9,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the third master sends the student to fight.",
+          "timeRangeSeconds": [
+            31.4,
+            35.5
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "cora"
+            ],
+            "size": "mcu",
+            "side": "right"
+          },
+          "performances": {
+            "cora": {
+              "action": "lifts the chin toward the valley",
+              "parts": [
+                "face",
+                "neck"
+              ],
+              "expression": "cool command: lips slightly parted to speak"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "she draws a calm breath before speaking",
+                "source": {
+                  "characterId": "cora",
+                  "part": "face"
+                }
+              }
+            ],
+            "bed": "faint",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "speakerId": "cora",
+          "dialogue": {
+            "line": "They're weak. Nori, go. Crush this vampire.",
+            "delivery": "calm, certain, a teacher's order"
+          }
+        },
+        {
+          "sceneNumber": 10,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the student readies himself.",
+          "timeRangeSeconds": [
+            35.5,
+            37.7
+          ],
+          "shot": {
+            "type": "single",
+            "subjects": [
+              "nori"
+            ],
+            "size": "medium",
+            "angle": "low"
+          },
+          "performances": {
+            "nori": {
+              "action": "presses a fist into the other palm, jaw setting",
+              "parts": [
+                "hands",
+                "arms",
+                "face"
+              ],
+              "expression": "resolve: jaw set, eyes hard, lips closed"
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "knuckles crack",
+                "source": {
+                  "characterId": "nori",
+                  "part": "hands"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          }
+        },
+        {
+          "sceneNumber": 11,
+          "locationId": "ridge",
+          "storyBeat": "Therefore the fight below is about to change.",
+          "timeRangeSeconds": [
+            37.7,
+            39.6
+          ],
+          "shot": {
+            "type": "establishing"
+          },
+          "performances": {
+            "adam": {
+              "action": "stands at the edge looking down, the fur mantle stirring in the wind",
+              "parts": [
+                "torso"
+              ]
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "the wind tugs at his fur mantle",
+                "source": {
+                  "characterId": "adam",
+                  "part": "torso"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "position": [
+                  -1.35,
+                  0.35,
+                  1.9
+                ],
+                "lookAt": [
+                  0.8,
+                  22,
+                  -6
+                ],
+                "verticalFovDegrees": 45,
+                "timeSeconds": 37.7
+              }
+            ]
+          },
+          "motion": "Mist drifts through the valley far below"
+        }
+      ]
+    }
+  ]
+}

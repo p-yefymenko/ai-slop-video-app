@@ -4,12 +4,12 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { ShowScript } from "./script";
+import type { ShowScript, Vec3 } from "./script";
 import { CAMERA_TRAVEL_WARN_THRESHOLD, cameraTravelScore, parseShowScript } from "./script-schema";
 
-const ironBridePath = path.resolve(
+const showPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../../content-pipeline/shows/the-iron-bride/script.json",
+  "../../../content-pipeline/shows/return-of-the-wolf/script.json",
 );
 
 function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
@@ -70,11 +70,9 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             storyBeat: "Ada waits.",
             timeRangeSeconds: [0, 4],
             performances: {
-              ada: { action: "stands still, then shifts her weight once", parts: ["legs"] },
+              ada: { action: "stands still, then shifts the weight once", parts: ["legs"] },
             },
-            camera: {
-              keyframes: [{ timeSeconds: 0, position: [0, -3, 1.5], lookAt: [0, 0, 1.5], verticalFovDegrees: 40 }],
-            },
+            shot: { type: "single", subjects: ["ada"], size: "full" },
             sound: {
               events: [
                 { text: "dress fabric rustles as she shifts her weight", source: { characterId: "ada", part: "legs" } },
@@ -110,20 +108,21 @@ test("accepts a complete minimal show", () => {
   assert.equal(result.ok, true);
 });
 
-test("the iron bride script is valid", () => {
-  const data = JSON.parse(readFileSync(ironBridePath, "utf8"));
-  const result = parseShowScript(data, { showId: "the-iron-bride", showIdLabel: "the show folder" });
+test("the development show script is valid", () => {
+  const data = JSON.parse(readFileSync(showPath, "utf8"));
+  const result = parseShowScript(data, { showId: "return-of-the-wolf", showIdLabel: "the show folder" });
   if (!result.ok) {
     assert.fail(result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
   }
-  assert.ok(result.issues.some((issue) => issue.message.includes("high camera travel+rotation score")));
 });
 
-test("cameraTravelScore matches Gate 3b scene 01 figure (~39.5)", () => {
-  const data = JSON.parse(readFileSync(ironBridePath, "utf8")) as ShowScript;
-  const score = cameraTravelScore(data.episodes[0]!.scenes[0]!);
-  assert.ok(score > CAMERA_TRAVEL_WARN_THRESHOLD);
-  assert.ok(Math.abs(score - 39.47) < 0.05, `expected ~39.47, got ${score}`);
+test("cameraTravelScore adds travel, half the aim travel, and lens and roll change", () => {
+  const scene = minimalShow().episodes[0].scenes[0];
+  assert.equal(cameraTravelScore(scene), 0, "a framed shot has no authored travel");
+  const first = { timeSeconds: 0, position: [0, -3, 1.5] as Vec3, lookAt: [0, 0, 1.5] as Vec3, verticalFovDegrees: 40 };
+  scene.camera = { keyframes: [first, { ...first, timeSeconds: 4, position: [30, -3, 1.5], lookAt: [0, 10, 1.5] }] };
+  assert.ok(Math.abs(cameraTravelScore(scene) - 35) < 1e-9);
+  assert.ok(cameraTravelScore(scene) > CAMERA_TRAVEL_WARN_THRESHOLD);
 });
 
 test("rejects a location missing soundscape and a scene missing sound", () => {
@@ -338,8 +337,42 @@ test("rejects a show id that does not match the file", () => {
   assert.match(result.issues[0].message, /other-show/);
 });
 
+test("every shot of people is framed from its subjects; only establishing and action set a camera", () => {
+  const show = minimalShow();
+  const scene = show.episodes[0].scenes[0];
+  scene.camera = { keyframes: [{ timeSeconds: 0, position: [0, -3, 1.5], lookAt: [0, 0, 1.5], verticalFovDegrees: 40 }] };
+  assert.match(messages(show), /camera: a single shot gets its camera from its subjects/);
+  delete scene.camera;
+  scene.shot = { type: "single", subjects: [] };
+  assert.match(messages(show), /shot.subjects: a single shot frames 1 subject/);
+  scene.shot = { type: "single", subjects: ["ada"], size: "wide" };
+  assert.match(messages(show), /shot.size: a single shot is ecu, cu, mcu, medium, full/);
+  scene.shot = { type: "overShoulder", subjects: ["ada"], over: "ada" };
+  assert.match(messages(show), /shot.over: the near shoulder belongs to someone other than the subject/);
+  scene.shot = { type: "insert", subjects: ["ada"] };
+  assert.match(messages(show), /shot.part: an insert of a character shows one part/);
+  scene.shot = { type: "establishing" };
+  assert.match(messages(show), /camera: an establishing shot needs its own camera/);
+});
+
 test("rejects visual text that names a character", () => {
   const show = minimalShow();
   show.episodes[0].scenes[0].performances.ada.action = "stands still, watching Ada's reflection";
   assert.match(messages(show), /performances\.ada\.action: names character "ada"/);
+});
+
+test("rejects visual text that points at someone, and aims an action only through {target}", () => {
+  const show = minimalShow();
+  const ada = show.episodes[0].scenes[0].performances.ada;
+  ada.action = "leans forward over her, glaring down";
+  assert.match(messages(show), /performances\.ada\.action: "her" points at someone or something/);
+  ada.action = "glares down at {target}";
+  assert.match(messages(show), /uses \{target\}, so the performance needs a target/);
+  ada.target = "ada";
+  assert.match(messages(show), /target: an action is aimed at someone or something else/);
+  ada.target = "nobody";
+  assert.match(messages(show), /target: unknown target "nobody"/);
+  ada.action = "glares down";
+  ada.target = "bench";
+  assert.match(messages(show), /target: the action must say where it is aimed, as \{target\}/);
 });

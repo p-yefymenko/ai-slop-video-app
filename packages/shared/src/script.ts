@@ -217,6 +217,37 @@ export type SpatialCamera = {
   keyframes: SpatialCameraKeyframe[];
 };
 
+export const SHOT_TYPES = ["single", "group", "overShoulder", "insert", "establishing", "action"] as const;
+export type ShotType = (typeof SHOT_TYPES)[number];
+export const SHOT_SIZES = ["ecu", "cu", "mcu", "medium", "full", "wide"] as const;
+export type ShotSize = (typeof SHOT_SIZES)[number];
+
+/**
+ * What the shot shows. For every shot of people the camera is computed from the
+ * blocking (content-pipeline/scripts/shots.py), so it frames its subjects by
+ * construction; only `establishing` and `action` may set `camera` themselves.
+ *
+ * - `single`: one character (`subjects: [id]`), `size` ecu|cu|mcu|medium|full.
+ * - `group`: two or more characters, `size` mcu|medium|full|wide.
+ * - `overShoulder`: `subjects: [seen]` over the near shoulder of `over`, `size` cu|mcu|medium.
+ * - `insert`: one detail: a character's `part`, or a prop or landmark.
+ * - `establishing`: the place; needs `camera`.
+ * - `action`: characters in motion, `size` full|wide, or its own `camera`.
+ */
+export type SceneShot = {
+  type: ShotType;
+  subjects?: string[];
+  over?: string;
+  part?: BodyPart;
+  size?: ShotSize;
+  /** eye (default) | low (looking up: power) | high (looking down: defeat). */
+  angle?: "eye" | "low" | "high";
+  /** front (default, along the gaze) | left | right (a three-quarter view). */
+  side?: "front" | "left" | "right";
+  /** static (default) | pushIn | pullOut. */
+  move?: "static" | "pushIn" | "pullOut";
+};
+
 export type ScriptScene = {
   sceneNumber: number;
   locationId: string;
@@ -226,8 +257,10 @@ export type ScriptScene = {
   speakerId?: string;
   /** Interval on the episode timeline. Scene duration is this interval. */
   timeRangeSeconds: [number, number];
-  /** Never inside a mesh. */
-  camera: SpatialCamera;
+  /** What the shot shows; its camera follows from it. */
+  shot: SceneShot;
+  /** Only for `establishing` (required) and `action` (optional). Never inside a mesh. */
+  camera?: SpatialCamera;
   /**
    * Exactly one entry per character visible at any moment of the shot, no
    * more: previs renders the shot and fails on a missing or extra entry.
@@ -242,8 +275,20 @@ export type ScriptScene = {
 };
 
 export type ScenePerformance = {
-  /** Visible motion for the whole take, positive and present tense. */
+  /**
+   * Visible motion for the whole take, positive and present tense, of this
+   * person's own body only ("the jaw tightens", "shoves {target} with both
+   * hands"). No pronouns and no names: the video model sees only the frame and
+   * invents whoever a word points at. Another person or thing is only ever
+   * `{target}`; gaze comes from lookAtId.
+   */
   action: string;
+  /**
+   * Who or what the action is aimed at, written as `{target}` in the action: a
+   * character, prop, or landmark id. It must be in the start frame; the clip
+   * prompt names it by where the frame shows it.
+   */
+  target?: string;
   /** Body parts the action moves; empty when the action is stillness. Each must be on screen at some moment of the shot. */
   parts: BodyPart[];
   /**

@@ -47,6 +47,9 @@ VIDEO_DEPTH_ANYTHING_FILE = "video_depth_anything_vits.pth"
 VIDEO_DEPTH_ANYTHING_MIN_BYTES = 100_000_000  # ~111 MB
 YUNET_REPO = "opencv/face_detection_yunet"
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
+# The output checks (verify.py): the face matcher, and torchvision's COCO person detector.
+SFACE_REPO = "opencv/face_recognition_sface"
+SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 
 TRELLIS_REPO = "Comfy-Org/TRELLIS.2"
 TRELLIS_UNET = "diffusion_models/trellis_2_int8_convrot.safetensors"
@@ -200,6 +203,10 @@ def main() -> None:
         models / "quality" / YUNET_FILE,
         100_000,
     )
+    download(SFACE_REPO, SFACE_FILE, models / "quality" / SFACE_FILE, 10_000_000)
+    import torchvision
+
+    torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.DEFAULT.get_state_dict(progress=True)
     checkpoints = models / "checkpoints"
     stub = checkpoints / STUB_NAME
     write_metadata_stub(stub, fetch_official_metadata())

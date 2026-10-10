@@ -25,6 +25,7 @@ PICTURE_LEGEND = {
     "OwnColor": "Picture {n} is its colors.",
     "Appearance": "Picture {n} is how it looks: the same face, hair, skin, clothes, colors, and materials.",
     "Look": "Picture {n} is how it looks with its effects.",
+    "Base": "Picture {n} is the object on pure black.",
 }
 
 
@@ -188,11 +189,33 @@ def sound_sentence(show: dict, scene: dict) -> str:
     )
 
 
+_ARTICLE = re.compile(r"^(one|an?|the)\s+", re.IGNORECASE)
+
+
+def target_words(show: dict, scene: dict, start: dict, target: str) -> str:
+    """What an action is aimed at, as the start frame shows it: a person by body and
+    place, a thing by its effects when the frame shows them, else by its first words.
+
+    The script checks keep every target in the start frame, so these words always
+    point at something LTX can find there.
+    """
+    if target in show["characters"]:
+        place = people_places(start).get(target)
+        body = clause(show["characters"][target]["body"])
+        return f"the {body}, {place[:1].lower() + place[1:]}" if place else f"the {body}"
+    effects = [clause(effect["appearance"]) for effect in start.get("effects") or [] if effect["id"] == target]
+    if effects:
+        return "the " + _ARTICLE.sub("", effects[0])
+    kind = "prop" if target in (show.get("props") or {}) else "landmark"
+    return "the " + _ARTICLE.sub("", re.split(r"[,.;:]", descriptions(show, scene, kind, target)[0][0])[0].strip())
+
+
 def ltx_prompt(show: dict, scene: dict, start: dict) -> str:
     """Dialogue, performances, motion, a locked camera, then sound.
 
     People are named by where the start frame shows them, plus their body, so
-    LTX can find them in the first frame.
+    LTX can find them in the first frame. Script text never points at anyone; an
+    action aimed at someone says ``{target}``, filled here from the start frame.
     """
     places = people_places(start)
 
@@ -202,6 +225,12 @@ def ltx_prompt(show: dict, scene: dict, start: dict) -> str:
             return body
         place = places[cid][:1].upper() + places[cid][1:]
         return template("scenePerson", {"place": place, "body": body})
+
+    def action(performance: dict) -> str:
+        text = clause(performance["action"])
+        if performance.get("target"):
+            text = text.replace("{target}", target_words(show, scene, start, performance["target"]))
+        return text
 
     parts: list[str] = []
     if scene.get("dialogue"):
@@ -215,10 +244,15 @@ def ltx_prompt(show: dict, scene: dict, start: dict) -> str:
                 },
             )
         )
-    for cid, performance in (scene.get("performances") or {}).items():
-        parts.append(template("scenePerformance", {"person": person(cid), "action": clause(performance["action"])}))
+    performances = scene.get("performances") or {}
+    for cid, performance in performances.items():
+        parts.append(template("scenePerformance", {"person": person(cid), "action": action(performance)}))
         if performance.get("expression"):
             parts.append(template("scenePerformanceExpression", {"expression": clause(performance["expression"])}))
+    # Anyone else in the start frame holds still, so the video model invents no motion for them.
+    for cid in places:
+        if cid not in performances:
+            parts.append(template("scenePerformance", {"person": person(cid), "action": clause(settings()["holdStill"])}))
     if scene.get("motion"):
         parts.append(template("sceneMotion", {"motion": clause(scene["motion"])}))
     effects = list(dict.fromkeys(clause(effect["appearance"]) for effect in start.get("effects") or []))
@@ -226,5 +260,9 @@ def ltx_prompt(show: dict, scene: dict, start: dict) -> str:
         parts.append(template("sceneEffects", {"effects": "; ".join(effects)}))
     if not camera_moves(scene):
         parts.append(template("sceneCameraLocked", {}))
-    visual = template("sceneVideo", {"action": " ".join(parts)})
+    # The prompt names only what the start frame has: telling the model to keep
+    # "its people" in an empty landscape makes it put people there.
+    props = any(entry["kind"] == "prop" and in_shot(start, entity_id) for entity_id, entry in start["entities"].items())
+    keep = ("people, wardrobe, " if places else "") + ("props, " if props else "")
+    visual = template("sceneVideo", {"keep": keep, "action": " ".join(parts)})
     return f"{visual} {sound_sentence(show, scene)}"

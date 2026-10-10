@@ -38,8 +38,13 @@ def settings() -> dict:
 
 
 def load_show(path: Path) -> dict:
-    """The script as authored. ``content:validate`` has already checked its shape."""
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    """The script as authored, with every shot's camera framed (``shots.resolve_cameras``).
+
+    ``content:validate`` has already checked its shape.
+    """
+    from shots import resolve_cameras
+
+    return resolve_cameras(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 def clause(text: object) -> str:
@@ -137,13 +142,8 @@ def camera_moves(scene: dict) -> bool:
     )
 
 
-def scene_has_spatial_change(episode: dict, scene: dict, seen: set[str]) -> bool:
-    """The camera moves, or someone the camera sees (``seen``) moves or turns during the shot.
-
-    Someone moving out of shot does not change the shot.
-    """
-    if camera_moves(scene):
-        return True
+def someone_moves(episode: dict, scene: dict, seen: set[str]) -> bool:
+    """Someone the camera sees (``seen``) moves or turns during the shot. Someone out of shot does not count."""
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     for character_id, track in episode["spatialTimeline"]["characterTracks"].items():
         if character_id not in seen:
@@ -156,6 +156,30 @@ def scene_has_spatial_change(episode: dict, scene: dict, seen: set[str]) -> bool
         if abs((last["bodyYawDegrees"] - first["bodyYawDegrees"] + 180.0) % 360.0 - 180.0) >= 2.0:
             return True
     return False
+
+
+def scene_has_spatial_change(episode: dict, scene: dict, seen: set[str]) -> bool:
+    """The camera moves, or someone the camera sees (``seen``) moves or turns during the shot."""
+    return camera_moves(scene) or someone_moves(episode, scene, seen)
+
+
+# Parts that can move without changing a body's outline in a depth video.
+OUTLINE_KEEPING_PARTS = frozenset({"hair", "face", "eyes", "neck"})
+
+
+def depth_control_fits(episode: dict, scene: dict, seen: set[str]) -> bool:
+    """Whether the clay video shows the shot as it really plays, so LTX may be held to it.
+
+    Meshes are rigid statues. The clay of someone walking, turning, or moving arms
+    or legs is a statue sliding, and depth control makes LTX copy exactly that.
+    So the clay constrains only a moving camera over people whose outlines hold
+    still, and never a speaker, whose face the clay cannot move. Every other shot
+    is animated from its start still and its words.
+    """
+    if scene.get("speakerId") or not camera_moves(scene) or someone_moves(episode, scene, seen):
+        return False
+    performances = scene.get("performances") or {}
+    return all(set(performances.get(cid, {}).get("parts") or ()) <= OUTLINE_KEEPING_PARTS for cid in seen)
 
 
 @dataclass
