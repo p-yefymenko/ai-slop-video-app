@@ -16,6 +16,7 @@ if (!python) {
 }
 
 // No default --reserve-vram: content:frames regressed with it (slower stills).
+// For clips (content:generate) use COMFY_ARGS="--reserve-vram 1.5": without it LTX can spill into shared memory and run ~13x slower.
 // Override any args via COMFY_ARGS (replaces defaults entirely when set).
 const extraArgs = (process.env.COMFY_ARGS || "")
   .split(/\s+/)

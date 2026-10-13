@@ -102,7 +102,7 @@ def observation(regions: dict[str, dict[str, list[int]]], **entries) -> dict:
         shown = sum(v for v, _e in parts.values())
         found[entity_id] = {"kind": "character", "pixels": [shown, shown], "screenX": 380.0, "depth": 4.0, "regions": parts}
     found.update(entries)
-    return {"timeSeconds": 0.0, "camera": {"position": [0, -4, 1.5]}, "entities": found}
+    return {"timeSeconds": 0.0, "camera": {"position": [0, -4, 1.5], "lookAt": [0, 0, 1.2]}, "entities": found}
 
 
 FRONT = {part: [5000, 6000] for part in BODY_PARTS}
@@ -135,7 +135,7 @@ class TimelineTests(unittest.TestCase):
         self.assertFalse(fits(still_episode, performances=glance), "locked camera: nothing for the clay to hold")
         self.assertFalse(fits(still_episode, camera=dolly, performances=wave), "a clay arm cannot wave")
         self.assertFalse(fits(show_with({"ada": walking})["episodes"][0], camera=dolly), "a clay body slides")
-        self.assertFalse(fits(still_episode, camera=dolly, performances=glance, speakerId="ada"), "a clay face cannot talk")
+        self.assertFalse(fits(still_episode, camera=dolly, performances=glance, lines=[{"speakerId": "ada", "line": "Go.", "delivery": "low"}]), "a clay face cannot talk")
 
     def test_walk_turn_and_location_change(self) -> None:
         track = [
@@ -267,6 +267,49 @@ class DescribeTests(unittest.TestCase):
         self.assertIn("stone paving", prompt.lower(), "any pixel of the ground in the shot is said")
         self.assertNotIn("open fields", prompt)
 
+    def test_a_still_with_one_person_is_drawn_whole_in_words_and_plate(self) -> None:
+        from describe import whole_prompt
+        from generate_batch import drawn_whole
+
+        show = show_with({})
+        backdrop = lambda pixels: {"kind": "backdrop", "pixels": [pixels, pixels], "regions": {"whole": [pixels, pixels]}}
+        bench = {"kind": "landmark", "pixels": [9000, 10000], "regions": {"whole": [9000, 10000]}}
+        seen = observation({"ada": FRONT}, bench=bench, sky=backdrop(20000), ground=backdrop(40), surround=backdrop(0))
+        self.assertEqual(drawn_whole(seen, scene()), "ada")
+        shot = scene(performances={"ada": {"action": "waits", "parts": ["torso"], "expression": "jaw set"}})
+        prompt = whole_prompt(show, shot, seen, "ada")
+        self.assertIn("In the center: the same person as picture 2", prompt)
+        self.assertIn("(adult woman, brown skin, 52 years old, black hair), jaw set, in sharp focus.", prompt)
+        self.assertIn("Where the depth shows it: One stone bench.", prompt, "an object is said, never shown")
+        self.assertIn("Above: a gray sky.", prompt)
+        self.assertIn("Solid dry ground underfoot, from the bottom of the frame to where it ends: stone paving", prompt)
+        self.assertNotIn("open fields", prompt, "only what is in shot")
+        self.assertNotIn("ada", prompt)
+        behind = whole_prompt(show, shot, observation({"ada": BEHIND}), "ada", behind=True)
+        self.assertIn("seen from directly behind", behind)
+        self.assertNotIn("jaw set", behind, "a face turned away shows no expression")
+        close = whole_prompt(show, shot, seen, "ada", part=True)
+        self.assertIn("exactly as picture 2 shows them", close)
+        self.assertNotIn("52 years old", close, "a close shot names no clothes it cannot show")
+        empty = whole_prompt(show, scene(), observation({}, sky=backdrop(20000)), None)
+        self.assertIn("Nobody is in the frame.", empty)
+        self.assertNotIn("picture 2", empty)
+        self.assertIsNone(drawn_whole(observation({}), scene()))
+        self.assertFalse(drawn_whole(observation({"ada": FRONT, "bo": FRONT}), scene()), "two faces are drawn apart")
+        over = observation({"ada": FRONT, "bo": BEHIND})
+        over["entities"]["bo"]["depth"] = 1.0
+        self.assertEqual(drawn_whole(over, scene()), "ada", "a shoulder in front shows no face")
+        show["characters"]["bo"] = {"body": "old man, gray beard", "attributes": [], "heightMeters": 1.8}
+        near = whole_prompt(show, shot, over, "ada", near_pictures={"bo": 3})
+        self.assertIn("in the near foreground: the back of another person's head and shoulder", near)
+        self.assertIn("dressed like the person in picture 3 seen from behind", near)
+        self.assertNotIn("gray beard", near, "a shoulder in front gets no words to bleed into the subject")
+        turned = scene(shot={"type": "overShoulder", "subjects": ["bo"], "over": "ada"})
+        self.assertFalse(drawn_whole(over, turned), "the subject's back, and another face")
+        lit = observation({"ada": FRONT})
+        lit["effects"] = [{"id": "bench", "appearance": "flames"}]
+        self.assertFalse(drawn_whole(lit, scene()), "effects are added as light onto their host's drawing")
+
     def test_ltx_names_people_by_where_the_start_frame_shows_them(self) -> None:
         show = show_with({})
         shot = scene(performances={"ada": {"action": "waits", "parts": ["torso"]}})
@@ -280,6 +323,63 @@ class DescribeTests(unittest.TestCase):
         empty = ltx_prompt(show, scene(), observation({}))
         self.assertIn("Preserve its set, composition", empty)
         self.assertNotIn("people", empty, "an empty shot never mentions people")
+
+    def test_framing_and_view_in_words(self) -> None:
+        from describe import band_words, view_words
+        from generate_batch import drawn_whole
+
+        self.assertEqual(band_words([0.0, 0.3]), "only the boots and legs show, filling the frame, no head or chest")
+        self.assertEqual(band_words([0.6, 1.0]), "the head and shoulders")
+        self.assertEqual(view_words({"position": [0, 0, 8], "lookAt": [0, 5, 0]}), "Seen from high above, looking steeply down.")
+        self.assertEqual(view_words({"position": [0, 0, 1.6], "lookAt": [0, 5, 1.5]}), "")
+        far = observation({"ada": FRONT, "bo": {**FRONT, "face": [300, 320]}})
+        self.assertEqual(drawn_whole(far, scene()), "ada", "a face too small to recognize is said in words")
+
+    def test_subtitles_follow_the_words_heard(self) -> None:
+        from captions import line_times
+
+        lines = [{"line": "Strong?"}, {"line": "Just a low bloodsucker."}]
+        words = [(0.2, 0.6), (1.0, 1.2), (1.2, 1.3), (1.3, 1.6), (1.6, 2.2)]
+        first, second = line_times(lines, words, 5.0)
+        self.assertEqual(first[0], 0.2)
+        self.assertLessEqual(first[1], second[0], "one subtitle leaves when the next comes")
+        self.assertAlmostEqual(second[0], 1.0)
+        self.assertAlmostEqual(second[1], 2.2 + 0.35)
+        late = [{"line": "Whoa.", "startSeconds": 4.0}]
+        self.assertEqual(line_times(late, [(1.0, 1.5)], 6.0)[0][0], 4.0, "never before its own start")
+        self.assertEqual(line_times(late, [], 6.0)[0][0], 4.0, "nothing heard: from its own start")
+
+    def test_how_a_person_is_turned_to_the_camera(self) -> None:
+        from describe import facing_words
+
+        camera = lambda x, y: {"position": [x, y, 1.6], "lookAt": [0, 0, 1.6]}
+        self.assertEqual(facing_words((0, 1), (0, 0), camera(0, 4)), "facing the camera")
+        self.assertEqual(facing_words((0, 1), (0, 0), camera(4, 0)), "in profile, looking to the frame right")
+        self.assertEqual(facing_words((0, 1), (0, 0), camera(-4, 0)), "in profile, looking to the frame left")
+        self.assertEqual(facing_words((0, 1), (0, 0), camera(2, 3)), "turned three-quarters, looking off to the frame right")
+        self.assertEqual(facing_words((0, 1), (0, 0), camera(0, -4)), "facing away from the camera")
+
+    def test_lines_on_and_off_screen_in_order_and_the_camera_in_words(self) -> None:
+        show = show_with({})
+        show["characters"]["bo"] = {"body": "old man, gray beard", "attributes": [], "heightMeters": 1.8}
+        lines = [
+            {"speakerId": "ada", "line": "Go now.", "delivery": "low", "startSeconds": 0.2},
+            {"speakerId": "ada", "line": "Hurry.", "delivery": "lower", "startSeconds": 0.9},
+            {"speakerId": "bo", "line": "Wait.", "delivery": "sharp"},
+            {"speakerId": "ada", "line": "No.", "delivery": "flat", "startSeconds": 1.5},
+        ]
+        shot = scene(performances={"ada": {"action": "waits", "parts": ["face"], "expression": "lips parted"}}, lines=lines)
+        prompt = ltx_prompt(show, shot, observation({"ada": FRONT}))
+        self.assertIn('In the center, adult woman, brown skin says, low, the lips moving naturally with the words: "Go now. Hurry."', prompt)
+        self.assertNotIn("At 0.2 seconds", prompt, "one speech in a row, untimed: timed lines make the model cut")
+        picture, sound = prompt.split("Sound.")
+        self.assertIn("At 1.5 seconds, in the center", picture)
+        self.assertNotIn("Wait.", picture, "a voice from off screen is sound: among the actions, the model cuts to its speaker")
+        self.assertIn("An old man's voice from off screen says, sharp: \"Wait.\"", sound)
+        self.assertIn("handheld and nearly still", prompt)
+        flying = scene(cameraMotion="flies low over the treetops")
+        flying["camera"]["keyframes"].append({**flying["camera"]["keyframes"][0], "timeSeconds": 2, "position": [0, -2, 3]})
+        self.assertIn("The camera flies low over the treetops, in one smooth continuous move.", ltx_prompt(show, flying, observation({})))
 
     def test_an_action_points_only_at_what_the_start_frame_shows(self) -> None:
         show = show_with({})
@@ -314,17 +414,24 @@ class CheckTests(unittest.TestCase):
         unlisted = check_scene(show, show["episodes"][0], scene(), [(0.0, start, [])])
         self.assertFalse(any("ada" in e for e in unlisted), "someone caught by the camera without a performance holds still")
         held = ltx_prompt(show, scene(), start)
-        self.assertIn("In the center, adult woman, brown skin: stands still", held)
+        self.assertIn("In the center, adult woman, brown skin: stands still", held, "holding still, seen from behind: what the frame shows")
+        turn = scene(performances={"ada": {"action": "turns around", "parts": ["face"]}})
+        turning = ltx_prompt(show, turn, start, observation({"ada": FRONT}))
+        self.assertIn("In the center, adult woman, brown skin, 52 years old, black hair: turns around", turning, "turning to show the face: the whole look")
+        watching = ltx_prompt(show, turn, start, start)
+        self.assertIn("In the center, adult woman, brown skin: turns around", watching, "the face never shown: no face words to turn them for")
+        entering = ltx_prompt(show, turn, observation({}), start)
+        self.assertIn("adult woman, brown skin, 52 years old, black hair: turns around", entering, "someone entering: the whole look")
         shot = scene(
-            speakerId="ada",
+            lines=[{"speakerId": "ada", "line": "Go.", "delivery": "low"}],
             performances={"ada": {"action": "talks to {target}", "parts": ["face"], "expression": "jaw set", "target": "bench"}},
             sound={"events": [{"text": "a breath", "source": {"landmarkId": "bench"}}], "bed": "faint", "music": {"kind": "none"}},
         )
         errors = "\n".join(check_scene(show, show["episodes"][0], shot, [(0.0, start, [])]))
         self.assertIn("parts names face, but their face is never visible in the shot (start: 1800 px visible of 42000 px)", errors)
         self.assertIn("expression is set, but their face is not visible", errors)
-        self.assertIn("speaker ada's face is 1800 px visible of 42000 px in the start frame; a speaking face needs at least", errors)
-        self.assertIn("comes from bench, which is not visible", errors)
+        self.assertIn("ada speaks on screen, but their face is never visible in the shot (start: 1800 px visible of 42000 px)", errors)
+        self.assertIn("comes from bench, which is never visible", errors)
         self.assertIn("performances.ada.target is bench, which is not visible in the start frame", errors)
         absent = check_scene(show, show["episodes"][0], shot, [(0.0, observation({}), [])])
         self.assertTrue(any("performances.ada is set, but ada is never visible" in e for e in absent))
@@ -413,16 +520,31 @@ class VerifyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             dest = Path(folder) / "scene_01.mp4"
             seeds: list[int] = []
+
+            def make(seed: int) -> None:
+                seeds.append(seed)
+                dest.write_text(str(seed), encoding="utf-8")
+
             answers = iter([["an invented person"], []])
-            problems = verified(seeds.append, lambda: next(answers), 7, dest, 3)
+            problems = verified(make, lambda: next(answers), 7, dest, 3)
             self.assertEqual(problems, [])
             self.assertEqual(len(seeds), 2)
             self.assertEqual(seeds[0], 7)
             self.assertNotEqual(seeds[1], 7, "a retry never repeats the failed seed")
-            stuck = verified(seeds.append, lambda: ["an invented person"], 7, dest, 2)
-            self.assertEqual(stuck, ["an invented person"])
+            tries = iter([["a", "b"], ["an invented person"], ["c", "d", "e"]])
+            stuck = verified(make, lambda: next(tries), 7, dest, 3)
+            self.assertEqual(stuck, ["an invented person"], "the try with the fewest problems is kept")
+            self.assertEqual(dest.read_text(encoding="utf-8"), str(seeds[-2]))
+            self.assertFalse(list(Path(folder).glob("*.try*")), "the other tries are removed")
+
             report = json.loads((Path(folder) / "inputs" / "scene_01" / "verify.json").read_text(encoding="utf-8"))
-            self.assertEqual(report, {"tries": 2, "problems": ["an invented person"]})
+            self.assertEqual(report, {"tries": 3, "problems": ["an invented person"]})
+            def hangs_once(seed: int) -> None:
+                if seed == 7:
+                    raise TimeoutError("prompt did not finish")
+                make(seed)
+
+            self.assertEqual(verified(hangs_once, lambda: [], 7, dest, 3), [], "a hung run is a failed try, then retried")
 
     def test_a_person_where_the_scene_has_nobody_is_invented(self) -> None:
         from unittest import mock
@@ -447,6 +569,93 @@ class VerifyTests(unittest.TestCase):
         leg = np.zeros_like(expected)
         leg[20:35, 5:10] = True  # a part of the same person, found again
         self.assertEqual(len(verify._distinct([left, leg])), 1, "one person is counted once")
+
+    def test_a_hard_cut_inside_a_take_is_found(self) -> None:
+        import subprocess
+
+        import verify
+
+        with tempfile.TemporaryDirectory() as folder:
+            for index in range(24):
+                shade = 60 + index if index < 12 else 200  # slow drift, then a jump to another picture
+                Image.new("RGB", (64, 112), (shade, shade, shade)).save(Path(folder) / f"f{index:03d}.png")
+            clip = Path(folder) / "clip.mp4"
+            subprocess.run(
+                ["ffmpeg", "-loglevel", "error", "-framerate", "24", "-i", str(Path(folder) / "f%03d.png"), "-pix_fmt", "yuv420p", str(clip)],
+                check=True,
+            )
+            self.assertEqual(verify.hard_cuts(clip), [0.5])
+
+    def test_a_held_shot_that_morphs_into_another_picture_is_found(self) -> None:
+        import subprocess
+
+        import verify
+
+        with tempfile.TemporaryDirectory() as folder:
+            for index in range(24):
+                shade = 100 + index if index < 6 else (100 + 6 * (index - 6) if index < 18 else 200)  # still, a slow morph, still
+                Image.new("RGB", (36, 64), (shade, shade, shade)).save(Path(folder) / f"f{index:03d}.png")
+            clip = Path(folder) / "clip.mp4"
+            subprocess.run(
+                ["ffmpeg", "-loglevel", "error", "-framerate", "24", "-i", str(Path(folder) / "f%03d.png"), "-pix_fmt", "yuv420p", str(clip)],
+                check=True,
+            )
+            self.assertEqual(verify.hard_cuts(clip), [], "a slow morph is no single-frame cut")
+            self.assertEqual(verify.drift(clip)[0], 0.5, "but it leaves the first frame's picture")
+
+    def test_a_held_take_that_leaves_its_shot_at_the_end_holds_its_last_good_frame(self) -> None:
+        import subprocess
+
+        import generate_batch
+        import verify
+
+        def take(folder: Path, name: str, leaves_at: int) -> Path:
+            """Two seconds at 24 fps that turn into another picture at frame ``leaves_at``."""
+            for index in range(48):
+                shade = 100 if index < leaves_at else 220
+                Image.new("RGB", (36, 64), (shade, shade, shade)).save(folder / f"{name}{index:03d}.png")
+            clip = folder / f"{name}.mp4"
+            subprocess.run(
+                ["ffmpeg", "-loglevel", "error", "-framerate", "24", "-i", str(folder / f"{name}%03d.png"), "-pix_fmt", "yuv420p", str(clip)],
+                check=True,
+            )
+            return clip
+
+        with tempfile.TemporaryDirectory() as folder:
+            late = take(Path(folder), "late", 40)
+            self.assertAlmostEqual(generate_batch.hold_tail(late), 1.5, places=2)
+            self.assertEqual(verify.drift(late), [])
+            self.assertEqual(len(list(verify.clip_frames(late, fps=24))), 48, "the take keeps its length")
+            early = take(Path(folder), "early", 12)
+            self.assertIsNone(generate_batch.hold_tail(early), "a take that leaves its shot early is not saved by a hold")
+
+    def test_a_held_shot_keeps_its_people_at_their_size(self) -> None:
+        from unittest import mock
+
+        import verify
+
+        frames = [Image.new("RGB", (40, 40))] * 3
+        big, small = np.zeros((40, 40), dtype=bool), np.zeros((40, 40), dtype=bool)
+        big[0:40, 5:35] = True
+        small[30:40, 18:22] = True
+        everywhere = Image.new("L", (40, 40), 255)
+        with mock.patch.object(verify, "clip_frames", return_value=frames), mock.patch.object(verify, "hard_cuts", return_value=[]),                 mock.patch.object(verify, "drift", return_value=[]), mock.patch.object(verify, "people", side_effect=[[big], [big], [small]] * 2):
+            self.assertEqual(verify.check_clip(Path("x.mp4"), everywhere, 1), [], "a moving shot may change size")
+            problems = verify.check_clip(Path("x.mp4"), everywhere, 1, holds=True)
+        self.assertIn("times their size in the first frame while the shot holds", problems[0])
+
+    def test_a_person_drawn_over_a_person_is_an_extra_face(self) -> None:
+        from unittest import mock
+
+        import verify
+
+        with tempfile.TemporaryDirectory() as folder:
+            still, people = Path(folder) / "still.png", Path(folder) / "people.png"
+            Image.new("RGB", (40, 40)).save(still)
+            Image.new("L", (40, 40), 255).save(people)
+            with mock.patch.object(verify, "people", return_value=[]), mock.patch.object(verify, "face_count", return_value=2):
+                self.assertEqual(verify.check_still(still, people, {}, 2), [])
+                self.assertEqual(verify.check_still(still, people, {}, 1), ["2 faces in the picture, but the 3D scene shows 1"])
 
 
 class PasteTests(unittest.TestCase):
@@ -585,6 +794,10 @@ class ShotTests(unittest.TestCase):
         push = self.frame(type="single", subjects=["ada"], move="pushIn")
         self.assertEqual(len(push), 2)
         self.assertLess(self.math.dist(push[1]["position"], push[1]["lookAt"]), self.math.dist(push[0]["position"], push[0]["lookAt"]))
+        tilt = self.frame(type="single", subjects=["ada"], move="tiltUp")
+        self.assertEqual(tilt[0]["position"], tilt[1]["position"], "a tilt keeps its place")
+        self.assertLess(tilt[0]["lookAt"][2], 0.3, "and starts on the feet")
+        self.assertEqual(tilt[1]["lookAt"], eye["lookAt"], "and ends on the framing")
 
     def test_over_the_shoulder_sits_behind_the_near_one(self) -> None:
         pose = self.frame(type="overShoulder", subjects=["bram"], over="ada", size="mcu")[0]

@@ -44,6 +44,9 @@ CLOTHES_FLATTEN_RADIUS = 3
 
 
 def sample_times(start: float, finish: float) -> list[float]:
+    """Moments of the shot, from its first frame to its last, one video frame before the cut:
+    at the cut itself the next shot's blocking already holds (someone has moved on)."""
+    finish = max(start, finish - 1.0 / CLIP_FPS)
     count = max(2, int(round((finish - start) * BLOCKOUT_FPS)) + 1)
     return [start + (finish - start) * index / (count - 1) for index in range(count)]
 
@@ -288,6 +291,19 @@ def write_guides(show, episode, scene, label, observation, frame, labels, entiti
         guide_path(*ids, label, "edges"): edge_image(np.where(np.isfinite(frame.depth), frame.depth, beyond)),
         guide_path(*ids, label, "color"): color_image(frame, entities, labels, location["backdrop"]),
     }
+    if labels is not None:
+        # Only the people, landmarks, and props, for a still drawn whole: the
+        # ground's smooth flat ramp is drawn as a smooth flat surface (still water,
+        # sand) whatever the words say, so the setting comes from the words alone.
+        # A person is a flat silhouette at their own distance: the clay's face
+        # relief would be drawn into the face, so only where they stand and how
+        # big they are comes from here, and their turn from the words.
+        solids = np.where(labels == 0, frame.depth, np.inf)
+        for index, entity in enumerate(entities):
+            body = (frame.entity == index + 1) & np.isfinite(solids)
+            if entity.kind == "character" and body.any():
+                solids[body] = np.median(solids[body])
+        images[guide_path(*ids, label, "solids")] = depth_image(solids)
     observation["effects"] = []
     for index, entity in enumerate(entities):
         if entity.kind not in DRAWN_ALONE:
@@ -411,12 +427,15 @@ CLIP_PEOPLE_GROW_PIXELS = 96
 
 
 def people_mask(frames, grow: int) -> Image.Image:
-    """Where the 3D scene has a person in any of ``frames`` ((frame, entities) pairs), grown by ``grow`` pixels."""
+    """Where the 3D scene has a person in any of ``frames`` ((frame, entities) pairs), grown by ``grow`` pixels.
+
+    Props count: a prop may be a figure (a body on the ground), which a person detector rightly finds.
+    """
     from scipy import ndimage
 
     found = np.zeros((HEIGHT, WIDTH), dtype=bool)
     for frame, entities in frames:
-        people = [number + 1 for number, entity in enumerate(entities) if entity.kind == "character"]
+        people = [number + 1 for number, entity in enumerate(entities) if entity.kind in ("character", "prop")]
         found |= np.isin(frame.entity, people)
     if found.any():
         found = ndimage.binary_dilation(found, iterations=grow)

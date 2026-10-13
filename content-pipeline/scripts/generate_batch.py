@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from captions import caption_episode
 from clip_spec import CLIP_HEIGHT, CLIP_WIDTH, FPS, clip_crop_box, fit_to_clip, ltx_length_for_duration
 from depth_control import (
     choose_ltx_workflow,
@@ -34,7 +35,7 @@ from depth_control import (
     stage_control_video,
     stage_fit_still,
 )
-from describe import drawn_prompt, effect_prompt, ltx_prompt, still_prompt
+from describe import drawn_prompt, effect_prompt, facing_key, facing_words, ltx_prompt, still_prompt, whole_prompt
 from ffmpeg_tools import concat_videos
 from pipeline_paths import (
     OUTPUT_DIR,
@@ -50,7 +51,8 @@ from pipeline_paths import (
 from previs import current_previs, load_observation, previs_episode, shot_depth_control, shot_moves, shot_people
 from render import HEIGHT as PROXY_HEIGHT
 from render import WIDTH as PROXY_WIDTH
-from world import load_show, look_path, plate_path
+from observe import in_shot, visible
+from world import back_path, load_show, look_path, plate_path, settings
 
 ROOT = Path(__file__).resolve().parents[1]
 LTX_WORKFLOW_PATH = ROOT / "workflows" / "ltx_gemma_api.json"
@@ -448,6 +450,22 @@ def free_comfy_models() -> None:
         print("Unloaded idle ComfyUI models so the next stage can fit in VRAM.", flush=True)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         print(f"Could not unload ComfyUI models ({exc}); continuing.", flush=True)
+
+def interrupt_comfy() -> None:
+    """Stop whatever ComfyUI is running and drop its queue: a hung prompt blocks every later one."""
+    for path, payload in (("/interrupt", {}), ("/queue", {"clear": True})):
+        req = urllib.request.Request(
+            f"{COMFYUI_URL}{path}", data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            urllib.request.urlopen(req, timeout=30)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            print(f"Could not reach ComfyUI {path} ({exc}).", flush=True)
+
+
+# A clip takes a few minutes; one still running after this has hung.
+VIDEO_TIMEOUT_SECONDS = 900
+
 
 def queue_prompt(prompt_graph: dict) -> str:
     payload = json.dumps({"prompt": prompt_graph}).encode("utf-8")
@@ -876,12 +894,17 @@ def execute_queued_graph(
     prefixes = [prefix for prefix, _path in also or []]
     if also:
         prefixes.append("reelshort_start")
-    outputs, history_item = wait_for_output(
-        prompt_id,
-        monitor=monitor,
-        prefer=prefer,
-        require_prefixes=prefixes or None,
-    )
+    try:
+        outputs, history_item = wait_for_output(
+            prompt_id,
+            monitor=monitor,
+            prefer=prefer,
+            require_prefixes=prefixes or None,
+            **({"timeout_s": VIDEO_TIMEOUT_SECONDS} if prefer == "video" else {}),
+        )
+    except TimeoutError:
+        interrupt_comfy()
+        raise
     for prefix, path in also or []:
         download_output(output_named(outputs, prefix), path)
         print(f"  Wrote {path} ({format_bytes(path.stat().st_size)})", flush=True)
@@ -1169,8 +1192,92 @@ def plate_slice(plate: Path, band: list[float] | None, dest: Path) -> Path:
     return dest
 
 
+def drawn_whole(observation: dict, scene: dict) -> str | None | bool:
+    """Whether a still is drawn whole in one pass: False when not, else the person it is about (None for nobody).
+
+    One model pass keeps one person true to their plate, and draws a far more
+    natural shot than pasted pieces. With two faces in it, it mixes up their
+    clothes and copies faces, so those shots are drawn piece by piece; so are
+    shots with effects, which are added as light onto their host's own drawing.
+    Anyone else in a one-pass shot shows no face that needs a likeness (a
+    shoulder in the foreground, someone seen from behind, a face too small to
+    recognize: under ``plateFaceMinPixels``) and is said in words. The person it
+    is about is the shot's subject when in shot, else the biggest figure.
+    """
+    people = [eid for eid, entry in observation["entities"].items() if entry["kind"] == "character" and in_shot(observation, eid)]
+    if observation.get("effects"):
+        return False
+    if not people:
+        return None
+    faces = [cid for cid in people if visible(observation, cid, ["face"], settings()["plateFaceMinPixels"])]
+    subjects = [cid for cid in (scene.get("shot") or {}).get("subjects", []) if cid in people]
+    person = (subjects or sorted(people, key=lambda cid: -observation["entities"][cid]["pixels"][0]))[0]
+    return False if [cid for cid in faces if cid != person] else person
+
+
+# A one-pass still adds a picture for someone farther away only while it has fewer than this many.
+WHOLE_FAR_PICTURES = 3
+
+
+def render_whole_still(show: dict, episode: dict, scene: dict, observation: dict, person: str | None, guide, dest: Path, seed: int) -> None:
+    """The still in one pass: the shot's solids for where everything is, the person's plate for who they are
+    (their back when they face away: shown a face, the model draws it)."""
+    from asset_generate import generate_back_plate
+
+    files = [("Depth", guide("solids"))]
+    facing, behind, part = None, False, False
+    if person is not None:
+        from shots import _people
+
+        here = _people(show, episode, scene)[person]
+        key, _side = facing_key(here["gaze"], (here["x"], here["y"]), observation["camera"])
+        facing = facing_words(here["gaze"], (here["x"], here["y"]), observation["camera"])
+        behind = key == "away"
+        plate = plate_path(show, "character", person, scene["locationId"])
+        if not present(plate):
+            raise SystemExit(f"Missing {plate}. Run `pnpm run content:plates` first.")
+        if behind:
+            back = back_path(show, person)
+            if not present(back):
+                print(f"  Drawing {person} from behind (first use): {back}", flush=True)
+                generate_back_plate(plate, back)
+            plate = back
+        reference = plate_slice(plate, observation["entities"][person].get("band"), still_inputs_dir(dest) / f"whole_{person}_reference.png")
+        files.append(("Appearance", reference))
+        part = reference != plate
+    # Everyone else, biggest first: someone in front of them drawn from their back,
+    # up to the model's four pictures; someone farther away as their own picture
+    # while the shot has fewer than three (with four, the model loses the setting:
+    # a mountain clearing became a castle). The rest are said in words.
+    near_pictures, far_pictures = {}, {}
+    others = [
+        cid
+        for cid, entry in observation["entities"].items()
+        if person is not None and cid != person and entry["kind"] == "character" and in_shot(observation, cid)
+    ]
+    for cid in sorted(others, key=lambda cid: -observation["entities"][cid]["pixels"][0]):
+        if observation["entities"][cid]["depth"] < observation["entities"][person]["depth"]:
+            if len(files) < 4:
+                back = back_path(show, cid)
+                if not present(back):
+                    print(f"  Drawing {cid} from behind (first use): {back}", flush=True)
+                    generate_back_plate(plate_path(show, "character", cid, scene["locationId"]), back)
+                files.append((f"Near{cid}", back))
+                near_pictures[cid] = len(files)
+        elif len(files) < WHOLE_FAR_PICTURES:
+            files.append((f"Far{cid}", plate_path(show, "character", cid, scene["locationId"])))
+            far_pictures[cid] = len(files)
+    prompt = whole_prompt(
+        show, scene, observation, person, part=part, facing=facing, behind=behind, near_pictures=near_pictures, far_pictures=far_pictures
+    )
+    qwen_pass(dest, prompt, files, seed, "Qwen whole still")
+    append_generation_log(dest, "whole", prompt, files, {"person": person})
+    shutil.copyfile(dest, still_inputs_dir(dest) / "solid.png")
+
+
 def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path, seed: int) -> None:
-    """One scene still: everything in the shot drawn alone and pasted in, the empty space drawn around it, then effects as light.
+    """One scene still: drawn whole when it has at most one person (``drawn_whole``), else
+    everything in the shot drawn alone and pasted in, the empty space drawn around it, then effects as light.
 
     A drawn entity sees only its own guides (the shot camera magnified onto it),
     its plate, and its own words, so it never borrows another's description and
@@ -1182,6 +1289,10 @@ def render_still(show: dict, episode: dict, scene: dict, label: str, dest: Path,
     guide = lambda kind: guide_path(*ids, label, kind)
     begin_generation_log(dest)
     inputs = still_inputs_dir(dest)
+    whole = drawn_whole(observation, scene)
+    if whole is not False:
+        render_whole_still(show, episode, scene, observation, whole, guide, dest, seed)
+        return
     drawn = []
     lights = []
     for entity_id in paint_order(observation):
@@ -1290,8 +1401,15 @@ def still_problems(show: dict, episode: dict, scene: dict, label: str, still: Pa
     # People and faces are judged on the solid shot: through added fire light a
     # detector sees figures in the flames.
     solid = still_inputs_dir(still) / "solid.png"
-    problems = check_still(solid if solid.is_file() else still, guide_path(*ids, label, "people"), faces)
-    coverage = json.loads((still_inputs_dir(still) / "coverage.json").read_text(encoding="utf-8"))
+    face_total = sum(
+        1
+        for cid, entry in observation["entities"].items()
+        if entry["kind"] == "character" and visible(observation, cid, ["face"], settings()["onScreenMinPixels"])
+    )
+    problems = check_still(solid if solid.is_file() else still, guide_path(*ids, label, "people"), faces, face_total)
+    # Only a pasted still has coverage: how much of each mesh its drawing filled.
+    report = still_inputs_dir(still) / "coverage.json"
+    coverage = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
     for name, share in coverage.items():
         if share < DRAWN_MIN_COVERAGE:
             problems.append(
@@ -1323,7 +1441,7 @@ def clip_problems(show: dict, episode: dict, scene: dict, clip: Path) -> list[st
 
         light = ndimage.binary_dilation(light, iterations=CLIP_LIGHT_GROW_PIXELS)
         light = fit_to_clip(Image.fromarray(light.astype(np.uint8) * 255).convert("RGB"))
-    return check_clip(clip, people, shot_people(show, episode, scene) or 0, light)
+    return check_clip(clip, people, shot_people(show, episode, scene) or 0, light, holds=shot_moves(show, episode, scene) is False)
 
 
 # A clip's flames reach this far past where the start frame has them.
@@ -1334,16 +1452,35 @@ def verified(make, problems_of, seed: int, dest: Path, attempts: int) -> list[st
     """Make an output, check it against the 3D scene, and remake it with a new seed while it fails.
 
     A model's mistake is random; the same seed repeats it, another seed usually
-    does not. After ``attempts`` the last try is kept, and its problems are
-    written to ``inputs/<name>/verify.json`` and returned so the run can report it.
+    does not. After ``attempts`` the try with the fewest problems is kept, and its
+    problems are written to ``inputs/<name>/verify.json`` and returned so the run
+    can report it.
     """
     problems: list[str] = []
+    best: tuple[int, int] | None = None
+    keep = lambda attempt: dest.with_name(f"{dest.stem}.try{attempt}{dest.suffix}")
     for attempt in range(max(1, attempts)):
-        make(seed if attempt == 0 else stable_seed(seed, "retry", attempt))
+        try:
+            make(seed if attempt == 0 else stable_seed(seed, "retry", attempt))
+        except TimeoutError as exc:
+            # A hung model run is a failed try like any other: another seed usually runs.
+            problems = [f"the model run hung and was stopped ({exc})"]
+            print(f"  Try {attempt + 1} of {attempts} hung; stopped it.", flush=True)
+            continue
         problems = problems_of()
         if not problems:
             break
         print(f"  Check failed (try {attempt + 1} of {attempts}):\n    - " + "\n    - ".join(problems), flush=True)
+        shutil.copyfile(dest, keep(attempt))
+        if best is None or len(problems) < best[0]:
+            best = (len(problems), attempt)
+            best_problems = problems
+    if problems and best is not None:
+        shutil.copyfile(keep(best[1]), dest)
+        problems = best_problems
+        print(f"  Keeping try {best[1] + 1}, the one with the fewest problems.", flush=True)
+    for attempt in range(max(1, attempts)):
+        keep(attempt).unlink(missing_ok=True)
     report = still_inputs_dir(dest) / "verify.json"
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps({"tries": attempt + 1, "problems": problems}, indent=2) + "\n", encoding="utf-8")
@@ -1408,11 +1545,46 @@ def inject_spatial_upscale(graph: dict, still: Path, factor: str, strength: floa
     return width, height
 
 
+# A held take that leaves its shot only this close to its end keeps what came before,
+# its last good frame held to the end: a held shot is still, so the hold reads as one.
+TAIL_HOLD_SECONDS = 0.6
+# The change starts after the last sample before it (drift samples at 6 fps).
+TAIL_MARGIN_SECONDS = 1 / 6
+
+
+def hold_tail(clip: Path) -> float | None:
+    """When a held take turns into another shot only in its last moments, freeze it before.
+
+    The video model often finishes the speech, then starts a new shot (a laugh and a
+    whip, a pull-back) in the take's last half second. Returns the second it froze at.
+    """
+    from verify import drift, hard_cuts
+
+    duration = float(subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(clip)],
+        capture_output=True, text=True, check=True,
+    ).stdout)
+    leaves = min(drift(clip) + hard_cuts(clip), default=None)
+    if leaves is None or leaves < duration - TAIL_HOLD_SECONDS:
+        return None
+    at = max(0.0, leaves - TAIL_MARGIN_SECONDS)
+    held = clip.with_name(clip.stem + ".held.mp4")
+    subprocess.run(
+        ["ffmpeg", "-loglevel", "error", "-y", "-i", str(clip), "-filter_complex",
+         f"[0:v]trim=end={at:.3f},setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={duration - at:.3f}[v]",
+         "-map", "[v]", "-map", "0:a?", "-t", f"{duration:.3f}", "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+         "-c:a", "copy", str(held)],
+        check=True,
+    )
+    held.replace(clip)
+    return at
+
+
 def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: dict, use_depth: bool) -> Path:
     ids = (show["id"], episode["episodeNumber"], scene["sceneNumber"])
     still = start_still_path(*ids)
     dest = clip_path(*ids)
-    prompt = ltx_prompt(show, scene, load_observation(*ids, "start"))
+    prompt = ltx_prompt(show, scene, load_observation(*ids, "start"), load_observation(*ids, "end"))
     wf_path, graph_name = choose_ltx_workflow(scene, episode, spatial=use_depth)
     graph = inject_prompt(load_json(wf_path), prompt, os.environ.get("LTXV_API_KEY", ""))
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
@@ -1434,7 +1606,7 @@ def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: d
             ic_strength=ic_strength,
         )
     else:
-        if scene.get("speakerId"):
+        if scene.get("lines"):
             inject_dialogue_multimodal_guider(graph)
         inject_start_frame(graph, stage_start_still(still, fit_clip=True), strength=start_strength)
 
@@ -1459,6 +1631,10 @@ def generate_clip(show: dict, episode: dict, scene: dict, seed: int, renderer: d
     )
     execute_queued_graph(graph, dest, prefer="video", mode=f"LTX scene {number:02d}")
     free_comfy_models()
+    if shot_moves(show, episode, scene) is False:
+        at = hold_tail(dest)
+        if at is not None:
+            print(f"  The take left its shot at the end; held its frame from {at:.2f}s.", flush=True)
     return dest
 
 
@@ -1542,6 +1718,8 @@ def generate_show(show: dict, stage: str, partial: bool = False, force: bool = F
         if not partial and all(present(path) for path in ordered):
             episode_mp4 = episode_video_path(show_id, number)
             concat_videos(ordered, episode_mp4, loudness_target_lufs=renderer.get("episodeLoudnessTargetLufs"))
+            free_comfy_models()
+            caption_episode(show, episode, ordered, episode_mp4)
             print(f"Wrote {episode_mp4} ({format_bytes(episode_mp4.stat().st_size)})", flush=True)
     if stage == "frames":
         print(

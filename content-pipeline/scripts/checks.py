@@ -85,25 +85,33 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
                 f"frame ({_numbers(start, cid, 'face')}), so nobody would see it. Remove it or reframe."
             )
 
-    speaker = scene.get("speakerId")
-    # A talking face needs a talking shot: about an eighth of the frame height (a
-    # medium close-up). Smaller, the video model has a few pixels of mouth to speak with.
-    talking = settings()["speakerFaceMinPixels"]
-    if speaker and not visible(start, speaker, ["face"], talking):
-        errors.append(
-            f"{where}: speaker {speaker}'s face is {_numbers(start, speaker, 'face')} in the start frame; "
-            f"a speaking face needs at least {talking} px (about an eighth of the frame height, a medium "
-            f"close-up). Bring the camera closer or use a longer lens."
-        )
+    # A speaker with a performance speaks on screen, so their face must show at
+    # some moment (a tilt up the body reaches it late); one without a performance
+    # is a voice from off screen. A face in the start frame starts ready to speak.
+    for line in scene.get("lines") or []:
+        speaker = line["speakerId"]
+        if speaker not in performances:
+            continue
+        if not any(on_screen(observation, speaker, ["face"]) for _t, observation, _e in samples):
+            errors.append(
+                f"{where}: {speaker} speaks on screen, but their face is never visible in the shot "
+                f"(start: {_numbers(start, speaker, 'face')}). Reframe, or drop their performance to make the "
+                f"line a voice from off screen."
+            )
+        elif on_screen(start, speaker, ["face"]) and not performances[speaker].get("expression"):
+            errors.append(
+                f"{where}: {speaker} speaks with their face in the start frame, so performances.{speaker} needs an "
+                f"expression with the mouth ready to speak (lips slightly parted)."
+            )
 
     for index, event in enumerate(scene["sound"]["events"]):
         source = event["source"]
         entity_id = source.get("characterId") or source.get("landmarkId") or source.get("propId")
         part = source.get("part")
-        if not on_screen(start, entity_id, [part] if part else None):
+        if not any(on_screen(observation, entity_id, [part] if part else None) for _t, observation, _e in samples):
             errors.append(
                 f"{where}: sound.events[{index}] comes from {entity_id}{' ' + part if part else ''}, which is "
-                f"not visible in the start frame ({_numbers(start, entity_id, part)})."
+                f"never visible in the shot (start: {_numbers(start, entity_id, part)})."
             )
     return errors
 

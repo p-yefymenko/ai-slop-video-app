@@ -168,6 +168,7 @@ const stageGeometrySchema = z
 
 const showCharacterSchema = z
   .object({
+    name: text("name").optional(),
     body: text("body"),
     attributes: z.array(text("attribute"), {
       required_error: "attributes is required",
@@ -243,7 +244,7 @@ const shotSchema = z
     size: z.enum(SHOT_SIZES, { errorMap: () => ({ message: `shot.size must be one of ${SHOT_SIZES.join(", ")}` }) }).optional(),
     angle: z.enum(["eye", "low", "high"]).optional(),
     side: z.enum(["front", "left", "right"]).optional(),
-    move: z.enum(["static", "pushIn", "pullOut"]).optional(),
+    move: z.enum(["static", "pushIn", "pullOut", "tiltUp"]).optional(),
   })
   .strict();
 
@@ -253,7 +254,7 @@ const locationSoundscapeSchema = z
       "Persistent bed always audible at this location. Present tense. Not music unless the place truly has source music.",
     ),
     space: text("soundscape.space").describe(
-      "Acoustic character: open air, enclosed hall, reverb, dry stone, little echo.",
+      "Acoustic character: open air, enclosed hall, reverb, dry stone, little echo. Sound only, never what the place looks like: the clip prompt is shared by picture and sound, and a place described here makes the video cut to a wide of it.",
     ),
   })
   .strict()
@@ -320,10 +321,12 @@ const performanceSchema = z
   })
   .strict();
 
-const dialogueSchema = z
+const lineSchema = z
   .object({
-    line: text("dialogue.line"),
-    delivery: text("dialogue.delivery"),
+    speakerId: text("lines speakerId"),
+    line: text("lines line"),
+    delivery: text("lines delivery"),
+    startSeconds: finiteNumber("lines startSeconds").optional(),
   })
   .strict();
 
@@ -344,7 +347,7 @@ const sceneSoundSchema = z
         invalid_type_error: `sound.bed must be ${BED_LEVELS.join(" or ")}`,
       })
       .describe(
-        'How loud the location bed sits. "present" = full bed. "faint" = bed lowered under the scene (preferred when speakerId is set).',
+        'How loud the location bed sits. "present" = full bed. "faint" = bed lowered under the scene (preferred when someone speaks).',
       ),
     music: sceneMusicSchema,
   })
@@ -364,7 +367,6 @@ const sceneSchema = z
       .positive("sceneNumber must be greater than 0"),
     locationId: text("locationId"),
     storyBeat: text("storyBeat"),
-    speakerId: text("speakerId").optional(),
     timeRangeSeconds: z.tuple([finiteNumber("timeRangeSeconds start"), finiteNumber("timeRangeSeconds end")], {
       required_error: "timeRangeSeconds is required",
       invalid_type_error: "timeRangeSeconds must be [start, end]",
@@ -381,11 +383,12 @@ const sceneSchema = z
       })
       .strict()
       .optional(),
+    cameraMotion: text("cameraMotion").optional(),
     performances: z.record(performanceSchema, {
       required_error: "performances is required; use {} when no one is on camera",
       invalid_type_error: "performances must be an object keyed by characterId",
     }),
-    dialogue: dialogueSchema.optional(),
+    lines: z.array(lineSchema).optional(),
     motion: text("motion").optional(),
     sound: sceneSoundSchema,
   })
@@ -931,7 +934,7 @@ function checkSceneSoundWarnings(
   soundLint: SoundLintConfig,
 ) {
   const sound = scene.sound;
-  if (scene.speakerId && sound.bed !== "faint") {
+  if ((scene.lines ?? []).length > 0 && sound.bed !== "faint") {
     issues.push({
       path: `${scenePath}.sound.bed`,
       message: `speaking scene should use bed "faint" so dialogue is not buried under the location bed`,
@@ -978,7 +981,10 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
   // start frame, and gaze comes from lookAtId, so visual text must not name anyone.
   const namesSomeone = (value: string | undefined) =>
     Object.keys(show.characters).find((id) => new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""));
-  const visualText: [string, string | undefined][] = [[`${scenePath}.motion`, scene.motion]];
+  const visualText: [string, string | undefined][] = [
+    [`${scenePath}.motion`, scene.motion],
+    [`${scenePath}.cameraMotion`, scene.cameraMotion],
+  ];
   const things = new Set([
     ...Object.keys(show.characters),
     ...Object.keys(show.props ?? {}),
@@ -1016,21 +1022,22 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
       });
     }
   }
-  if (scene.speakerId) {
-    const speaker = performances[scene.speakerId];
-    if (!speaker) {
-      issues.push({ path: `${scenePath}.speakerId`, message: "the speaker needs a performance" });
-    } else if (!speaker.expression) {
-      issues.push({
-        path: `${scenePath}.performances.${scene.speakerId}.expression`,
-        message: "the speaker needs an expression; the still must show the mouth ready to speak (lips slightly parted)",
-      });
+  const [sceneStart, sceneEnd] = scene.timeRangeSeconds;
+  (scene.lines ?? []).forEach((line, lineIndex) => {
+    const path = `${scenePath}.lines[${lineIndex}]`;
+    if (!(line.speakerId in show.characters)) {
+      issues.push({ path: `${path}.speakerId`, message: `unknown character ${JSON.stringify(line.speakerId)}` });
+      return;
     }
-    if (!scene.dialogue) {
-      issues.push({ path: `${scenePath}.dialogue`, message: "required when speakerId is set" });
+    if (line.startSeconds !== undefined && (line.startSeconds < 0 || line.startSeconds >= sceneEnd - sceneStart)) {
+      issues.push({ path: `${path}.startSeconds`, message: `must be within the scene (0 to ${(sceneEnd - sceneStart).toFixed(2)} s)` });
     }
-  } else if (scene.dialogue) {
-    issues.push({ path: `${scenePath}.dialogue`, message: "dialogue needs a speakerId" });
+  });
+  const ownCameraMoves = (scene.camera?.keyframes.length ?? 0) > 1;
+  if (ownCameraMoves && !scene.cameraMotion) {
+    issues.push({ path: `${scenePath}.cameraMotion`, message: "an own camera that moves needs cameraMotion: how it moves, in words for the video model" });
+  } else if (scene.cameraMotion && !ownCameraMoves) {
+    issues.push({ path: `${scenePath}.cameraMotion`, message: "only an own camera that moves has cameraMotion; a shot's move is shot.move" });
   }
   const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
   scene.sound.events.forEach((event, eventIndex) => {
@@ -1039,7 +1046,7 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     if ("characterId" in source) {
       checkPartId(issues, `${path}.part`, source.part);
       const moves = performances[source.characterId]?.parts ?? [];
-      const speaks = source.characterId === scene.speakerId && source.part === "face";
+      const speaks = (scene.lines ?? []).some((line) => line.speakerId === source.characterId) && source.part === "face";
       if (!moves.includes(source.part) && !speaks) {
         issues.push({
           path: `${path}.part`,

@@ -330,6 +330,27 @@ def generate_look_plate(plate: Path, effects: list[str], dest: Path) -> Path:
     return dest
 
 
+def generate_back_plate(plate: Path, dest: Path) -> Path:
+    """Write ``back.png``: the person on the plate seen from behind. ComfyUI must be running.
+
+    Given a plate that shows the face, the still model draws the face whatever
+    the words say, so a shot of someone's back is drawn from their back.
+    """
+    from generate_batch import clone_workflow, execute_queued_graph, free_comfy_models, stable_seed, stage_named_image
+
+    prompt = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))["backPlate"]
+    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
+    graph["6"]["inputs"]["image"] = stage_named_image(plate, "asset_back_source")
+    graph["7"]["inputs"]["prompt"] = prompt
+    graph["10"]["inputs"]["seed"] = stable_seed("back", str(plate))
+    try:
+        free_comfy_models()
+        execute_queued_graph(graph, dest, prefer="image", mode="Qwen back plate")
+    except urllib.error.URLError as exc:
+        raise RuntimeError(_comfy_unreachable()) from exc
+    return dest
+
+
 def plate_is_ready(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 1024
 

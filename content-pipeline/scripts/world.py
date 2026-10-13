@@ -176,7 +176,7 @@ def depth_control_fits(episode: dict, scene: dict, seen: set[str]) -> bool:
     still, and never a speaker, whose face the clay cannot move. Every other shot
     is animated from its start still and its words.
     """
-    if scene.get("speakerId") or not camera_moves(scene) or someone_moves(episode, scene, seen):
+    if scene.get("lines") or not camera_moves(scene) or someone_moves(episode, scene, seen):
         return False
     performances = scene.get("performances") or {}
     return all(set(performances.get(cid, {}).get("parts") or ()) <= OUTLINE_KEEPING_PARTS for cid in seen)
@@ -325,6 +325,11 @@ def definition(show: dict, kind: str, entity_id: str, location_id: str | None = 
     if kind == "prop":
         return show["props"][entity_id]
     return show["locations"][location_id]["spatial"]["landmarks"][entity_id]
+
+
+def back_path(show: dict, character_id: str) -> Path:
+    """The character seen from behind, drawn from their plate: the reference for a shot of their back."""
+    return plate_path(show, "character", character_id).with_name("back.png")
 
 
 def look_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:

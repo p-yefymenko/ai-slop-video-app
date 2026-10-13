@@ -28,6 +28,8 @@ export const BODY_PARTS = [
 export type BodyPart = (typeof BODY_PARTS)[number];
 
 export type ShowCharacter = {
+  /** How the episode's name card titles them the first time they speak on screen ("Master Adam"). Never sent to a model. */
+  name?: string;
   /** Build and skin. Also how the video prompt points at this person. */
   body: string;
   /**
@@ -111,7 +113,7 @@ export type LocationBackdrop = {
 export type LocationSoundscape = {
   /** The bed that is always audible here. Present tense. Not music unless the place truly has source music. */
   ambience: string;
-  /** Acoustic character of the place: open air, enclosed hall, wet reverb, dry stone. */
+  /** Acoustic character of the place: open air, enclosed hall, wet reverb, dry stone. Sound only, never what the place looks like: the clip prompt is shared by picture and sound, and a place described here makes the video cut to a wide of it. */
   space: string;
 };
 
@@ -244,8 +246,8 @@ export type SceneShot = {
   angle?: "eye" | "low" | "high";
   /** front (default, along the gaze) | left | right (a three-quarter view). */
   side?: "front" | "left" | "right";
-  /** static (default) | pushIn | pullOut. */
-  move?: "static" | "pushIn" | "pullOut";
+  /** static (default) | pushIn | pullOut | tiltUp (from the feet up to the framing). */
+  move?: "static" | "pushIn" | "pullOut" | "tiltUp";
 };
 
 export type ScriptScene = {
@@ -253,22 +255,25 @@ export type ScriptScene = {
   locationId: string;
   /** Why this scene exists in the story, as cause and effect. Not visuals or blocking. */
   storyBeat: string;
-  /** Who speaks. Omit on silent scenes. Needs a performance with an expression. */
-  speakerId?: string;
   /** Interval on the episode timeline. Scene duration is this interval. */
   timeRangeSeconds: [number, number];
   /** What the shot shows; its camera follows from it. */
   shot: SceneShot;
   /** Only for `establishing` (required) and `action` (optional). Never inside a mesh. */
   camera?: SpatialCamera;
+  /** How an own camera that moves moves, in words for the video model ("flies low over the treetops toward the cliff edge"). Required exactly when it moves. */
+  cameraMotion?: string;
   /**
    * Exactly one entry per character visible at any moment of the shot, no
    * more: previs renders the shot and fails on a missing or extra entry.
    * `{}` when nobody is visible.
    */
   performances: Record<string, ScenePerformance>;
-  /** The spoken line. Required exactly when `speakerId` is set. */
-  dialogue?: SceneDialogue;
+  /**
+   * What is said, in order. A speaker with a performance speaks on screen (and
+   * needs an expression); a speaker without one is a voice from off screen.
+   */
+  lines?: SceneLine[];
   /** Motion that belongs to no character: fire, smoke, cloth, debris, light. */
   motion?: string;
   sound: SceneSound;
@@ -301,11 +306,15 @@ export type ScenePerformance = {
   expression?: string;
 };
 
-export type SceneDialogue = {
+export type SceneLine = {
+  /** Who says it: on screen when they have a performance in this scene, else off screen. */
+  speakerId: string;
   /** The words spoken, nothing else. */
   line: string;
   /** How it is said: "low, final", "harsh, rising". */
   delivery: string;
+  /** Seconds into the scene when the line starts; omit to start when the previous line ends. */
+  startSeconds?: number;
 };
 
 export type ShowEpisode = {

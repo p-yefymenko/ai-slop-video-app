@@ -3,6 +3,7 @@
   "title": "Return of the Wolf (remake test)",
   "characters": {
     "nori": {
+      "name": "Nori",
       "body": "young man, slim athletic build, fair skin",
       "attributes": [
         "20 years old",
@@ -17,6 +18,7 @@
       "heightMeters": 1.8
     },
     "adam": {
+      "name": "Master Adam",
       "body": "old man, tall lean build, fair weathered skin",
       "attributes": [
         "62 years old",
@@ -31,6 +33,7 @@
       "heightMeters": 1.86
     },
     "ben": {
+      "name": "Master Ben",
       "body": "middle-aged man, tall broad build, tanned skin",
       "attributes": [
         "55 years old",
@@ -44,13 +47,14 @@
       "heightMeters": 1.84
     },
     "cora": {
+      "name": "Master Cora",
       "body": "older woman, tall slender build, pale skin",
       "attributes": [
         "58 years old",
         "silver-white hair in a braided crown",
         "pale gray irises",
         "a white fur cape over the shoulders",
-        "a long cream lace gown",
+        "a long cream linen gown",
         "a small silver pendant"
       ],
       "heightMeters": 1.72
@@ -67,6 +71,45 @@
         "black gauntlets"
       ],
       "heightMeters": 1.88
+    },
+    "mira": {
+      "body": "young woman, slender build, fair skin",
+      "attributes": [
+        "25 years old",
+        "long dark brown hair in a loose braid",
+        "brown irises",
+        "a long olive-brown wool cloak",
+        "a cream linen dress",
+        "a plain leather belt",
+        "worn leather boots"
+      ],
+      "heightMeters": 1.68
+    }
+  },
+  "props": {
+    "fallen_warrior": {
+      "appearance": "One dead warrior lying on the side, seen from the side, the body slumped flat on the ground, a fur-trimmed brown leather tunic, dark trousers and boots, a single object.",
+      "size": [
+        1.8,
+        0.8,
+        0.4
+      ]
+    },
+    "fallen_hunter": {
+      "appearance": "One dead man lying flat on the back, seen from the side, the body stretched out on the ground, a gray wool tunic with a fur collar, dark trousers and boots, a single object.",
+      "size": [
+        1.8,
+        0.8,
+        0.4
+      ]
+    },
+    "fallen_woman": {
+      "appearance": "One dead young woman lying on her side, a long olive-brown wool cloak spread around her, long dark brown braid, a single object.",
+      "size": [
+        1.7,
+        0.8,
+        0.4
+      ]
     }
   },
   "locations": {
@@ -88,7 +131,7 @@
           84,
           76
         ],
-        "surround": "a deep pine-forest valley far below with a white waterfall and misty mountains",
+        "surround": "a deep pine-forest valley far below, a muddy clearing on its floor, misty mountains beyond",
         "surroundColor": [
           52,
           70,
@@ -118,8 +161,8 @@
         }
       },
       "soundscape": {
-        "ambience": "steady wind over the ridge, the distant roar of a waterfall far below",
-        "space": "open air high above a valley, no echo"
+        "ambience": "steady wind over the ridge, a faint distant roar of water far below",
+        "space": "open air, no echo"
       }
     },
     "clearing": {
@@ -156,8 +199,8 @@
         "landmarks": {
           "fallen_pine": {
             "position": [
-              0.8,
-              2.6,
+              5.5,
+              6.0,
               0
             ],
             "size": [
@@ -171,7 +214,7 @@
       },
       "soundscape": {
         "ambience": "light rain on mud, wind in the pines",
-        "space": "an open clearing ringed by forest, a soft echo"
+        "space": "open air, a soft echo"
       }
     }
   },
@@ -184,80 +227,6 @@
       "spatialTimeline": {
         "durationSeconds": 39.6,
         "characterTracks": {
-          "nori": [
-            {
-              "timeSeconds": 0,
-              "locationId": "ridge",
-              "position": [
-                0.2,
-                2.6,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "edge_rock"
-            },
-            {
-              "timeSeconds": 12.7,
-              "locationId": "ridge",
-              "position": [
-                0.2,
-                2.6,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "adam"
-            }
-          ],
-          "adam": [
-            {
-              "timeSeconds": 0,
-              "locationId": "ridge",
-              "position": [
-                -0.9,
-                1.1,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "nori"
-            },
-            {
-              "timeSeconds": 37.7,
-              "locationId": "ridge",
-              "position": [
-                -0.9,
-                1.1,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "edge_rock"
-            }
-          ],
-          "ben": [
-            {
-              "timeSeconds": 0,
-              "locationId": "ridge",
-              "position": [
-                -1.8,
-                0.7,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "nori"
-            }
-          ],
-          "cora": [
-            {
-              "timeSeconds": 0,
-              "locationId": "ridge",
-              "position": [
-                -0.4,
-                0.1,
-                0
-              ],
-              "bodyYawDegrees": 0,
-              "lookAtId": "nori"
-            }
-          ],
           "ryan": [
             {
               "timeSeconds": 0,
@@ -267,31 +236,283 @@
                 0,
                 0
               ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "mira"
+            },
+            {
+              "timeSeconds": 0.97,
+              "locationId": "clearing",
+              "position": [
+                0,
+                0,
+                0
+              ],
               "bodyYawDegrees": 180
+            }
+          ],
+          "mira": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                0,
+                0.75,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            },
+            {
+              "timeSeconds": 0.97,
+              "locationId": null
+            }
+          ],
+          "nori": [
+            {
+              "timeSeconds": 0,
+              "locationId": null
+            },
+            {
+              "timeSeconds": 0.97,
+              "locationId": "ridge",
+              "position": [
+                -1.6,
+                3.7,
+                0
+              ],
+              "bodyYawDegrees": 80
+            },
+            {
+              "timeSeconds": 4.1,
+              "locationId": "ridge",
+              "position": [
+                0.6,
+                4.05,
+                0
+              ],
+              "bodyYawDegrees": 80
+            },
+            {
+              "timeSeconds": 4.7,
+              "locationId": "ridge",
+              "position": [
+                0.6,
+                4.05,
+                0
+              ],
+              "bodyYawDegrees": 5
+            },
+            {
+              "timeSeconds": 5.9,
+              "locationId": "clearing",
+              "position": [
+                -0.5,
+                -6.4,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            },
+            {
+              "timeSeconds": 18.45,
+              "locationId": "clearing",
+              "position": [
+                -0.5,
+                -6.4,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "adam"
+            },
+            {
+              "timeSeconds": 35.5,
+              "locationId": "clearing",
+              "position": [
+                -0.5,
+                -6.4,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            },
+            {
+              "timeSeconds": 36.8,
+              "locationId": "clearing",
+              "position": [
+                -0.5,
+                -6.4,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            },
+            {
+              "timeSeconds": 37.6,
+              "locationId": "clearing",
+              "position": [
+                0.7,
+                -5.9,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            },
+            {
+              "timeSeconds": 37.7,
+              "locationId": null
+            }
+          ],
+          "adam": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                -0.4,
+                -9.0,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            },
+            {
+              "timeSeconds": 37.7,
+              "locationId": "clearing",
+              "position": [
+                -0.4,
+                -9.0,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            }
+          ],
+          "ben": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                0.5,
+                -9.1,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            },
+            {
+              "timeSeconds": 37.7,
+              "locationId": "clearing",
+              "position": [
+                0.5,
+                -9.1,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
+            }
+          ],
+          "cora": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                -1.3,
+                -9.2,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "nori"
+            },
+            {
+              "timeSeconds": 37.7,
+              "locationId": "clearing",
+              "position": [
+                -1.3,
+                -9.2,
+                0
+              ],
+              "bodyYawDegrees": 0,
+              "lookAtId": "ryan"
             }
           ]
         },
-        "propTracks": {}
+        "propTracks": {
+          "fallen_warrior": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                -1.7,
+                1.3,
+                0
+              ]
+            }
+          ],
+          "fallen_hunter": [
+            {
+              "timeSeconds": 0,
+              "locationId": "clearing",
+              "position": [
+                1.5,
+                -1.0,
+                0
+              ]
+            }
+          ],
+          "fallen_woman": [
+            {
+              "timeSeconds": 0,
+              "locationId": null
+            },
+            {
+              "timeSeconds": 0.97,
+              "locationId": "clearing",
+              "position": [
+                0.4,
+                1.7,
+                0
+              ]
+            }
+          ]
+        }
       },
       "scenes": [
         {
           "sceneNumber": 1,
-          "locationId": "ridge",
-          "storyBeat": "Far above the battle, someone has been watching all along.",
+          "locationId": "clearing",
+          "storyBeat": "The vampire is crushing the werewolves who came for him.",
           "timeRangeSeconds": [
             0.0,
-            5.9
+            0.97
           ],
           "shot": {
-            "type": "establishing"
+            "type": "action"
           },
-          "performances": {},
+          "performances": {
+            "ryan": {
+              "action": "seizes {target} by the throat with one gauntleted hand and drives forward",
+              "parts": [
+                "arms",
+                "hands"
+              ],
+              "target": "mira"
+            },
+            "mira": {
+              "action": "chokes, both hands clawing at the gauntlet, the head tipping back",
+              "parts": [
+                "hands",
+                "arms",
+                "face"
+              ],
+              "expression": "terror: eyes wide, mouth open in a choked gasp"
+            }
+          },
           "sound": {
             "events": [
               {
-                "text": "a gust of wind hisses over the boulder",
+                "text": "a choked gasp and the crunch of the gauntlet closing",
                 "source": {
-                  "landmarkId": "edge_rock"
+                  "characterId": "mira",
+                  "part": "face"
                 }
               }
             ],
@@ -303,30 +524,100 @@
           "camera": {
             "keyframes": [
               {
+                "timeSeconds": 0.0,
                 "position": [
-                  0.6,
-                  2.6,
-                  1.6
+                  -1.6,
+                  -1.0,
+                  1.55
                 ],
                 "lookAt": [
-                  1.8,
-                  16,
-                  -4.5
+                  0.4,
+                  0.75,
+                  1.35
                 ],
-                "verticalFovDegrees": 50,
-                "timeSeconds": 0.0
+                "verticalFovDegrees": 40
               }
             ]
           },
-          "motion": "Mist drifts slowly through the valley below and the distant waterfall pours"
+          "motion": "A spray of red blood mist bursts into the air"
         },
         {
           "sceneNumber": 2,
           "locationId": "ridge",
+          "storyBeat": "Far above, someone has been watching the slaughter.",
+          "timeRangeSeconds": [
+            0.97,
+            5.9
+          ],
+          "shot": {
+            "type": "establishing"
+          },
+          "performances": {
+            "nori": {
+              "action": "walks in to the cliff edge, stops, and looks down into the valley",
+              "parts": [
+                "legs",
+                "torso"
+              ]
+            }
+          },
+          "sound": {
+            "events": [
+              {
+                "text": "boots scrape on the wet rock",
+                "source": {
+                  "characterId": "nori",
+                  "part": "legs"
+                }
+              }
+            ],
+            "bed": "present",
+            "music": {
+              "kind": "none"
+            }
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 0.97,
+                "position": [
+                  1.0,
+                  12.0,
+                  6.0
+                ],
+                "lookAt": [
+                  1.0,
+                  22.0,
+                  -3.0
+                ],
+                "verticalFovDegrees": 50
+              },
+              {
+                "timeSeconds": 5.9,
+                "position": [
+                  0.3,
+                  1.5,
+                  1.05
+                ],
+                "lookAt": [
+                  1.2,
+                  8.0,
+                  -0.7
+                ],
+                "verticalFovDegrees": 50
+              }
+            ]
+          },
+          "cameraMotion": "flies fast and low over the misty forested valley, then rises and pulls back over the cliff edge, the mossy rock rising into frame from below, and settles low behind the rock",
+          "motion": "Mist drifts through the valley far below"
+        },
+        {
+          "sceneNumber": 3,
+          "locationId": "clearing",
           "storyBeat": "Therefore the student admits the vampire is strong.",
           "timeRangeSeconds": [
             5.9,
-            12.7
+            12.67
           ],
           "shot": {
             "type": "single",
@@ -334,22 +625,22 @@
               "nori"
             ],
             "size": "mcu",
-            "angle": "low"
+            "angle": "low",
+            "move": "tiltUp"
           },
           "performances": {
             "nori": {
-              "action": "stares down into the valley, eyebrows rising",
+              "action": "gazes up and out across the clearing, the eyebrows lifting in wonder",
               "parts": [
                 "face",
                 "eyes"
-              ],
-              "expression": "awe: eyes wide, brows raised, lips slightly parted to speak"
+              ]
             }
           },
           "sound": {
             "events": [
               {
-                "text": "a short impressed breath",
+                "text": "a soft impressed breath",
                 "source": {
                   "characterId": "nori",
                   "part": "face"
@@ -361,40 +652,46 @@
               "kind": "none"
             }
           },
-          "speakerId": "nori",
-          "dialogue": {
-            "line": "Whoa. This vampire is so strong.",
-            "delivery": "quiet, impressed, half to himself"
-          }
+          "lines": [
+            {
+              "speakerId": "nori",
+              "line": "Whoa.",
+              "delivery": "quiet, impressed",
+              "startSeconds": 4.2
+            },
+            {
+              "speakerId": "nori",
+              "line": "This vampire is so strong...",
+              "delivery": "quiet, half to himself",
+              "startSeconds": 5.2
+            }
+          ]
         },
         {
-          "sceneNumber": 3,
-          "locationId": "ridge",
+          "sceneNumber": 4,
+          "locationId": "clearing",
           "storyBeat": "But the master scoffs: the vampire is nothing.",
           "timeRangeSeconds": [
-            12.7,
+            12.67,
             18.1
           ],
           "shot": {
-            "type": "overShoulder",
+            "type": "single",
             "subjects": [
               "adam"
             ],
-            "over": "nori",
-            "size": "mcu"
+            "size": "mcu",
+            "angle": "low",
+            "side": "right"
           },
           "performances": {
             "adam": {
-              "action": "tilts the head and smirks, unimpressed",
+              "action": "speaks with a dismissive half-smile, the chin lifting",
               "parts": [
                 "face",
                 "neck"
               ],
-              "expression": "amused contempt: one corner of the mouth up, lips slightly parted to speak"
-            },
-            "nori": {
-              "action": "stands motionless, listening",
-              "parts": []
+              "expression": "dry amusement: one corner of the mouth up, lips slightly parted"
             }
           },
           "sound": {
@@ -412,19 +709,34 @@
               "kind": "none"
             }
           },
-          "speakerId": "adam",
-          "dialogue": {
-            "line": "Strong? Just a low-level bloodsucker.",
-            "delivery": "dry, dismissive, almost bored"
-          }
+          "lines": [
+            {
+              "speakerId": "adam",
+              "line": "Strong?",
+              "delivery": "dry, amused",
+              "startSeconds": 0.2
+            },
+            {
+              "speakerId": "adam",
+              "line": "Just a low-level bloodsucker.",
+              "delivery": "dismissive, unhurried",
+              "startSeconds": 0.7
+            },
+            {
+              "speakerId": "adam",
+              "line": "Even ants are stronger than him.",
+              "delivery": "dry, final",
+              "startSeconds": 3.7
+            }
+          ]
         },
         {
-          "sceneNumber": 4,
-          "locationId": "ridge",
-          "storyBeat": "But the student protests: it beat three werewolves.",
+          "sceneNumber": 5,
+          "locationId": "clearing",
+          "storyBeat": "But the student protests: the vampire beat them all.",
           "timeRangeSeconds": [
             18.1,
-            21.8
+            21.83
           ],
           "shot": {
             "type": "overShoulder",
@@ -432,19 +744,16 @@
               "nori"
             ],
             "over": "adam",
-            "size": "mcu"
+            "size": "medium",
+            "side": "right"
           },
           "performances": {
             "nori": {
-              "action": "shakes the head, insisting, brows lifting",
+              "action": "turns around and protests, one open hand lifting toward {target}",
               "parts": [
                 "face"
               ],
-              "expression": "earnest disbelief: brows up, lips slightly parted to speak"
-            },
-            "adam": {
-              "action": "stands motionless, listening",
-              "parts": []
+              "target": "adam"
             }
           },
           "sound": {
@@ -462,35 +771,44 @@
               "kind": "none"
             }
           },
-          "speakerId": "nori",
-          "dialogue": {
-            "line": "But he beat all three werewolves!",
-            "delivery": "urgent, a little indignant"
-          }
+          "lines": [
+            {
+              "speakerId": "nori",
+              "line": "But he beat all three werewolves!",
+              "delivery": "urgent, indignant",
+              "startSeconds": 0.2
+            },
+            {
+              "speakerId": "nori",
+              "line": "And everyone they brought.",
+              "delivery": "insistent",
+              "startSeconds": 2.4
+            }
+          ]
         },
         {
-          "sceneNumber": 5,
+          "sceneNumber": 6,
           "locationId": "clearing",
           "storyBeat": "Therefore we see the vampire standing over the fallen.",
           "timeRangeSeconds": [
-            21.8,
-            22.9
+            21.83,
+            22.87
           ],
           "shot": {
             "type": "action"
           },
           "performances": {
             "ryan": {
-              "action": "stands still in the mud, the crimson cloak stirring",
+              "action": "stands still among the fallen, the crimson cloak stirring",
               "parts": []
             }
           },
           "sound": {
             "events": [
               {
-                "text": "rain patters on the fallen trunk and the mud",
+                "text": "rain patters into the bloody puddles",
                 "source": {
-                  "landmarkId": "fallen_pine"
+                  "propId": "fallen_warrior"
                 }
               }
             ],
@@ -502,52 +820,52 @@
           "camera": {
             "keyframes": [
               {
+                "timeSeconds": 21.83,
                 "position": [
-                  0.0,
-                  -5.5,
-                  4.2
+                  0.3,
+                  -4.9,
+                  3.7
                 ],
                 "lookAt": [
-                  0.2,
-                  0.8,
-                  0.8
+                  0.0,
+                  0.3,
+                  0.2
                 ],
-                "verticalFovDegrees": 32,
-                "timeSeconds": 21.8
+                "verticalFovDegrees": 42
               }
             ]
-          }
+          },
+          "motion": "Rain falls and the dark puddles ripple"
         },
         {
-          "sceneNumber": 6,
-          "locationId": "ridge",
+          "sceneNumber": 7,
+          "locationId": "clearing",
           "storyBeat": "Therefore the second master sneers at the werewolves.",
           "timeRangeSeconds": [
-            22.9,
-            26.5
+            22.87,
+            26.47
           ],
           "shot": {
             "type": "single",
             "subjects": [
               "ben"
             ],
-            "size": "mcu",
-            "side": "left"
+            "size": "mcu"
           },
           "performances": {
             "ben": {
-              "action": "shakes the head slowly, lip curling",
+              "action": "speaks with a scornful smile, the head tilting",
               "parts": [
                 "face",
                 "neck"
               ],
-              "expression": "disgust: nose wrinkled, lips slightly parted to speak"
+              "expression": "scornful smile, lips slightly parted"
             }
           },
           "sound": {
             "events": [
               {
-                "text": "a scornful breath through the nose",
+                "text": "a scornful huff",
                 "source": {
                   "characterId": "ben",
                   "part": "face"
@@ -559,45 +877,61 @@
               "kind": "none"
             }
           },
-          "speakerId": "ben",
-          "dialogue": {
-            "line": "A real disgrace for werewolves.",
-            "delivery": "scornful, slow"
-          }
+          "lines": [
+            {
+              "speakerId": "ben",
+              "line": "These lackeys are even weaker,",
+              "delivery": "scornful, amused",
+              "startSeconds": 0.05
+            },
+            {
+              "speakerId": "ben",
+              "line": "a real disgrace for werewolves.",
+              "delivery": "scornful, slow",
+              "startSeconds": 1.7
+            }
+          ]
         },
         {
-          "sceneNumber": 7,
-          "locationId": "ridge",
-          "storyBeat": "Therefore the masters agree the human-world werewolves have fallen.",
+          "sceneNumber": 8,
+          "locationId": "clearing",
+          "storyBeat": "Therefore the masters agree the werewolves of this world have fallen.",
           "timeRangeSeconds": [
-            26.5,
+            26.47,
             29.1
           ],
           "shot": {
-            "type": "single",
+            "type": "group",
             "subjects": [
-              "ben"
+              "ben",
+              "adam"
             ],
-            "size": "mcu",
-            "side": "right"
+            "size": "medium"
           },
           "performances": {
             "ben": {
-              "action": "glances sideways and shrugs",
+              "action": "speaks with a theatrical sigh, the head shaking slowly",
               "parts": [
                 "face",
-                "torso"
+                "neck"
               ],
-              "expression": "weary scorn: lips slightly parted to speak"
+              "expression": "weary scorn, lips slightly parted"
+            },
+            "adam": {
+              "action": "listens, the jaw set",
+              "parts": [
+                "face"
+              ],
+              "expression": "stern, lips closed"
             }
           },
           "sound": {
             "events": [
               {
-                "text": "the wind tugs at their fur mantles",
+                "text": "a theatrical sigh",
                 "source": {
                   "characterId": "ben",
-                  "part": "torso"
+                  "part": "face"
                 }
               }
             ],
@@ -606,42 +940,46 @@
               "kind": "none"
             }
           },
-          "speakerId": "ben",
-          "dialogue": {
-            "line": "The werewolves here have fallen so low.",
-            "delivery": "mocking, a theatrical sigh"
-          }
+          "lines": [
+            {
+              "speakerId": "ben",
+              "line": "To think the werewolves of the human world have fallen so low.",
+              "delivery": "mocking, a theatrical sigh",
+              "startSeconds": 0.1
+            }
+          ]
         },
         {
-          "sceneNumber": 8,
-          "locationId": "ridge",
-          "storyBeat": "But the student is unsure what they expect of him.",
+          "sceneNumber": 9,
+          "locationId": "clearing",
+          "storyBeat": "But the student cannot believe how they talk about werewolves.",
           "timeRangeSeconds": [
             29.1,
-            31.4
+            31.37
           ],
           "shot": {
-            "type": "single",
+            "type": "overShoulder",
             "subjects": [
               "nori"
             ],
-            "size": "cu",
-            "side": "right"
+            "over": "adam",
+            "size": "mcu"
           },
           "performances": {
             "nori": {
-              "action": "glances from one master to the other",
+              "action": "stares wide-eyed at {target}, silent",
               "parts": [
                 "eyes",
                 "face"
               ],
-              "expression": "uncertain: eyes moving, lips closed"
+              "expression": "stunned: eyes wide, lips closed",
+              "target": "adam"
             }
           },
           "sound": {
             "events": [
               {
-                "text": "a slow uneasy breath",
+                "text": "a sharp breath",
                 "source": {
                   "characterId": "nori",
                   "part": "face"
@@ -652,40 +990,72 @@
             "music": {
               "kind": "none"
             }
-          }
+          },
+          "lines": [
+            {
+              "speakerId": "ben",
+              "line": "Golden werewolves?",
+              "delivery": "mocking",
+              "startSeconds": 0.0
+            },
+            {
+              "speakerId": "ben",
+              "line": "Ha, weaklings!",
+              "delivery": "a short contemptuous laugh",
+              "startSeconds": 1.3
+            }
+          ]
         },
         {
-          "sceneNumber": 9,
-          "locationId": "ridge",
+          "sceneNumber": 10,
+          "locationId": "clearing",
           "storyBeat": "Therefore the third master sends the student to fight.",
           "timeRangeSeconds": [
-            31.4,
+            31.37,
             35.5
           ],
           "shot": {
-            "type": "single",
+            "type": "action",
             "subjects": [
-              "cora"
-            ],
-            "size": "mcu",
-            "side": "right"
+              "ben",
+              "adam",
+              "cora",
+              "nori"
+            ]
           },
           "performances": {
+            "ben": {
+              "action": "sneers and speaks, one hand flicking dismissively",
+              "parts": [
+                "face",
+                "arms",
+                "hands"
+              ],
+              "expression": "contempt, lips slightly parted"
+            },
             "cora": {
-              "action": "lifts the chin toward the valley",
+              "action": "speaks calmly, the chin lifting",
               "parts": [
                 "face",
                 "neck"
               ],
-              "expression": "cool command: lips slightly parted to speak"
+              "expression": "cool command, lips slightly parted"
+            },
+            "adam": {
+              "action": "stands listening, the jaw set",
+              "parts": []
+            },
+            "nori": {
+              "action": "stands listening, very still",
+              "parts": []
             }
           },
           "sound": {
             "events": [
               {
-                "text": "she draws a calm breath before speaking",
+                "text": "a dismissive snort before the words",
                 "source": {
-                  "characterId": "cora",
+                  "characterId": "ben",
                   "part": "face"
                 }
               }
@@ -695,16 +1065,49 @@
               "kind": "none"
             }
           },
-          "speakerId": "cora",
-          "dialogue": {
-            "line": "They're weak. Nori, go. Crush this vampire.",
-            "delivery": "calm, certain, a teacher's order"
-          }
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 31.37,
+                "position": [
+                  5.5,
+                  -3.0,
+                  1.6
+                ],
+                "lookAt": [
+                  -0.4,
+                  -7.9,
+                  1.1
+                ],
+                "verticalFovDegrees": 40
+              }
+            ]
+          },
+          "lines": [
+            {
+              "speakerId": "ben",
+              "line": "What a pathetic sight!",
+              "delivery": "contemptuous",
+              "startSeconds": 0.0
+            },
+            {
+              "speakerId": "cora",
+              "line": "They're weak.",
+              "delivery": "calm, certain",
+              "startSeconds": 1.5
+            },
+            {
+              "speakerId": "cora",
+              "line": "Nori, go, consider it training.",
+              "delivery": "calm, a teacher's order",
+              "startSeconds": 2.5
+            }
+          ]
         },
         {
-          "sceneNumber": 10,
-          "locationId": "ridge",
-          "storyBeat": "Therefore the student readies himself.",
+          "sceneNumber": 11,
+          "locationId": "clearing",
+          "storyBeat": "Therefore the student goes to fight.",
           "timeRangeSeconds": [
             35.5,
             37.7
@@ -715,15 +1118,15 @@
               "nori"
             ],
             "size": "medium",
-            "angle": "low"
+            "side": "left"
           },
           "performances": {
             "nori": {
-              "action": "presses a fist into the other palm, jaw setting",
+              "action": "presses a fist into the other palm, the jaw setting, then turns away and strides off",
               "parts": [
-                "hands",
                 "arms",
-                "face"
+                "face",
+                "torso"
               ],
               "expression": "resolve: jaw set, eyes hard, lips closed"
             }
@@ -731,22 +1134,30 @@
           "sound": {
             "events": [
               {
-                "text": "knuckles crack",
+                "text": "a sharp exhale through the nose as the fist meets the palm",
                 "source": {
                   "characterId": "nori",
-                  "part": "hands"
+                  "part": "face"
                 }
               }
             ],
-            "bed": "present",
+            "bed": "faint",
             "music": {
               "kind": "none"
             }
-          }
+          },
+          "lines": [
+            {
+              "speakerId": "cora",
+              "line": "Crush this vampire.",
+              "delivery": "calm, cold",
+              "startSeconds": 0.4
+            }
+          ]
         },
         {
-          "sceneNumber": 11,
-          "locationId": "ridge",
+          "sceneNumber": 12,
+          "locationId": "clearing",
           "storyBeat": "Therefore the fight below is about to change.",
           "timeRangeSeconds": [
             37.7,
@@ -757,7 +1168,7 @@
           },
           "performances": {
             "adam": {
-              "action": "stands at the edge looking down, the fur mantle stirring in the wind",
+              "action": "stands watching, the fur mantle stirring in the wind",
               "parts": [
                 "torso"
               ]
@@ -766,7 +1177,7 @@
           "sound": {
             "events": [
               {
-                "text": "the wind tugs at his fur mantle",
+                "text": "the wind tugs at the fur mantle",
                 "source": {
                   "characterId": "adam",
                   "part": "torso"
@@ -781,22 +1192,22 @@
           "camera": {
             "keyframes": [
               {
+                "timeSeconds": 37.7,
                 "position": [
-                  -1.35,
-                  0.35,
-                  1.9
+                  -0.9,
+                  -10.6,
+                  1.8
                 ],
                 "lookAt": [
-                  0.8,
-                  22,
-                  -6
+                  0.6,
+                  2.0,
+                  0.6
                 ],
-                "verticalFovDegrees": 45,
-                "timeSeconds": 37.7
+                "verticalFovDegrees": 42
               }
             ]
           },
-          "motion": "Mist drifts through the valley far below"
+          "motion": "Far out across the clearing a figure wrapped in golden light streaks from left to right, leaving a bright trail of light"
         }
       ]
     }

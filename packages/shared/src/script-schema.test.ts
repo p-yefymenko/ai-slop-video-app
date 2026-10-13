@@ -96,9 +96,8 @@ function messages(data: unknown) {
 
 function speaking(show: ShowScript) {
   const scene = show.episodes[0].scenes[0];
-  scene.speakerId = "ada";
   scene.sound.bed = "faint";
-  scene.dialogue = { line: "Hello.", delivery: "soft" };
+  scene.lines = [{ speakerId: "ada", line: "Hello.", delivery: "soft" }];
   scene.performances.ada.expression = "calm, lips slightly parted";
   return show;
 }
@@ -236,22 +235,31 @@ test("a prop needs appearance and size", () => {
   assert.match(messages(show), /props\.cup\.appearance: appearance is required/);
 });
 
-test("the speaker needs a performance with an expression and a line", () => {
+test("a line's speaker is a known character", () => {
   const show = speaking(minimalShow());
   assert.equal(parseShowScript(show).ok, true);
-  delete show.episodes[0].scenes[0].performances.ada.expression;
-  assert.match(messages(show), /performances\.ada\.expression: the speaker needs an expression/);
-  show.episodes[0].scenes[0].performances = {};
-  assert.match(messages(show), /speakerId: the speaker needs a performance/);
+  const unknown = speaking(minimalShow());
+  unknown.episodes[0].scenes[0].lines = [{ speakerId: "bram", line: "Hello.", delivery: "soft" }];
+  assert.match(messages(unknown), /lines\[0\]\.speakerId: unknown character "bram"/);
 });
 
-test("requires dialogue exactly when someone speaks", () => {
+test("a line starts within its scene", () => {
   const show = speaking(minimalShow());
-  delete show.episodes[0].scenes[0].dialogue;
-  assert.match(messages(show), /scenes\[0\]\.dialogue: required when speakerId is set/);
-  const silent = minimalShow();
-  silent.episodes[0].scenes[0].dialogue = { line: "Hello.", delivery: "soft" };
-  assert.match(messages(silent), /scenes\[0\]\.dialogue: dialogue needs a speakerId/);
+  show.episodes[0].scenes[0].lines![0].startSeconds = 99;
+  assert.match(messages(show), /lines\[0\]\.startSeconds: must be within the scene/);
+});
+
+test("an own camera that moves says how in words", () => {
+  const show = minimalShow();
+  const scene = show.episodes[0].scenes[0];
+  scene.shot = { type: "establishing" };
+  scene.performances = {};
+  const pose = (t: number, y: number) => ({ timeSeconds: t, position: [0, y, 1.6] as [number, number, number], lookAt: [0, 5, 1.2] as [number, number, number], verticalFovDegrees: 40 });
+  scene.camera = { keyframes: [pose(0, -4), pose(1, -3)] };
+  assert.match(messages(show), /cameraMotion: an own camera that moves needs cameraMotion/);
+  scene.cameraMotion = "glides forward";
+  const result = parseShowScript(show);
+  assert.ok(result.ok || !result.issues.some((issue) => issue.path.endsWith("cameraMotion")));
 });
 
 test("rejects a performance for an unknown character or with an unknown part", () => {

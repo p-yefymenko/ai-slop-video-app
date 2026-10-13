@@ -25,8 +25,10 @@ FULL_ROOM, WIDE_ROOM = 1.18, 2.2
 ANGLES = {"eye": 0.0, "low": -18.0, "high": 22.0}
 # Horizontal turn off the gaze line, in degrees: a three-quarter view.
 SIDES = {"front": 0.0, "left": 32.0, "right": -32.0}
-# A push-in ends this much closer, a pull-out this much farther.
-MOVES = {"static": 1.0, "pushIn": 0.82, "pullOut": 1.22}
+# A push-in ends this much closer, a pull-out this much farther. A tilt-up keeps
+# its place and turns from the feet (``TILT_FROM`` of the height) up to the framing.
+MOVES = {"static": 1.0, "pushIn": 0.82, "pullOut": 1.22, "tiltUp": 1.0}
+TILT_FROM = 0.08
 # Lenses: people are shot long (flattering, little distortion), wide shots wider.
 PEOPLE_FOV, WIDE_FOV = 30.0, 45.0
 # Over the shoulder: the camera sits this far behind and beside the near one, at this
@@ -82,6 +84,8 @@ def _keyframes(scene: dict, look: list[float], toward: tuple[float, float, float
             "verticalFovDegrees": fov,
         }
 
+    if scene["shot"].get("move") == "tiltUp":
+        return [pose(start, 1.0), pose(finish, 1.0)]
     return [pose(start, 1.0)] if move == 1.0 else [pose(start, 1.0), pose(finish, move)]
 
 
@@ -189,7 +193,12 @@ def frame_shot(show: dict, episode: dict, scene: dict) -> list[dict]:
     width = (spread + 0.7) * ASPECT if len(subjects) > 1 else 0.0
     distance = _span_distance(max(span, width), fov)
     depth = max(abs((s["x"] - center[0]) * gaze[0] + (s["y"] - center[1]) * gaze[1]) for s in subjects)
-    return _search(scene, look, gaze, side, angle, distance + depth, fov, solids)
+    frames = _search(scene, look, gaze, side, angle, distance + depth, fov, solids)
+    if shot.get("move") == "tiltUp":
+        # Same place, first looking at the feet.
+        low = min(s["z"] for s in subjects) + TILT_FROM * tall
+        frames[0]["lookAt"] = [frames[0]["lookAt"][0], frames[0]["lookAt"][1], round(low, 3)]
+    return frames
 
 
 def resolve_cameras(show: dict) -> dict:
