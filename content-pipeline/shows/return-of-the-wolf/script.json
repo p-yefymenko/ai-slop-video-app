@@ -119,7 +119,6 @@
   "locations": {
     "ridge": {
       "look": {
-        "materials": "wet gray granite, dark green moss, weathered pine bark",
         "light": "soft overcast daylight, cool and misty"
       },
       "backdrop": {
@@ -171,7 +170,6 @@
     },
     "clearing": {
       "look": {
-        "materials": "wet dark mud, flattened grass, rough pine bark",
         "light": "soft overcast daylight, cool and misty"
       },
       "backdrop": {

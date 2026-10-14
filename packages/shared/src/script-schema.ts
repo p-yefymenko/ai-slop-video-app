@@ -381,7 +381,7 @@ const showScriptSchema = z
         z
           .object({
             look: z
-              .object({ materials: text("look.materials"), light: text("look.light") })
+              .object({ light: text("look.light") })
               .strict(),
             backdrop: z
               .object({

@@ -23,7 +23,6 @@ from asset_generate import (
     OBJECT_PICTURE_SIZE,
     generate_asset_mesh,
     object_prompt,
-    object_text,
     picture_is_current,
 )
 from asset_sources import materialize_mesh
@@ -353,7 +352,7 @@ def collect_requests(show: dict) -> list[AssetRequest]:
     requests: list[AssetRequest] = []
     for location_id, location in show["locations"].items():
         for landmark_id, landmark in location["spatial"]["landmarks"].items():
-            appearance = object_text(landmark["appearance"], location["look"]["materials"])
+            appearance = " ".join(landmark["appearance"].split())
             requests.append(
                 AssetRequest(
                     consumer_id=f"landmark:{location_id}:{landmark_id}",

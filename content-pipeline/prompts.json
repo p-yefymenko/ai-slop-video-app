@@ -1,7 +1,6 @@
 {
   "objectPicture": "Studio product photograph of one isolated object on a plain light gray background, the whole object in frame, soft even light with no strong shadows: {appearance}",
   "objectNegative": "ground, floor, cast shadow, sky, scenery, other objects, people, text, cartoon, painting, 3d render, blurry, cropped",
-  "landmarkMaterials": "Built of {materials}, like everything else in its place.",
   "referencePhoto": "Full-length studio photograph of one person, {body}. Exactly as described, item by item: {attributes}. Standing still and facing the camera, arms relaxed at the sides. The whole figure is in frame, head to toe: both feet stand on the floor near the bottom edge, with a little space above the head and below the feet. Plain pure white seamless studio background, empty and clean. Soft even daylight-balanced light, sharp focus on the face. Photorealistic, a real person, natural skin texture, real fabric, leather and fur.",
   "voiceSample": "I walked a long way to get here, and the night was cold. Sit down for a moment, and listen to what I have to say.",
   "referenceNegative": "wrong clothes, extra garments, snow, particles, dust, background objects, cartoon, 3d render, plastic skin, airbrushed, painting, blurry face, deformed hands, cropped body",

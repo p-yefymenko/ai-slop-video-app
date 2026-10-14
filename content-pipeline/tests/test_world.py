@@ -51,7 +51,7 @@ def show_with(tracks: dict, props: dict | None = None, prop_tracks: dict | None 
         "props": props or {},
         "locations": {
             "room": {
-                "look": {"materials": "worn gray stone", "light": "soft overcast daylight"},
+                "look": {"light": "soft overcast daylight"},
                 "backdrop": {
                     "sky": "a gray sky",
                     "skyColor": [40, 48, 64],

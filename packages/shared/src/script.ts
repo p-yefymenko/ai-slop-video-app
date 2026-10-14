@@ -144,12 +144,6 @@ export type SceneSound = {
  * belong to the same place.
  */
 export type LocationLook = {
-  /**
-   * What the place is built of, e.g. "rain-wet black basalt and dark forged
-   * iron". Added to every landmark's plate, so it is also in the mesh: no
-   * effects here. A landmark's own `appearance` gives its shape and parts.
-   */
-  materials: string;
   /** The light on everything in a shot here, e.g. "cold blue storm light from above, wet sheen". */
   light: string;
 };

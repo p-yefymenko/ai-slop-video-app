@@ -26,7 +26,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
     },
     locations: {
       room: {
-        look: { materials: "worn gray stone", light: "soft overcast daylight" },
+        look: { light: "soft overcast daylight" },
         backdrop: {
           sky: "a gray sky",
           skyColor: [40, 48, 64],

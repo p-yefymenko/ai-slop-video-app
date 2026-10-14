@@ -49,15 +49,6 @@ UPSAMPLE_RESOLUTION = 1024
 PIXAL3D_PAD = 1.1
 
 
-def object_text(appearance: str, materials: str) -> str:
-    """A landmark's own words plus its location's shared materials."""
-    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    template = prompts.get("landmarkMaterials")
-    if not isinstance(template, str) or "{materials}" not in template:
-        raise RuntimeError(f"{PROMPTS_PATH} is missing a landmarkMaterials template with {{materials}}")
-    return f"{' '.join(appearance.split())} {template.replace('{materials}', ' '.join(materials.split()))}"
-
-
 def object_prompt(appearance: str) -> str:
     """One isolated object (a landmark or a prop), from its words."""
     from describe import template

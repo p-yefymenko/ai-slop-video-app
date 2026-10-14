@@ -193,13 +193,6 @@ class AssetTests(unittest.TestCase):
         self.assertIn("TRELLIS.2", text)
         self.assertIn("demo/room/bench", text)
 
-    def test_a_landmark_plate_carries_its_location_materials(self) -> None:
-        from asset_resolver import collect_requests
-
-        (request,) = [r for r in collect_requests(self._show()) if r.landmark_id]
-        self.assertIn("Built of worn gray stone, like everything else in its place.", request.appearance)
-        self.assertIn("Built of worn gray stone", request.prompt)
-
     def test_plates_stop_before_the_mesh(self) -> None:
         show = self._show()
         drawn: list[Path] = []
@@ -351,7 +344,7 @@ class AssetTests(unittest.TestCase):
             "characters": {},
             "locations": {
                 "room": {
-                    "look": {"materials": "worn gray stone", "light": "soft overcast daylight"},
+                    "look": {"light": "soft overcast daylight"},
                     "spatial": {
                         "sizeMeters": [8.0, 10.0, 4.0],
                         "landmarks": {
