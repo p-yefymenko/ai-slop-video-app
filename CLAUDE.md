@@ -75,5 +75,5 @@ Record a model limit as a model limit. Never paper over it with scene-specific w
 - **Running code:** commands are root `package.json` scripts. ComfyUI-side Python runs with `content-pipeline/.comfyui/.venv`.
 - **Tests:** `pnpm run content:test-spatial`. Add tests for new pure logic: prompt builders, depth encoding, frame counts.
 - **Coordinates:** schema space is Z-up, +Y forward; glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`.
-- **Separate envs (gitignored):** `content-pipeline/.voice` (Chatterbox) and `content-pipeline/.lipsync`. Free ComfyUI's VRAM (POST `/free`) before starting another GPU process.
+- **Separate envs (gitignored):** `content-pipeline/.voice` (Chatterbox) and `content-pipeline/.voicedesign` (Qwen3-TTS VoiceDesign). Free ComfyUI's VRAM (POST `/free`) before starting another GPU process.
 - **Git:** commit only when the user asks.

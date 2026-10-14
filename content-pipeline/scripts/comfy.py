@@ -49,15 +49,6 @@ def format_duration(seconds: float) -> str:
     return f"{seconds:.1f}s"
 
 
-def format_bytes(n: int) -> str:
-    value = float(max(0, n))
-    for unit in ("B", "KB", "MB", "GB"):
-        if value < 1024 or unit == "GB":
-            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    return f"{value:.1f} GB"
-
-
 def _post(path: str, payload: dict, timeout: float = 30) -> dict:
     request = urllib.request.Request(
         f"{COMFYUI_URL}{path}", data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST"

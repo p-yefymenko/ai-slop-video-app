@@ -63,32 +63,6 @@ def box_mesh(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
     return corners, np.array(faces, dtype=np.int64)
 
 
-def primitive_mesh(kind: str, size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
-    """Last-resort stand-in for one landmark or prop. Schema space, base at the origin."""
-    if kind == "column":
-        return _prism(size, sides=8)
-    if kind == "pedestal":
-        return _stack_boxes(
-            (
-                ((size[0], size[1], size[2] * 0.35), 0.0),
-                ((size[0] * 0.62, size[1] * 0.62, size[2] * 0.65), size[2] * 0.35),
-            )
-        )
-    if kind == "seat":
-        return _stack_boxes(
-            (
-                ((size[0], size[1], size[2] * 0.45), 0.0),
-                ((size[0], size[1] * 0.16, size[2] * 0.55), size[2] * 0.45),
-            ),
-            back_offset=size[1] * 0.42,
-        )
-    if kind == "door":
-        return box_mesh((size[0] * 0.92, min(size[1], 0.12), size[2]))
-    if kind == "window":
-        return _window(size)
-    return box_mesh(size)
-
-
 def fit_to_size(
     vertices: np.ndarray, size: tuple[float, float, float]
 ) -> np.ndarray:
@@ -205,12 +179,6 @@ def cap_holes(
     if not added:
         return points, triangles
     return points, np.vstack((triangles, np.asarray(added, dtype=np.int64)))
-
-
-# A standing person is not as wide as they are tall. Capes that stay wide
-# across many slices are left alone; this only flags a mesh the fit could
-# not make into a person.
-STANDING_WIDTH_RATIO = 0.7
 
 
 def drop_thin_side_protrusions(
@@ -349,24 +317,6 @@ def _on_neighbor_surface(
     return keep
 
 
-def standing_proportion_warning(character_id: str, vertices: np.ndarray) -> str | None:
-    """Warn when a fitted character is too wide to be a standing person."""
-    points = np.asarray(vertices, dtype=np.float64)
-    if len(points) == 0:
-        return None
-    extent = points.max(axis=0) - points.min(axis=0)
-    height = float(extent[2])
-    if height < 1e-4:
-        return None
-    width = float(max(extent[0], extent[1]))
-    if width / height <= STANDING_WIDTH_RATIO:
-        return None
-    return (
-        f"{character_id}: mesh is {width:.2f} m wide and {height:.2f} m tall, "
-        f"which is too wide for a standing person"
-    )
-
-
 def _add_cap(
     points: np.ndarray,
     occupied: set[tuple[int, int, int]],
@@ -420,21 +370,6 @@ def _boundary_components(edges: list[tuple[int, int]]) -> list[list[tuple[int, i
     for src, tgt in edges:
         groups.setdefault(find(src), []).append((src, tgt))
     return list(groups.values())
-
-
-def proportions_match(
-    extent: np.ndarray,
-    size: tuple[float, float, float],
-    low: float = 0.35,
-    high: float = 2.85,
-) -> bool:
-    """Compare sorted axis ratios so a long prop is not forced into a cube."""
-    actual = np.sort(np.maximum(np.asarray(extent, dtype=np.float64), 1e-6))
-    target = np.sort(np.maximum(np.array(size, dtype=np.float64), 1e-6))
-    actual = actual / actual.max()
-    target = target / target.max()
-    ratio = actual / target
-    return bool(np.all((ratio >= low) & (ratio <= high)))
 
 
 def write_schema_glb(
@@ -500,71 +435,6 @@ def read_gltf_mesh(path: Path) -> tuple[np.ndarray, np.ndarray]:
     if len(faces) == 0:
         raise ValueError(f"{path} has no triangles")
     return vertices, faces
-
-
-def schema_triangles(vertices: np.ndarray, faces: np.ndarray) -> list[tuple[tuple[float, float, float], ...]]:
-    output = []
-    for face in faces:
-        output.append(tuple(tuple(float(value) for value in vertices[int(index)]) for index in face[:3]))
-    return output
-
-
-def _prism(size: tuple[float, float, float], sides: int) -> tuple[np.ndarray, np.ndarray]:
-    radius = min(size[0], size[1]) / 2.0
-    height = size[2]
-    angles = np.linspace(0.0, np.pi * 2.0, sides, endpoint=False)
-    ring = np.stack((np.cos(angles) * radius, np.sin(angles) * radius), axis=1)
-    bottom = np.column_stack((ring, np.zeros(sides)))
-    top = np.column_stack((ring, np.full(sides, height)))
-    vertices = np.vstack((bottom, top))
-    faces = []
-    for index in range(1, sides - 1):
-        faces.append((0, index, index + 1))
-        faces.append((sides, sides + index + 1, sides + index))
-    for index in range(sides):
-        nxt = (index + 1) % sides
-        faces.append((index, nxt, sides + nxt))
-        faces.append((index, sides + nxt, sides + index))
-    return vertices, np.array(faces, dtype=np.int64)
-
-
-def _stack_boxes(
-    parts: tuple[tuple[tuple[float, float, float], float], ...],
-    back_offset: float = 0.0,
-) -> tuple[np.ndarray, np.ndarray]:
-    vertices = []
-    faces = []
-    for part_index, (part_size, z_offset) in enumerate(parts):
-        part_vertices, part_faces = box_mesh(part_size)
-        part_vertices = part_vertices.copy()
-        part_vertices[:, 2] += z_offset
-        if part_index == 1 and back_offset:
-            part_vertices[:, 1] += back_offset
-        base = len(vertices)
-        vertices.extend(part_vertices.tolist())
-        faces.extend((base + int(a), base + int(b), base + int(c)) for a, b, c in part_faces)
-    return np.array(vertices, dtype=np.float64), np.array(faces, dtype=np.int64)
-
-
-def _window(size: tuple[float, float, float]) -> tuple[np.ndarray, np.ndarray]:
-    width, depth, height = size
-    thickness = max(min(depth, 0.12), width * 0.08)
-    frame = max(min(width, height) * 0.16, 0.05)
-    parts = (
-        ((width, thickness, frame), 0.0),
-        ((width, thickness, frame), height - frame),
-        ((frame, thickness, height), 0.0),
-    )
-    vertices, faces = _stack_boxes(parts[:2])
-    side, side_faces = box_mesh((frame, thickness, height))
-    left = side.copy()
-    left[:, 0] -= width / 2.0 - frame / 2.0
-    right = side.copy()
-    right[:, 0] += width / 2.0 - frame / 2.0
-    base = len(vertices)
-    vertices = np.vstack((vertices, left, right))
-    extra = np.vstack((side_faces + base, side_faces + base + len(side)))
-    return vertices, np.vstack((faces, extra))
 
 
 def _read_obj_as_y_up(path: Path) -> tuple[np.ndarray, np.ndarray]:

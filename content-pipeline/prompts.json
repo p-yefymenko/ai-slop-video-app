@@ -1,7 +1,6 @@
 {
   "landmarkPlate": "One isolated object on a plain light gray background, cold and unlit: only the object itself, with no ground, sky, or scenery. Ignore the attached blank image and create only this object: {appearance}",
   "landmarkMaterials": "Built of {materials}, like everything else in its place.",
-  "lookPlate": "Picture 1 is one object. Keep it exactly as it is: the same shape, view, size in the picture, colors, and plain light gray background. Add only this to it: {effects}.",
   "characterPlate": "One adult standing full-body on a plain background, feet visible, arms at their sides, facing the camera. Solid unbroken skin and solid cloth, no holes, no lace, no mesh, no transparent fabric. Ignore the attached blank image and create only this person: {description}",
   "referencePhoto": "Full-length studio photograph of one person, {body}. Exactly as described, item by item: {attributes}. Standing still and facing the camera, arms relaxed at the sides. The whole figure is in frame, head to toe: both feet stand on the floor near the bottom edge, with a little space above the head and below the feet. Plain pure white seamless studio background, empty and clean. Soft even daylight-balanced light, sharp focus on the face. Photorealistic, a real person, natural skin texture, real fabric, leather and fur.",
   "voiceSample": "I walked a long way to get here, and the night was cold. Sit down for a moment, and listen to what I have to say.",

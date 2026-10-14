@@ -279,20 +279,6 @@ def plate_path(show: dict, kind: str, entity_id: str, location_id: str | None = 
     return asset_dir(show, "plates", kind, entity_id, location_id) / "plate.png"
 
 
-def definition(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> dict:
-    """The script's entry for a character, prop, or landmark."""
-    if kind == "character":
-        return show["characters"][entity_id]
-    if kind == "prop":
-        return show["props"][entity_id]
-    return show["locations"][location_id]["spatial"]["landmarks"][entity_id]
-
-
-def back_path(show: dict, character_id: str) -> Path:
-    """The character seen from behind, drawn from their plate: the reference for a shot of their back."""
-    return plate_path(show, "character", character_id).with_name("back.png")
-
-
 def reference_path(show: dict, character_id: str) -> Path:
     """The character as the video model knows them: a full-length photo on pure white (``content:plates``)."""
     return plate_path(show, "character", character_id).with_name("reference.png")
@@ -301,12 +287,6 @@ def reference_path(show: dict, character_id: str) -> Path:
 def voice_path(show: dict, character_id: str) -> Path:
     """The character's cast voice: a short clean recording every line of theirs is spoken in."""
     return plate_path(show, "character", character_id).with_name("voice.wav")
-
-
-def look_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
-    """The picture a still draws it from: its plate, with its effects drawn in when it has any."""
-    plate = plate_path(show, kind, entity_id, location_id)
-    return plate.with_name("look.png") if definition(show, kind, entity_id, location_id).get("effects") else plate
 
 
 def required_meshes(show: dict) -> list[Path]:

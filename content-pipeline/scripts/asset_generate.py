@@ -306,15 +306,6 @@ def _paint_plate_texture(graph: dict, seed: int) -> None:
     graph["23"]["inputs"]["mesh"] = ["37", 0]
 
 
-def look_prompt(effects: list[str]) -> str:
-    """The plate as it looks in the show: the same object, with its effects added."""
-    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    template = prompts.get("lookPlate")
-    if not isinstance(template, str) or "{effects}" not in template:
-        raise RuntimeError(f"{PROMPTS_PATH} is missing a lookPlate template with {{effects}}")
-    return template.replace("{effects}", "; ".join(" ".join(text.split()) for text in effects))
-
-
 # A picture takes minutes, a mesh longer; a run past these has hung.
 PICTURE_TIMEOUT_SECONDS = 1800
 MESH_TIMEOUT_SECONDS = 3600
@@ -329,18 +320,6 @@ def _run(graph: dict, prefix: str, dest: Path, label: str, timeout_s: float) -> 
     except urllib.error.URLError as exc:
         raise RuntimeError(_comfy_unreachable()) from exc
     return dest
-
-
-def generate_look_plate(plate: Path, effects: list[str], dest: Path) -> Path:
-    """Write ``look.png``: the reviewed plate with its effects drawn in. ComfyUI must be running."""
-    from comfy import clone_workflow, stable_seed, stage_input
-
-    prompt = look_prompt(effects)
-    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
-    graph["6"]["inputs"]["image"] = stage_input(plate, "asset_look_source")
-    graph["7"]["inputs"]["prompt"] = prompt
-    graph["10"]["inputs"]["seed"] = stable_seed("look", prompt)
-    return _run(graph, PLATE_PREFIX, dest, "Qwen look plate", PICTURE_TIMEOUT_SECONDS)
 
 
 def generate_reference(character: dict, dest: Path) -> Path:

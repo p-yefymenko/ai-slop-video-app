@@ -23,18 +23,14 @@ from asset_resolver import (  # noqa: E402
 from asset_sources import materialize_mesh  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
 from mesh_io import (  # noqa: E402
-    DECIMATOR,
     TRIANGLE_BUDGET,
     box_mesh,
     cap_holes,
     drop_thin_side_protrusions,
     face_schema_forward,
     fit_to_size,
-    primitive_mesh,
-    proportions_match,
     read_schema_mesh,
     read_vertex_colors,
-    standing_proportion_warning,
     write_schema_glb,
 )
 
@@ -98,12 +94,6 @@ class AssetTests(unittest.TestCase):
         restored, restored_faces = read_schema_mesh(path)
         np.testing.assert_allclose(restored, vertices, atol=1e-5)
         np.testing.assert_array_equal(restored_faces, faces)
-        for kind, size in (("column", (1.0, 1.0, 4.0)), ("window", (1.2, 0.1, 1.6)), ("seat", (0.6, 0.6, 0.9))):
-            mesh, mesh_faces = primitive_mesh(kind, size)
-            self.assertGreater(len(mesh_faces), 0)
-            self.assertAlmostEqual(float(mesh[:, 2].min()), 0.0, places=5)
-        self.assertFalse(proportions_match(np.array([1.0, 1.0, 1.0]), (8.0, 0.2, 0.2)))
-        self.assertTrue(proportions_match(np.array([2.0, 2.0, 2.0]), (1.0, 1.0, 1.0)))
 
     def test_glb_saved_as_zip_is_not_unzipped(self) -> None:
         mislabeled = self.library / "model.zip"
@@ -249,9 +239,6 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(lost_vertices, 0)
         self.assertEqual(lost_triangles, 0)
         self.assertEqual(len(kept_faces), len(wide_faces))
-        fitted = fit_to_size(cleaned, (1.8, 1.8, 1.8))
-        self.assertIsNone(standing_proportion_warning("sela", fitted))
-        self.assertIn("vardan", standing_proportion_warning("vardan", vertices) or "")
 
     def test_triangle_limit_is_recorded_on_the_landmark(self) -> None:
         generator = CountingGenerator(self.cube)
@@ -315,32 +302,6 @@ class AssetTests(unittest.TestCase):
         write_plates(show, writer, output_dir=self.output, refresh=True)
         self.assertEqual(len(drawn), 2)
         self.assertFalse(mesh.exists())
-
-    def test_an_entity_with_effects_gets_a_look_picture_beside_its_plate(self) -> None:
-        show = self._show()
-        landmark = next(iter(show["locations"]["room"]["spatial"]["landmarks"].values()))
-        landmark["effects"] = [{"appearance": "white-gold flames", "size": [1, 1, 1], "offset": [0, 0, 1]}]
-        looks: list[tuple[Path, list[str]]] = []
-
-        def writer(appearance: str, raw_dir: Path, character: bool = False) -> Path:
-            del appearance, character
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            (raw_dir / "plate.png").write_bytes(b"x" * 2048)
-            return raw_dir / "plate.png"
-
-        def look_writer(plate: Path, effects: list[str], dest: Path) -> Path:
-            looks.append((plate, effects))
-            dest.write_bytes(b"y" * 2048)
-            return dest
-
-        (plate,) = write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
-        self.assertTrue(plate.with_name("look.png").is_file())
-        self.assertEqual(looks, [(plate, ["white-gold flames"])])
-        write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
-        self.assertEqual(len(looks), 1, "an unchanged plate and effects keep their look")
-        del landmark["effects"]
-        write_plates(show, writer, output_dir=self.output, look_writer=look_writer)
-        self.assertFalse(plate.with_name("look.png").exists())
 
     def test_mesh_step_requires_a_reviewed_plate(self) -> None:
         with self.assertRaises(RuntimeError) as caught:

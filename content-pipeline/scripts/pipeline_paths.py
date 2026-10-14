@@ -34,10 +34,6 @@ def load_content_env() -> None:
 SHOWS_DIR = ROOT / "shows"
 LEGACY_SCRIPTS_DIR = ROOT / "scripts_input"
 OUTPUT_DIR = ROOT / "output"
-STAGES = ("plates", "assets", "landmarks", "previs", "frames", "generate")
-
-
-
 def show_id_for_script(path: Path) -> str:
     """Folder name for ``shows/<id>/script.json``; filename stem for a legacy file."""
     if path.name == "script.json":
@@ -51,11 +47,6 @@ def show_script_path(show_id: str) -> Path:
 
 def stage_dir(stage: str, show_id: str) -> Path:
     return OUTPUT_DIR / stage / show_id
-
-
-def show_assets_dir(show_id: str) -> Path:
-    """Generated location meshes for one show."""
-    return stage_dir("assets", show_id)
 
 
 def discover_show_scripts(show_id: str | None = None) -> list[Path]:
@@ -82,10 +73,6 @@ def discover_show_scripts(show_id: str | None = None) -> list[Path]:
         script = found.get(show_id)
         return [script] if script is not None else []
     return [found[key] for key in sorted(found)]
-
-
-def character_image_path(show_id: str, character_id: str) -> Path:
-    return stage_dir("frames", show_id) / "characters" / f"{character_id}.png"
 
 
 def episode_dir(stage: str, show_id: str, episode_number: int) -> Path:
@@ -166,5 +153,3 @@ def plate_path(show_id: str, location_id: str) -> Path:
     return stage_dir("plates", show_id) / location_id / "plate.png"
 
 
-def location_dir(show_id: str, location_id: str) -> Path:
-    return stage_dir("assets", show_id) / location_id
