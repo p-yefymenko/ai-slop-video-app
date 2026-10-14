@@ -15,7 +15,8 @@
         "leather bracers",
         "dark trousers and worn leather boots"
       ],
-      "heightMeters": 1.8
+      "heightMeters": 1.8,
+      "voice": "a young man's voice, about twenty: light baritone, relaxed and a little cocky, unhurried, plain American accent"
     },
     "adam": {
       "name": "Master Adam",
@@ -30,7 +31,8 @@
         "a long gray-green wool coat",
         "a brown leather belt"
       ],
-      "heightMeters": 1.86
+      "heightMeters": 1.86,
+      "voice": "an old man's voice, about sixty: low and gravelly, slow and measured, a weary authority, plain American accent"
     },
     "ben": {
       "name": "Master Ben",
@@ -44,7 +46,8 @@
         "a cream silk robe with a gold-embroidered collar",
         "a leather belt"
       ],
-      "heightMeters": 1.84
+      "heightMeters": 1.84,
+      "voice": "a middle-aged man's voice, about fifty-five: deep and booming, chesty, forceful and blunt, plain American accent"
     },
     "cora": {
       "name": "Master Cora",
@@ -57,7 +60,8 @@
         "a long cream linen gown",
         "a small silver pendant"
       ],
-      "heightMeters": 1.72
+      "heightMeters": 1.72,
+      "voice": "an older woman's voice, about sixty: low alto, cool and precise, clipped and stern, plain American accent"
     },
     "ryan": {
       "body": "adult man, tall lean build, very pale skin",

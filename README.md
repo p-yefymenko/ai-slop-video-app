@@ -109,7 +109,7 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 
 1. `pnpm run content:setup-comfy`
 2. `pnpm run content:models`
-3. `pnpm run content:voice-deps` (the Chatterbox voice env)
+3. `pnpm run content:voice-deps` (the voice envs: Chatterbox, and Qwen3-TTS VoiceDesign)
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 
 `pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws previs on the GPU. `content:plates` needs ComfyUI running and the Qwen-Image-Edit and Qwen-Image-2512 weights. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`.

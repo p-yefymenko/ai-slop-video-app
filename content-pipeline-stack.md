@@ -2,7 +2,7 @@
 
 A show is one authored JSON file. The pipeline turns that file into a vertical episode on a local GPU. The script describes a physical world: every character, landmark, and prop is a generated mesh, placed by the timeline. Previs renders that world from each shot's camera, and the script is checked against the render. Image and video models only paint and animate what the render shows.
 
-Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen-Image, TRELLIS.2, Pixal3D, Wan 2.2, and RIFE run through ComfyUI at `http://127.0.0.1:8188`; Chatterbox runs in its own env (`content-pipeline/.voice`).
+Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen-Image, TRELLIS.2, Pixal3D, Wan 2.2, and RIFE run through ComfyUI at `http://127.0.0.1:8188`; Chatterbox and Qwen3-TTS VoiceDesign each run in their own env (`content-pipeline/.voice`, `content-pipeline/.voicedesign`).
 
 The video model is given as little as possible: the more it generates on its own, the more natural the take. The 3D scene supplies only what a shot has proved it needs (today: a depth video for the framing, and a reference photo for each face the shot shows), and each such input says when it applies.
 
@@ -57,7 +57,9 @@ Plates and meshes skip files already on disk. A still, a voice track, or a clip 
 
 Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0.
 
-**Reference photos.** Each character also gets `reference.png`, the picture the video model knows them by: Qwen-Image-2512 (Q8 GGUF, 50 steps, CFG 4, euler, AuraFlow shift 3.1, 928×1664), a full-length studio photo on pure white from `body` and every attribute, item by item (`referencePhoto`, `referenceNegative`). Qwen-Image-Edit's plates follow a description less closely and look less real. One photo per character, at a seed fixed by their words; it is drawn again when the words change, and reviewed like every plate. `voice.wav` beside it, when present, is the character's cast voice (stage 5).
+**Reference photos.** Each character also gets `reference.png`, the picture the video model knows them by: Qwen-Image-2512 (Q8 GGUF, 50 steps, CFG 4, euler, AuraFlow shift 3.1, 928×1664), a full-length studio photo on pure white from `body` and every attribute, item by item (`referencePhoto`, `referenceNegative`). Qwen-Image-Edit's plates follow a description less closely and look less real. One photo per character, at a seed fixed by their words; it is drawn again when the words change, and reviewed like every plate.
+
+**Voices.** Every character with a `voice` description also gets `voice.wav` beside the reference: Qwen3-TTS VoiceDesign (1.7B, bf16, in `content-pipeline/.voicedesign`) speaks `voiceSample` (prompts.json) in a voice made from that description, in English, at a seed fixed by it (`voice.design_voices`). It is made again when the description, the sample or the model changes, and reviewed like every plate. ComfyUI's VRAM is freed first. Every line of that character is spoken in it (stage 5).
 
 ### 2. Meshes — TRELLIS.2 and Pixal3D
 
@@ -113,7 +115,7 @@ Stills and clips are not checked automatically and not remade on their own: each
 
 `content:generate` makes each scene's clip in three steps (`generate_batch.generate_clip`).
 
-**Voice** (`voice.py`, Chatterbox in `content-pipeline/.voice`, installed by `content:voice-deps`). One speaker's lines in a row are one speech, spoken in one go so the voice runs on, starting at the first line's `startSeconds`. The speeches are laid on a track exactly the scene's length (`output/generate/<show>/<episode>/voices/scene_XX.wav`); a scene without lines gets a silent track, so every clip has sound. A speech that runs into the next one or past the scene is reported. Each character speaks in their voice, `voice.wav` beside their reference photo; a speaker without one stops the run (there is no general way to make a voice yet; open problem). Exaggeration 0.6, CFG weight 0.4. Chatterbox reads no delivery words; the delivery reaches only the picture. Background sound and music are not made here.
+**Voice** (`voice.py`, Chatterbox in `content-pipeline/.voice`, installed by `content:voice-deps`). One speaker's lines in a row are one speech, spoken in one go so the voice runs on, starting at the first line's `startSeconds`. The speeches are laid on a track exactly the scene's length (`output/generate/<show>/<episode>/voices/scene_XX.wav`); a scene without lines gets a silent track, so every clip has sound. A speech that runs into the next one or past the scene is reported. Each character speaks in their voice, `voice.wav` beside their reference photo (made by `content:plates`); validation requires a `voice` for every speaker. Exaggeration 0.6, CFG weight 0.4. Chatterbox reads no delivery words; the delivery reaches only the picture. Background sound and music are not made here.
 
 **The take**, at 16 fps (Wan 14B's own rate), `4n+1` frames covering the scene (`wan.frames_for`):
 
@@ -147,6 +149,7 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 | Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. | MIT |
 | RIFE | `rife49.pth`, fetched by ComfyUI-Frame-Interpolation on first use | MIT |
 | Chatterbox | `content-pipeline/.voice` (`voice-requirements.txt`, installed by `content:voice-deps`); weights fetched on first use | MIT |
+| Qwen3-TTS-12Hz-1.7B-VoiceDesign | `content-pipeline/.voicedesign` (`voice-design-requirements.txt`, installed by `content:voice-deps`); weights fetched on first use | Apache-2.0 |
 
 `content:assets -- --credits` rewrites `docs/CREDITS.md` from the records under `output/assets/`.
 

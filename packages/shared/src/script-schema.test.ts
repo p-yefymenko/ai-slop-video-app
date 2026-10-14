@@ -21,6 +21,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
         body: "brown skin",
         attributes: ["in a plain dress", "black hair", "barefoot"],
         heightMeters: 1.7,
+        voice: "a young woman's voice, warm and clear",
       },
     },
     locations: {
@@ -216,6 +217,12 @@ test("a line's speaker is a known character", () => {
   const unknown = speaking(minimalShow());
   unknown.episodes[0].scenes[0].lines = [{ speakerId: "bram", line: "Hello.", delivery: "soft" }];
   assert.match(messages(unknown), /lines\[0\]\.speakerId: unknown character "bram"/);
+});
+
+test("a speaker has a voice", () => {
+  const show = speaking(minimalShow());
+  delete show.characters.ada.voice;
+  assert.match(messages(show), /lines\[0\]\.speakerId: ada speaks but has no voice/);
 });
 
 test("a line starts within its scene", () => {

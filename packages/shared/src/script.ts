@@ -39,6 +39,13 @@ export type ShowCharacter = {
   attributes: string[];
   /** Standing height in meters. The generated mesh is fitted to it. */
   heightMeters: number;
+  /**
+   * How they sound, as a voice designer would brief it: sex, age, pitch,
+   * texture, pace, accent ("an old man's voice, low and gravelly, slow and
+   * measured"). Their `voice.wav` is made from it, and every line of theirs is
+   * spoken in that voice. Required for anyone with a line.
+   */
+  voice?: string;
   effects?: Effect[];
 };
 

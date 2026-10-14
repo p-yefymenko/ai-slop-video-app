@@ -5,10 +5,10 @@ on naturally, starting at the first line's ``startSeconds``. The track is the
 scene's length exactly: S2V paces the take by it, and a silent scene gets a
 silent track so every clip has sound to join.
 
-A character's voice is cast once, from ``voice.wav`` beside their reference
-(``world.voice_path``). A speaker without one stops the run: there is no
-general way to make a character's voice yet, and Chatterbox's default voice is
-the same for everyone.
+A character's voice is made once, in ``content:plates``, from their ``voice``
+description: Qwen3-TTS VoiceDesign speaks ``voiceSample`` (prompts.json) in it,
+and that recording is ``voice.wav`` beside their reference (``world.voice_path``).
+Chatterbox speaks every line of theirs in it. A speaker without one stops the run.
 """
 
 from __future__ import annotations
@@ -21,17 +21,58 @@ from pathlib import Path
 
 import numpy as np
 
-from comfy import stable_seed
-from world import voice_path
+from comfy import inputs_dir, present, stable_seed, write_log
+from world import settings, voice_path
 
 ROOT = Path(__file__).resolve().parents[1]
 VOICE_PYTHON = ROOT / ".voice" / "Scripts" / "python.exe"
 WORKER = Path(__file__).resolve().with_name("voice_worker.py")
+DESIGN_PYTHON = ROOT / ".voicedesign" / "Scripts" / "python.exe"
+DESIGN_WORKER = Path(__file__).resolve().with_name("voice_design_worker.py")
+# Makes a voice from words; Chatterbox cannot.
+DESIGN_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+# Every script is written in English.
+LANGUAGE = "English"
 # Chatterbox's own output rate.
 SAMPLE_RATE = 24_000
 # How much the delivery is acted (0.5 is neutral) and how closely the pace follows the reference voice.
 EXAGGERATION = 0.6
 CFG_WEIGHT = 0.4
+
+
+def design_entry(character: dict) -> dict:
+    """Everything a character's ``voice.wav`` is made from."""
+    return {"model": DESIGN_MODEL, "language": LANGUAGE, "instruct": character["voice"], "text": settings()["voiceSample"]}
+
+
+def voice_is_current(character: dict, dest: Path) -> bool:
+    """Whether ``voice.wav`` exists and was made from the character's current description."""
+    log = inputs_dir(dest) / "log.json"
+    if not (present(dest) and log.is_file()):
+        return False
+    made = json.loads(log.read_text(encoding="utf-8"))
+    return all(made.get(key) == value for key, value in design_entry(character).items())
+
+
+def design_voices(show: dict, character_ids: list[str]) -> None:
+    """Make each character's ``voice.wav`` from their ``voice`` description, at a seed fixed by it."""
+    if not DESIGN_PYTHON.is_file():
+        raise SystemExit(f"Missing {DESIGN_PYTHON}. Run `pnpm run content:voice-deps` once.")
+    jobs = []
+    for cid in character_ids:
+        entry = design_entry(show["characters"][cid])
+        dest = voice_path(show, cid)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        jobs.append({"id": cid, "entry": entry, "dest": dest, "seed": stable_seed("voice", entry["instruct"])})
+    with tempfile.TemporaryDirectory() as folder:
+        job_file = Path(folder) / "jobs.json"
+        job_file.write_text(json.dumps({
+            "settings": {"model": DESIGN_MODEL, "language": LANGUAGE},
+            "voices": [{"text": job["entry"]["text"], "instruct": job["entry"]["instruct"], "seed": job["seed"], "out": str(job["dest"])} for job in jobs],
+        }), encoding="utf-8")
+        subprocess.run([str(DESIGN_PYTHON), str(DESIGN_WORKER), str(job_file)], check=True)
+    for job in jobs:
+        write_log(job["dest"], {**job["entry"], "seed": job["seed"]})
 
 
 def speeches(scene: dict) -> list[dict]:
@@ -92,7 +133,7 @@ def write_voice_track(show: dict, episode: dict, scene: dict, dest: Path) -> lis
             for index, speech in enumerate(said):
                 voice = voice_path(show, speech["speakerId"])
                 if not voice.is_file():
-                    raise SystemExit(f"{speech['speakerId']} has no voice ({voice}); no general way to make one exists yet.")
+                    raise SystemExit(f"{speech['speakerId']} has no voice ({voice}). Run `pnpm run content:plates`.")
                 jobs.append({
                     "text": speech["text"],
                     "voice": str(voice),

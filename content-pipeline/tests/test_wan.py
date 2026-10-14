@@ -216,6 +216,19 @@ class VoiceTests(unittest.TestCase):
         silent, problems = lay_out([], 1.5, rate)
         self.assertEqual((len(silent), float(np.abs(silent).max()), problems), (150, 0.0, []))
 
+    def test_a_voice_is_made_again_when_its_description_changes(self) -> None:
+        from comfy import write_log
+        from voice import design_entry, voice_is_current
+
+        character = {"voice": "an old man's voice, low and slow"}
+        with tempfile.TemporaryDirectory() as folder:
+            dest = Path(folder) / "voice.wav"
+            self.assertFalse(voice_is_current(character, dest), "not made yet")
+            dest.write_bytes(b"\0" * 4096)
+            write_log(dest, {**design_entry(character), "seed": 1})
+            self.assertTrue(voice_is_current(character, dest))
+            self.assertFalse(voice_is_current({"voice": "a young woman's voice"}, dest))
+
 
 class GraphTests(unittest.TestCase):
     def test_a_still_is_the_first_frame_of_a_short_take(self) -> None:

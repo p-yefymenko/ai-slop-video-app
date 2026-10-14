@@ -1,5 +1,7 @@
-// The Chatterbox voice env, content-pipeline/.voice (Python 3.11): its own env because
-// Chatterbox pins packages that clash with ComfyUI's. Installed with uv, as tested.
+// The two voice envs, each its own because their pins clash with ComfyUI's and with each other's
+// (Chatterbox needs transformers 5.x, qwen-tts pins 4.57.3). Installed with uv, as tested.
+// - content-pipeline/.voice (Python 3.11): Chatterbox, which speaks the lines.
+// - content-pipeline/.voicedesign (Python 3.12): Qwen3-TTS VoiceDesign, which makes each character's voice from its description.
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -7,8 +9,6 @@ const { findPython } = require("./find-python.cjs");
 
 const repoRoot = path.resolve(__dirname, "..");
 const pipeline = path.join(repoRoot, "content-pipeline");
-const venv = path.join(pipeline, ".voice");
-const voicePython = path.join(venv, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
 const python = findPython();
 if (!python) {
   console.error("Python 3 was not found. Install it from https://www.python.org/downloads/ and rerun this command.");
@@ -22,10 +22,19 @@ function run(args) {
   }
 }
 
-spawnSync(python, ["-m", "pip", "install", "--quiet", "uv"], { stdio: "inherit" });
-if (!fs.existsSync(voicePython)) {
-  run(["venv", venv, "--python", "3.11"]);
+function installEnv(folder, pythonVersion, requirements) {
+  const venv = path.join(pipeline, folder);
+  const envPython = path.join(venv, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  if (!fs.existsSync(envPython)) {
+    run(["venv", venv, "--python", pythonVersion]);
+  }
+  run(["pip", "install", "--python", envPython, "torch==2.7.1", "torchaudio==2.7.1", "--index-url", "https://download.pytorch.org/whl/cu128"]);
+  run(["pip", "install", "--python", envPython, "--no-deps", "-r", path.join(pipeline, requirements)]);
+  return venv;
 }
-run(["pip", "install", "--python", voicePython, "torch==2.7.1", "torchaudio==2.7.1", "--index-url", "https://download.pytorch.org/whl/cu128"]);
-run(["pip", "install", "--python", voicePython, "--no-deps", "-r", path.join(pipeline, "voice-requirements.txt")]);
-console.log(`Chatterbox is installed in ${venv}. content:generate speaks each scene's lines with it.`);
+
+spawnSync(python, ["-m", "pip", "install", "--quiet", "uv"], { stdio: "inherit" });
+const voice = installEnv(".voice", "3.11", "voice-requirements.txt");
+const design = installEnv(".voicedesign", "3.12", "voice-design-requirements.txt");
+console.log(`Chatterbox is installed in ${voice}; content:generate speaks each scene's lines with it.`);
+console.log(`Qwen3-TTS VoiceDesign is installed in ${design}; content:plates makes each character's voice with it.`);

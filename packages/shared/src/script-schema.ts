@@ -116,6 +116,7 @@ const showCharacterSchema = z
       (value) => value >= 1.2 && value <= 2.4,
       "heightMeters must be a standing height from 1.2 to 2.4 meters",
     ),
+    voice: text("voice").optional(),
     effects: effectsSchema,
   })
   .strict();
@@ -795,6 +796,9 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     if (!(line.speakerId in show.characters)) {
       issues.push({ path: `${path}.speakerId`, message: `unknown character ${JSON.stringify(line.speakerId)}` });
       return;
+    }
+    if (!show.characters[line.speakerId].voice) {
+      issues.push({ path: `${path}.speakerId`, message: `${line.speakerId} speaks but has no voice` });
     }
     if (line.startSeconds !== undefined && (line.startSeconds < 0 || line.startSeconds >= sceneEnd - sceneStart)) {
       issues.push({ path: `${path}.startSeconds`, message: `must be within the scene (0 to ${(sceneEnd - sceneStart).toFixed(2)} s)` });

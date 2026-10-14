@@ -138,6 +138,10 @@ and the `performances`.
   Their face should be toward the camera in the start frame, best in a medium
   close-up; a speaker without a performance is a voice from off screen. Only one
   face is lip-synced per shot: give a shot one on-screen speaker.
+- **Everyone with a line has a `voice`:** sex, age, pitch, texture, pace,
+  accent, as a casting brief ("an old man's voice, about sixty: low and
+  gravelly, slow and measured"). Their voice is made from it once and speaks
+  every line of theirs; delivery belongs on each line, not in `voice`.
 - **Fire, sparks, glow, steam and mist are `effects`,** never words in a
   `body`, attribute or `appearance`: a mesh is built from those words, and a
   flame in a mesh is a solid shape.

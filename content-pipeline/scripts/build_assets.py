@@ -1,4 +1,4 @@
-"""Draw plates for every landmark, prop, and character (and each character's reference photo), or mesh reviewed plates.
+"""Draw plates for every landmark, prop, and character (and each character's reference photo and voice), or mesh reviewed plates.
 
 ``--episode``, ``--scene``, ``--seed``, and ``--size`` are accepted so ``content:render``
 can forward the same arguments. They do not change what is built.
@@ -41,6 +41,25 @@ def write_references(show: dict, *, refresh: bool, offline: bool) -> None:
             raise SystemExit(f"Missing or stale {dest}, and --offline does not generate.")
         print(f"Reference photo for {cid}...", flush=True)
         generate_reference(character, dest)
+
+
+def write_voices(show: dict, *, refresh: bool, offline: bool) -> None:
+    """Every character's voice, made from their ``voice`` description; a character without one has no voice."""
+    from comfy import free_comfy_models
+    from voice import design_voices, voice_is_current
+    from world import voice_path
+
+    stale = [
+        cid for cid, character in show["characters"].items()
+        if character.get("voice") and (refresh or not voice_is_current(character, voice_path(show, cid)))
+    ]
+    if not stale:
+        return
+    if offline:
+        raise SystemExit(f"Missing or stale voices for {', '.join(stale)}, and --offline does not generate.")
+    print(f"Voices for {', '.join(stale)}...", flush=True)
+    free_comfy_models()
+    design_voices(show, stale)
 
 
 def main() -> None:
@@ -92,8 +111,9 @@ def main() -> None:
                 look_writer=generate_look_plate,
             )
             print(f"{show_id_for_script(script)}: {len(plates)} plates")
+            write_voices(show, refresh=args.force or args.refresh, offline=args.offline)
             write_references(show, refresh=args.force or args.refresh, offline=args.offline)
-        print("Review the plates and references, then run `pnpm run content:assets`.")
+        print("Review the plates, references and voices, then run `pnpm run content:assets`.")
         return
     for script in scripts:
         show = json.loads(script.read_text(encoding="utf-8"))
