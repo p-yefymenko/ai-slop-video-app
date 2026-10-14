@@ -83,7 +83,6 @@ _FRAGMENT = """
 #version 330 core
 uniform int u_gray;
 uniform int u_entity;
-uniform int u_region;
 flat in vec3 g_normal;
 in vec3 g_color;
 layout(location = 0) out vec4 out_clay;
@@ -99,7 +98,7 @@ void main() {
     }
     out_clay = vec4(vec3(clamp(value, 88.0, 232.0) / 255.0), 1.0);
     out_albedo = vec4(pow(clamp(g_color, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
-    out_ident = vec4(float(u_entity) / 255.0, float(u_region) / 255.0, 0.0, 1.0);
+    out_ident = vec4(float(u_entity) / 255.0, 0.0, 0.0, 1.0);
 }
 """
 
@@ -124,7 +123,6 @@ def camera_basis(camera: dict, height: float = HEIGHT):
 class Frame:
     clay: np.ndarray  # (H, W, 3) uint8, viewport gray where empty
     entity: np.ndarray  # (H, W) uint8, index into the entity list + 1, 0 where empty
-    region: np.ndarray  # (H, W) uint8 region index + 1
     # Read back only when asked (full=True): plate color, and camera-forward meters (inf where empty).
     albedo: np.ndarray | None = None
     depth: np.ndarray | None = None
@@ -210,9 +208,7 @@ class _Renderer:
             vao = self._vao(entity.mesh)
             self._place(entity)
             self.program["u_entity"].value = index + 1
-            for region, first, count in entity.mesh.ranges:
-                self.program["u_region"].value = region + 1
-                vao.render(self.gl.TRIANGLES, vertices=count * 3, first=first * 3)
+            vao.render(self.gl.TRIANGLES)
 
         def read(attachment: int, components: int) -> np.ndarray:
             raw = self.fbo.read(components=components, attachment=attachment)
@@ -221,7 +217,7 @@ class _Renderer:
         ident = read(2, 2)
         clay = read(0, 3)
         clay[ident[:, :, 0] == 0] = VIEWPORT_GRAY
-        frame = Frame(clay, ident[:, :, 0], ident[:, :, 1])
+        frame = Frame(clay, ident[:, :, 0])
         if full:
             frame.albedo = read(1, 3)
             frame.depth = _linear_depth(self.depth, width, height)
@@ -264,7 +260,7 @@ def render(entities, camera: dict, width: int = WIDTH, height: int = HEIGHT, cro
 
 def thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: Path, width: int = 256) -> None:
     """Clay thumbnail of one mesh."""
-    from world import Entity, _region_mesh
+    from world import Entity, make_mesh
 
     points = np.asarray(vertices, dtype=np.float64)
     low, high = points.min(axis=0), points.max(axis=0)
@@ -275,7 +271,7 @@ def thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: Path, width:
         "lookAt": list(center),
         "verticalFovDegrees": 35.0,
     }
-    mesh = _region_mesh(f"thumb:{destination}", points, np.asarray(faces), None, np.zeros(len(points), dtype=np.int16))
-    frame = render([Entity("thumb", "landmark", mesh, (0.0, 0.0, 0.0), 0.0, ("whole",))], camera)
+    mesh = make_mesh(f"thumb:{destination}", points, np.asarray(faces))
+    frame = render([Entity("thumb", "landmark", mesh, (0.0, 0.0, 0.0), 0.0)], camera)
     height = max(1, round(width * HEIGHT / WIDTH))
     Image.fromarray(frame.clay).resize((width, height), Image.Resampling.LANCZOS).save(destination)

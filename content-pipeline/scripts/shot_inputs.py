@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from ffmpeg_tools import encode_rgb_frames
 from observe import ground_depth
@@ -31,10 +31,6 @@ DEPTH_NEAR_METERS = 0.5
 DEPTH_FAR_METERS = 60.0
 # Gray range of a surface; black is reserved for nothing at all.
 DEPTH_GRAY_FAR, DEPTH_GRAY_NEAR = 48, 255
-# A reference photo's backdrop: everything this close to its corner color becomes pure white.
-BACKDROP_TOLERANCE = 18
-# Margin kept around a cut-out person, in pixels of the reference photo.
-CUTOUT_MARGIN = 20
 # A person fills at most this share of the sheet's height.
 SHEET_FILL = 0.95
 
@@ -81,28 +77,12 @@ def write_depth_video(show: dict, episode: dict, scene: dict, width: int, height
     return dest
 
 
-def cut_out(photo: Image.Image) -> Image.Image:
-    """The person in a studio photo, cropped to them, with the backdrop turned pure white."""
-    photo = photo.convert("RGB")
-    gray = np.asarray(photo.convert("L")).astype(int)
-    different = np.abs(gray - gray[2, 2]) > BACKDROP_TOLERANCE
-    rows, cols = np.flatnonzero(different.any(axis=1)), np.flatnonzero(different.any(axis=0))
-    if len(rows) and len(cols):
-        photo = photo.crop((
-            max(0, cols[0] - CUTOUT_MARGIN), max(0, rows[0] - CUTOUT_MARGIN),
-            min(photo.width, cols[-1] + CUTOUT_MARGIN), min(photo.height, rows[-1] + CUTOUT_MARGIN),
-        ))
-    for corner in ((0, 0), (photo.width - 1, 0), (0, photo.height - 1), (photo.width - 1, photo.height - 1)):
-        ImageDraw.floodfill(photo, corner, (255, 255, 255), thresh=BACKDROP_TOLERANCE)
-    return photo
-
-
 def reference_sheet(photos: list[Path], width: int, height: int, dest: Path) -> Path:
-    """The people side by side on pure white, one picture: VACE takes a single reference."""
+    """The reference photos side by side on pure white, as drawn, one picture: VACE takes a single reference."""
     sheet = Image.new("RGB", (width, height), (255, 255, 255))
     slot = width // len(photos)
     for index, path in enumerate(photos):
-        person = cut_out(Image.open(path))
+        person = Image.open(path).convert("RGB")
         scale = min(slot / person.width, height * SHEET_FILL / person.height)
         person = person.resize((max(1, int(person.width * scale)), max(1, int(person.height * scale))), Image.Resampling.LANCZOS)
         sheet.paste(person, (index * slot + (slot - person.width) // 2, (height - person.height) // 2))

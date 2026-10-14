@@ -7,7 +7,6 @@
 import { z } from "zod";
 
 import {
-  INSERT_PARTS,
   SHOT_SIZES,
   SHOT_TYPES,
   type CharacterSpatialKeyframe,
@@ -142,13 +141,6 @@ const characterKeyframeSchema = z
 const propKeyframeSchema = z.union(
   [
     z
-      .object({
-        timeSeconds: finiteNumber("timeSeconds"),
-        heldByCharacterId: text("heldByCharacterId"),
-        heldInHand: z.enum(["left", "right"]),
-      })
-      .strict(),
-    z
       .object({ timeSeconds: finiteNumber("timeSeconds"), locationId: text("locationId"), position: vec3("position") })
       .strict(),
     z.object({ timeSeconds: finiteNumber("timeSeconds"), locationId: z.null() }).strict(),
@@ -156,7 +148,7 @@ const propKeyframeSchema = z.union(
   {
     errorMap: () => ({
       message:
-        "prop keyframe must be { timeSeconds, heldByCharacterId, heldInHand }, { timeSeconds, locationId, position }, or { timeSeconds, locationId: null }",
+        "prop keyframe must be { timeSeconds, locationId, position } or { timeSeconds, locationId: null }",
     }),
   },
 );
@@ -179,7 +171,6 @@ const shotSchema = z
     type: z.enum(SHOT_TYPES, { errorMap: () => ({ message: `shot.type must be one of ${SHOT_TYPES.join(", ")}` }) }),
     subjects: z.array(text("shot subject")).optional(),
     over: text("shot.over").optional(),
-    part: text("shot.part").optional(),
     size: z.enum(SHOT_SIZES, { errorMap: () => ({ message: `shot.size must be one of ${SHOT_SIZES.join(", ")}` }) }).optional(),
     angle: z.enum(["eye", "low", "high"]).optional(),
     side: z.enum(["front", "left", "right"]).optional(),
@@ -531,15 +522,6 @@ function checkCharacterFrame(issues: ScriptIssue[], path: string, frame: Charact
 }
 
 function checkPropFrame(issues: ScriptIssue[], path: string, frame: PropSpatialKeyframe, show: ShowScript) {
-  if ("heldByCharacterId" in frame) {
-    if (!(frame.heldByCharacterId in show.characters)) {
-      issues.push({
-        path: `${path}.heldByCharacterId`,
-        message: `unknown character ${JSON.stringify(frame.heldByCharacterId)}`,
-      });
-    }
-    return;
-  }
   if (frame.locationId === null) {
     return;
   }
@@ -577,7 +559,7 @@ function checkTarget(
   path: string,
   characterId: string,
   performance: ScenePerformance,
-  things: Set<string>,
+  show: ShowScript,
 ) {
   const placeholders = [...performance.action.matchAll(/\{([^}]*)\}/g)].map((match) => match[1]);
   if (placeholders.some((name) => name !== "target")) {
@@ -596,11 +578,11 @@ function checkTarget(
     issues.push({ path: `${path}.target`, message: "the action must say where it is aimed, as {target}" });
   }
   if (performance.target === characterId) {
-    issues.push({ path: `${path}.target`, message: "an action is aimed at someone or something else" });
-  } else if (!things.has(performance.target)) {
+    issues.push({ path: `${path}.target`, message: "an action is aimed at someone else" });
+  } else if (!(performance.target in show.characters)) {
     issues.push({
       path: `${path}.target`,
-      message: `unknown target ${JSON.stringify(performance.target)}: a character, prop, or landmark of this location`,
+      message: `unknown target ${JSON.stringify(performance.target)}: a character (props and landmarks are never named to the video model)`,
     });
   }
 }
@@ -708,30 +690,28 @@ const SHOT_RULES: Record<ScriptScene["shot"]["type"], { sizes: string[]; subject
   single: { sizes: ["ecu", "cu", "mcu", "medium", "full"], subjects: [1, 1] },
   group: { sizes: ["mcu", "medium", "full", "wide"], subjects: [2, 99] },
   overShoulder: { sizes: ["cu", "mcu", "medium"], subjects: [1, 1] },
-  insert: { sizes: [], subjects: [1, 1] },
+  insert: { sizes: [], subjects: [0, 0] },
   establishing: { sizes: [], subjects: [0, 0] },
   action: { sizes: ["full", "wide"], subjects: [0, 99] },
 };
 
 /**
  * A shot names what it shows, and every shot of people gets its camera from the
- * blocking, so it frames its subjects by construction. Only an establishing or
- * action shot may set its own camera.
+ * blocking, so it frames its subjects by construction. Only an insert, an
+ * establishing, or an action shot may set its own camera.
  */
 function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
   const shot = scene.shot;
   const path = `${scenePath}.shot`;
   const rule = SHOT_RULES[shot.type];
   const subjects = shot.subjects ?? [];
-  const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
   const isCharacter = (id: string) => id in show.characters;
-  const things = (id: string) => isCharacter(id) || id in (show.props ?? {}) || id in landmarks;
-  const ownCamera = shot.type === "establishing" || (shot.type === "action" && scene.camera !== undefined);
-  if (scene.camera && !["establishing", "action"].includes(shot.type)) {
+  const ownCamera = shot.type === "establishing" || shot.type === "insert" || (shot.type === "action" && scene.camera !== undefined);
+  if (scene.camera && !["insert", "establishing", "action"].includes(shot.type)) {
     issues.push({ path: `${scenePath}.camera`, message: `a ${shot.type} shot gets its camera from its subjects; remove camera` });
   }
-  if (shot.type === "establishing" && !scene.camera) {
-    issues.push({ path: `${scenePath}.camera`, message: "an establishing shot needs its own camera" });
+  if ((shot.type === "establishing" || shot.type === "insert") && !scene.camera) {
+    issues.push({ path: `${scenePath}.camera`, message: `an ${shot.type} shot needs its own camera` });
   }
   if (!ownCamera && (subjects.length < Math.max(rule.subjects[0], 1) || subjects.length > rule.subjects[1])) {
     issues.push({
@@ -743,9 +723,8 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
     if (isCharacter(id) && !(id in (scene.performances ?? {}))) {
       issues.push({ path: `${path}.subjects[${index}]`, message: `${JSON.stringify(id)} is the shot's subject, so it needs a performance` });
     }
-    const ok = shot.type === "insert" ? things(id) : isCharacter(id);
-    if (!ok) {
-      issues.push({ path: `${path}.subjects[${index}]`, message: `unknown ${shot.type === "insert" ? "character, prop, or landmark" : "character"} ${JSON.stringify(id)}` });
+    if (!isCharacter(id)) {
+      issues.push({ path: `${path}.subjects[${index}]`, message: `unknown character ${JSON.stringify(id)}` });
     }
   });
   if (shot.size !== undefined && !rule.sizes.includes(shot.size)) {
@@ -760,17 +739,6 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
   } else if (shot.over !== undefined) {
     issues.push({ path: `${path}.over`, message: "only an over-the-shoulder shot has over" });
   }
-  if (shot.type === "insert" && subjects.length === 1 && isCharacter(subjects[0])) {
-    if (!shot.part) {
-      issues.push({ path: `${path}.part`, message: "an insert of a character shows one part (hands, eyes, face, ...)" });
-    } else {
-      if (!(INSERT_PARTS as readonly string[]).includes(shot.part)) {
-        issues.push({ path: `${path}.part`, message: `an insert frames one of ${INSERT_PARTS.join(", ")}` });
-      }
-    }
-  } else if (shot.part !== undefined) {
-    issues.push({ path: `${path}.part`, message: "only an insert of a character has part" });
-  }
 }
 
 /**
@@ -778,17 +746,12 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
  */
 function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
   const performances = scene.performances ?? {};
-  const things = new Set([
-    ...Object.keys(show.characters),
-    ...Object.keys(show.props ?? {}),
-    ...Object.keys(show.locations[scene.locationId]?.spatial.landmarks ?? {}),
-  ]);
   for (const [characterId, performance] of Object.entries(performances)) {
     const path = `${scenePath}.performances.${characterId}`;
     if (!(characterId in show.characters)) {
       issues.push({ path, message: `unknown character ${JSON.stringify(characterId)}` });
     }
-    checkTarget(issues, path, characterId, performance, things);
+    checkTarget(issues, path, characterId, performance, show);
   }
   const [sceneStart, sceneEnd] = scene.timeRangeSeconds;
   (scene.lines ?? []).forEach((line, lineIndex) => {

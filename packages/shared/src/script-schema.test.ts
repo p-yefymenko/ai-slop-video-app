@@ -183,25 +183,24 @@ test("accepts a character who enters from off stage", () => {
   assert.equal(parseShowScript(show).ok, true);
 });
 
-test("a prop is held, placed, or off stage, and has a track", () => {
+test("a prop is placed or off stage, and has a track", () => {
   const show = minimalShow({ props: { cup: { appearance: "One clay cup", size: [0.1, 0.1, 0.1] } } });
   assert.match(messages(show), /propTracks\.cup: every prop has a track/);
   show.episodes[0].spatialTimeline.propTracks = {
     cup: [
-      { timeSeconds: 0, heldByCharacterId: "ada", heldInHand: "left" },
-      { timeSeconds: 2, locationId: "room", position: [0, 1, 0.5] },
+      { timeSeconds: 0, locationId: "room", position: [0, 1, 0.5] },
       { timeSeconds: 3, locationId: null },
     ],
   };
   assert.equal(parseShowScript(show).ok, true);
-  (show.episodes[0].spatialTimeline.propTracks.cup[0] as { locationId?: string }).locationId = "room";
+  (show.episodes[0].spatialTimeline.propTracks.cup[0] as { heldByCharacterId?: string }).heldByCharacterId = "ada";
   assert.match(messages(show), /propTracks\.cup\[0\]: Unrecognized key/);
 });
 
 test("rejects a prop track whose id was never declared", () => {
   const show = minimalShow();
   show.episodes[0].spatialTimeline.propTracks = {
-    iron_collar: [{ timeSeconds: 0, heldByCharacterId: "ada", heldInHand: "left" }],
+    iron_collar: [{ timeSeconds: 0, locationId: null }],
   };
   assert.match(messages(show), /propTracks\.iron_collar: prop "iron_collar" is not declared/);
 });
@@ -283,7 +282,7 @@ test("rejects a show id that does not match the file", () => {
   assert.match(result.issues[0].message, /other-show/);
 });
 
-test("every shot of people is framed from its subjects; only establishing and action set a camera", () => {
+test("every shot of people is framed from its subjects; only insert, establishing and action set a camera", () => {
   const show = minimalShow();
   const scene = show.episodes[0].scenes[0];
   scene.camera = { keyframes: [{ timeSeconds: 0, position: [0, -3, 1.5], lookAt: [0, 0, 1.5], verticalFovDegrees: 40 }] };
@@ -295,8 +294,8 @@ test("every shot of people is framed from its subjects; only establishing and ac
   assert.match(messages(show), /shot.size: a single shot is ecu, cu, mcu, medium, full/);
   scene.shot = { type: "overShoulder", subjects: ["ada"], over: "ada" };
   assert.match(messages(show), /shot.over: the near shoulder belongs to someone other than the subject/);
-  scene.shot = { type: "insert", subjects: ["ada"] };
-  assert.match(messages(show), /shot.part: an insert of a character shows one part/);
+  scene.shot = { type: "insert" };
+  assert.match(messages(show), /camera: an insert shot needs its own camera/);
   scene.shot = { type: "establishing" };
   assert.match(messages(show), /camera: an establishing shot needs its own camera/);
 });
@@ -307,7 +306,7 @@ test("an action is aimed only through {target}", () => {
   ada.action = "glares down at {target}";
   assert.match(messages(show), /uses \{target\}, so the performance needs a target/);
   ada.target = "ada";
-  assert.match(messages(show), /target: an action is aimed at someone or something else/);
+  assert.match(messages(show), /target: an action is aimed at someone else/);
   ada.target = "nobody";
   assert.match(messages(show), /target: unknown target "nobody"/);
   ada.action = "glares down";

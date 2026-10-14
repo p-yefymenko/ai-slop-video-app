@@ -29,7 +29,8 @@ Before writing any value, ask: "would this be right for every scene where this c
 
 The pipeline uses only authored script data (`shot.subjects`, `shot.over`, `performances`, `lines`, …) and exact geometry (the timeline, the meshes, the camera, the depth render, "any pixel of it is in the frame").
 
-- **No thresholds on pixels or mesh regions** (minimum sizes, visible shares, height bands standing in for body parts).
+- **No thresholds on pixels or mesh regions** (minimum sizes, visible shares, height bands standing in for body parts, color tolerances, mesh cleanup by size).
+- **The video prompt never describes what may be only partly in frame.** No clothes, props, or landmarks, no screen side, no facing: words cannot know which part of a person or thing the frame shows, and a described part the frame does not show gets drawn anyway. People are named only by `body`; looks come from the reference sheet, shapes from the depth video.
 - **No detectors on model output** (person or face detectors, cut or drift checks), and no automatic retries driven by them. Outputs are reviewed by the user.
 - **No word-list lints** in validation (pronouns, effect words, music words). Validation checks structure and references only.
 - When a rule seems to need a threshold or a detector, it needs an authored field instead: add it to the schema (`packages/shared/src/script.ts`) and the script.

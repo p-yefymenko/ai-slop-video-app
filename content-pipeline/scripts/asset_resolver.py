@@ -23,14 +23,11 @@ from coords import schema_to_gltf
 from mesh_io import (
     DECIMATOR,
     TRIANGLE_BUDGET,
-    cap_holes,
-    drop_thin_side_protrusions,
     face_schema_forward,
     fit_to_size,
     read_schema_mesh,
     read_vertex_colors,
     require_triangle_budget,
-    stand_upright,
     write_schema_glb,
 )
 from pipeline_paths import OUTPUT_DIR
@@ -43,10 +40,6 @@ FACING = "schema-plus-y"
 PIXAL3D_PAGE = "https://github.com/TencentARC/Pixal3D"
 # Plate color sampled by Pixal3D and stored on each vertex.
 SURFACE = "vertex-color"
-# Character meshes cap small openings with new triangles. Objects keep theirs.
-CHARACTER_MESH_REPAIR = "upright-cap-holes"
-
-
 @dataclass
 class AssetRequest:
     consumer_id: str
@@ -171,8 +164,6 @@ class AssetResolver:
             return None
         if (record.get("meshModel"), record.get("surface")) != (_model(request), SURFACE):
             return None
-        if request.character_id and record.get("meshRepair") != CHARACTER_MESH_REPAIR:
-            return None
         size = record.get("sizeMeters") or list(request.size)
         return ResolvedAsset(
             location_id=request.location_id,
@@ -207,18 +198,8 @@ class AssetResolver:
         if colors is not None and len(colors) != len(vertices):
             colors = None
         if request.character_id:
-            vertices = stand_upright(face_schema_forward(vertices), faces)
-            write_schema_glb(directory / "model.precleanup.glb", vertices, faces, colors)
-            vertices, faces, colors, lost_vertices, lost_triangles = drop_thin_side_protrusions(
-                vertices, faces, colors
-            )
-            print(
-                f"  {request.character_id}: removed {lost_vertices} vertices and {lost_triangles} triangles",
-                flush=True,
-            )
+            vertices = face_schema_forward(vertices)
         fitted = fit_to_size(vertices, request.size)
-        if request.character_id:
-            fitted, faces = cap_holes(fitted, faces)
         source_id = appearance_source_id(request.appearance)
         write_schema_glb(directory / "model.glb", fitted, faces, colors)
         if fetched != directory / "model.glb" and fetched.is_file():
@@ -252,7 +233,6 @@ class AssetResolver:
             **request.identity(),
         }
         if character:
-            record["meshRepair"] = CHARACTER_MESH_REPAIR
             record["facing"] = FACING
         (directory / request.record_name).write_text(json.dumps(record, indent=2), encoding="utf-8")
         return ResolvedAsset(request.location_id, directory / "model.glb", source, source_id, request.appearance, request.size)

@@ -152,22 +152,17 @@ class EntityTests(unittest.TestCase):
         outside = world.entities_at(here, here["episodes"][0], scene(position=(0, -20, 1.5)), 0)
         self.assertNotIn("floor", [e.id for e in outside])
 
-    def test_look_at_turns_the_body_and_a_held_prop_follows_the_hand(self) -> None:
+    def test_look_at_turns_the_body(self) -> None:
         tracks = {"ada": [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0, "lookAtId": "bench"}]}
-        cup = {"cup": {"appearance": "One clay cup", "size": [0.1, 0.1, 0.1]}}
-        held = {"cup": [{"timeSeconds": 0, "heldByCharacterId": "ada", "heldInHand": "left"}]}
-        show = show_with(tracks, cup, held)
+        show = show_with(tracks)
         entities = {e.id: e for e in world.entities_at(show, show["episodes"][0], scene(), 0)}
         self.assertAlmostEqual(entities["ada"].yaw_degrees, 0.0)
-        self.assertIn("cup", entities)
         show["episodes"][0]["spatialTimeline"]["characterTracks"]["ada"][0]["lookAtId"] = None
         show["episodes"][0]["spatialTimeline"]["characterTracks"]["ada"][0]["bodyYawDegrees"] = 90
         entities = {e.id: e for e in world.entities_at(show, show["episodes"][0], scene(), 0)}
         self.assertAlmostEqual(entities["ada"].yaw_degrees, 90.0)
         low, high = entities["ada"].bounds()
         np.testing.assert_allclose((high - low)[2], 1.7, atol=1e-5)
-        hand = entities["cup"].offset
-        self.assertAlmostEqual(hand[2], 0.45 * 1.7, delta=0.06)
 
     def test_missing_mesh_is_an_error(self) -> None:
         show = show_with({"ada": [{"timeSeconds": 0, "locationId": "room", "position": [0, 0, 0], "bodyYawDegrees": 0}]})

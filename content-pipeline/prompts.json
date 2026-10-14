@@ -7,7 +7,7 @@
   "referenceNegative": "wrong clothes, extra garments, snow, particles, dust, background objects, cartoon, 3d render, plastic skin, airbrushed, painting, blurry face, deformed hands, cropped body",
   "vaceNegative": "cut, scene change, new shot, zoom out, extra people, blurry, distorted face, deformed hands, text, watermark",
   "s2vNegative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
-  "shotSentence": "{angle}{size}{over}, cinematic live-action footage, photorealistic.",
+  "shotSentence": "{angle}{size}, cinematic live-action footage, photorealistic.",
   "shot": {
     "angles": {
       "low": "low-angle",
@@ -25,12 +25,7 @@
       "insert": "close-up insert",
       "establishing": "wide establishing shot",
       "action": "wide shot"
-    },
-    "over": " over another person's shoulder"
-  },
-  "view": {
-    "high": "Seen from high above, looking steeply down.",
-    "low": "Seen from low down, looking up."
+    }
   },
   "cameraHeld": "The camera is handheld and nearly still, holding the same framing for the whole take.",
   "cameraMotion": "The camera {motion}, in one smooth continuous move.",
@@ -39,15 +34,8 @@
     "pullOut": "The camera slowly pulls back.",
     "tiltUp": "The camera starts low on the feet and tilts slowly up the body to the face, then holds on the face."
   },
-  "personFace": "{place}: {look}{facing}.",
-  "personNear": "{place}, close to the camera and soft out of focus: the back of another person's head and shoulder, seen from behind ({look}).",
-  "personEnters": "Coming into the frame: {look}.",
-  "facing": {
-    "camera": "facing the camera",
-    "three": "seen in three-quarter view, looking off to the frame {side}",
-    "profile": "in profile, looking to the frame {side}",
-    "away": "facing away from the camera"
-  },
+  "person": "{body}: {action}.",
+  "personEnters": "Coming into the frame, {body}: {action}.",
   "expression": "Face: {expression}.",
   "speaking": "Speaking {delivery}, the head moving naturally with the words.",
   "effects": "Moving all through the take: {effects}.",

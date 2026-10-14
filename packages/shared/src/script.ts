@@ -11,30 +11,15 @@
  * that everyone with a performance is in the frame.
  */
 
-/** The details an insert of a character can frame: a band of their height (content-pipeline/scripts/shots.py). */
-export const INSERT_PARTS = [
-  "hair",
-  "face",
-  "eyes",
-  "neck",
-  "torso",
-  "arms",
-  "hands",
-  "legs",
-  "feet",
-] as const;
-
-export type InsertPart = (typeof INSERT_PARTS)[number];
-
 export type ShowCharacter = {
   /** How the episode's name card titles them the first time they speak on screen ("Master Adam"). Never sent to a model. */
   name?: string;
-  /** Build and skin. Also how the video prompt points at this person. */
+  /** Build and skin, never clothes. The only words the video prompt says about this person. */
   body: string;
   /**
    * Every other detail of their look, one clause each: age, hair, clothes,
-   * scars. The plate and every still draw the whole person from `body` plus
-   * these, from the camera's angle; the shot keeps only what it shows.
+   * scars. Only the plate and the reference photo are drawn from them; the
+   * video model gets the look from the reference photo, never in words.
    */
   attributes: string[];
   /** Standing height in meters. The generated mesh is fitted to it. */
@@ -196,9 +181,8 @@ export type CharacterSpatialKeyframe = {
   lookAtId?: string;
 };
 
-/** Either held by a character or placed in a location. Every prop has a track starting at 0. */
+/** Placed in a location, or gone. Every prop has a track starting at 0. */
 export type PropSpatialKeyframe =
-  | { timeSeconds: number; heldByCharacterId: string; heldInHand: "left" | "right" }
   | { timeSeconds: number; locationId: string; position: Vec3 }
   | { timeSeconds: number; locationId: null };
 
@@ -232,12 +216,12 @@ export type ShotSize = (typeof SHOT_SIZES)[number];
 /**
  * What the shot shows. For every shot of people the camera is computed from the
  * blocking (content-pipeline/scripts/shots.py), so it frames its subjects by
- * construction; only `establishing` and `action` may set `camera` themselves.
+ * construction; only `insert`, `establishing` and `action` may set `camera` themselves.
  *
  * - `single`: one character (`subjects: [id]`), `size` ecu|cu|mcu|medium|full.
  * - `group`: two or more characters, `size` mcu|medium|full|wide.
  * - `overShoulder`: `subjects: [seen]` over the near shoulder of `over`, `size` cu|mcu|medium.
- * - `insert`: one detail: a character's `part`, or a prop or landmark.
+ * - `insert`: one detail (hands, a weapon); needs `camera`.
  * - `establishing`: the place; needs `camera`.
  * - `action`: characters in motion, `size` full|wide, or its own `camera`.
  */
@@ -245,7 +229,6 @@ export type SceneShot = {
   type: ShotType;
   subjects?: string[];
   over?: string;
-  part?: InsertPart;
   size?: ShotSize;
   /** eye (default) | low (looking up: power) | high (looking down: defeat). */
   angle?: "eye" | "low" | "high";
@@ -290,14 +273,15 @@ export type ScenePerformance = {
    * Visible motion for the whole take, positive and present tense, of this
    * person's own body only ("the jaw tightens", "shoves {target} with both
    * hands"). No pronouns and no names: the video model sees only the frame and
-   * invents whoever a word points at. Another person or thing is only ever
-   * `{target}`; gaze comes from lookAtId.
+   * invents whoever a word points at. Another person is only ever `{target}`;
+   * gaze comes from lookAtId. Never describe clothes, props, or landmarks: the
+   * words cannot know which part of them the frame shows.
    */
   action: string;
   /**
-   * Who or what the action is aimed at, written as `{target}` in the action: a
-   * character, prop, or landmark id. It must be in the start frame; the clip
-   * prompt names it by where the frame shows it.
+   * Who the action is aimed at, written as `{target}` in the action: a
+   * character id. They must be in the start frame; the clip prompt names them
+   * by their `body`.
    */
   target?: string;
   /**

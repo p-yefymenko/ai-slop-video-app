@@ -84,7 +84,8 @@ The reference episode, `packages/shared/src/reel-short-content-reference/return-
    - a group shot or two-shot;
    - a medium close-up for every spoken line;
    - an extreme close-up for the wounding line or a power (eyes, teeth, a hand);
-   - inserts of hands, feet, claws, weapons (1–2 s);
+   - inserts of hands, feet, claws, weapons (1–2 s), each with its own
+     `camera`;
    - a low angle on whoever has power, a high angle on whoever is beaten;
    - over-the-shoulder for an exchange;
    - reaction shots.
@@ -107,11 +108,15 @@ and the `performances`.
 
 - **Coverage is cut from one continuous blocking.** Nobody teleports to
   manufacture a close-up.
-- **Give a performance to everyone the model should get right.** Each
-  performer is described with their whole look and action; anyone else in the
-  frame is not named, and the model draws them as it likes. The shot's `over`
-  is described as the shoulder in front. A performer must be in the frame at
-  some moment (previs fails otherwise), and a `target` in the start frame.
+- **Give a performance to everyone whose action matters.** The video model
+  hears of a performer only their `body` and their action and expression;
+  their look comes from their reference photo (if they are a subject) and
+  their shape from the depth video. Anyone else, the shot's `over` included,
+  is not named. A performer must be in the frame at some moment (previs fails
+  otherwise), and a `target` (always a person) in the start frame.
+- **`body` is build and skin only, never clothes**, and an action never names
+  clothes, props, or landmarks: the words cannot know which part of them the
+  frame shows, and the model draws whatever is named.
 - **The subjects are the faces.** The reference photos of the shot's `subjects`
   (or, without subjects, of the performers) go to the model, and it paints
   their faces; so list as a subject only someone whose face the shot should

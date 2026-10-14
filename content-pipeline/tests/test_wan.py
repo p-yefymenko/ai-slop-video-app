@@ -73,28 +73,27 @@ class ReferenceSheetTests(unittest.TestCase):
         from describe import reference_people
 
         show = two_people()
-        self.assertEqual(reference_people(show, over_the_shoulder()), ["ada"], "the shoulder in front is left to the words")
+        self.assertEqual(reference_people(show, over_the_shoulder()), ["ada"], "the shoulder in front is left to the depth video")
         acting = scene(performances={"ada": {"action": "waits"}, "bo": {"action": "nods"}})
         self.assertEqual(reference_people(show, acting), ["ada", "bo"], "no subjects: everyone with a performance")
         self.assertEqual(reference_people(show, scene()), [])
 
-    def test_people_are_cut_out_onto_pure_white(self) -> None:
+    def test_photos_side_by_side_on_white_as_drawn(self) -> None:
         from shot_inputs import reference_sheet
 
         with tempfile.TemporaryDirectory() as folder:
-            photo = Image.new("RGB", (200, 400), (236, 236, 236))
-            photo.paste((40, 30, 20), (60, 50, 140, 380))
+            photo = Image.new("RGB", (200, 400), (40, 30, 20))
             photo.save(Path(folder) / "ada.png")
             sheet = reference_sheet([Path(folder) / "ada.png"] * 2, 480, 832, Path(folder) / "sheet.png")
             pixels = np.asarray(Image.open(sheet))
             self.assertEqual(pixels.shape, (832, 480, 3))
-            self.assertTrue((pixels[:20] == 255).all(), "the studio gray became pure white")
-            dark = (pixels.sum(axis=2) < 200).any(axis=0)
-            self.assertTrue(dark[:240].any() and dark[240:].any(), "one person in each half")
+            self.assertTrue((pixels[0] == 255).all(), "the sheet itself is white")
+            self.assertEqual(tuple(pixels[416, 120]), (40, 30, 20), "the left photo is pasted unchanged")
+            self.assertEqual(tuple(pixels[416, 360]), (40, 30, 20), "and so is the right one")
 
 
 class WordsTests(unittest.TestCase):
-    def test_the_shoulder_in_front_and_the_performers_in_words(self) -> None:
+    def test_performers_by_body_only_and_nobody_else(self) -> None:
         from describe import video_prompt
 
         show = two_people()
@@ -103,28 +102,23 @@ class WordsTests(unittest.TestCase):
             {"ada": 5000, "bo": 9000},
             sky={"kind": "backdrop", "pixels": 20000},
             surround={"kind": "backdrop", "pixels": 0},
+            bench={"kind": "landmark", "pixels": 3000},
         )
-        seen["entities"]["bo"].update({"depth": 1.0, "screenX": 60.0})
         prompt = video_prompt(show, episode, over_the_shoulder(), seen)
-        self.assertTrue(prompt.startswith("Low-angle medium close-up with shallow depth of field over another person's shoulder"))
-        self.assertLess(prompt.index("old man"), prompt.index("adult woman"), "nearest first")
-        self.assertIn("On the left, close to the camera and soft out of focus: the back of another person's head and shoulder", prompt)
-        self.assertIn("In the center: an adult woman, brown skin, 52 years old, black hair, facing the camera.", prompt)
-        self.assertIn("Speaks with a half-smile. Face: lips slightly parted.", prompt)
+        self.assertTrue(prompt.startswith("Low-angle medium close-up with shallow depth of field, cinematic"))
+        self.assertNotIn("shoulder", prompt, "the shoulder in front is left to the depth video")
+        self.assertNotIn("old man", prompt, "nobody without a performance is named")
+        self.assertIn("An adult woman, brown skin: speaks with a half-smile. Face: lips slightly parted.", prompt)
+        self.assertNotIn("black hair", prompt, "no look beyond the body: the frame may not show it")
+        self.assertNotIn("bench", prompt, "no landmarks or props: the frame may show only part of one")
         self.assertIn("Above: a gray sky.", prompt)
-        self.assertNotIn("open fields", prompt, "only what is in shot")
+        self.assertNotIn("open fields", prompt, "only the backdrop in shot")
         self.assertIn("Soft overcast daylight.", prompt)
         self.assertNotIn("ada", prompt.lower().replace("daylight", ""), "no ids reach the model")
-        self.assertFalse(PRONOUNS & set(prompt.lower().replace(",", " ").replace(".", " ").split()), "no pronouns")
+        self.assertFalse(PRONOUNS & set(prompt.lower().replace(",", " ").replace(".", " ").replace(":", " ").split()), "no pronouns")
         self.assertNotIn("Speaking", prompt, "a picture prompt says nothing of speech")
-
-    def test_nobody_without_a_role_is_named(self) -> None:
-        from describe import video_prompt
-
-        show = two_people()
-        prompt = video_prompt(show, show["episodes"][0], scene(), observation({"ada": 5000, "bo": 9000}))
-        self.assertNotIn("woman", prompt)
-        self.assertNotIn("old man", prompt)
+        for word in ("left", "right", "center", "facing", "profile"):
+            self.assertNotIn(word, prompt, "no screen side or facing")
 
     def test_a_performer_outside_the_start_frame_comes_into_it(self) -> None:
         from describe import video_prompt
@@ -132,7 +126,7 @@ class WordsTests(unittest.TestCase):
         show = two_people()
         entering = scene(performances={"bo": {"action": "walks in"}})
         prompt = video_prompt(show, show["episodes"][0], entering, observation({"ada": 5000}))
-        self.assertIn("Coming into the frame: an old man, broad build, a red fox-fur mantle. Walks in.", prompt)
+        self.assertIn("Coming into the frame, an old man, broad build: walks in.", prompt)
 
     def test_a_talking_take_is_about_the_first_speaker_with_a_performance(self) -> None:
         from describe import talking_speaker, video_prompt
@@ -149,36 +143,29 @@ class WordsTests(unittest.TestCase):
         self.assertIn("Speaking low; then harder, the head moving naturally with the words.", prompt)
         self.assertNotIn("Go.", prompt, "the words are the voice's, never the prompt's")
 
-    def test_an_action_points_only_at_what_the_start_frame_shows(self) -> None:
+    def test_a_target_is_named_by_body(self) -> None:
+        from describe import video_prompt
+
+        show = two_people()
+        grab = scene(performances={"ada": {"action": "seizes the wrist of {target}", "target": "bo"}})
+        prompt = video_prompt(show, show["episodes"][0], grab, observation({"ada": 5000, "bo": 9000}))
+        self.assertIn(": seizes the wrist of the old man, broad build.", prompt)
+
+    def test_the_effects_in_shot_are_named(self) -> None:
         from describe import video_prompt
 
         show = show_with({"ada": standing()})
-        reach = scene(performances={"ada": {"action": "reaches toward {target}", "target": "bench"}})
         start = observation({"ada": 5000})
-        self.assertIn("Reaches toward the stone bench.", video_prompt(show, show["episodes"][0], reach, start))
         start["effects"] = [{"id": "bench", "appearance": "white-gold flames"}]
-        prompt = video_prompt(show, show["episodes"][0], reach, start)
-        self.assertIn("Reaches toward the white-gold flames.", prompt)
-        self.assertIn("Moving all through the take: white-gold flames.", prompt)
-
-    def test_how_a_person_is_turned_to_the_camera(self) -> None:
-        from describe import facing_words
-
-        camera = lambda x, y: {"position": [x, y, 1.6], "lookAt": [0, 0, 1.6]}
-        self.assertEqual(facing_words((0, 1), (0, 0), camera(0, 4)), "facing the camera")
-        self.assertEqual(facing_words((0, 1), (0, 0), camera(4, 0)), "in profile, looking to the frame right")
-        self.assertEqual(facing_words((0, 1), (0, 0), camera(2, 3)), "seen in three-quarter view, looking off to the frame right")
-        self.assertEqual(facing_words((0, 1), (0, 0), camera(0, -4)), "facing away from the camera")
+        self.assertIn("Moving all through the take: white-gold flames.", video_prompt(show, show["episodes"][0], scene(), start))
 
     def test_the_camera_in_words(self) -> None:
-        from describe import camera_sentence, view_words
+        from describe import camera_sentence
 
         self.assertIn("handheld and nearly still", camera_sentence(scene()))
         flying = scene(cameraMotion="flies low over the treetops")
         flying["camera"]["keyframes"].append({**flying["camera"]["keyframes"][0], "timeSeconds": 2, "position": [0, -2, 3]})
         self.assertEqual(camera_sentence(flying), "The camera flies low over the treetops, in one smooth continuous move.")
-        self.assertEqual(view_words({"position": [0, 0, 8], "lookAt": [0, 5, 0]}), "Seen from high above, looking steeply down.")
-        self.assertEqual(view_words({"position": [0, 0, 1.6], "lookAt": [0, 5, 1.5]}), "")
 
     def test_a_reference_photo_is_drawn_from_every_attribute(self) -> None:
         from describe import reference_prompt

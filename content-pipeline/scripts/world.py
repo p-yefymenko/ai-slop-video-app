@@ -23,7 +23,6 @@ from pipeline_paths import stage_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "prompts.json"
-WHOLE = ("whole",)
 FLOOR_ID = "floor"
 
 Vec3 = tuple[float, float, float]
@@ -93,10 +92,10 @@ def character_state(track: list[dict], time_seconds: float) -> dict:
 
 
 def prop_state(track: list[dict], time_seconds: float) -> dict:
-    """Either held (``heldByCharacterId``) or placed (``locationId`` + ``position``)."""
+    """Placed (``locationId`` + ``position``) or gone (``locationId`` null)."""
     before, after, amount = _segment(track, time_seconds)
     state = dict(before)
-    placed = lambda frame: frame is not None and frame.get("position") and not frame.get("heldByCharacterId")
+    placed = lambda frame: frame is not None and frame.get("position")
     if placed(before) and placed(after) and after.get("locationId") == before.get("locationId"):
         state["position"] = _lerp(before["position"], after["position"], amount)
     return state
@@ -130,28 +129,17 @@ def camera_at(scene: dict, time_seconds: float) -> dict:
 def camera_moves(scene: dict) -> bool:
     """The camera pose differs between the first and last frame of the shot."""
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
-    first, last = camera_at(scene, start), camera_at(scene, finish)
-    moved = lambda a, b: math.dist(a, b) >= 0.02
-    return (
-        moved(first["position"], last["position"])
-        or moved(first["lookAt"], last["lookAt"])
-        or abs(first["verticalFovDegrees"] - last["verticalFovDegrees"]) >= 0.5
-        or abs((last["rollDegrees"] - first["rollDegrees"] + 180.0) % 360.0 - 180.0) >= 0.5
-    )
+    return camera_at(scene, start) != camera_at(scene, finish)
 
 
 @dataclass
 class Mesh:
-    """Schema-space triangles, faces grouped by region so each region draws as one range."""
+    """Schema-space triangles."""
 
     key: str
     vertices: np.ndarray
     faces: np.ndarray
     colors: np.ndarray | None
-    # (region index, first face, face count), in face order.
-    ranges: list[tuple[int, int, int]]
-    # Named local points: "left_hand" and "right_hand" on a character.
-    anchors: dict[str, np.ndarray]
     path: Path | None = None
 
     def __post_init__(self) -> None:
@@ -167,7 +155,6 @@ class Entity:
     mesh: Mesh
     offset: Vec3
     yaw_degrees: float
-    regions: tuple[str, ...]
     # Fire, smoke, glow: the script's ``effects``, never part of the mesh.
     effects: tuple[dict, ...] = ()
 
@@ -198,24 +185,12 @@ class MissingMesh(Exception):
 _MESHES: dict[str, Mesh] = {}
 
 
-def _region_mesh(key: str, vertices: np.ndarray, faces: np.ndarray, colors, region_of_vertex, anchors=None) -> Mesh:
-    face_regions = region_of_vertex[faces[:, 0]] if len(faces) else np.zeros(0, dtype=np.int16)
-    order = np.argsort(face_regions, kind="stable")
-    faces = np.ascontiguousarray(faces[order], dtype=np.uint32)
-    face_regions = face_regions[order]
-    ranges: list[tuple[int, int, int]] = []
-    for region in np.unique(face_regions):
-        hits = np.nonzero(face_regions == region)[0]
-        ranges.append((int(region), int(hits[0]), int(len(hits))))
-    return Mesh(key, np.ascontiguousarray(vertices, dtype=np.float32), faces, colors, ranges, anchors or {})
+def make_mesh(key: str, vertices: np.ndarray, faces: np.ndarray, colors=None) -> Mesh:
+    return Mesh(key, np.ascontiguousarray(vertices, dtype=np.float32), np.ascontiguousarray(faces, dtype=np.uint32), colors)
 
 
-# A held prop sits at the side of the body, at this share of the body's height.
-HAND_HEIGHT_SHARE = 0.45
-
-
-def load_mesh(path: Path, *, body: bool) -> Mesh:
-    """A generated GLB in schema space. A ``body`` gets a hand point on each side, where a held prop goes."""
+def load_mesh(path: Path) -> Mesh:
+    """A generated GLB in schema space."""
     from mesh_io import read_schema_mesh, read_vertex_colors
 
     if not path.is_file():
@@ -232,13 +207,7 @@ def load_mesh(path: Path, *, body: bool) -> Mesh:
         colors = None
     if colors is not None:
         colors = np.ascontiguousarray(colors, dtype=np.float32)
-    regions = np.zeros(len(vertices), dtype=np.int16)
-    anchors = {}
-    if body:
-        low, high = vertices.min(axis=0), vertices.max(axis=0)
-        middle_y, hand_z = (low[1] + high[1]) / 2.0, low[2] + HAND_HEIGHT_SHARE * (high[2] - low[2])
-        anchors = {"right_hand": np.array([high[0], middle_y, hand_z]), "left_hand": np.array([low[0], middle_y, hand_z])}
-    mesh = _region_mesh(key, vertices, faces, colors, regions, anchors)
+    mesh = make_mesh(key, vertices, faces, colors)
     mesh.path = path
     _MESHES[str(path)] = mesh
     return mesh
@@ -256,7 +225,7 @@ def _floor_mesh(size: Vec3) -> Mesh:
         dtype=np.float64,
     )
     faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.uint32)
-    return _region_mesh(f"floor:{width}x{depth}", vertices, faces, None, np.zeros(4, dtype=np.int16))
+    return make_mesh(f"floor:{width}x{depth}", vertices, faces)
 
 
 def asset_dir(show: dict, stage: str, kind: str, entity_id: str, location_id: str | None = None) -> Path:
@@ -303,7 +272,7 @@ def required_meshes(show: dict) -> list[Path]:
 
 def camera_inside(camera: dict, size) -> bool:
     x, y, z = camera["position"]
-    return abs(x) <= size[0] / 2 + 0.05 and abs(y) <= size[1] / 2 + 0.05 and -0.05 <= z <= size[2] + 0.05
+    return abs(x) <= size[0] / 2 and abs(y) <= size[1] / 2 and 0.0 <= z <= size[2]
 
 
 def facing_yaw(position, body_yaw: float, target: Vec3 | None) -> float:
@@ -335,9 +304,6 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
         if target_id in landmarks:
             return tuple(landmarks[target_id]["position"])
         prop = props.get(target_id) or {}
-        holder = prop.get("heldByCharacterId")
-        if holder and here(holder):
-            return tuple(states[holder]["position"])
         if prop.get("locationId") == location_id and prop.get("position"):
             return tuple(prop["position"])
         return None
@@ -348,10 +314,9 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
             Entity(
                 landmark_id,
                 "landmark",
-                load_mesh(mesh_path(show, "landmark", landmark_id, location_id), body=False),
+                load_mesh(mesh_path(show, "landmark", landmark_id, location_id)),
                 tuple(float(v) for v in landmark["position"]),
                 0.0,
-                WHOLE,
                 tuple(landmark.get("effects") or ()),
             )
         )
@@ -363,27 +328,19 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
         people[cid] = Entity(
             cid,
             "character",
-            load_mesh(mesh_path(show, "character", cid), body=True),
+            load_mesh(mesh_path(show, "character", cid)),
             tuple(float(v) for v in state["position"]),
             yaw,
-            WHOLE,
             tuple(show["characters"][cid].get("effects") or ()),
         )
     found.extend(people.values())
     for pid, state in props.items():
-        holder = people.get(state.get("heldByCharacterId") or "")
-        if holder is not None:
-            hand = holder.mesh.anchors.get(f"{state.get('heldInHand') or 'right'}_hand")
-            offset = tuple(float(v) for v in holder.to_world(hand)[0])
-            yaw = holder.yaw_degrees
-        elif state.get("locationId") == location_id and state.get("position") and not state.get("heldByCharacterId"):
-            offset, yaw = tuple(float(v) for v in state["position"]), 0.0
-        else:
+        if state.get("locationId") != location_id or not state.get("position"):
             continue
         effects = tuple(show["props"][pid].get("effects") or ())
-        found.append(Entity(pid, "prop", load_mesh(mesh_path(show, "prop", pid), body=False), offset, yaw, WHOLE, effects))
+        found.append(Entity(pid, "prop", load_mesh(mesh_path(show, "prop", pid)), tuple(float(v) for v in state["position"]), 0.0, effects))
     if camera_inside(camera_at(scene, time_seconds), spatial["sizeMeters"]):
-        found.append(Entity(FLOOR_ID, "floor", _floor_mesh(spatial["sizeMeters"]), (0.0, 0.0, 0.0), 0.0, WHOLE))
+        found.append(Entity(FLOOR_ID, "floor", _floor_mesh(spatial["sizeMeters"]), (0.0, 0.0, 0.0), 0.0))
     return found
 
 
@@ -405,32 +362,13 @@ def effect_entity(host: Entity, index: int) -> Entity:
          [2, 6, 3], [3, 6, 7], [0, 4, 2], [2, 4, 6], [1, 3, 5], [3, 7, 5]],
         dtype=np.uint32,
     )
-    box = _region_mesh(f"effect:{host.id}:{index}:{effect['size']}:{effect['offset']}", corners, faces, None, np.zeros(8, dtype=np.int16))
-    return Entity(f"{host.id}_effect_{index}", "effect", box, host.offset, host.yaw_degrees, WHOLE)
+    box = make_mesh(f"effect:{host.id}:{index}:{effect['size']}:{effect['offset']}", corners, faces)
+    return Entity(f"{host.id}_effect_{index}", "effect", box, host.offset, host.yaw_degrees)
 
 
-def plate_clause(text: str) -> str:
-    """Drop a trailing plate instruction such as 'a single object' or 'no walls'."""
-    import re
-
-    return re.split(r",\s*(?:a single |no )\b", text.strip(), maxsplit=1, flags=re.I)[0].strip(" .")
-
-
-def descriptions(show: dict, scene: dict, kind: str, entity_id: str) -> list[tuple[str, tuple[str, ...]]]:
-    """Words for a landmark, prop, or stretch of empty space (sky, ground, surround).
-
-    A landmark or prop is said only in its own drawn-alone pass; a person's words
-    are ``character_appearance_text``.
-    """
-    if kind == "landmark":
-        appearance = show["locations"][scene["locationId"]]["spatial"]["landmarks"][entity_id]["appearance"]
-        return [(plate_clause(appearance), WHOLE)]
-    if kind == "prop":
-        return [(plate_clause(show["props"][entity_id]["appearance"]), WHOLE)]
-    if kind == "backdrop":
-        backdrop = show["locations"][scene["locationId"]]["backdrop"]
-        return [(plate_clause(backdrop[entity_id]), WHOLE)]
-    return []
+def backdrop_text(show: dict, scene: dict, part: str) -> str:
+    """The script's words for one stretch of the location's empty space (sky, ground, surround)."""
+    return clause(show["locations"][scene["locationId"]]["backdrop"][part])
 
 
 def character_appearance_text(character: dict) -> str:

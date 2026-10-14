@@ -25,8 +25,6 @@ from coords import schema_to_gltf  # noqa: E402
 from mesh_io import (  # noqa: E402
     TRIANGLE_BUDGET,
     box_mesh,
-    cap_holes,
-    drop_thin_side_protrusions,
     face_schema_forward,
     fit_to_size,
     read_schema_mesh,
@@ -54,23 +52,6 @@ class CountingGenerator:
         dest = raw_dir / "model.glb"
         dest.write_bytes(self.cube.read_bytes())
         return dest
-
-
-class UprightTests(unittest.TestCase):
-    def test_a_leaning_body_is_stood_up_without_turning_it(self) -> None:
-        from mesh_io import stand_upright
-
-        rings = [(x, y, z) for z in np.linspace(0, 1.8, 40) for x, y in ((0.2, 0), (0, 0.12), (-0.2, 0), (0, -0.12))]
-        body = np.array(rings, dtype=np.float64)
-        nose = len(body)
-        body = np.vstack([body, [[0.0, 0.2, 1.6]]])  # faces +Y
-        faces = np.array([[i, i + 1, i + 4] for i in range(len(rings) - 5)] + [[nose, nose - 1, nose - 2]])
-        lean = np.radians(12)
-        tilt = np.array([[1, 0, 0], [0, np.cos(lean), -np.sin(lean)], [0, np.sin(lean), np.cos(lean)]])
-        upright = stand_upright(body @ tilt.T, faces)
-        spine = upright[38 * 4] - upright[0]
-        self.assertLess(np.degrees(np.arctan2(np.hypot(spine[0], spine[1]), spine[2])), 1.0)
-        self.assertGreater(upright[nose, 1] - upright[38 * 4:39 * 4, 1].mean(), 0.1, "still faces +Y")
 
 
 class AssetTests(unittest.TestCase):
@@ -174,71 +155,6 @@ class AssetTests(unittest.TestCase):
             [node["inputs"]["vae_name"] for node in texture_vae],
             ["trellis_2_shape_vae_bf16.safetensors", "trellis_2_texture_vae_bf16.safetensors"],
         )
-        small, small_faces = box_mesh((0.01, 0.01, 0.01))
-        opened = small_faces[:-1]
-        capped, capped_faces = cap_holes(small, opened)
-        np.testing.assert_array_equal(capped, small)
-        self.assertEqual(len(capped_faces), len(small_faces))
-        wide, wide_faces = box_mesh((1.0, 1.0, 1.0))
-        _kept, kept_faces = cap_holes(wide, wide_faces[:-1])
-        self.assertEqual(len(kept_faces), len(wide_faces) - 1)
-        slit_points = np.array(
-            [[0.0, 0.0, 0.0], [0.008, 0.0, 0.0], [0.016, 0.0, 0.0], [0.008, 0.004, 0.0]],
-            dtype=np.float64,
-        )
-        slit_faces = np.array([[0, 1, 3], [1, 2, 3]], dtype=np.int64)
-        sealed, sealed_faces = cap_holes(slit_points, slit_faces)
-        np.testing.assert_array_equal(sealed, slit_points)
-        self.assertGreater(len(sealed_faces), len(slit_faces))
-
-    def test_a_thin_side_sheet_is_removed_and_a_wide_body_is_kept(self) -> None:
-        def column(width: float, depth: float, height: float) -> tuple[np.ndarray, np.ndarray]:
-            rings, around = 40, 8
-            vertices = []
-            for z in np.linspace(0.0, height, rings):
-                for index in range(around):
-                    angle = 2.0 * np.pi * index / around
-                    vertices.append([width / 2.0 * np.cos(angle), depth / 2.0 * np.sin(angle), z])
-            points = np.asarray(vertices, dtype=np.float64)
-            faces = []
-            for ring in range(rings - 1):
-                for index in range(around):
-                    a = ring * around + index
-                    b = ring * around + (index + 1) % around
-                    c = a + around
-                    d = b + around
-                    faces.append([a, b, d])
-                    faces.append([a, d, c])
-            return points, np.asarray(faces, dtype=np.int64)
-
-        body, body_faces = column(0.4, 0.25, 1.8)
-        sheet = []
-        for x in np.linspace(-0.9, 0.9, 16):
-            sheet.append([x, 0.0, 1.42])
-            sheet.append([x, 0.01, 1.42])
-        sheet_points = np.asarray(sheet, dtype=np.float64)
-        sheet_faces = []
-        for index in range(0, len(sheet_points) - 2, 2):
-            sheet_faces.append([index, index + 1, index + 2])
-        sheet_faces = np.asarray(sheet_faces, dtype=np.int64) + len(body)
-        vertices = np.vstack((body, sheet_points))
-        faces = np.vstack((body_faces, sheet_faces))
-        colors = np.tile(np.array([[20, 30, 40]], dtype=np.uint8), (len(vertices), 1))
-        cleaned, _faces, cleaned_colors, lost_vertices, lost_triangles = drop_thin_side_protrusions(
-            vertices, faces, colors
-        )
-        self.assertGreater(lost_vertices, 0)
-        self.assertGreater(lost_triangles, 0)
-        self.assertLess(float(cleaned[:, 0].max() - cleaned[:, 0].min()), 0.6)
-        self.assertEqual(len(cleaned_colors), len(cleaned))
-        np.testing.assert_array_equal(cleaned_colors[0], [20, 30, 40])
-        wide, wide_faces = column(0.9, 0.3, 1.8)
-        _kept, kept_faces, _colors, lost_vertices, lost_triangles = drop_thin_side_protrusions(
-            wide, wide_faces, None
-        )
-        self.assertEqual(lost_vertices, 0)
-        self.assertEqual(lost_triangles, 0)
-        self.assertEqual(len(kept_faces), len(wide_faces))
 
     def test_triangle_limit_is_recorded_on_the_landmark(self) -> None:
         generator = CountingGenerator(self.cube)
@@ -399,13 +315,11 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(item.source, "pixal3d")
         vertices, _faces = read_schema_mesh(item.glb)
         np.testing.assert_allclose(vertices.max(axis=0) - vertices.min(axis=0), [1.6, 1.6, 1.6], atol=1e-3)
-        self.assertTrue(item.glb.with_name("model.precleanup.glb").is_file())
         record_path = item.glb.parent / "character.json"
         record = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(record["characterId"], "ada")
         self.assertEqual(record["meshModel"], "pixal3d")
         self.assertEqual(record["facing"], "schema-plus-y")
-        self.assertEqual(record["meshRepair"], "upright-cap-holes")
         self.assertEqual(record["surface"], "vertex-color")
         self.assertIn("amber irises", record["title"])
         np.testing.assert_allclose(face_schema_forward(np.array([[0.2, -0.5, 1.0]])), [[-0.2, 0.5, 1.0]])
