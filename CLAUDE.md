@@ -1,0 +1,69 @@
+# ai-slop-video-app
+
+The goal of `content-pipeline/` is a pipeline that turns any `script.json` into an episode. A good clip for one scene is worth nothing unless the pipeline code made it. Every hour spent must leave the pipeline better for every scene, not one scene better looking.
+
+## Working on the content pipeline
+
+### Code first, render second
+
+- Generation code lives in `content-pipeline/scripts/`: graph builders, prompt builders, and stages in `generate_batch.py`. Each stage is wired to a root `package.json` command. Never build a parallel chain of scratchpad scripts.
+- Render only through pipeline code, by scene number and show, never from hand-picked files. If the code to run it does not exist yet, write that code first.
+- The scratchpad is only for throwaway helpers that render nothing: inspecting a file, extracting frames, measuring something.
+
+### Nothing hardcoded for one scene
+
+Before writing any value, ask: "would this be right for every scene where this condition holds?" If not, it does not go in.
+
+- **No hand-written prompt text.** Every word comes from `script.json`, the 3D scene (`observe`, `world`), or a template in `prompts.json`. When a result is missing something, the fix is one of these:
+  - a general rule in the prompt builder, with its condition (e.g. "a person who is only a soft edge of the frame gets words but no plate");
+  - a fix in `script.json` (blocking, wording);
+  - a template change.
+
+  Never a sentence about one scene's fur or one character's beard.
+- **No per-scene code or values.** No `if scene == N`, no per-scene seeds, strengths or step counts, and no paths to a picked plate or take.
+- **Settings are named constants with a reason**, in one place, the same for every scene. Change one only when the change is meant for all scenes.
+- **Picking by eye is not a step.** When a choice is needed (a plate seed, the best take), code makes it with a check or a deterministic rule. If it can't, flag it to the user as an open problem.
+
+### Every GPU run must answer a question
+
+Before starting anything on the GPU, tell the user in one or two lines:
+
+1. What question it answers.
+2. What changes in the code for each possible outcome. If no outcome changes the code, don't run it.
+3. How long it will take.
+
+Then:
+
+- **Use the cheapest run that answers the question:** a still before a clip, 480p before 720p, one scene before an episode, a short take before a full one.
+- **Don't re-render a finished result at higher quality just to show it.** Final-quality renders come from the integrated pipeline, at the end.
+- **Check with the user before any run over ~15 minutes,** unless they asked for exactly that run.
+- **Stop runs that no longer serve a decision.** Don't leave a long run going when nothing waits on it. Stopping a client script doesn't stop ComfyUI: also POST `/interrupt` and clear `/queue`.
+- **Probes are allowed only when the answer decides a general rule.** A probe tests whether a model can do something (a node, an input, a prompt trick). Say up front that it's a probe, keep it small, never polish it, and turn its outcome into code or a recorded decision right away.
+
+### When a scene fails
+
+1. Name the general cause:
+   - a missing input (3D truth such as depth, or a plate);
+   - a wrong prompt-builder rule;
+   - a script problem;
+   - a model limit.
+2. Fix that cause in code, with the condition under which it applies.
+3. Rerun the earlier scenes that the rule touches, to check for regressions.
+
+Record a model limit as a model limit. Never paper over it with scene-specific words.
+
+### Reporting
+
+- Review every clip fully before reporting: frame strips over the whole clip, with every defect listed.
+- Whenever a result is shown, say plainly what is general and what is still scene-specific or picked by hand.
+- Keep messages short. Don't ask questions that the code or the script can answer.
+
+## Conventions
+
+- **Authored:** `content-pipeline/shows/<id>/script.json`. The schema is `packages/shared/src/script.ts`; validate with `pnpm run content:validate`. Use the `write-script` skill when writing or editing a script.
+- **Generated:** everything goes under `content-pipeline/output/<command>/<show>/`.
+- **Running code:** commands are root `package.json` scripts. ComfyUI-side Python runs with `content-pipeline/.comfyui/.venv`.
+- **Tests:** `pnpm run content:test-spatial`. Add tests for new pure logic: prompt builders, depth encoding, frame counts.
+- **Coordinates:** schema space is Z-up, +Y forward; glTF is Y-up. Convert only in `content-pipeline/scripts/coords.py`.
+- **Separate envs (gitignored):** `content-pipeline/.voice` (Chatterbox) and `content-pipeline/.lipsync`. Free ComfyUI's VRAM (POST `/free`) before starting another GPU process.
+- **Git:** commit only when the user asks.

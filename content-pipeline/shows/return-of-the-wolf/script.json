@@ -391,8 +391,8 @@
               "timeSeconds": 0,
               "locationId": "clearing",
               "position": [
-                0.5,
-                -9.1,
+                0.3,
+                -8.1,
                 0
               ],
               "bodyYawDegrees": 0,
@@ -402,8 +402,8 @@
               "timeSeconds": 37.7,
               "locationId": "clearing",
               "position": [
-                0.5,
-                -9.1,
+                0.3,
+                -8.1,
                 0
               ],
               "bodyYawDegrees": 0,
@@ -676,12 +676,12 @@
             18.1
           ],
           "shot": {
-            "type": "single",
+            "type": "overShoulder",
             "subjects": [
               "adam"
             ],
+            "over": "ben",
             "size": "mcu",
-            "angle": "low",
             "side": "right"
           },
           "performances": {

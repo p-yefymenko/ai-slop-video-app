@@ -14,6 +14,8 @@ build
 Thumbs.db
 content-pipeline/output
 content-pipeline/.comfyui
+content-pipeline/.voice
+content-pipeline/.lipsync
 content-pipeline/__pycache__
 *.pyc
 credentials
