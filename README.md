@@ -10,11 +10,11 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 
 | Stage | Command | Writes |
 | --- | --- | --- |
-| Plates | `content:plates` | `output/plates/<show>/` — one per landmark, prop, and character |
+| Plates | `content:plates` | `output/plates/<show>/` — one per landmark, prop, and character, plus each character's reference photo |
 | Meshes | `content:assets` | `output/assets/<show>/` — one per plate |
 | Previs and script checks | `content:previs` | `output/previs/<show>/<episode>/` — per-scene `blockout.mp4`, guides, observations, plus one episode `blockout.mp4` |
-| Qwen stills | `content:frames` | `output/frames/<show>/<episode>/` |
-| LTX clips | `content:generate` | `output/generate/<show>/<episode>/` |
+| Wan stills | `content:frames` | `output/frames/<show>/<episode>/` |
+| Voices, Wan clips at 24 fps, episode cut | `content:generate` | `output/generate/<show>/<episode>/` |
 
 Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. Previs renders every character, landmark, and prop mesh where the timeline puts it, and fails with a list when the script claims something the camera does not see (a performance for someone off screen, a face seen from behind, a speaker without a visible mouth) or misses someone it does.
 
@@ -52,10 +52,11 @@ Useful flags (all stages accept them; plates and assets ignore `--episode` / `--
 | `--show <id>` | One show |
 | `--episode N` | One episode |
 | `--scene N` | One scene (needs `--episode`) |
-| `--force` | Rebuild that selected scene (needs `--scene`) |
+| `--force` | Rebuild that selected scene even when it is current (needs `--scene`) |
+| `--size 480` / `--size 720` | Stills and clips: 480p drafts (default) or the 720p final look |
 | `--offline` | Plates and assets: do not generate. A missing file fails the build |
 
-Existing files are skipped unless `--force` is set on a selected scene. After a structural script rewrite, archive first:
+A still or clip is skipped while what it was made from is unchanged (its words, size, lines, start still); otherwise it is made again. After a structural script rewrite, archive first:
 
 ```bash
 pnpm run content:archive -- return-of-the-wolf
@@ -108,10 +109,9 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 
 1. `pnpm run content:setup-comfy`
 2. `pnpm run content:models`
-3. Put `LTXV_API_KEY` in `content-pipeline/.env` (copy from `content-pipeline/.env.example`)
+3. `pnpm run content:voice-deps` (the Chatterbox voice env)
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
-5. In that UI, Load `qwen_image_edit_spatial.json` and `ltx_gemma_api.json`, and fix missing nodes or files
 
-`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws previs on the GPU. `content:plates` needs ComfyUI running and the Qwen still stack. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`.
+`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws previs on the GPU. `content:plates` needs ComfyUI running and the Qwen-Image-Edit and Qwen-Image-2512 weights. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`.
 
 Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

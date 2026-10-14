@@ -1,76 +1,57 @@
 #!/usr/bin/env python3
-"""Download LTX video weights plus the Qwen-Image-Edit still-generation stack."""
+"""Download every model the pipeline runs: the Wan 2.2 chain, the character and object pictures, and the meshes.
+
+    download_models.py [<comfy root>]
+
+Each file lands in ComfyUI's ``models/<folder>`` under its own name; one already
+there (at least its expected size) is kept.
+"""
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
-import struct
 import sys
 from pathlib import Path
 
-import requests
-from huggingface_hub import hf_hub_download, hf_hub_url
+from huggingface_hub import hf_hub_download
 
-GGUF_REPO = "unsloth/LTX-2.3-GGUF"
-GGUF_FILE = "distilled-1.1/ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf"
-GGUF_NAME = "ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf"
+WAN = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
+WAN21 = "Comfy-Org/Wan_2.1_ComfyUI_repackaged"
+VACE = "QuantStack/Wan2.2-VACE-Fun-A14B-GGUF"
+QWEN = "Comfy-Org/Qwen-Image_ComfyUI"
+TRELLIS = "Comfy-Org/TRELLIS.2"
+PIXAL3D = "Comfy-Org/Pixal3D"
+GB, MB = 1_000_000_000, 1_000_000
 
-VAE_REPO = "unsloth/LTX-2.3-GGUF"
-VAE_FILE = "vae/ltx-2.3-22b-distilled_video_vae.safetensors"
-VAE_NAME = "ltx-2.3-22b-distilled_video_vae.safetensors"
-AUDIO_VAE_FILE = "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"
-AUDIO_VAE_NAME = "ltx-2.3-22b-distilled_audio_vae.safetensors"
-
-META_REPO = "Lightricks/LTX-2.3"
-META_FILE = "ltx-2.3-22b-distilled-1.1.safetensors"
-STUB_NAME = "ltx-2.3-22b-distilled-api-id.safetensors"
-OLD_STUB_NAMES = ("ltx-2-19b-distilled-api-id.safetensors",)
-
-QWEN_GGUF_REPO = "unsloth/Qwen-Image-Edit-2511-GGUF"
-QWEN_GGUF_FILE = "qwen-image-edit-2511-Q4_K_M.gguf"
-QWEN_ENCODER_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
-QWEN_ENCODER_FILE = "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
-QWEN_ENCODER_NAME = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
-QWEN_VAE_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
-QWEN_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
-QWEN_VAE_NAME = "qwen_image_vae.safetensors"
-QWEN_LORA_REPO = "lightx2v/Qwen-Image-Edit-2511-Lightning"
-QWEN_LORA_FILE = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
-# Stage 2 of LTX: enlarge the low-resolution latent, then refine it in a few steps.
-LTX_UPSCALERS = ("ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors")
-LTX_IC_LORA_REPO = "Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control"
-LTX_IC_LORA_FILE = "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"
-VIDEO_DEPTH_ANYTHING_REPO = "depth-anything/Video-Depth-Anything-Small"
-VIDEO_DEPTH_ANYTHING_FILE = "video_depth_anything_vits.pth"
-VIDEO_DEPTH_ANYTHING_MIN_BYTES = 100_000_000  # ~111 MB
-YUNET_REPO = "opencv/face_detection_yunet"
-YUNET_FILE = "face_detection_yunet_2023mar.onnx"
-# The output checks (verify.py): the face matcher, and torchvision's COCO person detector.
-SFACE_REPO = "opencv/face_recognition_sface"
-SFACE_FILE = "face_recognition_sface_2021dec.onnx"
-
-TRELLIS_REPO = "Comfy-Org/TRELLIS.2"
-TRELLIS_UNET = "diffusion_models/trellis_2_int8_convrot.safetensors"
-TRELLIS_UNET_NAME = "trellis_2_int8_convrot.safetensors"
-TRELLIS_DINO = "clip_vision/dino_v3_vit_l.safetensors"
-TRELLIS_DINO_NAME = "dino_v3_vit_l.safetensors"
-TRELLIS_SHAPE_VAE = "vae/trellis_2_shape_vae_bf16.safetensors"
-TRELLIS_SHAPE_VAE_NAME = "trellis_2_shape_vae_bf16.safetensors"
-PIXAL3D_REPO = "Comfy-Org/Pixal3D"
-PIXAL3D_UNET = "diffusion_models/pixal3d_int8_convrot.safetensors"
-PIXAL3D_UNET_NAME = "pixal3d_int8_convrot.safetensors"
-PIXAL3D_DINO = "clip_vision/dino_v3_L_naf_fp32.safetensors"
-PIXAL3D_DINO_NAME = "dino_v3_L_naf_fp32.safetensors"
-PIXAL3D_TEXTURE_VAE = "vae/trellis_2_texture_vae_bf16.safetensors"
-PIXAL3D_TEXTURE_VAE_NAME = "trellis_2_texture_vae_bf16.safetensors"
-MOGE_REPO = "Comfy-Org/MoGe"
-MOGE_FILE = "geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
-MOGE_NAME = "moge_2_vitl_normal_fp16.safetensors"
-BIREFNET_REPO = "Comfy-Org/BiRefNet"
-BIREFNET_FILE = "background_removal/birefnet.safetensors"
-BIREFNET_NAME = "birefnet.safetensors"
+# (repository, file in it, models folder, smallest plausible size in bytes)
+MODELS = [
+    # Wan 2.2 VACE (stills and takes without a speaker), two experts at Q8.
+    (VACE, "HighNoise/Wan2.2-VACE-Fun-A14B-high-noise-Q8_0.gguf", "diffusion_models", 10 * GB),
+    (VACE, "LowNoise/Wan2.2-VACE-Fun-A14B-low-noise-Q8_0.gguf", "diffusion_models", 10 * GB),
+    # Wan 2.2 S2V (talking takes) and its audio encoder.
+    (WAN, "split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors", "diffusion_models", 10 * GB),
+    (WAN, "split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors", "audio_encoders", 500 * MB),
+    # Shared by every Wan model.
+    (WAN21, "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors", "text_encoders", 5 * GB),
+    (WAN, "split_files/vae/wan_2.1_vae.safetensors", "vae", 200 * MB),
+    # Qwen-Image-2512: character reference photos.
+    ("unsloth/Qwen-Image-2512-GGUF", "qwen-image-2512-Q8_0.gguf", "diffusion_models", 15 * GB),
+    (QWEN, "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "text_encoders", 5 * GB),
+    (QWEN, "split_files/vae/qwen_image_vae.safetensors", "vae", 100 * MB),
+    # Qwen-Image-Edit-2511: the plates meshes are built from (workflows/qwen_asset_plate.json).
+    ("unsloth/Qwen-Image-Edit-2511-GGUF", "qwen-image-edit-2511-Q4_K_M.gguf", "diffusion_models", 10 * GB),
+    ("lightx2v/Qwen-Image-Edit-2511-Lightning", "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", "loras", 100 * MB),
+    # TRELLIS.2 (object meshes) and Pixal3D (character meshes).
+    (TRELLIS, "diffusion_models/trellis_2_int8_convrot.safetensors", "diffusion_models", 5 * GB),
+    (TRELLIS, "clip_vision/dino_v3_vit_l.safetensors", "clip_vision", 1 * GB),
+    (TRELLIS, "vae/trellis_2_shape_vae_bf16.safetensors", "vae", 1 * GB),
+    (PIXAL3D, "diffusion_models/pixal3d_int8_convrot.safetensors", "diffusion_models", 5 * GB),
+    (PIXAL3D, "clip_vision/dino_v3_L_naf_fp32.safetensors", "clip_vision", 1 * GB),
+    (PIXAL3D, "vae/trellis_2_texture_vae_bf16.safetensors", "vae", 800 * MB),
+    ("Comfy-Org/MoGe", "geometry_estimation/moge_2_vitl_normal_fp16.safetensors", "geometry_estimation", 600 * MB),
+    ("Comfy-Org/BiRefNet", "background_removal/birefnet.safetensors", "background_removal", 400 * MB),
+]
 
 
 def cache_dir() -> Path:
@@ -90,132 +71,11 @@ def download(repo_id: str, filename: str, dest: Path, min_size: int) -> None:
     print(dest)
 
 
-def safetensors_header(data: bytes) -> dict:
-    if len(data) < 8:
-        raise RuntimeError("Safetensors header too short")
-    (length,) = struct.unpack_from("<Q", data, 0)
-    end = 8 + length
-    if end > len(data):
-        raise RuntimeError(f"Safetensors header is {length} bytes; fetched {len(data) - 8}")
-    return json.loads(data[8:end].decode("utf-8"))
-
-
-def fetch_bytes(url: str, nbytes: int) -> bytes:
-    headers = {"Range": f"bytes=0-{nbytes - 1}"}
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    with requests.get(url, headers=headers, timeout=120, allow_redirects=True, stream=True) as response:
-        response.raise_for_status()
-        chunks: list[bytes] = []
-        remaining = nbytes
-        for chunk in response.iter_content(64 * 1024):
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-            if remaining <= 0:
-                break
-    return b"".join(chunks)
-
-
-def fetch_official_metadata() -> dict:
-    url = hf_hub_url(repo_id=META_REPO, filename=META_FILE)
-    print(f"Fetching official LTX checkpoint metadata from {META_REPO}/{META_FILE}...")
-    nbytes = 4 * 1024 * 1024
-    data = fetch_bytes(url, nbytes)
-    if len(data) < 8:
-        raise RuntimeError("Safetensors header too short")
-    (length,) = struct.unpack_from("<Q", data, 0)
-    need = 8 + length
-    if need > len(data):
-        data = fetch_bytes(url, need + 1024)
-    header = safetensors_header(data)
-    metadata = header.get("__metadata__") or {}
-    if "encrypted_wandb_properties" not in metadata:
-        raise RuntimeError("Official checkpoint header has no encrypted_wandb_properties metadata")
-    return metadata
-
-
-def write_metadata_stub(dest: Path, metadata: dict) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    header = {
-        "__metadata__": metadata,
-        "api_id_placeholder": {
-            "dtype": "F32",
-            "shape": [1],
-            "data_offsets": [0, 4],
-        },
-    }
-    encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
-    encoded += b" " * ((8 - (len(encoded) % 8)) % 8)
-    dest.write_bytes(struct.pack("<Q", len(encoded)) + encoded + b"\x00\x00\x00\x00")
-    print(f"Wrote Gemma API model-id stub: {dest}")
-
-
 def main() -> None:
     comfy_root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / ".comfyui")
-    models = comfy_root / "models"
-    download(GGUF_REPO, GGUF_FILE, models / "diffusion_models" / GGUF_NAME, 1_000_000_000)
-    download(VAE_REPO, VAE_FILE, models / "vae" / VAE_NAME, 100_000_000)
-    audio_vae = models / "vae" / AUDIO_VAE_NAME
-    download(VAE_REPO, AUDIO_VAE_FILE, audio_vae, 50_000_000)
-    # LTXVAudioVAELoader lists models/checkpoints, not models/vae.
-    audio_vae_ckpt = models / "checkpoints" / AUDIO_VAE_NAME
-    if not audio_vae_ckpt.exists() or audio_vae_ckpt.stat().st_size < 50_000_000:
-        audio_vae_ckpt.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(audio_vae, audio_vae_ckpt)
-        print(f"Copied audio VAE into checkpoints for LTXVAudioVAELoader: {audio_vae_ckpt}")
-    else:
-        print(f"Already present: {audio_vae_ckpt}")
-    download(QWEN_GGUF_REPO, QWEN_GGUF_FILE, models / "diffusion_models" / QWEN_GGUF_FILE, 1_000_000_000)
-    download(QWEN_ENCODER_REPO, QWEN_ENCODER_FILE, models / "text_encoders" / QWEN_ENCODER_NAME, 1_000_000_000)
-    download(QWEN_VAE_REPO, QWEN_VAE_FILE, models / "vae" / QWEN_VAE_NAME, 50_000_000)
-    download(QWEN_LORA_REPO, QWEN_LORA_FILE, models / "loras" / QWEN_LORA_FILE, 100_000_000)
-    download(LTX_IC_LORA_REPO, LTX_IC_LORA_FILE, models / "loras" / LTX_IC_LORA_FILE, 100_000_000)
-    for name in LTX_UPSCALERS:
-        download(META_REPO, name, models / "latent_upscale_models" / name, 100_000_000)
-    vda_dest = models / "videodepthanything" / VIDEO_DEPTH_ANYTHING_FILE
-    download(
-        VIDEO_DEPTH_ANYTHING_REPO,
-        VIDEO_DEPTH_ANYTHING_FILE,
-        vda_dest,
-        VIDEO_DEPTH_ANYTHING_MIN_BYTES,
-    )
-    if vda_dest.is_file():
-        print(f"Video Depth Anything weights: {vda_dest} ({vda_dest.stat().st_size} bytes)")
-    download(TRELLIS_REPO, TRELLIS_UNET, models / "diffusion_models" / TRELLIS_UNET_NAME, 5_000_000_000)
-    download(TRELLIS_REPO, TRELLIS_DINO, models / "clip_vision" / TRELLIS_DINO_NAME, 1_000_000_000)
-    download(TRELLIS_REPO, TRELLIS_SHAPE_VAE, models / "vae" / TRELLIS_SHAPE_VAE_NAME, 1_000_000_000)
-    download(PIXAL3D_REPO, PIXAL3D_UNET, models / "diffusion_models" / PIXAL3D_UNET_NAME, 5_000_000_000)
-    download(PIXAL3D_REPO, PIXAL3D_DINO, models / "clip_vision" / PIXAL3D_DINO_NAME, 1_000_000_000)
-    download(
-        PIXAL3D_REPO,
-        PIXAL3D_TEXTURE_VAE,
-        models / "vae" / PIXAL3D_TEXTURE_VAE_NAME,
-        800_000_000,
-    )
-    download(MOGE_REPO, MOGE_FILE, models / "geometry_estimation" / MOGE_NAME, 600_000_000)
-    download(BIREFNET_REPO, BIREFNET_FILE, models / "background_removal" / BIREFNET_NAME, 400_000_000)
-    download(
-        YUNET_REPO,
-        YUNET_FILE,
-        models / "quality" / YUNET_FILE,
-        100_000,
-    )
-    download(SFACE_REPO, SFACE_FILE, models / "quality" / SFACE_FILE, 10_000_000)
-    import torchvision
-
-    torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.DEFAULT.get_state_dict(progress=True)
-    checkpoints = models / "checkpoints"
-    stub = checkpoints / STUB_NAME
-    write_metadata_stub(stub, fetch_official_metadata())
-    # Old ComfyUI graphs still point at this filename. Same 2.3 model_id bytes so
-    # the Gemma API node keeps working if the UI widget was never updated.
-    for old_name in OLD_STUB_NAMES:
-        old_stub = checkpoints / old_name
-        shutil.copy2(stub, old_stub)
-        print(f"Copied Gemma API stub for leftover UI graphs: {old_stub}")
+    for repo_id, filename, folder, min_size in MODELS:
+        download(repo_id, filename, comfy_root / "models" / folder / Path(filename).name, min_size)
+    # RIFE's weights are fetched by ComfyUI-Frame-Interpolation the first time it runs.
 
 
 if __name__ == "__main__":

@@ -4,13 +4,10 @@
  * is checked by content:previs against the rendered world.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import {
-  BODY_PARTS,
+  INSERT_PARTS,
   SHOT_SIZES,
   SHOT_TYPES,
   type CharacterSpatialKeyframe,
@@ -22,8 +19,6 @@ import {
   type ShowScript,
   type SpatialCameraKeyframe,
 } from "./script";
-
-const BODY_PART_SET = new Set<string>(BODY_PARTS);
 
 export type ScriptIssue = {
   path: string;
@@ -43,67 +38,10 @@ export type ParseResult =
   | { ok: true; script: ShowScript; issues: ScriptIssue[] }
   | { ok: false; issues: ScriptIssue[] };
 
-/**
- * Authored camera travel+rotation warn threshold (Gate 3b / docs/ltx-depth-gate.md).
- * Scene 01 scored 39.47 with follow 0.55 (fail); scenes 11/06 passed with travel ≤4.04
- * and follow ≥0.93. Threshold sits in that gap. Scene 04 scored only 2.44 with weak
- * follow 0.686 — not explained by this score.
- */
-export const CAMERA_TRAVEL_WARN_THRESHOLD = 20;
-
 const SNAKE_ID = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHOW_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const BED_LEVELS = ["present", "faint"] as const;
-
-const PROMPTS_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../content-pipeline/prompts.json",
-);
-
-type SoundLintConfig = {
-  emptyEventsMaxWords: number;
-  musicConflictWords: string[];
-};
-
-function loadSoundLint(): SoundLintConfig {
-  if (!existsSync(PROMPTS_PATH)) {
-    return { emptyEventsMaxWords: 2, musicConflictWords: [] };
-  }
-  try {
-    const prompts = JSON.parse(readFileSync(PROMPTS_PATH, "utf8")) as {
-      soundLint?: { emptyEventsMaxWords?: unknown; musicConflictWords?: unknown };
-    };
-    const lint = prompts.soundLint;
-    const maxWords =
-      typeof lint?.emptyEventsMaxWords === "number" && Number.isFinite(lint.emptyEventsMaxWords)
-        ? Math.max(0, Math.floor(lint.emptyEventsMaxWords))
-        : 2;
-    const words = Array.isArray(lint?.musicConflictWords)
-      ? lint.musicConflictWords
-          .filter((word): word is string => typeof word === "string" && word.trim().length > 0)
-          .map((word) => word.trim().toLowerCase())
-      : [];
-    return { emptyEventsMaxWords: maxWords, musicConflictWords: words };
-  } catch {
-    return { emptyEventsMaxWords: 2, musicConflictWords: [] };
-  }
-}
-
-function wordCount(value: string): number {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
-
-function containsMusicWord(text: string, words: string[]): string | undefined {
-  const lower = text.toLowerCase();
-  return words.find((word) => {
-    const pattern = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    return pattern.test(lower);
-  });
-}
 
 function text(label: string) {
   return z
@@ -286,14 +224,14 @@ const soundSourceSchema = z
   .union(
     [
       z
-        .object({ characterId: text("source.characterId"), part: text("source.part") })
+        .object({ characterId: text("source.characterId") })
         .strict(),
       z.object({ landmarkId: text("source.landmarkId") }).strict(),
       z.object({ propId: text("source.propId") }).strict(),
     ],
     {
       errorMap: () => ({
-        message: "source must be { characterId, part }, { landmarkId }, or { propId }",
+        message: "source must be { characterId }, { landmarkId }, or { propId }",
       }),
     },
   )
@@ -311,11 +249,6 @@ const performanceSchema = z
     action: text("performance action").describe(
       "Visible motion of this person for the whole take, positive and present tense.",
     ),
-    parts: z
-      .array(text("performance part"), {
-        required_error: "parts is required",
-        invalid_type_error: "parts must be an array",
-      }),
     target: text("performance target").optional(),
     expression: text("performance expression").optional(),
   })
@@ -525,12 +458,6 @@ function outsideStage(position: [number, number, number], location: ShowLocation
   return Math.abs(position[0]) > width / 2 || Math.abs(position[1]) > depth / 2 || position[2] < 0;
 }
 
-function checkPartId(issues: ScriptIssue[], path: string, part: string) {
-  if (!BODY_PART_SET.has(part)) {
-    issues.push({ path, message: `unknown part id ${JSON.stringify(part)}` });
-  }
-}
-
 function checkSnakeId(issues: ScriptIssue[], path: string, id: string, label: string) {
   if (!SNAKE_ID.test(id)) {
     issues.push({ path, message: `${label} ${JSON.stringify(id)} must be lowercase snake_case` });
@@ -644,46 +571,6 @@ function checkCameraFrame(
   }
 }
 
-function vecLength(v: readonly [number, number, number]): number {
-  return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-}
-
-function vecSub(a: readonly [number, number, number], b: readonly [number, number, number]): [number, number, number] {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
-
-/** Authored camera travel and rotation across consecutive keyframes. */
-export function cameraTravelScore(scene: ScriptScene): number {
-  const keyframes = scene.camera?.keyframes ?? [];
-  let travel = 0;
-  for (let i = 0; i < keyframes.length - 1; i++) {
-    const a = keyframes[i]!;
-    const b = keyframes[i + 1]!;
-    travel += vecLength(vecSub(b.position, a.position));
-    travel += 0.5 * vecLength(vecSub(b.lookAt, a.lookAt));
-    travel += 0.02 * Math.abs(b.verticalFovDegrees - a.verticalFovDegrees);
-    let roll = ((b.rollDegrees ?? 0) - (a.rollDegrees ?? 0) + 180) % 360;
-    if (roll < 0) {
-      roll += 360;
-    }
-    travel += 0.02 * Math.abs(roll - 180);
-  }
-  return travel;
-}
-
-function cameraTravelWarnMessage(score: number, threshold: number): string {
-  return (
-    `high camera travel+rotation score ${score.toFixed(2)} exceeds warn threshold ${threshold} ` +
-    `(Gate 3b: scene 01 scored 39.47 with follow 0.55; scenes 11/06 passed with travel ≤4.04 and ` +
-    `follow ≥0.93; scene 04 scored only 2.44 with weak follow 0.686 — not explained by this score)`
-  );
-}
-
-// Words that point at a person or thing. In a clip prompt they make the video
-// model show whoever they point at, in frame or not.
-const POINTING_WORDS =
-  /\b(he|him|his|himself|she|her|hers|herself|they|them|their|theirs|themselves|it|its|itself|someone|somebody|anyone|anybody|everyone|everybody)\b/i;
-
 function checkTarget(
   issues: ScriptIssue[],
   path: string,
@@ -717,23 +604,8 @@ function checkTarget(
   }
 }
 
-// Words for something that is not a solid surface. A mesh built from them would
-// turn fire into a solid shape in every depth guide; they belong in `effects`.
-const EFFECT_WORDS = /\b(fire\w*|flames?|flaming|smoke|smoking|smoulder\w*|smolder\w*|steam\w*|sparks?|embers?|mist|fog|glow\w*|burning|ablaze|lightning)\b/i;
-
-function checkSolid(issues: ScriptIssue[], path: string, value: string) {
-  const found = EFFECT_WORDS.exec(value);
-  if (found) {
-    issues.push({
-      path,
-      message: `${JSON.stringify(found[0])} is not a solid surface and would be built into the mesh; describe it in effects`,
-    });
-  }
-}
-
 function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   const issues: ScriptIssue[] = [];
-  const soundLint = loadSoundLint();
   if (source && show.id !== source.showId) {
     issues.push({
       path: "id",
@@ -742,36 +614,17 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
   }
   for (const [characterId, character] of Object.entries(show.characters)) {
     checkSnakeId(issues, `characters.${characterId}`, characterId, "character id");
-    checkSolid(issues, `characters.${characterId}.body`, character.body);
-    character.attributes.forEach((attribute, index) =>
-      checkSolid(issues, `characters.${characterId}.attributes[${index}]`, attribute),
-    );
   }
   for (const [locationId, location] of Object.entries(show.locations)) {
     checkSnakeId(issues, `locations.${locationId}`, locationId, "location id");
-    checkSolid(issues, `locations.${locationId}.look.materials`, location.look.materials);
     for (const [landmarkId, landmark] of Object.entries(location.spatial.landmarks)) {
       const path = `locations.${locationId}.spatial.landmarks.${landmarkId}`;
       checkSnakeId(issues, path, landmarkId, "landmark id");
-      checkSolid(issues, `${path}.appearance`, landmark.appearance);
     }
   }
   for (const [propId, prop] of Object.entries(show.props ?? {})) {
     checkSnakeId(issues, `props.${propId}`, propId, "prop id");
-    checkSolid(issues, `props.${propId}.appearance`, prop.appearance);
-    // One object is written once: worn for the whole show it is part of the
-    // character's look; a prop is a separate mesh the timeline places.
-    const words = propId.split("_");
-    for (const [characterId, character] of Object.entries(show.characters)) {
-      character.attributes.forEach((attribute, attributeIndex) => {
-        if (words.every((word) => new RegExp(`\\b${word}\\b`, "i").test(attribute))) {
-          issues.push({
-            path: `characters.${characterId}.attributes[${attributeIndex}]`,
-            message: `describes prop ${JSON.stringify(propId)}; an object is either part of the character's look (an attribute) or a prop the timeline places, never both`,
-          });
-        }
-      });
-    }
+
   }
 
   const seenEpisodes = new Set<number>();
@@ -836,7 +689,6 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
       }
       checkPerformances(issues, show, scene, scenePath);
       checkShot(issues, show, scene, scenePath);
-      checkSceneSoundWarnings(issues, show, scene, scenePath, soundLint);
       const keyframes = scene.camera?.keyframes ?? [];
       keyframes.forEach((frame, frameIndex) => {
         const path = `${scenePath}.camera.keyframes[${frameIndex}]`;
@@ -845,14 +697,6 @@ function crossCheck(show: ShowScript, source?: ScriptSource): ScriptIssue[] {
         }
         checkCameraFrame(issues, path, frame, start, finish);
       });
-      const travel = scene.camera ? cameraTravelScore(scene) : 0;
-      if (travel > CAMERA_TRAVEL_WARN_THRESHOLD) {
-        issues.push({
-          path: `${scenePath}.camera`,
-          message: cameraTravelWarnMessage(travel, CAMERA_TRAVEL_WARN_THRESHOLD),
-          severity: "warning",
-        });
-      }
     });
   });
   return issues;
@@ -919,72 +763,20 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
     if (!shot.part) {
       issues.push({ path: `${path}.part`, message: "an insert of a character shows one part (hands, eyes, face, ...)" });
     } else {
-      checkPartId(issues, `${path}.part`, shot.part);
+      if (!(INSERT_PARTS as readonly string[]).includes(shot.part)) {
+        issues.push({ path: `${path}.part`, message: `an insert frames one of ${INSERT_PARTS.join(", ")}` });
+      }
     }
   } else if (shot.part !== undefined) {
     issues.push({ path: `${path}.part`, message: "only an insert of a character has part" });
   }
 }
 
-function checkSceneSoundWarnings(
-  issues: ScriptIssue[],
-  show: ShowScript,
-  scene: ScriptScene,
-  scenePath: string,
-  soundLint: SoundLintConfig,
-) {
-  const sound = scene.sound;
-  if ((scene.lines ?? []).length > 0 && sound.bed !== "faint") {
-    issues.push({
-      path: `${scenePath}.sound.bed`,
-      message: `speaking scene should use bed "faint" so dialogue is not buried under the location bed`,
-      severity: "warning",
-    });
-  }
-  sound.events.forEach((event, eventIndex) => {
-    if (wordCount(event.text) <= soundLint.emptyEventsMaxWords) {
-      issues.push({
-        path: `${scenePath}.sound.events[${eventIndex}].text`,
-        message: `event looks empty-ish (${wordCount(event.text)} word(s); describe the audible action)`,
-        severity: "warning",
-      });
-    }
-  });
-  if (sound.music.kind === "none") {
-    const ambience = show.locations[scene.locationId]?.soundscape.ambience ?? "";
-    const hitAmbience = containsMusicWord(ambience, soundLint.musicConflictWords);
-    if (hitAmbience) {
-      issues.push({
-        path: `${scenePath}.sound.music`,
-        message: `music is "none" but location ambience contains ${JSON.stringify(hitAmbience)}`,
-        severity: "warning",
-      });
-    }
-    const hitEvents = containsMusicWord(sound.events.map((event) => event.text).join(" "), soundLint.musicConflictWords);
-    if (hitEvents) {
-      issues.push({
-        path: `${scenePath}.sound.music`,
-        message: `music is "none" but sound.events contains ${JSON.stringify(hitEvents)}`,
-        severity: "warning",
-      });
-    }
-  }
-}
-
 /**
- * References and structure. Who is visible, and whether each part, face, and
- * source is on screen, is answered by content:previs from the render.
+ * References and structure. Who is in the frame is answered by content:previs from the render.
  */
 function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
   const performances = scene.performances ?? {};
-  // The video model sees pixels, not ids. People are placed for it from the
-  // start frame, and gaze comes from lookAtId, so visual text must not name anyone.
-  const namesSomeone = (value: string | undefined) =>
-    Object.keys(show.characters).find((id) => new RegExp(`\\b${id.split("_").join("[ _]")}\\b`, "i").test(value ?? ""));
-  const visualText: [string, string | undefined][] = [
-    [`${scenePath}.motion`, scene.motion],
-    [`${scenePath}.cameraMotion`, scene.cameraMotion],
-  ];
   const things = new Set([
     ...Object.keys(show.characters),
     ...Object.keys(show.props ?? {}),
@@ -995,32 +787,7 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     if (!(characterId in show.characters)) {
       issues.push({ path, message: `unknown character ${JSON.stringify(characterId)}` });
     }
-    visualText.push([`${path}.action`, performance.action], [`${path}.expression`, performance.expression]);
     checkTarget(issues, path, characterId, performance, things);
-    const seen = new Set<string>();
-    performance.parts.forEach((part, partIndex) => {
-      checkPartId(issues, `${path}.parts[${partIndex}]`, part);
-      if (seen.has(part)) {
-        issues.push({ path: `${path}.parts[${partIndex}]`, message: `duplicate part ${JSON.stringify(part)}` });
-      }
-      seen.add(part);
-    });
-  }
-  for (const [path, value] of visualText) {
-    const named = namesSomeone(value);
-    if (named) {
-      issues.push({
-        path,
-        message: `names character ${JSON.stringify(named)}; the video model only sees the frame. Aim the action with target and {target}, and let lookAtId set the gaze`,
-      });
-    }
-    const pronoun = POINTING_WORDS.exec(value ?? "");
-    if (pronoun) {
-      issues.push({
-        path,
-        message: `${JSON.stringify(pronoun[0])} points at someone or something; the video model invents whoever it cannot find in the frame. Describe only this body ("the jaw tightens"), aim at someone in the shot with target and {target}, and let lookAtId set the gaze`,
-      });
-    }
   }
   const [sceneStart, sceneEnd] = scene.timeRangeSeconds;
   (scene.lines ?? []).forEach((line, lineIndex) => {
@@ -1044,14 +811,8 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     const path = `${scenePath}.sound.events[${eventIndex}].source`;
     const source = event.source;
     if ("characterId" in source) {
-      checkPartId(issues, `${path}.part`, source.part);
-      const moves = performances[source.characterId]?.parts ?? [];
-      const speaks = (scene.lines ?? []).some((line) => line.speakerId === source.characterId) && source.part === "face";
-      if (!moves.includes(source.part) && !speaks) {
-        issues.push({
-          path: `${path}.part`,
-          message: `${source.characterId}'s ${source.part} makes this sound, but performances.${source.characterId}.parts does not move it; the video model voices the sound and leaves the part still`,
-        });
+      if (!(source.characterId in show.characters)) {
+        issues.push({ path: `${path}.characterId`, message: `unknown character ${JSON.stringify(source.characterId)}` });
       }
     } else if ("landmarkId" in source) {
       if (!(source.landmarkId in landmarks)) {

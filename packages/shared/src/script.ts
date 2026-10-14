@@ -1,19 +1,18 @@
 /**
  * Authoring JSON for `content-pipeline/shows/<id>/script.json`. One file per show.
  *
- * Screenwriting guidance lives in `.cursor/rules/Short-reel-scripts-writer.mdc`.
- * These comments are renderer semantics only. Shared Qwen/LTX templates live in
+ * Screenwriting guidance lives in `.claude/skills/write-script/SKILL.md`.
+ * These comments are renderer semantics only. Shared word templates live in
  * `content-pipeline/prompts.json`, not in show JSON.
  *
  * The script describes a physical world. Every character, landmark, and prop is
- * a generated mesh placed by the timeline. Who appears in a shot, and what is
- * visible, is never written down: previs renders the world from the scene's
- * camera and checks every on-camera claim (performances, expressions, the
- * speaker, sound sources) against that render.
+ * a generated mesh placed by the timeline. Who appears in a shot is never
+ * written down: previs renders the world from the scene's camera and checks
+ * that everyone with a performance is in the frame.
  */
 
-/** Body parts are the regions of a character mesh. Defined once; previs and stills share it. */
-export const BODY_PARTS = [
+/** The details an insert of a character can frame: a band of their height (content-pipeline/scripts/shots.py). */
+export const INSERT_PARTS = [
   "hair",
   "face",
   "eyes",
@@ -25,7 +24,7 @@ export const BODY_PARTS = [
   "feet",
 ] as const;
 
-export type BodyPart = (typeof BODY_PARTS)[number];
+export type InsertPart = (typeof INSERT_PARTS)[number];
 
 export type ShowCharacter = {
   /** How the episode's name card titles them the first time they speak on screen ("Master Adam"). Never sent to a model. */
@@ -125,10 +124,10 @@ export type SceneMusic =
   | { kind: "none" }
   | { kind: "described"; description: string };
 
-/** What makes a sound. Previs fails when it is not visible in the start frame. */
+/** What makes a sound. */
 export type SoundSource =
-  /** A body part, or wardrobe worn on it. The part must be in that character's performance parts. */
-  | { characterId: string; part: BodyPart }
+  /** A character. */
+  | { characterId: string }
   /** A landmark of this scene's location. */
   | { landmarkId: string }
   /** A prop. */
@@ -240,7 +239,7 @@ export type SceneShot = {
   type: ShotType;
   subjects?: string[];
   over?: string;
-  part?: BodyPart;
+  part?: InsertPart;
   size?: ShotSize;
   /** eye (default) | low (looking up: power) | high (looking down: defeat). */
   angle?: "eye" | "low" | "high";
@@ -264,9 +263,10 @@ export type ScriptScene = {
   /** How an own camera that moves moves, in words for the video model ("flies low over the treetops toward the cliff edge"). Required exactly when it moves. */
   cameraMotion?: string;
   /**
-   * Exactly one entry per character visible at any moment of the shot, no
-   * more: previs renders the shot and fails on a missing or extra entry.
-   * `{}` when nobody is visible.
+   * Who acts in the shot. Everyone here is said to the video model with their
+   * whole look and their action; anyone else in the frame is not named (the
+   * shot's `over` is the shoulder in front). Previs fails when someone here is
+   * never in the frame. `{}` when nobody acts.
    */
   performances: Record<string, ScenePerformance>;
   /**
@@ -294,8 +294,6 @@ export type ScenePerformance = {
    * prompt names it by where the frame shows it.
    */
   target?: string;
-  /** Body parts the action moves; empty when the action is stillness. Each must be on screen at some moment of the shot. */
-  parts: BodyPart[];
   /**
    * The face in the start frame, as visible cues ("jaw set, lips slightly
    * parted"). It is drawn into the still and continued by the clip, so it must

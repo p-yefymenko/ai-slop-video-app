@@ -1,24 +1,19 @@
 const { spawn } = require("node:child_process");
-const fs = require("node:fs");
 const path = require("node:path");
 const { comfyPaths, findComfyPython } = require("./comfy-env.cjs");
 
 const { comfyDir } = comfyPaths();
 const python = findComfyPython();
-const backdropNode = path.join(__dirname, "..", "content-pipeline", "comfy_nodes", "qwen_backdrop.py");
-const customNodes = path.join(comfyDir, "custom_nodes");
-fs.mkdirSync(customNodes, { recursive: true });
-fs.copyFileSync(backdropNode, path.join(customNodes, "qwen_backdrop.py"));
 
 if (!python) {
   console.error("ComfyUI is not set up yet. Run `pnpm run content:setup-comfy` first.");
   process.exit(1);
 }
 
-// No default --reserve-vram: content:frames regressed with it (slower stills).
-// For clips (content:generate) use COMFY_ARGS="--reserve-vram 1.5": without it LTX can spill into shared memory and run ~13x slower.
-// Override any args via COMFY_ARGS (replaces defaults entirely when set).
-const extraArgs = (process.env.COMFY_ARGS || "")
+// The Wan 14B experts are offloaded to RAM on a 16 GB card; reserving 1.5 GB of VRAM keeps
+// ComfyUI from spilling into shared memory, which runs many times slower.
+// COMFY_ARGS replaces these defaults entirely when set.
+const extraArgs = (process.env.COMFY_ARGS || "--reserve-vram 1.5")
   .split(/\s+/)
   .map((part) => part.trim())
   .filter(Boolean);

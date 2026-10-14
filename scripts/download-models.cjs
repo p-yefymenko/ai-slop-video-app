@@ -17,7 +17,7 @@ if (!python) {
   process.exit(1);
 }
 
-for (const folder of ["diffusion_models", "vae", "checkpoints", "text_encoders", "loras", "videodepthanything"]) {
+for (const folder of ["diffusion_models", "vae", "text_encoders", "audio_encoders", "loras"]) {
   fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
 }
 
@@ -29,10 +29,6 @@ for (const name of fs.readdirSync(workflowSrcDir)) {
     fs.copyFileSync(path.join(workflowSrcDir, name), path.join(workflowDestDir, name));
   }
 }
-
-const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
-const nodeDest = path.join(comfyDir, "custom_nodes", "reelshort_ltx");
-fs.cpSync(nodeSrc, nodeDest, { recursive: true });
 
 const result = spawnSync(python, [script, comfyDir], {
   stdio: "inherit",

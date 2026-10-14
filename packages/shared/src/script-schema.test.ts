@@ -4,8 +4,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { ShowScript, Vec3 } from "./script";
-import { CAMERA_TRAVEL_WARN_THRESHOLD, cameraTravelScore, parseShowScript } from "./script-schema";
+import type { ShowScript } from "./script";
+import { parseShowScript } from "./script-schema";
 
 const showPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -70,12 +70,12 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
             storyBeat: "Ada waits.",
             timeRangeSeconds: [0, 4],
             performances: {
-              ada: { action: "stands still, then shifts the weight once", parts: ["legs"] },
+              ada: { action: "stands still, then shifts the weight once" },
             },
             shot: { type: "single", subjects: ["ada"], size: "full" },
             sound: {
               events: [
-                { text: "dress fabric rustles as she shifts her weight", source: { characterId: "ada", part: "legs" } },
+                { text: "dress fabric rustles as she shifts her weight", source: { characterId: "ada" } },
               ],
               bed: "present",
               music: { kind: "none" },
@@ -115,15 +115,6 @@ test("the development show script is valid", () => {
   }
 });
 
-test("cameraTravelScore adds travel, half the aim travel, and lens and roll change", () => {
-  const scene = minimalShow().episodes[0].scenes[0];
-  assert.equal(cameraTravelScore(scene), 0, "a framed shot has no authored travel");
-  const first = { timeSeconds: 0, position: [0, -3, 1.5] as Vec3, lookAt: [0, 0, 1.5] as Vec3, verticalFovDegrees: 40 };
-  scene.camera = { keyframes: [first, { ...first, timeSeconds: 4, position: [30, -3, 1.5], lookAt: [0, 10, 1.5] }] };
-  assert.ok(Math.abs(cameraTravelScore(scene) - 35) < 1e-9);
-  assert.ok(cameraTravelScore(scene) > CAMERA_TRAVEL_WARN_THRESHOLD);
-});
-
 test("rejects a location missing soundscape and a scene missing sound", () => {
   const show = minimalShow();
   delete (show.locations.room as { soundscape?: unknown }).soundscape;
@@ -137,22 +128,6 @@ test("rejects sound.music without an explicit kind", () => {
   const show = minimalShow();
   (show.episodes[0].scenes[0].sound as { music: unknown }).music = {};
   assert.match(messages(show), /sound\.music/);
-});
-
-test("warns when a speaking scene does not use bed faint", () => {
-  const show = speaking(minimalShow());
-  show.episodes[0].scenes[0].sound.bed = "present";
-  const result = parseShowScript(show);
-  assert.equal(result.ok, true);
-  assert.ok(result.issues.some((issue) => issue.severity === "warning" && issue.path.endsWith("sound.bed")));
-});
-
-test("warns when music none conflicts with ambience music words", () => {
-  const show = minimalShow();
-  show.locations.room.soundscape.ambience = "soft choir music under the arches";
-  const result = parseShowScript(show);
-  assert.equal(result.ok, true);
-  assert.ok(result.issues.some((issue) => issue.severity === "warning" && issue.path.endsWith("sound.music")));
 });
 
 test("every landmark has position, size, and appearance", () => {
@@ -262,36 +237,10 @@ test("an own camera that moves says how in words", () => {
   assert.ok(result.ok || !result.issues.some((issue) => issue.path.endsWith("cameraMotion")));
 });
 
-test("rejects a performance for an unknown character or with an unknown part", () => {
+test("rejects a performance for an unknown character", () => {
   const show = minimalShow();
-  show.episodes[0].scenes[0].performances.bram = { action: "waits", parts: ["torso"] };
+  show.episodes[0].scenes[0].performances.bram = { action: "waits" };
   assert.match(messages(show), /performances\.bram: unknown character "bram"/);
-  const odd = minimalShow();
-  odd.episodes[0].scenes[0].performances.ada.parts = ["toes" as "feet"];
-  assert.match(messages(odd), /performances\.ada\.parts\[0\]: unknown part id "toes"/);
-});
-
-test("accepts stillness: a performance that moves no part", () => {
-  const show = minimalShow();
-  const scene = show.episodes[0].scenes[0];
-  scene.performances.ada = { action: "holds still, watching", parts: [] };
-  scene.sound.events = [{ text: "the bench creaks as it settles", source: { landmarkId: "bench" } }];
-  assert.equal(parseShowScript(show).ok, true);
-});
-
-test("rejects a body sound from a part the performance does not move", () => {
-  const show = minimalShow();
-  show.episodes[0].scenes[0].sound.events[0].source = { characterId: "ada", part: "face" };
-  assert.match(messages(show), /ada's face makes this sound, but performances\.ada\.parts does not move it/);
-});
-
-test("lets a speaker's face make a sound", () => {
-  const show = speaking(minimalShow());
-  show.episodes[0].scenes[0].sound.events[0] = {
-    text: "a sharp breath before the word",
-    source: { characterId: "ada", part: "face" },
-  };
-  assert.equal(parseShowScript(show).ok, true);
 });
 
 test("rejects unknown landmark and prop sound sources", () => {
@@ -302,24 +251,6 @@ test("rejects unknown landmark and prop sound sources", () => {
   const report = messages(show);
   assert.match(report, /events\[1\]\.source\.landmarkId: unknown landmark "altar"/);
   assert.match(report, /events\[2\]\.source\.propId: unknown prop "lantern"/);
-});
-
-test("rejects an object written both as an attribute and as a prop", () => {
-  const show = minimalShow({ props: { iron_collar: { appearance: "One iron torc", size: [0.28, 0.22, 0.08] } } });
-  show.characters.ada.attributes.push("a plain iron bridal collar");
-  show.episodes[0].spatialTimeline.propTracks = {
-    iron_collar: [{ timeSeconds: 0, heldByCharacterId: "ada", heldInHand: "left" }],
-  };
-  assert.match(messages(show), /characters\.ada\.attributes\[3\]: describes prop "iron_collar"/);
-});
-
-test("an effect is never part of a solid appearance", () => {
-  const show = minimalShow();
-  show.locations.room.spatial.landmarks.bench.appearance = "One stone fire ring with a bowl of white-gold flame";
-  show.characters.ada.attributes.push("glowing eyes");
-  const report = messages(show);
-  assert.match(report, /landmarks\.bench\.appearance: "fire" is not a solid surface/);
-  assert.match(report, /characters\.ada\.attributes\[3\]: "glowing" is not a solid surface/);
 });
 
 test("accepts effects on a landmark, a prop, and a character", () => {
@@ -363,17 +294,9 @@ test("every shot of people is framed from its subjects; only establishing and ac
   assert.match(messages(show), /camera: an establishing shot needs its own camera/);
 });
 
-test("rejects visual text that names a character", () => {
-  const show = minimalShow();
-  show.episodes[0].scenes[0].performances.ada.action = "stands still, watching Ada's reflection";
-  assert.match(messages(show), /performances\.ada\.action: names character "ada"/);
-});
-
-test("rejects visual text that points at someone, and aims an action only through {target}", () => {
+test("an action is aimed only through {target}", () => {
   const show = minimalShow();
   const ada = show.episodes[0].scenes[0].performances.ada;
-  ada.action = "leans forward over her, glaring down";
-  assert.match(messages(show), /performances\.ada\.action: "her" points at someone or something/);
   ada.action = "glares down at {target}";
   assert.match(messages(show), /uses \{target\}, so the performance needs a target/);
   ada.target = "ada";

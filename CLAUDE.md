@@ -22,7 +22,17 @@ Before writing any value, ask: "would this be right for every scene where this c
   Never a sentence about one scene's fur or one character's beard.
 - **No per-scene code or values.** No `if scene == N`, no per-scene seeds, strengths or step counts, and no paths to a picked plate or take.
 - **Settings are named constants with a reason**, in one place, the same for every scene. Change one only when the change is meant for all scenes.
-- **Picking by eye is not a step.** When a choice is needed (a plate seed, the best take), code makes it with a check or a deterministic rule. If it can't, flag it to the user as an open problem.
+- **Picking by eye is not a step.** When a choice is needed (a plate seed, the best take), code makes it with a deterministic rule from the script. If it can't, flag it to the user as an open problem.
+- **No stopgaps.** Never use or offer a hand-picked file, a leftover from an experiment, or a one-off workaround in place of a general method (e.g. an old recording as a character's voice). Name the general fix and what it takes; that is the only option to present.
+
+### Only robust code: no heuristics
+
+The pipeline uses only authored script data (`shot.subjects`, `shot.over`, `performances`, `lines`, …) and exact geometry (the timeline, the meshes, the camera, the depth render, "any pixel of it is in the frame").
+
+- **No thresholds on pixels or mesh regions** (minimum sizes, visible shares, height bands standing in for body parts).
+- **No detectors on model output** (person or face detectors, cut or drift checks), and no automatic retries driven by them. Outputs are reviewed by the user.
+- **No word-list lints** in validation (pronouns, effect words, music words). Validation checks structure and references only.
+- When a rule seems to need a threshold or a detector, it needs an authored field instead: add it to the schema (`packages/shared/src/script.ts`) and the script.
 
 ### Every GPU run must answer a question
 

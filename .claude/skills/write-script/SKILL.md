@@ -101,15 +101,21 @@ The reference episode, `packages/shared/src/reel-short-content-reference/return-
 ## The script is a physical world
 
 Every character, landmark, and prop is a mesh that the timeline places. You
-never list who is in a shot: previs renders the world from the camera and
-checks the script against it.
+never list who is in a shot: previs renders the world from the camera. Who the
+video model is told about is what you write: the shot's `subjects` and `over`,
+and the `performances`.
 
 - **Coverage is cut from one continuous blocking.** Nobody teleports to
   manufacture a close-up.
-- **Everyone the camera sees needs a performance**, even if it is only "stands
-  motionless, watching".
-- **Anything you say is on screen must be visible in the render:** a moving
-  part, a face, a speaker, a sound source.
+- **Give a performance to everyone the model should get right.** Each
+  performer is described with their whole look and action; anyone else in the
+  frame is not named, and the model draws them as it likes. The shot's `over`
+  is described as the shoulder in front. A performer must be in the frame at
+  some moment (previs fails otherwise), and a `target` in the start frame.
+- **The subjects are the faces.** The reference photos of the shot's `subjects`
+  (or, without subjects, of the performers) go to the model, and it paints
+  their faces; so list as a subject only someone whose face the shot should
+  show, and never the shoulder in front.
 - **Change the view through the blocking or the shot type, never through
   coordinates.**
   - Example: the near shoulder fills the edge of an over-the-shoulder shot →
@@ -128,11 +134,13 @@ checks the script against it.
   - The video model gets where people stand and how big they are; body motion
     and faces come from the words.
   - Keep each shot's motion simple. Keep its camera locked or slow.
-- **Speakers read best in a medium close-up.** A speaker's face must be
-  visible at some moment of the shot. Small faces in a group shot lip-sync
-  poorly.
+- **A speaker with a performance is lip-synced (S2V) from the start still.**
+  Their face should be toward the camera in the start frame, best in a medium
+  close-up; a speaker without a performance is a voice from off screen. Only one
+  face is lip-synced per shot: give a shot one on-screen speaker.
 - **Fire, sparks, glow, steam and mist are `effects`,** never words in a
-  `body`, attribute or `appearance`; validation rejects them there.
+  `body`, attribute or `appearance`: a mesh is built from those words, and a
+  flame in a mesh is a solid shape.
 - **No text is drawn except the subtitles.** Subtitles are burned in from
   `lines`, and a character with a `name` gets a name card the first time they
   speak on screen.

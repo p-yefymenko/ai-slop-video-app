@@ -13,7 +13,6 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from asset_generate import generate_asset_mesh, object_graph, pixal3d_graph, plate_prompt  # noqa: E402
-from generate_batch import latent_size  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     collect_requests,
@@ -140,7 +139,6 @@ class AssetTests(unittest.TestCase):
         custom = pixal3d_graph("plate.png", 7, triangle_budget=12_000)
         custom_decimate = next(node for node in custom.values() if node["class_type"] == "DecimateMesh")
         self.assertEqual(custom_decimate["inputs"]["target_face_count"], 12_000)
-        self.assertEqual(latent_size(graph), (1024, 1024, 1))
         self.assertIn("a stone bench", plate_prompt("  a   stone bench "))
         landmark = plate_prompt("a stone bench")
         self.assertNotIn("movie set", landmark.lower())

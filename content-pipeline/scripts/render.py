@@ -1,9 +1,7 @@
 """Draw entities on the GPU.
 
 ``render`` is one draw of every entity into four buffers at once: shaded clay,
-plate color, which entity and region owns each pixel, and camera-forward depth.
-``coverage`` draws one entity's regions with no depth test, so a region counts
-the pixels it would cover if nothing (not even the same body) were in front.
+plate color, which entity owns each pixel, and camera-forward depth.
 """
 
 from __future__ import annotations
@@ -122,43 +120,6 @@ def camera_basis(camera: dict, height: float = HEIGHT):
     return position, right, up, forward, focal
 
 
-def screen_box(entity, camera: dict, width: int = WIDTH, height: int = HEIGHT) -> tuple[float, float, float, float] | None:
-    """Where the whole entity lands in the frame, in pixels, even past its edges. None if behind the lens."""
-    position, right, up, forward, focal = camera_basis(camera, height)
-    points = entity.to_world(entity.mesh.vertices[:: max(1, len(entity.mesh.vertices) // 200_000)]) - position
-    depth = points @ forward
-    ahead = depth > NEAR
-    if not ahead.any():
-        return None
-    xs = width / 2 + focal * (points[ahead] @ right) / depth[ahead]
-    ys = height / 2 - focal * (points[ahead] @ up) / depth[ahead]
-    return float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())
-
-
-def height_band(entity, camera: dict, window: list[float], width: int = WIDTH, height: int = HEIGHT) -> tuple[float, float]:
-    """The slice of the entity's height that lands inside ``window`` (pixels), as fractions of it, 0 at its feet.
-
-    Every plate shows its whole entity upright from the front, so the same slice
-    of the plate is how the part a close shot shows looks.
-    """
-    position, right, up, forward, focal = camera_basis(camera, height)
-    local = entity.mesh.vertices[:: max(1, len(entity.mesh.vertices) // 200_000)]
-    points = entity.to_world(local) - position
-    depth = points @ forward
-    ahead = depth > NEAR
-    safe = np.where(ahead, depth, 1.0)
-    xs = width / 2 + focal * (points @ right) / safe
-    ys = height / 2 - focal * (points @ up) / safe
-    left, top, right_edge, bottom = window
-    inside = ahead & (xs >= left) & (xs <= right_edge) & (ys >= top) & (ys <= bottom)
-    if not inside.any():
-        return 0.0, 1.0
-    low, high = float(entity.mesh.low[2]), float(entity.mesh.high[2])
-    span = max(high - low, 1e-6)
-    z = local[inside, 2]
-    return max(0.0, (float(z.min()) - low) / span), min(1.0, (float(z.max()) - low) / span)
-
-
 @dataclass
 class Frame:
     clay: np.ndarray  # (H, W, 3) uint8, viewport gray where empty
@@ -266,30 +227,6 @@ class _Renderer:
             frame.depth = _linear_depth(self.depth, width, height)
         return frame
 
-    def coverage(self, entity, camera: dict, width: int, height: int, regions: set[int]) -> tuple[dict[int, int], int]:
-        """Pixels each of these regions covers with no depth test, and pixels those regions cover together."""
-        self._target(width, height)
-        self._camera(camera, width, height)
-        self.cover_fbo.use()
-        self.ctx.viewport = (0, 0, width, height)
-        self.ctx.disable(self.gl.DEPTH_TEST)
-        vao = self._vao(entity.mesh)
-        self._place(entity)
-        self.program["u_entity"].value = 1
-        union = np.zeros(width * height, dtype=bool)
-        found: dict[int, int] = {}
-        for region, first, count in entity.mesh.ranges:
-            if region not in regions:
-                continue
-            self.cover_fbo.clear(0.0, 0.0, 0.0, 0.0)
-            self.program["u_region"].value = region + 1
-            vao.render(self.gl.TRIANGLES, vertices=count * 3, first=first * 3)
-            covered = np.frombuffer(self.cover_fbo.read(components=1), dtype=np.uint8) > 0
-            union |= covered
-            found[region] = int(np.count_nonzero(covered))
-        return found, int(np.count_nonzero(union))
-
-
 def _linear_depth(texture, width: int, height: int) -> np.ndarray:
     raw = texture.read()
     count = width * height
@@ -323,11 +260,6 @@ def render(entities, camera: dict, width: int = WIDTH, height: int = HEIGHT, cro
     ``full=False`` reads back only clay and ids, for frames that are only checked.
     """
     return _renderer().render(entities, camera, width, height, crop, full)
-
-
-def coverage(entity, camera: dict, regions: set[int] | None = None, width: int = WIDTH, height: int = HEIGHT) -> tuple[dict[int, int], int]:
-    every = {region for region, _first, _count in entity.mesh.ranges}
-    return _renderer().coverage(entity, camera, width, height, every if regions is None else regions)
 
 
 def thumbnail(vertices: np.ndarray, faces: np.ndarray, destination: Path, width: int = 256) -> None:

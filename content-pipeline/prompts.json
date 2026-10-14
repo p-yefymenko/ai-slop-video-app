@@ -1,109 +1,61 @@
 {
   "landmarkPlate": "One isolated object on a plain light gray background, cold and unlit: only the object itself, with no ground, sky, or scenery. Ignore the attached blank image and create only this object: {appearance}",
   "landmarkMaterials": "Built of {materials}, like everything else in its place.",
-  "effectDrawn": "Keep picture 1 exactly as it is, every pixel of the object and the pure black around it. Add only its {effects}, glowing, exactly where they belong on it as in picture 2. Add no floor, no light on the background, nothing else.",
   "lookPlate": "Picture 1 is one object. Keep it exactly as it is: the same shape, view, size in the picture, colors, and plain light gray background. Add only this to it: {effects}.",
   "characterPlate": "One adult standing full-body on a plain background, feet visible, arms at their sides, facing the camera. Solid unbroken skin and solid cloth, no holes, no lace, no mesh, no transparent fabric. Ignore the attached blank image and create only this person: {description}",
-  "stillOpening": "Photorealistic vertical 9:16 film frame with real cloth and skin texture.",
-  "stillLight": "The light: {light}, the same on everything in the shot.",
-  "wholeOpening": "A photorealistic vertical 9:16 frame from a live-action film, shot on a cinema camera with an 85mm lens: natural skin with pores, real cloth, soft film grain, a gentle cinematic grade.",
-  "wholeOpeningEmpty": "A photorealistic vertical 9:16 frame from a live-action film, shot on a cinema camera: real textures, soft film grain, a gentle cinematic grade.",
-  "wholeView": {
+  "referencePhoto": "Full-length studio photograph of one person, {body}. Exactly as described, item by item: {attributes}. Standing still and facing the camera, arms relaxed at the sides. The whole figure is in frame, head to toe: both feet stand on the floor near the bottom edge, with a little space above the head and below the feet. Plain pure white seamless studio background, empty and clean. Soft even daylight-balanced light, sharp focus on the face. Photorealistic, a real person, natural skin texture, real fabric, leather and fur.",
+  "referenceNegative": "wrong clothes, extra garments, snow, particles, dust, background objects, cartoon, 3d render, plastic skin, airbrushed, painting, blurry face, deformed hands, cropped body",
+  "vaceNegative": "cut, scene change, new shot, zoom out, extra people, blurry, distorted face, deformed hands, text, watermark",
+  "s2vNegative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+  "shotSentence": "{angle}{size}{over}, cinematic live-action footage, photorealistic.",
+  "shot": {
+    "angles": {
+      "low": "low-angle",
+      "high": "high-angle"
+    },
+    "sizes": {
+      "ecu": "extreme close-up with shallow depth of field",
+      "cu": "close-up with shallow depth of field",
+      "mcu": "medium close-up with shallow depth of field",
+      "medium": "medium shot",
+      "full": "full shot",
+      "wide": "wide shot"
+    },
+    "types": {
+      "insert": "close-up insert",
+      "establishing": "wide establishing shot",
+      "action": "wide shot"
+    },
+    "over": " over another person's shoulder"
+  },
+  "view": {
     "high": "Seen from high above, looking steeply down.",
     "low": "Seen from low down, looking up."
   },
-  "wholeBodyParts": {
-    "feet": "only the feet show, filling the frame",
-    "feet+legs": "only the boots and legs show, filling the frame, no head or chest",
-    "legs": "only the legs show, filling the frame",
-    "legs+waist": "only the waist and legs show, filling the frame",
-    "chest": "only the chest shows",
-    "waist+chest": "only the waist and chest show",
-    "chest+head": "the head and shoulders",
-    "waist+chest+head": "from the waist up",
-    "legs+waist+chest+head": "from the knees up",
-    "head": "only the face, very close"
-  },
-  "backPlate": "Picture 1 is one person. Draw the same person seen from directly behind, turned fully away from the camera: the same build, hair, clothes, colors and materials, full body, standing the same way, feet visible, on the same plain light gray background. Only the back of the head and the back of the clothes show; no face.",
-  "wholeLayout": "Picture 1 is the layout of the shot as depth (brighter is closer): put every person and object exactly where it is there, at that size. Black in picture 1 is open: fill it with the setting described below.",
-  "wholePerson": "{place}: the same person as picture 2, the same face, hair and clothes ({body}){facing}{expression}, in sharp focus. The background is soft with shallow depth of field.",
-  "wholePersonPart": "{place}: the same person as picture 2, exactly as picture 2 shows them, the same face, hair and clothes; {shows}{facing}{expression}, in sharp focus. The background is soft with shallow depth of field.",
-  "wholePersonBehind": "{place}: the person from picture 2, seen from directly behind exactly as picture 2 shows them, facing away from the camera: only the back of the head and the back of the clothes show, no face ({body}).",
-  "wholeFacing": {
-    "camera": "facing the camera",
-    "three": "turned three-quarters, looking off to the frame {side}",
-    "profile": "in profile, looking to the frame {side}",
-    "away": "facing away from the camera"
-  },
-  "wholeOtherNear": "{place}, in the near foreground: the back of another person's head and shoulder, very large, blurred and out of focus{dressed}.",
-  "wholeOtherDressed": ", dressed like the person in picture {n} seen from behind",
-  "wholeOtherFar": "{place}, farther away: {who}, small in the distance.",
-  "wholeOtherFarSeen": "{place}, farther away: the person from picture {n}, small in the distance.",
-  "wholeThing": "Where the depth shows it: {appearance}.",
-  "wholeBackdrop": {
-    "sky": "Above: {text}.",
-    "ground": "Solid dry ground underfoot, from the bottom of the frame to where it ends: {text}.",
-    "surround": "Beyond: {text}."
-  },
-  "wholeNobody": "Nobody is in the frame.",
-  "wholeNobodyElse": "Nobody else is in the frame.",
-  "behindDepthRatio": 1.5,
-  "plateFaceMinPixels": 1500,
-  "onScreenMinPixels": 50,
-  "visibleMinShare": 0.25,
-  "endStill": false,
-  "verifyAttempts": 3,
-  "holdStill": "stands still, watching, the body unmoving",
-  "ltxStartStrength": 1.0,
-  "ltxIcLoRAStrength": 1.0,
-  "ltxSpatialUpscale": "x2",
-  "controlDepth": "depthanything",
-  "depthAnything": {
-    "weights": "video_depth_anything_vits.pth",
-    "inputSize": 518,
-    "precision": "fp16"
-  },
-  "cameraTravelWarnThreshold": 20,
-  "sceneRenderOptions": {},
-  "sceneVideo": "Continue directly from this image as the exact first frame. Preserve its {keep}set, composition, and lighting. Use one continuous take. Animate only the motion, performance, camera, dialogue, and sound described here: {action}",
-  "sceneLine": "{person} says, {delivery}, the lips moving naturally with the words: \"{line}\"",
-  "sceneLineOffScreen": "{voice} from off screen says, {delivery}: \"{line}\"",
-  "sceneLineAt": "At {seconds} seconds, {line}",
-  "sceneLineThen": "Then {line}",
-  "scenePerson": "{place}, {body}",
-  "scenePerformance": "{person}: {action}.",
-  "scenePerformanceExpression": "Face: {expression}.",
-  "sceneMotion": "{motion}.",
-  "sceneEffects": "Moving all through the take: {effects}.",
-  "sceneCameraHeld": "The camera is handheld and nearly still, with a slight natural drift, holding the same framing for the whole take.",
-  "sceneCameraMotion": "The camera {motion}, in one smooth continuous move.",
-  "sceneCameraMoves": {
+  "cameraHeld": "The camera is handheld and nearly still, holding the same framing for the whole take.",
+  "cameraMotion": "The camera {motion}, in one smooth continuous move.",
+  "cameraMoves": {
     "pushIn": "The camera slowly pushes in.",
     "pullOut": "The camera slowly pulls back.",
     "tiltUp": "The camera starts low on the feet and tilts slowly up the body to the face, then holds on the face."
   },
-  "sceneSound": "{label} {bedPhrase} {spacePhrase} {voicesPhrase} {eventsPhrase} {musicPhrase}",
-  "sceneSoundLabel": "Sound.",
-  "sceneSoundBedPresent": "{ambience}.",
-  "sceneSoundBedFaint": "Faint under the scene, {ambience}.",
-  "sceneSoundSpace": "{space}.",
-  "sceneSoundEvents": "{events}.",
-  "sceneSoundMusicNone": "No music plays.",
-  "sceneSoundMusicDescribed": "{description}.",
-  "episodeLoudnessTargetLufs": -16,
-  "soundLint": {
-    "emptyEventsMaxWords": 2,
-    "musicConflictWords": [
-      "music",
-      "melody",
-      "song",
-      "score",
-      "choir",
-      "orchestra",
-      "soundtrack",
-      "theme",
-      "fanfare",
-      "hymn"
-    ]
-  }
+  "personFace": "{place}: {look}{facing}.",
+  "personNear": "{place}, close to the camera and soft out of focus: the back of another person's head and shoulder, seen from behind ({look}).",
+  "personEnters": "Coming into the frame: {look}.",
+  "facing": {
+    "camera": "facing the camera",
+    "three": "seen in three-quarter view, looking off to the frame {side}",
+    "profile": "in profile, looking to the frame {side}",
+    "away": "facing away from the camera"
+  },
+  "expression": "Face: {expression}.",
+  "speaking": "Speaking {delivery}, the head moving naturally with the words.",
+  "effects": "Moving all through the take: {effects}.",
+  "backdrop": {
+    "sky": "Above: {text}.",
+    "ground": "Underfoot: {text}.",
+    "surround": "Behind: {text}."
+  },
+  "light": "{light}.",
+  "episodeLoudnessTargetLufs": -16
 }

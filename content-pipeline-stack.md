@@ -2,39 +2,38 @@
 
 A show is one authored JSON file. The pipeline turns that file into a vertical episode on a local GPU. The script describes a physical world: every character, landmark, and prop is a generated mesh, placed by the timeline. Previs renders that world from each shot's camera, and the script is checked against the render. Image and video models only paint and animate what the render shows.
 
-Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen, TRELLIS.2, Pixal3D, and LTX run through ComfyUI at `http://127.0.0.1:8188`.
+Commands live in the root `package.json` (`content:*` and `view`). Python runs through those scripts. Qwen-Image, TRELLIS.2, Pixal3D, Wan 2.2, and RIFE run through ComfyUI at `http://127.0.0.1:8188`; Chatterbox runs in its own env (`content-pipeline/.voice`).
 
-Depth-control research notes (not the live path): [docs/ltx-depth-control-spike.md](docs/ltx-depth-control-spike.md), [docs/ltx-depth-gate.md](docs/ltx-depth-gate.md).
+The video model is given as little as possible: the more it generates on its own, the more natural the take. The 3D scene supplies only what a shot has proved it needs (today: a depth video for the framing, and a reference photo for each face the shot shows), and each such input says when it applies.
 
 ## Machine
 
-Generation is offline, on the GPU machine (an RTX 5070 Ti, 16GB). CUDA 12.8 PyTorch is installed into the ComfyUI virtualenv so Blackwell cards work. Qwen, the mesh models, Depth Anything, and LTX are never resident together: each stage unloads idle weights before the next one starts. LTX peak VRAM on the depth-control path is about **15.8 GB**.
+Generation is offline, on the GPU machine (an RTX 5070 Ti, 16 GB; 34 GB RAM). CUDA 12.8 PyTorch is installed into the ComfyUI virtualenv so Blackwell cards work. Each stage unloads idle weights (`/free`) before the next one starts; the voice step frees ComfyUI's VRAM before Chatterbox loads. The Wan 14B experts do not fit the card at Q8 and are offloaded to RAM, about 30 s a step at 480p.
 
-Text for LTX is encoded by the LTX Gemma API (`LTXV_API_KEY` in `content-pipeline/.env`). That call is free. Video denoising stays local. The key is injected into the graph at run time and is not stored in the workflow JSON.
-
-`pnpm run content:comfy` starts ComfyUI with listen `127.0.0.1:8188` only. Set `COMFY_ARGS` to replace those defaults (for example `COMFY_ARGS=--reserve-vram 2`). On this machine `--reserve-vram 2` reduced LTX shared-memory spill but slowed Qwen stills, so it is **not** the default. For clips, start ComfyUI with `COMFY_ARGS=--reserve-vram 1.5`: LTX peaks within a few hundred MB of the 16 GB card, and when the desktop takes a little more (a video wallpaper, after a reboot) the second clip of a run spills into shared memory and samples about 13 times slower (238 s per step instead of 18; the GPU shows 99% load at 64 W). With the reserve, clips run back to back at normal speed. A video prompt still running after `VIDEO_TIMEOUT_SECONDS` (900) is interrupted and counts as a failed try.
+`pnpm run content:comfy` starts ComfyUI on `127.0.0.1:8188` with `--reserve-vram 1.5`, which keeps it from spilling into shared memory (many times slower). `COMFY_ARGS` replaces those arguments entirely.
 
 ## What is authored
 
 | Path | Role |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. |
-| `content-pipeline/prompts.json` | Shared Qwen and LTX templates and renderer numbers: `visibleMinShare` and one minimum size per check: `onScreenMinPixels` (on screen: needs a performance, can move, can make a sound), `behindDepthRatio`, `endStill`, `ltxStartStrength`, `ltxIcLoRAStrength`, `controlDepth`, `depthAnything`, `sceneRenderOptions`, the `scene*` LTX templates, `soundLint`, and `episodeLoudnessTargetLufs`. Not show content. |
-| `content-pipeline/workflows/*.json` | ComfyUI graphs the batch scripts fill in and post to `/prompt`. |
+| `content-pipeline/prompts.json` | Every word template the models get (plates, reference photos, the Wan prompt pieces, the negatives) and the episode loudness (`episodeLoudnessTargetLufs`). Not show content. |
+| `content-pipeline/scripts/wan.py` | The Wan chain's graphs and every model setting (steps, CFG, shift, strength, sizes, frame rates), one named constant each, the same for every scene. |
+| `content-pipeline/workflows/qwen_asset_plate.json` | The one stored ComfyUI graph: the mesh plates. Every other graph is built in Python. |
 
 ### The world
 
 Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `content-pipeline/scripts/coords.py` is the only converter.
 
 - **Entities.** A character (`body`, `attributes`, `heightMeters`), a landmark (`position`, `size`, `appearance`, per location), and a prop (`appearance`, `size`) are all the same thing: one generated, plate-colored mesh, fitted into its size, with named regions. A character's regions are body parts; anything else has one region, `whole`. A whole place seen from far away (a hanging citadel) is one landmark the size of the location.
-- **Location look.** Each location has `look.materials` and `look.light`, said once. Every landmark's plate adds `materials` (`landmarkMaterials`), so the objects of one place share one material language; every pass of a still there adds `light` (`stillLight`), so things drawn alone are lit alike. A landmark's `appearance` gives shape and parts.
-- **Effects.** Fire, smoke, steam, sparks, and glow are never part of a mesh: in a depth guide they would be a solid shape, and the still and the video would keep them solid. Any entity may list `effects`, each a box (`size`, `offset` from the entity's base, turned with it) and its own `appearance`. Validation rejects effect words (flame, fire, smoke, glow, …) in an `appearance`, `body`, `materials`, or attribute. An effect is never rendered into a guide or collided with; for the checks its box hides what is behind it. In a still it is added onto its host's own drawing on black, guided by `look.png` (the plate with the effects added, made once, so the same fire looks the same in every shot); only what that pass adds is light, and it is added to the shot as light.
+- **Location look.** Each location has `look.materials` and `look.light`, said once. Every landmark's plate adds `materials` (`landmarkMaterials`), so the objects of one place share one material language; every Wan prompt there ends with `light`.
+- **Effects.** Fire, smoke, steam, sparks, and glow are never part of a mesh: in a depth video they would be a solid shape, and the video would keep them solid. Any entity may list `effects`, each a box (`size`, `offset` from the entity's base, turned with it) and its own `appearance`. Validation rejects effect words (flame, fire, smoke, glow, …) in an `appearance`, `body`, `materials`, or attribute. An effect is never rendered into the depth video or collided with. The Wan prompt names the effects the start frame shows, so the video makes them.
 - **Shots.** Every scene declares `shot`: what it shows, as one of a closed set of types (`single`, `group`, `overShoulder`, `insert`, `establishing`, `action`) with its subjects, `size` (ecu … wide), `angle` (eye, low, high), `side` (front, left, right), and `move` (static, pushIn, pullOut, tiltUp: the same place, turning from the feet up to the framing). An own camera that moves says how in `cameraMotion`, the words the clip prompt uses. For every shot of people the camera is computed from the blocking (`shots.py`, when the show is loaded): a band of the subject's height fills the frame, seen along their gaze, so a shot frames its subject by construction and nobody types camera coordinates. Only `establishing` (required) and `action` (optional) set their own `camera`. Validation enforces each type's subjects and sizes.
 - **Timeline.** Every character and every prop has a track in every episode, starting at 0. A keyframe puts it in a location at a position, or off stage (`locationId: null`). A prop is held (`heldByCharacterId`, `heldInHand`) or placed. A character's body faces `lookAtId` when set, else `bodyYawDegrees`.
 - **Presence.** Who is in a shot is never written down. `world.entities_at` lists everything whose track puts it in the scene's location at that moment. Nobody despawns.
-- **Visibility.** `observe.observe` renders one moment and measures, per entity and region, `visible` (pixels that are the front surface) and `extent` (pixels the region would cover with nothing in front, not even the same body). There are two tests for two jobs. **In shot** (`observe.in_shot`): any pixel in the frame. Everything in shot is drawn into the still, with no size cutoff, so no words ever have to find their own place in a picture. **Visible** (`observe.visible`): `visible ≥ minimum` and `visible ≥ visibleMinShare × extent`, where each check has its own minimum: on screen at all (`onScreenMinPixels`). A face seen from behind covers its full extent but shows a sliver, so it is not visible. Only the checks below use it.
+- **In shot.** `observe.observe` renders one moment and lists, per entity, its pixels in the frame, its mean screen x, and its median distance. An entity is in shot when any pixel of it is (`observe.in_shot`); there are no size or visibility thresholds anywhere.
 
-`pnpm run content:validate` checks every show script's shape and references (TypeScript, zod). Every `content:*` stage runs it first and stops on an error. It does not decide what is visible; previs does. A high authored camera travel+rotation score (threshold **20**) and sound lint print warnings and do not fail.
+`pnpm run content:validate` checks every show script's shape and references (TypeScript, zod). Every `content:*` stage runs it first and stops on an error. It checks structure and references only (ids, times, keyframe order, each shot type's subjects and sizes, `{target}` use); it reads no words.
 
 ## Stages
 
@@ -43,20 +42,22 @@ Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `c
 ```text
 script.json
     │
-    ├─ content:plates      Qwen-Image-Edit-2511          one plate per landmark, prop, character
-    ├─ content:assets      TRELLIS.2 / Pixal3D           one mesh per plate
-    ├─ content:previs      moderngl                      render, guides, observations, script checks
-    ├─ content:frames      Qwen-Image-Edit-2511          scene start stills
-    └─ content:generate    Depth Anything → LTX-2.3      control depth + scene clips + episode cut
+    ├─ content:plates      Qwen-Image-Edit-2511 / -2512          one plate per landmark, prop, character; a reference photo per character
+    ├─ content:assets      TRELLIS.2 / Pixal3D                   one mesh per plate
+    ├─ content:previs      moderngl                              render, guides, observations, script checks
+    ├─ content:frames      Wan 2.2 VACE                          scene start stills
+    └─ content:generate    Chatterbox → Wan S2V or VACE → RIFE   voice, scene clips at 24 fps, episode cut
 ```
 
-Plates, meshes, stills, and clips skip files already on disk. One selected still or clip is rebuilt with `--force`. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show's generated files aside.
+Plates and meshes skip files already on disk. A still, a voice track, or a clip is made again when what it was made from changed (its words, its size, its lines, the still under a talking take: each output's `inputs/<name>/log.json` records them), and is otherwise skipped; `--force` remakes one selected scene anyway. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show's generated files aside.
 
-### 1. Plates — Qwen-Image-Edit-2511
+### 1. Plates — Qwen-Image-Edit-2511, and reference photos — Qwen-Image-2512
 
 `content:plates` draws and stops. ComfyUI must be running. A landmark or prop is one isolated object (`landmarkPlate`). A character is one full-body plate from `body` plus every attribute (`characterPlate`). Landmarks and props that share appearance and size are drawn once. An entity with `effects` also gets `look.png`: its reviewed plate with the effects added (`lookPlate`). The mesh is built from `plate.png` only. Output: `output/plates/<show>/<location>/<landmark>/`, `.../props/<prop>/`, `.../characters/<character>/`.
 
 Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0.
+
+**Reference photos.** Each character also gets `reference.png`, the picture the video model knows them by: Qwen-Image-2512 (Q8 GGUF, 50 steps, CFG 4, euler, AuraFlow shift 3.1, 928×1664), a full-length studio photo on pure white from `body` and every attribute, item by item (`referencePhoto`, `referenceNegative`). Qwen-Image-Edit's plates follow a description less closely and look less real. One photo per character, at a seed fixed by their words; it is drawn again when the words change, and reviewed like every plate. `voice.wav` beside it, when present, is the character's cast voice (stage 5).
 
 ### 2. Meshes — TRELLIS.2 and Pixal3D
 
@@ -71,113 +72,81 @@ Both remove the background with BiRefNet, condition with DINOv3, and run the sha
 
 ### 3. Previs — no diffusion model
 
-`content:previs` needs every mesh the script names and stops with the list of missing ones. Per shot it samples the timeline at 8 fps. Every sample is measured for the checks; only the start and end samples also read back depth and plate color and label the empty space, because only they become guides. Each sample is one GPU draw of every entity into clay, plate color, entity/region ids, and depth (`render.py`), plus a coverage draw for each region large enough to matter. A floor is drawn as ground when the camera is inside the location's bounds.
+`content:previs` needs every mesh the script names and stops with the list of missing ones. Per shot it samples the timeline at 8 fps. Each sample is one GPU draw of every entity into clay, plate color, entity ids, and depth (`render.py`). A floor is drawn as ground when the camera is inside the location's bounds.
 
-Every scene is rendered even when one fails; the stage ends with the full list of mismatches. The checks (`checks.py`), all with the one visibility measurement:
+Every scene is rendered even when one fails; the stage ends with the full list of mismatches. The checks (`checks.py`) are exact facts only:
 
-- anyone on screen at any sample has a performance (`parts: []` for stillness), and every performance belongs to someone on screen;
-- every part a performance moves is on screen at some moment of the shot;
-- an `expression` is only on a face visible in the start frame (the speaker must have one; zod checks that);
-- a performance's `target` (what `{target}` in its action points at) is visible in the start frame, so the clip prompt can name it by where the frame shows it;
-- every on-screen speaker (a `lines` speaker with a performance) has their face visible at some moment of the shot, and an expression when it is visible in the start frame; a speaker without a performance is a voice from off screen. Every `sound.events[].source` is on screen at some moment;
-- the camera is never inside a mesh.
+- the camera is never inside a mesh;
+- everyone with a performance is in the frame at some moment of the shot;
+- a performance's `target` (what `{target}` in its action points at) is in the start frame, so the prompt can name it by where the frame shows it.
 
-Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `blockout.mp4` (8 fps), `start.png`, `end.png`, `scene.json` (every entity's mesh and pose per sample, for the viewer), and `guides/`.
+Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `blockout.mp4` (8 fps), `start.png`, `end.png` (clay), `scene.json` (every entity's mesh and pose per sample, for the viewer), and `guides/`: `start_observation.json` and `end_observation.json` (per entity: pixels in the frame, screen x, distance; sky, ground, and surround pixels; the effects in the frame) and `previs_record.json` (the check errors and a digest of everything previs read, so an unchanged scene is not rendered again).
 
-| Guide (`start_*` and `end_*`) | What it is |
-| --- | --- |
-| `depth` | Camera-forward depth. Near is bright, sky black. The ground runs on past the floor to the horizon at its own depth, so the horizon is where the camera puts it and the ground past the floor is never empty space. The shading spans the meshes' depths; farther ground is the darkest surface. |
-| `edges` | Where depth jumps or a surface meets empty space. |
-| `color` | Every entity in flat plate colors, empty space in the location's flat sky, ground, and surround colors. |
-| `drawn_<id>_depth`, `_edges`, `_color` | One person, prop, or landmark in shot, drawn alone: the shot camera magnified onto a window around the whole entity, so pose and turn are the shot's and it is always drawn whole, even when the frame edge cuts it (the window may run past the frame). Only an entity bigger than the frame gets a frame-sized window over the part in view, so a drawing is only ever scaled down into the shot. |
-| `drawn_<id>_shown` | Where the shot shows it: its rendered silhouette, grown 4 px and softened, minus anything closer (the floor covers nothing). A drawing can land only here. |
-| `drawn_<id>_effects` | Only for an entity with effects in shot: where the shot shows its effect boxes, grown 8 px and softened, minus anything solid in front (its own near rim too). Their light is added only here. |
-| `drawn_<id>_whole_depth`, `_edges`, `_color` | Only when an entity's effects are in shot but the entity is not (flames rising into the frame from a bowl below it): the whole entity and its effects in an unclamped window, the base its effects are added onto (`wholeCrop` in the observation). An entity in shot gets its effects on its own sharp drawing instead. A whole window over `WHOLE_MAX_SCALE` (4) frames tall gives no usable base, and the effects are not shown (nor named to LTX). |
-| `start_people`, `clip_people` | Where the 3D scene has people: in the start frame grown 16 px (for the still), and in any sample of the shot grown 96 px (acting room, for the clip). The output checks compare against these. |
-| `observation.json` | Per entity, region pixels `[visible, extent]`, screen x, depth, each drawn entity's crop window, and `band`: the slice of its height inside that window (0 at its feet). |
-| `clay_24fps.mp4` | Clay at LTX size and rate, only for depth-controlled shots. Input to Depth Anything. |
-| `control_depth.mp4` | Written by `content:generate`: Depth Anything on `clay_24fps.mp4`. |
+### 4. Scene stills — Wan 2.2 VACE
 
-### 4. Scene stills — Qwen-Image-Edit-2511
+`content:frames` runs previs for each scene first, unless `guides/previs_record.json` shows the guides were made from the same script, meshes, settings, and previs code, and stops on a mismatch. The still is the scene's first frame: a talking take starts from it, and the stills are reviewed before any clip is made.
 
-`content:frames` runs previs for each scene first, unless `guides/previs_record.json` shows the guides were made from the same script, meshes, settings, and previs code, and stops on a mismatch.
+**Model.** Wan 2.2 VACE Fun A14B (QuantStack Q8 GGUF), its two experts as ComfyUI's template runs them: 20 steps, CFG 3.5, shift 8, euler, the high-noise expert for the first 10 steps and the low-noise expert for the rest (`wan.vace_graph`). The few-step Lightning LoRAs flattened the light and the acting, so every Wan pass runs at full steps.
 
-**One face, no effects: one pass** (`drawn_whole`, `render_whole_still`). The still is about one person: the shot's subject when in shot, else the one face, else the biggest figure. Anyone else in it shows no face (a shoulder in the foreground, someone seen from behind) and is said in words only (`wholeOtherNear`, `wholeOtherFar`). Pictures: the `solids` guide (depth of the landmarks and props, and each person as a flat silhouette at their own distance; the ground's smooth flat ramp would be drawn as a smooth flat surface, still water or sand, whatever the words say, and the clay's face relief would be drawn into the face) for the layout, and the person's plate (cut by `plate_slice`) for who they are. Words (`whole_prompt`): `wholeOpening` (a live-action film frame, 85mm, natural skin, film grain), `wholeLayout` (black is open, filled from the words), the person by place with `body`, attributes, how they are turned to the camera (`facing_words` from their gaze: facing the camera, three-quarters, profile, away), and expression (`wholePerson`; `wholePersonPart` when the shot shows only part of them, which names no clothes and leaves how they look to the cut plate, since words for boots in a close-up make the model draw the whole person small; `wholePersonBehind` when their face is not visible), each landmark and prop in shot in words only (`wholeThing`: shown an object's plate, the model pastes that picture in), each stretch of the backdrop in shot by where it is (`wholeBackdrop`: above, underfoot, beyond), the location's `light`, and that nobody else is there. One pass keeps one person true to their plate and draws a far more natural shot than pasted pieces; with two faces it mixes up their clothes and copies faces, so those shots use the passes below. Every still is also checked for extra faces: no more than the 3D scene shows (`verify.face_count`), since a person drawn over a person is one person to a mask.
+**A still is the first frame of a short take** (`STILL_FRAMES`, 9 frames): a one-frame take ignores the control video and copies the reference's layout.
 
-**Two or more people, or effects: drawn in passes** with `workflows/qwen_image_edit_spatial.json` (768×1360, 4 steps, CFG 1, AuraFlow shift 3.1, denoise 1.0, from noise, the four-picture `TextEncodeQwenBackdrop` encoder):
+**Inputs** (`shot_inputs.py`), the least that does the job:
 
-1. **One pass per person, prop, and landmark in shot**, however little of it shows. Pictures: its depth, colors, and edges (the shot camera magnified onto its window), plus its plate as the appearance reference, cut to the same slice of its height the window shows (`plate_slice` from `band`: a face close-up gets the plate's head and shoulders, not a small figure in a whole-body picture). Words: only its own, plus the location's `light`. A person gets `body`, every attribute, and their expression; a prop or landmark its appearance. Solid parts only. Nothing borrows another's description, and the drawing has at least the resolution the shot needs. The same pass also writes the drawing's soft outline: BiRefNet on the result, with everything outside the mesh's own outline in its depth guide (grown `REGION_GROW_PIXELS`, 16) painted over in the drawing's own background color first (its median outside that outline, so no new edge appears that could be taken for part of the subject). Background removal keeps the most prominent subject, and the model may draw more than the mesh asks for (a whole person beside the arm that is in shot); only the part where the mesh is can be the subject. An entity with effects in shot gets a second pass: its own drawing cut out onto black (drawn again whole, in its whole window, when only the effect is in shot), `look.png`, and `effectDrawn` with only its effects' words: keep the picture, add only the effects.
-2. **Composite.** Each drawing is scaled down into its window and blended into the `color` guide by its own soft outline times `drawn_<id>_shown`. Nothing drawn can land where the 3D scene has no such thing, and the soft cut leaves no stair-step or background fringe. Drawings are laid farthest first (`paint_order`). `coverage.json` records how much of where the shot shows each entity its drawing filled.
-3. **The shot, inpainted.** Pictures: depth, the composite, edges. The pasted pixels are kept exactly; only the rest of the frame (and a 3-pixel band at each pasted edge, so it sits in the shot) is drawn. Words: `stillOpening`, the legend, that everything standing in the shot is already painted, "Behind and around:" with the sky, ground, and surround in shot, and the location's `light`. No object is named, so no description can land on the wrong one.
-4. **Effects, as light.** After the shot pass, each effect is added to the still as light (screen blend) inside `drawn_<id>_effects` (`add_light`). The light is only what the effect pass added: its picture minus its base, less `LIGHT_NOISE`. Whatever solid it redrew (stones, the bowl) cancels out, and over the entity's own surface (its base's matte) only flame-bright light counts (`FLAME_LOW`–`FLAME_HIGH`, 0.7–0.9), so a surface the pass re-lit never turns to glass. Black adds nothing, and a flame brightens what is behind it, so nothing is cut out and nothing has to be guessed about a background. The LTX prompt adds the effects in the start frame (`sceneEffects`), and the depth video has nothing solid there, so the video animates them freely. Light suits fire, sparks, glow, steam, and mist; a dark smoke would need its own pass.
+- **Depth video** (every shot), rendered from the timeline at the take's own size and 16 fps. People are flat silhouettes at their own median distance: the clay's face relief, copied, froze the face; only where they stand and how big comes from here. One fixed log scale for every shot (0.5 m brightest, 60 m darkest, gray 48–255; black only where nothing is, the sky), so a lone person far away is not stretched to white. Past every mesh the ground runs on to the horizon at its own distance. Control strength `VACE_STRENGTH` 0.6: at 1.0 the flat silhouettes are copied and the face freezes.
+- **Reference sheet**: the reference photos of who the script says the shot is about (`describe.reference_people`): the shot's `subjects`, or, without subjects, everyone with a performance; never the shot's `over`. Each is cut out onto pure white, side by side in one picture (VACE takes one). A gray backdrop is copied into the take, and anyone on the sheet gets a face painted in, so the shoulder in front stays off it. No sheet when nobody is listed.
 
-Trailing plate instructions such as "a single object" are dropped. Names and ids are never sent. `output/frames/<show>/<episode>/inputs/scene_XX_start/` keeps every pass's prompt and pictures, each drawn picture, `composite.png`, and `draw_mask.png`.
+**Words** (`describe.video_prompt`), nearest person first, as the start frame shows them. Every piece is a `prompts.json` template; nothing names a scene:
 
-### Output checks — `verify.py`
+1. The shot (`shotSentence`): size and angle from the script's `shot` (`shot.sizes`, `shot.angles`; close sizes add a shallow depth of field), "over another person's shoulder" for `overShoulder`, and the view of an own camera looking steeply down or up (`view`). Then the camera: `cameraMotion` with an own moving camera's `cameraMotion`, `cameraMoves` for a shot's move, else `cameraHeld`.
+2. People, nearest first, by the third of the frame they are in. The shot's `over` is the back of a head and shoulder, close and soft (`personNear`), their look in words only. Everyone with a performance gets their whole look (`body` and every attribute), how they are turned to the camera (`facing`, from their gaze), their action (with `{target}` filled by what the start frame shows), and their `expression` (`personFace`, `expression`); a performer not in the start frame comes into it (`personEnters`). Nobody else is named.
+3. Landmarks and props in shot by their appearance, effects in shot (`effects`), each stretch of the backdrop in shot by where it is (`backdrop`: above, underfoot, behind), the scene's `motion`, and the location's `light`.
 
-Previs checks the script before anything is drawn; `verify.py` checks every still and clip after it is made, against the same 3D scene. A model's mistake is random, so a failed output is made again with a new seed, up to `verifyAttempts` (3) tries. The last try is kept either way, and `inputs/scene_XX[_start]/verify.json` records the tries and any problems left.
+Lines are never in a picture prompt: told among the actions, a voice from off screen makes the model cut to its speaker. No names, ids, or pronouns are written. Negative: `vaceNegative`.
 
-- **Nobody invented.** Mask R-CNN (torchvision, COCO) finds people (a detection mostly inside a bigger one is the same person found again), in a still on the solid shot before any effect light (`inputs/.../solid.png`: through fire a detector sees figures in the flames); a person mostly (over half) outside `start_people` in a still, or `clip_people` in a clip frame (sampled 3 times a second), was invented. A clip frame may not have more people than the most the camera sees at once (`people` in the previs record). In a clip, a detection mostly inside the shot's effect areas (its `drawn_<id>_effects`, grown 48 px) is not judged: a detector sees figures in flames, and fire is only light.
-- **Every face its own.** YuNet finds the face inside each character's `drawn_<id>_shown` in a still, and SFace compares it with the face on their plate. It must reach `FACE_SAME_PERSON` (0.30) and match its own plate better than any other character's. Faces under 48 px high are not judged.
+Output: `output/frames/<show>/<episode>/scene_XX_start.png`; `inputs/scene_XX_start/` keeps the depth video, the reference sheet, and `log.json` (prompt, size, seed, who is on the sheet).
 
-- **Every drawing where its mesh is.** Each drawing must fill at least `DRAWN_MIN_COVERAGE` (85%) of where the shot shows its entity (`coverage.json`).
+### No output checks
 
-The checks do not judge hair color, wardrobe colors, or lighting.
+Stills and clips are not checked automatically and not remade on their own: each is made once, at a seed fixed by its scene, and reviewed. `--force` remakes one selected scene; `--seed` rerolls it.
 
-### 5. Clips — LTX-2.3 distilled-1.1 + Depth Anything control
+### 5. Clips — Chatterbox, then Wan S2V or VACE, then RIFE
 
-`content:generate` animates each reviewed start still in two stages. Stage 1 generates the motion at **448×768** (`clip_spec.py`), **24 fps**, length **`8n+1`** for the scene duration. Stage 2 (`ltxSpatialUpscale`, `"x2"`; `null` turns it off) enlarges that latent with LTX's spatial upscaler (`ltx-2.3-spatial-upscaler-x2-1.1`), re-anchors the start still at **896×1536**, and refines it in the distilled model's short schedule (`_REFINE_SIGMAS`) on the plain model, so mouths, eyes, and skin are generated at the larger size while stage 1's motion stays. In a depth-controlled graph the guide frames are cropped off before stage 2. Clips are decoded tiled. It nearly fills a 16 GB card (it spills into shared memory) and takes about 2.5× as long as stage 1 alone.
+`content:generate` makes each scene's clip in three steps (`generate_batch.generate_clip`).
 
-**Routing**
+**Voice** (`voice.py`, Chatterbox in `content-pipeline/.voice`, installed by `content:voice-deps`). One speaker's lines in a row are one speech, spoken in one go so the voice runs on, starting at the first line's `startSeconds`. The speeches are laid on a track exactly the scene's length (`output/generate/<show>/<episode>/voices/scene_XX.wav`); a scene without lines gets a silent track, so every clip has sound. A speech that runs into the next one or past the scene is reported. Each character speaks in their voice, `voice.wav` beside their reference photo; a speaker without one stops the run (there is no general way to make a voice yet; open problem). Exaggeration 0.6, CFG weight 0.4. Chatterbox reads no delivery words; the delivery reaches only the picture. Background sound and music are not made here.
 
-| Scene | Graph | Control |
+**The take**, at 16 fps (Wan 14B's own rate), `4n+1` frames covering the scene (`wan.frames_for`):
+
+| Scene | Model | Inputs |
 | --- | --- | --- |
-| The clay shows the shot as it plays (`world.depth_control_fits`, `depthControl` in the previs record): the camera moves, nobody in shot moves or turns, every performance in shot moves only hair, face, eyes, or neck, and nobody speaks | `workflows/ltx_gemma_api_depth.json` | Start still + Depth Anything control video through the union IC-LoRA |
-| Any other shot | `workflows/ltx_gemma_api.json` | Start still only (plain image-to-video). Meshes are rigid statues: the clay of a walk, a turn, a shove, or a talking face is a statue sliding, and depth control makes LTX copy exactly that. Such a shot is animated from its still and its words. |
-| Override | `sceneRenderOptions["<show>/<episode>/<scene>"] = {"depthControl": false}` | Forces the plain graph; logs `no depth control (disabled by override)` |
+| A speaker with a performance, i.e. on screen (`describe.talking_speaker`: the first such speaker) | Wan 2.2 S2V 14B (fp8): 20 steps, CFG 6, uni_pc, shift 8, wav2vec2 audio encoder, and its first-frame fix (the first latent decoded twice, `S2V_DROP_FRAMES` 3 dropped) | The start still and the voice track. Prompt: `video_prompt` plus how they speak (`speaking`: the lines' deliveries, never the words). Negative: `s2vNegative` (the template's). |
+| Anything else: no lines, or only voices from off screen | Wan 2.2 VACE, as for the still, over the whole take | The depth video and the reference sheet. The voice track is laid under it. |
 
-**Depth Anything pass (spatial scenes, before LTX)**
+S2V moves one face. In a take with two speakers on screen it is about the first, and mouths every line on the track (a model limit).
 
-1. Load `guides/clay_24fps.mp4`.
-2. Run Video Depth Anything (`video_depth_anything_vits.pth`, small) via ComfyUI-Video-Depth-Anything.
-3. Write `guides/control_depth.mp4` (H.264 + silent AAC).
-4. Unload Comfy models (`/free`) before queuing LTX.
+**24 fps.** RIFE (ComfyUI-Frame-Interpolation, `rife49`, ensemble) triples the take to 48 fps with its sound, every other frame is dropped (24 fps), and the clip is cut to the scene's exact length.
 
-| Setting | Value |
-| --- | --- |
-| Weights | `ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf` |
-| IC-LoRA (spatial) | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` via `LTXICLoRALoaderModelOnly` |
-| Video VAE / audio VAE | Matching LTX-2.3 distilled VAEs |
-| Text | `GemmaAPITextEncode` against a tiny safetensors stub that carries the API `model_id`. Local node `LTXAVUseProcessedAPIEmbeds` marks those embeddings as already projected to 6144 so they match the Q4 GGUF. |
-| Size / rate | 448×768 stage 1, 896×1536 after stage 2, 24 fps, `8n+1` frames |
-| Sampler | Euler, 8 steps, LTX shift (max 2.05, base 0.95) |
-| Start frame | `LTXVImgToVideo` at `ltxStartStrength` (**1.0**: the first frame pinned exactly; at 0.7 LTX often left the shot within the first half second, cutting or whipping to another angle) |
-| IC-LoRA strength | `ltxIcLoRAStrength` (default **1.0**) on spatial/depth graphs |
-| End frame guide | Not used. No `LTXVAddGuide` end still. |
-| Dialogue | When the scene has `lines` on the plain graph, or on the depth-dialogue graph, `MultimodalGuider` raises joint audio and video guidance (`modality_scale` 3, cross-attention on). Silent scenes keep `BasicGuider`. |
-| Checks | Every clip is checked like its still (`verify.check_clip`): nobody where the shot has nobody, no more people than it has, and, when the shot holds (camera and people still, previs `moves` false), the people stay within `HOLD_SMALLEST`–`HOLD_LARGEST` (0.45–2.5) of their area in the first frame and the picture, shrunk to 9×16 gray blocks, within `HOLD_DRIFT` (25 levels, the median block, so one person turning does not count) of the first frame's: the video model sometimes turns a held take into another shot, zooming out to a full figure or morphing into another angle over a few frames. A single-frame jump to another shot (`hard_cuts`) fails any clip. A held take that leaves its shot only in its last `TAIL_HOLD_SECONDS` (0.6) is kept up to its last good frame, which is held to the end with the audio untouched (`hold_tail`, before the checks): LTX often finishes the speech, then starts a new shot. |
-| Captions | After the episode is joined, `captions.caption_episode` burns in subtitles from each scene's `lines`, timed to the words Whisper (large-v3-turbo) hears in that clip, and a name card (`characters.<id>.name`) the first time someone speaks on screen. The plain cut is kept as `episode_plain.mp4`. |
-| Prompt | `describe.ltx_prompt`: `sceneVideo` (continue from the still; then what on-screen speakers say in order, one speaker's consecutive `lines` as one speech: `sceneLine`, `sceneLineAt` only when the speech starts at `LATE_LINE_SECONDS` (1.0) or later, else `sceneLineThen` (timed separately, each line made LTX cut to a new shot); `scenePerformance` and `scenePerformanceExpression` per performance, `sceneMotion`, and the camera: `sceneCameraMotion` with an own moving camera's `cameraMotion`, `sceneCameraMoves` for a shot's move, else `sceneCameraHeld`, a gentle handheld hold). People are named by `scenePerson`: where the start frame's observation places them (by screen side; when some stand well behind the nearest, `in the foreground` or `farther back`, never a "row", which made LTX cut to a lineup) plus their `body`, never a character id, because LTX only sees the frame. Someone who acts or speaks and whom the shot reveals (entering, or their face hidden in the start frame but shown in previs's end frame) gets their whole appearance once, or LTX invents a stranger when they turn or enter; anyone else keeps the body words: face words for someone seen from behind make LTX turn them to camera, and the whole look of a sliver at the frame edge makes LTX reframe to show them. Anyone else in the start frame holds still (`holdStill`), except a bystander smaller than `STILL_MIN_SHARE` (3%) of the frame, who is left out: named, a distant figure or an edge sliver makes LTX cut to a shot that shows them. Then labeled sound sentences from `location.soundscape` + `scene.sound` using `sceneSound*` templates in `prompts.json` (label → bed → space → voices → events → music). A voice from off screen (`sceneLineOffScreen`) is sound, not picture: told among the actions, LTX cuts to show its speaker. Distilled CFG 1: positive descriptions only; no negative-prompt reliance. `GemmaAPITextEncode` runs with `enhance_prompt: false` (encodes the authored text; does not rewrite it). |
-| Log | Final LTX prompt, graph name, seed, and `enhance_prompt` land in `output/generate/<show>/<episode>/inputs/scene_XX/log.json`. |
-| Mux | Video Helper Suite, H.264, CRF 19, with the decoded LTX audio. |
+Output: `output/generate/<show>/<episode>/scene_XX.mp4`; `inputs/scene_XX/` keeps the 16 fps take, the 48 fps take, a VACE take's depth video and sheet, and `log.json` (prompt, size, model, seed, speaker, and digests of the voice and the still).
 
-Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg loudness-normalizes each clip to `episodeLoudnessTargetLufs` from `prompts.json` (default **-16** LUFS), then concatenates them into `episode.mp4` in that folder. `concat_videos` **aborts** if clip width, height, or fps differ (it does not auto-regenerate). A partial clip render leaves `episode.mp4` alone.
+When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudnessTargetLufs` (-16 LUFS) and joins them into `episode.mp4`; `concat_videos` aborts if their width, height, or fps differ. `captions.caption_episode` then burns in subtitles from each scene's `lines`, timed to the words Whisper (large-v3-turbo) hears, and a name card (`characters.<id>.name`) the first time someone speaks on screen; the plain cut is kept as `episode_plain.mp4`. A single-scene run leaves `episode.mp4` alone.
 
 `content:upload` pushes the finished MP4s and thumbnails to Cloudflare R2 and registers episodes on the Worker. That step is distribution, not generation.
 
 ## Models on disk
 
-`pnpm run content:models` downloads these into `content-pipeline/.comfyui/models/` and skips files already present.
+`pnpm run content:models` downloads these into `content-pipeline/.comfyui/models/` (`download_models.py`, one table) and skips files already present.
 
 | Stack | Files | Licence (model card) |
 | --- | --- | --- |
-| LTX-2.3 | Q4_K_M GGUF (~14GB), video VAE, audio VAE, distilled API stub | LTX-2 Community License |
-| LTX union IC-LoRA | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` (~654 MB) under `models/loras/` | LTX-2 Community License ([Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control)) |
-| Video Depth Anything (small) | `video_depth_anything_vits.pth` (~111 MB, 116440756 bytes) under `models/videodepthanything/` | Apache-2.0 ([depth-anything/Video-Depth-Anything-Small](https://huggingface.co/depth-anything/Video-Depth-Anything-Small)) |
-| Qwen stills | `qwen-image-edit-2511-Q4_K_M.gguf` (~13GB), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`, 4-step Lightning LoRA | Apache-2.0 |
+| Wan 2.2 VACE Fun A14B | high- and low-noise experts, Q8 GGUF (QuantStack) | Apache-2.0 |
+| Wan 2.2 S2V 14B | fp8 weights, `wav2vec2_large_english` audio encoder | Apache-2.0 |
+| Wan, shared | `umt5_xxl_fp8_e4m3fn_scaled` text encoder, `wan_2.1_vae` | Apache-2.0 |
+| Qwen-Image-2512 | Q8 GGUF (unsloth), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae` | Apache-2.0 |
+| Qwen-Image-Edit-2511 (mesh plates) | Q4_K_M GGUF, 4-step Lightning LoRA | Apache-2.0 |
 | TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet | MIT |
 | Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. | MIT |
-| Unused | YuNet ONNX face detector. Downloaded by `content:models`; no stage reads it. | — |
+| RIFE | `rife49.pth`, fetched by ComfyUI-Frame-Interpolation on first use | MIT |
+| Chatterbox | `content-pipeline/.voice` (`voice-requirements.txt`, installed by `content:voice-deps`); weights fetched on first use | MIT |
 
 `content:assets -- --credits` rewrites `docs/CREDITS.md` from the records under `output/assets/`.
 
@@ -185,18 +154,12 @@ Clips land in `output/generate/<show>/<episode>/scene_XX.mp4`. ffmpeg loudness-n
 
 `pnpm run content:setup-comfy` clones into `content-pipeline/.comfyui`:
 
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI), including native TRELLIS.2 and Pixal3D nodes
-- [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) (`GemmaAPITextEncode`, image-to-video, IC-LoRA guides)
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI), including native Wan (VACE, S2V), Qwen-Image, TRELLIS.2, and Pixal3D nodes
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)
 - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
-- [ComfyUI-Video-Depth-Anything](https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything) pinned at `a0db08e63d1ea571601c45cde4aaee0acdd0544d` (Python deps installed into the Comfy venv)
+- [ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation) (RIFE)
 
-Local nodes:
-
-- `content:setup-comfy` copies `content-pipeline/comfy_nodes/reelshort_ltx` — accept Gemma API embeddings that are already projected
-- `content:comfy` copies `content-pipeline/comfy_nodes/qwen_backdrop.py` — `TextEncodeQwenBackdrop`, a four-image Qwen edit encoder used when the empty-space plate is attached
-
-`pnpm run content:asset-deps` installs trimesh and moderngl into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:asset-deps` installs trimesh and moderngl into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs and the depth video. Do not install `content-pipeline/requirements.txt` into that virtualenv.
 
 ## Stage viewer
 
@@ -207,5 +170,7 @@ Local nodes:
 | Stage | Size | Why |
 | --- | --- | --- |
 | Plates and mesh conditioning | 1024 square | TRELLIS.2 / Pixal3D shape cascade |
-| Previs and Qwen stills | 768×1360 | Vertical, near 9:16 |
-| LTX clips / Depth Anything control | 448×768 | Union IC-LoRA `reference_downscale_factor=2` needs even latent dims; 448×800 is incompatible |
+| Reference photos | 928×1664 | Qwen-Image-2512's 9:16; a whole figure with room above the head and below the feet |
+| Previs | 768×1360 | Vertical, near 9:16 |
+| Wan stills and takes | 480×832 (`--size 480`, the default) or 720×1280 (`--size 720`) | 480p answers most questions in a fraction of the time; 720p is the final look. The depth video is rendered at the take's own size. |
+| Clips | the take's size, 24 fps | RIFE from Wan's 16 fps |

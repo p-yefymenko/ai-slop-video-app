@@ -490,19 +490,10 @@
           "performances": {
             "ryan": {
               "action": "seizes {target} by the throat with one gauntleted hand and drives forward",
-              "parts": [
-                "arms",
-                "hands"
-              ],
               "target": "mira"
             },
             "mira": {
               "action": "chokes, both hands clawing at the gauntlet, the head tipping back",
-              "parts": [
-                "hands",
-                "arms",
-                "face"
-              ],
               "expression": "terror: eyes wide, mouth open in a choked gasp"
             }
           },
@@ -511,8 +502,7 @@
               {
                 "text": "a choked gasp and the crunch of the gauntlet closing",
                 "source": {
-                  "characterId": "mira",
-                  "part": "face"
+                  "characterId": "mira"
                 }
               }
             ],
@@ -554,11 +544,7 @@
           },
           "performances": {
             "nori": {
-              "action": "walks in to the cliff edge, stops, and looks down into the valley",
-              "parts": [
-                "legs",
-                "torso"
-              ]
+              "action": "walks in to the cliff edge, stops, and looks down into the valley"
             }
           },
           "sound": {
@@ -566,8 +552,7 @@
               {
                 "text": "boots scrape on the wet rock",
                 "source": {
-                  "characterId": "nori",
-                  "part": "legs"
+                  "characterId": "nori"
                 }
               }
             ],
@@ -630,11 +615,7 @@
           },
           "performances": {
             "nori": {
-              "action": "gazes up and out across the clearing, the eyebrows lifting in wonder",
-              "parts": [
-                "face",
-                "eyes"
-              ]
+              "action": "gazes up and out across the clearing, the eyebrows lifting in wonder"
             }
           },
           "sound": {
@@ -642,8 +623,7 @@
               {
                 "text": "a soft impressed breath",
                 "source": {
-                  "characterId": "nori",
-                  "part": "face"
+                  "characterId": "nori"
                 }
               }
             ],
@@ -687,10 +667,6 @@
           "performances": {
             "adam": {
               "action": "speaks with a dismissive half-smile, the chin lifting",
-              "parts": [
-                "face",
-                "neck"
-              ],
               "expression": "dry amusement: one corner of the mouth up, lips slightly parted"
             }
           },
@@ -699,8 +675,7 @@
               {
                 "text": "a dry scoff through the nose",
                 "source": {
-                  "characterId": "adam",
-                  "part": "face"
+                  "characterId": "adam"
                 }
               }
             ],
@@ -750,9 +725,6 @@
           "performances": {
             "nori": {
               "action": "turns around and protests, one open hand lifting toward {target}",
-              "parts": [
-                "face"
-              ],
               "target": "adam"
             }
           },
@@ -761,8 +733,7 @@
               {
                 "text": "a quick indignant breath",
                 "source": {
-                  "characterId": "nori",
-                  "part": "face"
+                  "characterId": "nori"
                 }
               }
             ],
@@ -799,8 +770,7 @@
           },
           "performances": {
             "ryan": {
-              "action": "stands still among the fallen, the crimson cloak stirring",
-              "parts": []
+              "action": "stands still among the fallen, the crimson cloak stirring"
             }
           },
           "sound": {
@@ -855,10 +825,6 @@
           "performances": {
             "ben": {
               "action": "speaks with a scornful smile, the head tilting",
-              "parts": [
-                "face",
-                "neck"
-              ],
               "expression": "scornful smile, lips slightly parted"
             }
           },
@@ -867,8 +833,7 @@
               {
                 "text": "a scornful huff",
                 "source": {
-                  "characterId": "ben",
-                  "part": "face"
+                  "characterId": "ben"
                 }
               }
             ],
@@ -911,17 +876,10 @@
           "performances": {
             "ben": {
               "action": "speaks with a theatrical sigh, the head shaking slowly",
-              "parts": [
-                "face",
-                "neck"
-              ],
               "expression": "weary scorn, lips slightly parted"
             },
             "adam": {
               "action": "listens, the jaw set",
-              "parts": [
-                "face"
-              ],
               "expression": "stern, lips closed"
             }
           },
@@ -930,8 +888,7 @@
               {
                 "text": "a theatrical sigh",
                 "source": {
-                  "characterId": "ben",
-                  "part": "face"
+                  "characterId": "ben"
                 }
               }
             ],
@@ -968,10 +925,6 @@
           "performances": {
             "nori": {
               "action": "stares wide-eyed at {target}, silent",
-              "parts": [
-                "eyes",
-                "face"
-              ],
               "expression": "stunned: eyes wide, lips closed",
               "target": "adam"
             }
@@ -981,8 +934,7 @@
               {
                 "text": "a sharp breath",
                 "source": {
-                  "characterId": "nori",
-                  "part": "face"
+                  "characterId": "nori"
                 }
               }
             ],
@@ -1026,28 +978,17 @@
           "performances": {
             "ben": {
               "action": "sneers and speaks, one hand flicking dismissively",
-              "parts": [
-                "face",
-                "arms",
-                "hands"
-              ],
               "expression": "contempt, lips slightly parted"
             },
             "cora": {
               "action": "speaks calmly, the chin lifting",
-              "parts": [
-                "face",
-                "neck"
-              ],
               "expression": "cool command, lips slightly parted"
             },
             "adam": {
-              "action": "stands listening, the jaw set",
-              "parts": []
+              "action": "stands listening, the jaw set"
             },
             "nori": {
-              "action": "stands listening, very still",
-              "parts": []
+              "action": "stands listening, very still"
             }
           },
           "sound": {
@@ -1055,8 +996,7 @@
               {
                 "text": "a dismissive snort before the words",
                 "source": {
-                  "characterId": "ben",
-                  "part": "face"
+                  "characterId": "ben"
                 }
               }
             ],
@@ -1123,11 +1063,6 @@
           "performances": {
             "nori": {
               "action": "presses a fist into the other palm, the jaw setting, then turns away and strides off",
-              "parts": [
-                "arms",
-                "face",
-                "torso"
-              ],
               "expression": "resolve: jaw set, eyes hard, lips closed"
             }
           },
@@ -1136,8 +1071,7 @@
               {
                 "text": "a sharp exhale through the nose as the fist meets the palm",
                 "source": {
-                  "characterId": "nori",
-                  "part": "face"
+                  "characterId": "nori"
                 }
               }
             ],
@@ -1168,10 +1102,7 @@
           },
           "performances": {
             "adam": {
-              "action": "stands watching, the fur mantle stirring in the wind",
-              "parts": [
-                "torso"
-              ]
+              "action": "stands watching, the fur mantle stirring in the wind"
             }
           },
           "sound": {
@@ -1179,8 +1110,7 @@
               {
                 "text": "the wind tugs at the fur mantle",
                 "source": {
-                  "characterId": "adam",
-                  "part": "torso"
+                  "characterId": "adam"
                 }
               }
             ],

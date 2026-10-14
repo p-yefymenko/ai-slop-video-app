@@ -11,15 +11,10 @@ const workflowSrcDir = path.join(repoRoot, "content-pipeline", "workflows");
 
 const REPOS = [
   { url: "https://github.com/comfyanonymous/ComfyUI.git", dir: comfyDir },
-  { url: "https://github.com/Lightricks/ComfyUI-LTXVideo.git", dir: path.join(customNodes, "ComfyUI-LTXVideo") },
   { url: "https://github.com/city96/ComfyUI-GGUF.git", dir: path.join(customNodes, "ComfyUI-GGUF") },
   { url: "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", dir: path.join(customNodes, "ComfyUI-VideoHelperSuite") },
-  {
-    url: "https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git",
-    dir: path.join(customNodes, "ComfyUI-Video-Depth-Anything"),
-    // Pinned: gate 3b / spike-tested checkout
-    commit: "a0db08e63d1ea571601c45cde4aaee0acdd0544d",
-  },
+  // RIFE: Wan's 16 fps takes to the cut's 24 fps.
+  { url: "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git", dir: path.join(customNodes, "ComfyUI-Frame-Interpolation") },
 ];
 
 function run(cmd, args, cwd) {
@@ -74,10 +69,14 @@ console.log("Installing ComfyUI Python deps (this can take several minutes)...")
 runPython(pipPython, ["-m", "pip", "install", "--upgrade", "pip"], comfyDir);
 runPython(pipPython, ["-m", "pip", "install", "-r", "requirements.txt"], comfyDir);
 runPython(pipPython, ["-m", "pip", "install", "huggingface_hub", "imageio-ffmpeg"], comfyDir);
-const vdaReq = path.join(customNodes, "ComfyUI-Video-Depth-Anything", "requirements.txt");
-if (fs.existsSync(vdaReq)) {
-  console.log("Installing ComfyUI-Video-Depth-Anything Python deps into the Comfy venv...");
-  runPython(pipPython, ["-m", "pip", "install", "-r", vdaReq], comfyDir);
+for (const node of ["ComfyUI-GGUF", "ComfyUI-VideoHelperSuite", "ComfyUI-Frame-Interpolation"]) {
+  const requirements = path.join(customNodes, node, "requirements-no-cupy.txt");
+  const fallback = path.join(customNodes, node, "requirements.txt");
+  const file = fs.existsSync(requirements) ? requirements : fallback;
+  if (fs.existsSync(file)) {
+    console.log(`Installing ${node} Python deps into the Comfy venv...`);
+    runPython(pipPython, ["-m", "pip", "install", "-r", file], comfyDir);
+  }
 }
 console.log("Installing CUDA 12.8 PyTorch (required for RTX 50-series)...");
 runPython(pipPython, ["-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"], comfyDir);
@@ -105,32 +104,27 @@ for (const name of fs.readdirSync(workflowSrcDir)) {
   }
 }
 
-const nodeSrc = path.join(repoRoot, "content-pipeline", "comfy_nodes", "reelshort_ltx");
-const nodeDest = path.join(customNodes, "reelshort_ltx");
-fs.cpSync(nodeSrc, nodeDest, { recursive: true });
-
 for (const folder of [
   "diffusion_models",
   "checkpoints",
   "vae",
   "text_encoders",
   "loras",
-  "controlnet",
+  "audio_encoders",
   "clip_vision",
   "background_removal",
-  "videodepthanything",
 ]) {
   fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
 }
 
 console.log(`
 ComfyUI is cloned at content-pipeline/.comfyui
-Workflows copied to ComfyUI user/default/workflows/ (ltx_gemma_api.json, qwen_image_edit.json, qwen_image_edit_spatial.json, qwen_asset_plate.json)
+Workflows copied to ComfyUI user/default/workflows/ (qwen_asset_plate.json)
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)
-  2. pnpm run content:models       # LTX, Qwen-Image-Edit, and TRELLIS.2 weights
-  3. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
-  4. In the ComfyUI UI: Load → qwen_image_edit.json, qwen_image_edit_spatial.json, then ltx_gemma_api.json, and confirm no missing-node errors
-  5. pnpm run content:frames, then pnpm run content:generate
+  2. pnpm run content:models       # Wan 2.2 (VACE, S2V), Qwen-Image, TRELLIS.2, Pixal3D, and the check models
+  3. pnpm run content:voice-deps   # the Chatterbox voice env
+  4. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
+  5. pnpm run content:plates, content:assets, content:frames, then content:generate
 `);

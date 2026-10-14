@@ -2,9 +2,8 @@
 
 ``entities_at`` is the one answer to "what exists in this location at this
 moment, where, and turned which way". Characters, landmarks, and props are all
-entities: a mesh, an offset, a yaw, and named regions. A character's regions
-are body parts; anything else has one region, ``whole``. Every stage that draws,
-measures, describes, or checks a shot starts from this list.
+entities: a mesh, an offset, and a yaw. Every stage that draws, describes, or
+checks a shot starts from this list.
 
 Presence comes from the timeline only. A character is in a shot when their
 track puts them in the scene's location; nobody else decides it.
@@ -20,7 +19,6 @@ from pathlib import Path
 
 import numpy as np
 
-from body_parts import BODY_PARTS, part_ids_for_vertices
 from pipeline_paths import stage_dir
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -142,46 +140,6 @@ def camera_moves(scene: dict) -> bool:
     )
 
 
-def someone_moves(episode: dict, scene: dict, seen: set[str]) -> bool:
-    """Someone the camera sees (``seen``) moves or turns during the shot. Someone out of shot does not count."""
-    start, finish = (float(value) for value in scene["timeRangeSeconds"])
-    for character_id, track in episode["spatialTimeline"]["characterTracks"].items():
-        if character_id not in seen:
-            continue
-        first, last = character_state(track, start), character_state(track, finish)
-        if scene["locationId"] not in (first["locationId"], last["locationId"]):
-            continue
-        if first["locationId"] != last["locationId"] or math.dist(first["position"], last["position"]) >= 0.02:
-            return True
-        if abs((last["bodyYawDegrees"] - first["bodyYawDegrees"] + 180.0) % 360.0 - 180.0) >= 2.0:
-            return True
-    return False
-
-
-def scene_has_spatial_change(episode: dict, scene: dict, seen: set[str]) -> bool:
-    """The camera moves, or someone the camera sees (``seen``) moves or turns during the shot."""
-    return camera_moves(scene) or someone_moves(episode, scene, seen)
-
-
-# Parts that can move without changing a body's outline in a depth video.
-OUTLINE_KEEPING_PARTS = frozenset({"hair", "face", "eyes", "neck"})
-
-
-def depth_control_fits(episode: dict, scene: dict, seen: set[str]) -> bool:
-    """Whether the clay video shows the shot as it really plays, so LTX may be held to it.
-
-    Meshes are rigid statues. The clay of someone walking, turning, or moving arms
-    or legs is a statue sliding, and depth control makes LTX copy exactly that.
-    So the clay constrains only a moving camera over people whose outlines hold
-    still, and never a speaker, whose face the clay cannot move. Every other shot
-    is animated from its start still and its words.
-    """
-    if scene.get("lines") or not camera_moves(scene) or someone_moves(episode, scene, seen):
-        return False
-    performances = scene.get("performances") or {}
-    return all(set(performances.get(cid, {}).get("parts") or ()) <= OUTLINE_KEEPING_PARTS for cid in seen)
-
-
 @dataclass
 class Mesh:
     """Schema-space triangles, faces grouped by region so each region draws as one range."""
@@ -252,8 +210,12 @@ def _region_mesh(key: str, vertices: np.ndarray, faces: np.ndarray, colors, regi
     return Mesh(key, np.ascontiguousarray(vertices, dtype=np.float32), faces, colors, ranges, anchors or {})
 
 
+# A held prop sits at the side of the body, at this share of the body's height.
+HAND_HEIGHT_SHARE = 0.45
+
+
 def load_mesh(path: Path, *, body: bool) -> Mesh:
-    """A generated GLB in schema space. ``body`` labels the vertices with body parts."""
+    """A generated GLB in schema space. A ``body`` gets a hand point on each side, where a held prop goes."""
     from mesh_io import read_schema_mesh, read_vertex_colors
 
     if not path.is_file():
@@ -270,13 +232,12 @@ def load_mesh(path: Path, *, body: bool) -> Mesh:
         colors = None
     if colors is not None:
         colors = np.ascontiguousarray(colors, dtype=np.float32)
-    regions = part_ids_for_vertices(vertices) if body else np.zeros(len(vertices), dtype=np.int16)
+    regions = np.zeros(len(vertices), dtype=np.int16)
     anchors = {}
     if body:
-        hands = regions == BODY_PARTS.index("hands")
-        for name, side in (("right_hand", vertices[:, 0] > 0), ("left_hand", vertices[:, 0] < 0)):
-            if np.any(hands & side):
-                anchors[name] = vertices[hands & side].mean(axis=0)
+        low, high = vertices.min(axis=0), vertices.max(axis=0)
+        middle_y, hand_z = (low[1] + high[1]) / 2.0, low[2] + HAND_HEIGHT_SHARE * (high[2] - low[2])
+        anchors = {"right_hand": np.array([high[0], middle_y, hand_z]), "left_hand": np.array([low[0], middle_y, hand_z])}
     mesh = _region_mesh(key, vertices, faces, colors, regions, anchors)
     mesh.path = path
     _MESHES[str(path)] = mesh
@@ -330,6 +291,16 @@ def definition(show: dict, kind: str, entity_id: str, location_id: str | None = 
 def back_path(show: dict, character_id: str) -> Path:
     """The character seen from behind, drawn from their plate: the reference for a shot of their back."""
     return plate_path(show, "character", character_id).with_name("back.png")
+
+
+def reference_path(show: dict, character_id: str) -> Path:
+    """The character as the video model knows them: a full-length photo on pure white (``content:plates``)."""
+    return plate_path(show, "character", character_id).with_name("reference.png")
+
+
+def voice_path(show: dict, character_id: str) -> Path:
+    """The character's cast voice: a short clean recording every line of theirs is spoken in."""
+    return plate_path(show, "character", character_id).with_name("voice.wav")
 
 
 def look_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
@@ -415,7 +386,7 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
             load_mesh(mesh_path(show, "character", cid), body=True),
             tuple(float(v) for v in state["position"]),
             yaw,
-            BODY_PARTS,
+            WHOLE,
             tuple(show["characters"][cid].get("effects") or ()),
         )
     found.extend(people.values())
@@ -423,8 +394,6 @@ def entities_at(show: dict, episode: dict, scene: dict, time_seconds: float) -> 
         holder = people.get(state.get("heldByCharacterId") or "")
         if holder is not None:
             hand = holder.mesh.anchors.get(f"{state.get('heldInHand') or 'right'}_hand")
-            if hand is None:
-                raise MissingMesh(f"{holder.id}'s mesh has no hand region to hold {pid}")
             offset = tuple(float(v) for v in holder.to_world(hand)[0])
             yaw = holder.yaw_degrees
         elif state.get("locationId") == location_id and state.get("position") and not state.get("heldByCharacterId"):

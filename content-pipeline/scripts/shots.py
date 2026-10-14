@@ -37,16 +37,16 @@ PEOPLE_FOV, WIDE_FOV = 30.0, 45.0
 OTS_BACK, OTS_SIDE, OTS_HEIGHT, OTS_MIN_FOV = 0.55, 0.3, 0.86, 22.0
 # Vertical frame over horizontal frame.
 ASPECT = 1360 / 768
-# Height bands of a body part, as fractions of height (see body_parts.py).
+# The band of a character's height an insert of each part frames (INSERT_PARTS in script.ts).
 PART_BANDS = {
     "hair": (0.9, 1.0), "face": (0.86, 0.97), "eyes": (0.87, 0.92), "neck": (0.8, 0.87),
     "torso": (0.5, 0.8), "arms": (0.45, 0.8), "hands": (0.4, 0.54), "legs": (0.05, 0.5), "feet": (0.0, 0.08),
 }
 
 
-def _people(show: dict, episode: dict, scene: dict) -> dict[str, dict]:
-    """Where everyone in the scene's location stands at its start: position, height, and gaze direction."""
-    start = float(scene["timeRangeSeconds"][0])
+def _people(show: dict, episode: dict, scene: dict, time_seconds: float | None = None) -> dict[str, dict]:
+    """Where everyone in the scene's location stands at its start (or ``time_seconds``): position, height, and gaze direction."""
+    start = float(scene["timeRangeSeconds"][0]) if time_seconds is None else float(time_seconds)
     tracks = episode["spatialTimeline"]["characterTracks"]
     states = {cid: character_state(track, start) for cid, track in tracks.items()}
     here = {cid: state for cid, state in states.items() if state.get("locationId") == scene["locationId"]}

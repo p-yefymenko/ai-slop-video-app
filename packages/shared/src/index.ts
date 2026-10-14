@@ -64,9 +64,9 @@ export const COIN_PACKAGES: CoinPackage[] = [
   { productId: "coins_1200", coins: 1200, label: "1,200 coins" },
 ];
 
-export { BODY_PARTS } from "./script";
+export { INSERT_PARTS } from "./script";
 export type {
-  BodyPart,
+  InsertPart,
   LocationBackdrop,
   LocationLook,
   ScriptScene,

@@ -1,35 +1,16 @@
-"""Check a shot's script against what its camera actually sees.
+"""Check a shot's script against its 3D scene. Only exact facts, no thresholds:
 
-Every check uses ``observe.visible``, the same test a still uses to name
-something. A script passes only when what it says on camera is on camera:
-
-- every performance belongs to someone visible during the shot (anyone else the camera catches holds still);
-- every part a performance moves is visible at some moment of the shot;
-- an expression is drawn only on a face visible in the start frame;
-- whatever an action is aimed at (its target) is visible in the start frame;
-- the speaker's face is large enough to lip-sync in the start frame;
-- every sound source is visible in the start frame;
-- the camera is never inside a mesh.
+- the camera is never inside a mesh;
+- everyone with a performance is in the frame at some moment of the shot;
+- whatever an action is aimed at (its target) is in the start frame, so the
+  words can name it by where the frame shows it.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from observe import describe_numbers, visible
-from world import settings
-
-
-def on_screen(observation: dict, entity_id: str, regions=None) -> bool:
-    """In view at all: the video model will animate these pixels, however small."""
-    return visible(observation, entity_id, regions, settings()["onScreenMinPixels"])
-
-
-def _numbers(observation: dict, entity_id: str, region: str | None = None) -> str:
-    entry = observation["entities"].get(entity_id)
-    if entry is None:
-        return "not in this location"
-    return describe_numbers(*(entry["regions"][region] if region else entry["pixels"]))
+from observe import in_shot
 
 
 def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[float, dict, list]]) -> list[str]:
@@ -49,69 +30,15 @@ def check_scene(show: dict, episode: dict, scene: dict, samples: list[tuple[floa
                 inside.add(entity.id)
                 errors.append(f"{where} at {time_seconds:g}s: the camera is inside {entity.id}'s mesh.")
 
-    first_seen: dict[str, tuple[float, dict]] = {}
-    for time_seconds, observation, _entities in samples:
-        for entity_id, entry in observation["entities"].items():
-            if entry["kind"] == "character" and entity_id not in first_seen and on_screen(observation, entity_id):
-                first_seen[entity_id] = (time_seconds, observation)
-
-    # Someone the camera happens to catch who is not a subject and has no performance
-    # holds still (describe.ltx_prompt says so); the camera is framed, not authored.
-    performances = scene.get("performances") or {}
-    for cid, performance in performances.items():
-        if cid not in first_seen:
-            state = start["entities"].get(cid)
-            errors.append(
-                f"{where}: performances.{cid} is set, but {cid} is never visible "
-                f"({'not in ' + scene['locationId'] if state is None else _numbers(start, cid)} at the start)."
-            )
+    for cid, performance in (scene.get("performances") or {}).items():
+        if not any(in_shot(observation, cid) for _t, observation, _e in samples):
+            errors.append(f"{where}: performances.{cid} is set, but {cid} is never in the frame.")
             continue
-        for part in performance["parts"]:
-            if not any(on_screen(observation, cid, [part]) for _t, observation, _e in samples):
-                errors.append(
-                    f"{where}: performances.{cid}.parts names {part}, but their {part} is never visible "
-                    f"in the shot (start: {_numbers(start, cid, part)}). Reframe, re-block, or change the action."
-                )
         target = performance.get("target")
-        if target and not on_screen(start, target):
+        if target and not in_shot(start, target):
             errors.append(
-                f"{where}: performances.{cid}.target is {target}, which is not visible in the start frame "
-                f"({_numbers(start, target)}); the video model would invent it. Frame it, or drop the target "
-                f"and keep the action to their own body."
-            )
-        if performance.get("expression") and not on_screen(start, cid, ["face"]):
-            errors.append(
-                f"{where}: performances.{cid}.expression is set, but their face is not visible in the start "
-                f"frame ({_numbers(start, cid, 'face')}), so nobody would see it. Remove it or reframe."
-            )
-
-    # A speaker with a performance speaks on screen, so their face must show at
-    # some moment (a tilt up the body reaches it late); one without a performance
-    # is a voice from off screen. A face in the start frame starts ready to speak.
-    for line in scene.get("lines") or []:
-        speaker = line["speakerId"]
-        if speaker not in performances:
-            continue
-        if not any(on_screen(observation, speaker, ["face"]) for _t, observation, _e in samples):
-            errors.append(
-                f"{where}: {speaker} speaks on screen, but their face is never visible in the shot "
-                f"(start: {_numbers(start, speaker, 'face')}). Reframe, or drop their performance to make the "
-                f"line a voice from off screen."
-            )
-        elif on_screen(start, speaker, ["face"]) and not performances[speaker].get("expression"):
-            errors.append(
-                f"{where}: {speaker} speaks with their face in the start frame, so performances.{speaker} needs an "
-                f"expression with the mouth ready to speak (lips slightly parted)."
-            )
-
-    for index, event in enumerate(scene["sound"]["events"]):
-        source = event["source"]
-        entity_id = source.get("characterId") or source.get("landmarkId") or source.get("propId")
-        part = source.get("part")
-        if not any(on_screen(observation, entity_id, [part] if part else None) for _t, observation, _e in samples):
-            errors.append(
-                f"{where}: sound.events[{index}] comes from {entity_id}{' ' + part if part else ''}, which is "
-                f"never visible in the shot (start: {_numbers(start, entity_id, part)})."
+                f"{where}: performances.{cid}.target is {target}, which is not in the start frame; "
+                f"frame it, or drop the target and keep the action to their own body."
             )
     return errors
 

@@ -15,6 +15,8 @@ from mesh_io import TRIANGLE_BUDGET
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "prompts.json"
 PLATE_WORKFLOW = ROOT / "workflows" / "qwen_asset_plate.json"
+PLATE_PREFIX = "reelshort_asset_plate"
+MESH_PREFIX = "reelshort_asset"
 
 TRELLIS_UNET = "trellis_2_int8_convrot.safetensors"
 TRELLIS_DINO = "dino_v3_vit_l.safetensors"
@@ -218,7 +220,7 @@ def _shape_graph(
         },
         "23": {
             "class_type": "SaveGLB",
-            "inputs": {"mesh": ["22", 0], "filename_prefix": "reelshort_asset"},
+            "inputs": {"mesh": ["22", 0], "filename_prefix": MESH_PREFIX},
         },
     }
     if not pixel_aligned:
@@ -313,42 +315,56 @@ def look_prompt(effects: list[str]) -> str:
     return template.replace("{effects}", "; ".join(" ".join(text.split()) for text in effects))
 
 
+# A picture takes minutes, a mesh longer; a run past these has hung.
+PICTURE_TIMEOUT_SECONDS = 1800
+MESH_TIMEOUT_SECONDS = 3600
+
+
+def _run(graph: dict, prefix: str, dest: Path, label: str, timeout_s: float) -> Path:
+    from comfy import free_comfy_models, run_graph
+
+    try:
+        free_comfy_models()
+        run_graph(graph, {prefix: dest}, label, timeout_s)
+    except urllib.error.URLError as exc:
+        raise RuntimeError(_comfy_unreachable()) from exc
+    return dest
+
+
 def generate_look_plate(plate: Path, effects: list[str], dest: Path) -> Path:
     """Write ``look.png``: the reviewed plate with its effects drawn in. ComfyUI must be running."""
-    from generate_batch import clone_workflow, execute_queued_graph, free_comfy_models, stable_seed, stage_named_image
+    from comfy import clone_workflow, stable_seed, stage_input
 
     prompt = look_prompt(effects)
     graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
-    graph["6"]["inputs"]["image"] = stage_named_image(plate, "asset_look_source")
+    graph["6"]["inputs"]["image"] = stage_input(plate, "asset_look_source")
     graph["7"]["inputs"]["prompt"] = prompt
     graph["10"]["inputs"]["seed"] = stable_seed("look", prompt)
-    try:
-        free_comfy_models()
-        execute_queued_graph(graph, dest, prefer="image", mode="Qwen look plate")
-    except urllib.error.URLError as exc:
-        raise RuntimeError(_comfy_unreachable()) from exc
+    return _run(graph, PLATE_PREFIX, dest, "Qwen look plate", PICTURE_TIMEOUT_SECONDS)
+
+
+def generate_reference(character: dict, dest: Path) -> Path:
+    """Write a character's ``reference.png`` with Qwen-Image-2512, from their words, at a seed fixed by them."""
+    from comfy import stable_seed, write_log
+    from describe import reference_prompt
+    from wan import REFERENCE_PREFIX, reference_graph
+    from world import settings
+
+    prompt = reference_prompt(character)
+    negative = settings()["referenceNegative"]
+    seed = stable_seed("reference", prompt)
+    _run(reference_graph(prompt, negative, seed), REFERENCE_PREFIX, dest, "Qwen-Image-2512 reference", PICTURE_TIMEOUT_SECONDS)
+    write_log(dest, {"prompt": prompt, "negative": negative, "seed": seed})
     return dest
 
 
-def generate_back_plate(plate: Path, dest: Path) -> Path:
-    """Write ``back.png``: the person on the plate seen from behind. ComfyUI must be running.
+def reference_is_current(character: dict, dest: Path) -> bool:
+    """Whether ``reference.png`` exists and was drawn from the character's current words."""
+    from comfy import inputs_dir, present
+    from describe import reference_prompt
 
-    Given a plate that shows the face, the still model draws the face whatever
-    the words say, so a shot of someone's back is drawn from their back.
-    """
-    from generate_batch import clone_workflow, execute_queued_graph, free_comfy_models, stable_seed, stage_named_image
-
-    prompt = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))["backPlate"]
-    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
-    graph["6"]["inputs"]["image"] = stage_named_image(plate, "asset_back_source")
-    graph["7"]["inputs"]["prompt"] = prompt
-    graph["10"]["inputs"]["seed"] = stable_seed("back", str(plate))
-    try:
-        free_comfy_models()
-        execute_queued_graph(graph, dest, prefer="image", mode="Qwen back plate")
-    except urllib.error.URLError as exc:
-        raise RuntimeError(_comfy_unreachable()) from exc
-    return dest
+    log = inputs_dir(dest) / "log.json"
+    return present(dest) and log.is_file() and json.loads(log.read_text(encoding="utf-8")).get("prompt") == reference_prompt(character)
 
 
 def plate_is_ready(path: Path) -> bool:
@@ -356,36 +372,18 @@ def plate_is_ready(path: Path) -> bool:
 
 
 def generate_asset_plate(appearance: str, raw_dir: Path, *, character: bool = False) -> Path:
-    """Write ``plate.png`` and stop. ComfyUI must already be running."""
-    from generate_batch import (
-        clone_workflow,
-        execute_queued_graph,
-        free_comfy_models,
-        stable_seed,
-        stage_named_image,
-        write_solid_png,
-    )
+    """Write ``plate.png``, the picture the mesh is built from, and stop. ComfyUI must already be running."""
+    from comfy import clone_workflow, stable_seed, stage_input, write_solid_png
 
     raw_dir.mkdir(parents=True, exist_ok=True)
-    seed = stable_seed("asset", " ".join(appearance.split()))
     blank = raw_dir / "blank.png"
     write_solid_png(blank, (210, 210, 210), PLATE_SIZE, PLATE_SIZE)
-    plate_graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
-    plate_graph["6"]["inputs"]["image"] = stage_named_image(blank, "asset_blank")
-    plate_graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, character=character)
-    plate_graph["10"]["inputs"]["seed"] = seed
-    plate_path = raw_dir / "plate.png"
-    try:
-        free_comfy_models()
-        execute_queued_graph(
-            plate_graph,
-            plate_path,
-            prefer="image",
-            mode="Qwen character plate" if character else "Qwen object plate",
-        )
-    except urllib.error.URLError as exc:
-        raise RuntimeError(_comfy_unreachable()) from exc
-    return plate_path
+    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
+    graph["6"]["inputs"]["image"] = stage_input(blank, "asset_blank")
+    graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, character=character)
+    graph["10"]["inputs"]["seed"] = stable_seed("asset", " ".join(appearance.split()))
+    label = "Qwen character plate" if character else "Qwen object plate"
+    return _run(graph, PLATE_PREFIX, raw_dir / "plate.png", label, PICTURE_TIMEOUT_SECONDS)
 
 
 def generate_asset_mesh(
@@ -396,12 +394,7 @@ def generate_asset_mesh(
     character: bool = False,
 ) -> Path:
     """Turn an existing ``plate.png`` into ``model.glb``. ComfyUI must already be running."""
-    from generate_batch import (
-        execute_queued_graph,
-        free_comfy_models,
-        stable_seed,
-        stage_named_image,
-    )
+    from comfy import stable_seed, stage_input
 
     plate_path = raw_dir / "plate.png"
     if not plate_is_ready(plate_path):
@@ -409,23 +402,12 @@ def generate_asset_mesh(
             f"No reviewed plate at {plate_path}. "
             "Run `pnpm run content:plates` and check the image before meshing."
         )
-    mesh_path = raw_dir / "model.glb"
-    seed = stable_seed("asset", " ".join(appearance.split()))
-    staged = stage_named_image(plate_path, "asset_plate")
+    staged = stage_input(plate_path, "asset_plate")
     # Every mesh keeps the plate's color. A character plate is a frontal photo,
     # so its mesh is pixel-aligned to it; an object keeps TRELLIS.2's upright frame.
-    graph = (pixal3d_graph if character else object_graph)(staged, seed, triangle_budget)
-    try:
-        free_comfy_models()
-        execute_queued_graph(
-            graph,
-            mesh_path,
-            prefer="mesh",
-            mode="Pixal3D mesh" if character else "TRELLIS.2 textured mesh",
-        )
-    except urllib.error.URLError as exc:
-        raise RuntimeError(_comfy_unreachable()) from exc
-    return mesh_path
+    graph = (pixal3d_graph if character else object_graph)(staged, stable_seed("asset", " ".join(appearance.split())), triangle_budget)
+    label = "Pixal3D mesh" if character else "TRELLIS.2 textured mesh"
+    return _run(graph, MESH_PREFIX, raw_dir / "model.glb", label, MESH_TIMEOUT_SECONDS)
 
 
 def _comfy_unreachable() -> str:
