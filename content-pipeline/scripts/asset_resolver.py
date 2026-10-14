@@ -1,10 +1,11 @@
-"""Turn every entity of a show into a plate and a mesh.
+"""Turn every entity of a show into one picture and a mesh.
 
-A landmark or a prop is one isolated object, drawn from its appearance and
-fitted into its size. Two with the same appearance and size share one picture
-and mesh. A character is drawn wearing ``body`` plus every attribute and fitted
-to their standing height. Every mesh keeps the plate's color on its vertices.
-A character is Pixal3D, pixel-aligned to its frontal plate, front turned to
+A landmark or a prop is one isolated object, drawn from its appearance
+(``plate.png``) and fitted into its size. Two with the same appearance and size
+share one picture and mesh. A character's picture is their reference photo
+(``reference.png``), drawn from ``body`` plus every attribute, and the mesh is
+fitted to their standing height. Every mesh keeps its picture's color on its
+vertices. A character is Pixal3D, pixel-aligned to the photo, front turned to
 schema +Y; an object is TRELLIS.2 in its own upright frame, textured.
 """
 
@@ -17,7 +18,14 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from asset_generate import generate_asset_mesh, object_text, plate_is_ready, plate_prompt
+from asset_generate import (
+    CHARACTER_PICTURE_SIZE,
+    OBJECT_PICTURE_SIZE,
+    generate_asset_mesh,
+    object_prompt,
+    object_text,
+    picture_is_current,
+)
 from asset_sources import materialize_mesh
 from coords import schema_to_gltf
 from mesh_io import (
@@ -51,6 +59,18 @@ class AssetRequest:
     character_id: str | None = None
     prop_id: str | None = None
     position: tuple[float, float, float] | None = None
+    # The words its one picture is drawn from.
+    prompt: str = ""
+    negative: str = ""
+
+    @property
+    def picture(self) -> str:
+        """A character's picture is their reference photo; an object's is its plate."""
+        return "reference.png" if self.character_id else "plate.png"
+
+    @property
+    def picture_size(self) -> tuple[int, int]:
+        return CHARACTER_PICTURE_SIZE if self.character_id else OBJECT_PICTURE_SIZE
 
     @property
     def shared(self) -> bool:
@@ -131,16 +151,12 @@ class AssetResolver:
         return resolved
 
     def resolve_one(self, request: AssetRequest) -> ResolvedAsset:
-        plate = self._dir(request, "plates") / "plate.png"
-        if not plate_is_ready(plate):
+        picture = self._dir(request, "plates") / request.picture
+        if not picture_is_current(picture, request.prompt, request.negative):
             raise RuntimeError(
-                f"{request.consumer_id}: no reviewed plate at {plate}. Run `pnpm run content:plates`."
+                f"{request.consumer_id}: no picture of the current words at {picture}. Run `pnpm run content:plates`."
             )
         digest = description_hash(request)
-        if _read_json(plate.with_name("plate.json"), {}).get("descriptionHash") not in (None, digest):
-            raise RuntimeError(
-                f"{request.consumer_id}: the plate does not match the current text. Run `pnpm run content:plates`."
-            )
         cached = self._cached(request, digest)
         if cached is not None and not self.refresh:
             return cached
@@ -177,8 +193,8 @@ class AssetResolver:
     def _import_generated(self, request: AssetRequest, digest: str) -> ResolvedAsset:
         directory = self._dir(request)
         directory.mkdir(parents=True, exist_ok=True)
-        plate_copy = directory / "plate.png"
-        shutil.copyfile(self._dir(request, "plates") / "plate.png", plate_copy)
+        plate_copy = directory / "picture.png"
+        shutil.copyfile(self._dir(request, "plates") / request.picture, plate_copy)
         try:
             fetched = materialize_mesh(
                 self.generator(
@@ -270,7 +286,7 @@ def _model(request: AssetRequest) -> str:
     return CHARACTER_MODEL if request.character_id else OBJECT_MODEL
 
 
-def write_plates(
+def write_pictures(
     show: dict,
     writer,
     *,
@@ -278,46 +294,42 @@ def write_plates(
     refresh: bool = False,
     offline: bool = False,
 ) -> list[Path]:
-    """Draw each entity's plate and leave the mesh for a later step.
+    """Draw each entity's one picture and leave the mesh for a later step.
 
-    A redrawn plate drops the mesh that was built from the previous picture.
-    Landmarks and props with the same appearance and size share one picture.
+    A picture is drawn again when its words change; a redrawn picture drops the
+    mesh built from the previous one. Landmarks and props with the same
+    appearance and size share one picture.
     """
+    from comfy import inputs_dir, write_log
+
     show_id = str(show["id"])
-    plates: list[Path] = []
+    pictures: list[Path] = []
     shared: dict[str, tuple[Path, str]] = {}
     for request in collect_requests(show):
         digest = description_hash(request)
-        plate = request.directory(output_dir, "plates", show_id) / "plate.png"
-        meta_path = plate.with_name("plate.json")
-        current = plate_is_ready(plate) and _read_json(meta_path, {}).get("descriptionHash") == digest and not refresh
+        picture = request.directory(output_dir, "plates", show_id) / request.picture
+        current = picture_is_current(picture, request.prompt, request.negative) and not refresh
         source = shared.get(digest) if request.shared else None
         if source is not None:
             if not current:
-                plate.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(source[0], plate)
-                meta_path.write_text(
-                    json.dumps({"locationId": request.location_id, "descriptionHash": digest, **_ids(request)}, indent=2),
-                    encoding="utf-8",
-                )
+                picture.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source[0], picture)
+                write_log(picture, json.loads((inputs_dir(source[0]) / "log.json").read_text(encoding="utf-8")))
                 _discard_mesh(output_dir, show_id, request)
             print(f"  {request.label}: reuses {source[1]}", flush=True)
-            plates.append(plate)
+            pictures.append(picture)
             continue
         if not current:
             if offline:
-                raise RuntimeError(f"{request.consumer_id}: no plate at {plate}; offline mode does not draw one")
-            writer(request.appearance, plate.parent, character=bool(request.character_id))
+                raise RuntimeError(f"{request.consumer_id}: no picture at {picture}; offline mode does not draw one")
+            picture.parent.mkdir(parents=True, exist_ok=True)
+            writer(request.prompt, request.negative, request.picture_size, picture)
             _discard_mesh(output_dir, show_id, request)
-            meta_path.write_text(
-                json.dumps({"locationId": request.location_id, "descriptionHash": digest, **_ids(request)}, indent=2),
-                encoding="utf-8",
-            )
-        print(f"  {request.label}: {plate}", flush=True)
-        plates.append(plate)
+        print(f"  {request.label}: {picture}", flush=True)
+        pictures.append(picture)
         if request.shared:
-            shared[digest] = (plate, request.label)
-    return plates
+            shared[digest] = (picture, request.label)
+    return pictures
 
 
 def _ids(request: AssetRequest) -> dict:
@@ -333,30 +345,40 @@ def _discard_mesh(output_dir: Path, show_id: str, request: AssetRequest) -> None
 
 
 def collect_requests(show: dict) -> list[AssetRequest]:
-    """Every landmark of every location, every prop, then every character."""
+    """Every landmark of every location, every prop, then every character, with the words of their picture."""
+    from describe import reference_prompt
+    from world import settings
+
+    words = settings()
     requests: list[AssetRequest] = []
     for location_id, location in show["locations"].items():
         for landmark_id, landmark in location["spatial"]["landmarks"].items():
+            appearance = object_text(landmark["appearance"], location["look"]["materials"])
             requests.append(
                 AssetRequest(
                     consumer_id=f"landmark:{location_id}:{landmark_id}",
                     label=f"{location_id}/{landmark_id}",
                     size=_vec3(landmark["size"]),
                     location_id=location_id,
-                    appearance=object_text(landmark["appearance"], location["look"]["materials"]),
+                    appearance=appearance,
                     landmark_id=landmark_id,
                     position=_vec3(landmark["position"]),
+                    prompt=object_prompt(appearance),
+                    negative=words["objectNegative"],
                 )
             )
     for prop_id, prop in (show.get("props") or {}).items():
+        appearance = " ".join(prop["appearance"].split())
         requests.append(
             AssetRequest(
                 consumer_id=f"prop:{prop_id}",
                 label=f"props/{prop_id}",
                 size=_vec3(prop["size"]),
                 location_id="props",
-                appearance=" ".join(prop["appearance"].split()),
+                appearance=appearance,
                 prop_id=prop_id,
+                prompt=object_prompt(appearance),
+                negative=words["objectNegative"],
             )
         )
     for character_id, character in show["characters"].items():
@@ -369,15 +391,16 @@ def collect_requests(show: dict) -> list[AssetRequest]:
                 location_id="characters",
                 appearance=character_appearance_text(character),
                 character_id=character_id,
+                prompt=reference_prompt(character),
+                negative=words["referenceNegative"],
             )
         )
     return requests
 
 
 def description_hash(request: AssetRequest) -> str:
-    """Identity of the picture: the full plate prompt and the size."""
-    text = plate_prompt(request.appearance, character=bool(request.character_id))
-    return asset_hash(GENERATED_SOURCE, appearance_source_id(text), request.size)
+    """Identity of the mesh: the words of its picture and the size."""
+    return asset_hash(GENERATED_SOURCE, appearance_source_id(f"{request.prompt}\n{request.negative}"), request.size)
 
 
 def appearance_source_id(appearance: str) -> str:
@@ -398,7 +421,7 @@ def export_credits(output_dir: Path, destination: Path) -> None:
         "# Credits",
         "",
         "Meshes are generated for one show: one per landmark, prop, and character, fitted",
-        "to the size in the script, with the plate's color. Qwen-Image-Edit-2511 draws the",
+        "to the size in the script, with its picture's color. Qwen-Image-2512 draws the",
         "picture. TRELLIS.2 meshes and textures an object; Pixal3D meshes a character.",
         "Qwen is Apache-2.0. TRELLIS.2 and Pixal3D are MIT.",
         "",
@@ -412,9 +435,9 @@ def export_credits(output_dir: Path, destination: Path) -> None:
     for path in records:
         name = f"{path.parents[2].name}/{path.parents[1].name}/{path.parent.name}"
         if path.name == "character.json":
-            lines.append(f"- {name} by Qwen-Image-Edit-2511, Pixal3D (MIT). {PIXAL3D_PAGE}")
+            lines.append(f"- {name} by Qwen-Image-2512, Pixal3D (MIT). {PIXAL3D_PAGE}")
         else:
-            lines.append(f"- {name} by Qwen-Image-Edit-2511, TRELLIS.2 (MIT). https://github.com/microsoft/TRELLIS.2")
+            lines.append(f"- {name} by Qwen-Image-2512, TRELLIS.2 (MIT). https://github.com/microsoft/TRELLIS.2")
     lines.append("")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("\n".join(lines), encoding="utf-8")

@@ -7,7 +7,6 @@ const { comfyPaths, ensureComfyVenv, run: runPython } = require("./comfy-env.cjs
 const repoRoot = path.resolve(__dirname, "..");
 const comfyDir = path.join(repoRoot, "content-pipeline", ".comfyui");
 const customNodes = path.join(comfyDir, "custom_nodes");
-const workflowSrcDir = path.join(repoRoot, "content-pipeline", "workflows");
 
 const REPOS = [
   { url: "https://github.com/comfyanonymous/ComfyUI.git", dir: comfyDir },
@@ -96,14 +95,6 @@ runPython(
   comfyDir,
 );
 
-const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
-fs.mkdirSync(workflowDestDir, { recursive: true });
-for (const name of fs.readdirSync(workflowSrcDir)) {
-  if (name.endsWith(".json")) {
-    fs.copyFileSync(path.join(workflowSrcDir, name), path.join(workflowDestDir, name));
-  }
-}
-
 for (const folder of [
   "diffusion_models",
   "checkpoints",
@@ -119,7 +110,6 @@ for (const folder of [
 
 console.log(`
 ComfyUI is cloned at content-pipeline/.comfyui
-Workflows copied to ComfyUI user/default/workflows/ (qwen_asset_plate.json)
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)

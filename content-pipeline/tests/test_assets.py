@@ -12,13 +12,12 @@ import numpy as np
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from asset_generate import generate_asset_mesh, object_graph, pixal3d_graph, plate_prompt  # noqa: E402
+from asset_generate import generate_asset_mesh, object_graph, object_prompt, pixal3d_graph  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     collect_requests,
     export_credits,
-    description_hash,
-    write_plates,
+    write_pictures,
 )
 from asset_sources import materialize_mesh  # noqa: E402
 from coords import schema_to_gltf  # noqa: E402
@@ -52,6 +51,19 @@ class CountingGenerator:
         dest = raw_dir / "model.glb"
         dest.write_bytes(self.cube.read_bytes())
         return dest
+
+
+def picture_writer(drawn: list[Path], content: bytes = b"x" * 2048):
+    """Stands in for Qwen-Image: writes the picture and its log, as ``generate_picture`` does."""
+    from comfy import write_log
+
+    def writer(prompt: str, negative: str, size: tuple[int, int], dest: Path) -> Path:
+        dest.write_bytes(content)
+        write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "seed": 1})
+        drawn.append(dest)
+        return dest
+
+    return writer
 
 
 class AssetTests(unittest.TestCase):
@@ -110,16 +122,10 @@ class AssetTests(unittest.TestCase):
         custom = pixal3d_graph("plate.png", 7, triangle_budget=12_000)
         custom_decimate = next(node for node in custom.values() if node["class_type"] == "DecimateMesh")
         self.assertEqual(custom_decimate["inputs"]["target_face_count"], 12_000)
-        self.assertIn("a stone bench", plate_prompt("  a   stone bench "))
-        landmark = plate_prompt("a stone bench")
-        self.assertNotIn("movie set", landmark.lower())
+        self.assertIn("a stone bench", object_prompt("  a   stone bench "))
+        landmark = object_prompt("a stone bench")
+        self.assertIn("one isolated object", landmark)
         self.assertNotIn("place", landmark.lower())
-        self.assertIn("a stone bench", landmark)
-        person = plate_prompt("black hair", character=True)
-        self.assertIn("full-body", person)
-        self.assertIn("black hair", person)
-        self.assertIn("no holes", person)
-        self.assertNotIn("movie set", person.lower())
         aligned = pixal3d_graph("plate.png", 7)
         aligned_classes = [node["class_type"] for node in aligned.values()]
         self.assertIn("Pixal3DConditioning", aligned_classes)
@@ -192,30 +198,22 @@ class AssetTests(unittest.TestCase):
 
         (request,) = [r for r in collect_requests(self._show()) if r.landmark_id]
         self.assertIn("Built of worn gray stone, like everything else in its place.", request.appearance)
-        self.assertIn("Built of worn gray stone", plate_prompt(request.appearance))
+        self.assertIn("Built of worn gray stone", request.prompt)
 
     def test_plates_stop_before_the_mesh(self) -> None:
         show = self._show()
         drawn: list[Path] = []
-
-        def writer(appearance: str, raw_dir: Path, character: bool = False) -> Path:
-            del appearance, character
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            plate = raw_dir / "plate.png"
-            plate.write_bytes(b"x" * 2048)
-            drawn.append(plate)
-            return plate
-
-        plates = write_plates(show, writer, output_dir=self.output)
+        writer = picture_writer(drawn)
+        plates = write_pictures(show, writer, output_dir=self.output)
         self.assertEqual(plates, drawn)
         self.assertEqual(len(drawn), 1)
         mesh = self.output / "assets" / "demo" / "room" / "bench" / "model.glb"
         mesh.parent.mkdir(parents=True, exist_ok=True)
         mesh.write_bytes(b"mesh")
-        self.assertEqual(write_plates(show, writer, output_dir=self.output), plates)
+        self.assertEqual(write_pictures(show, writer, output_dir=self.output), plates)
         self.assertEqual(len(drawn), 1)
         self.assertTrue(mesh.is_file())
-        write_plates(show, writer, output_dir=self.output, refresh=True)
+        write_pictures(show, writer, output_dir=self.output, refresh=True)
         self.assertEqual(len(drawn), 2)
         self.assertFalse(mesh.exists())
 
@@ -256,16 +254,8 @@ class AssetTests(unittest.TestCase):
             "gate_column_r": {"position": [4.2, -12.4, 0], "size": [0.8, 0.8, 4.2], "appearance": appearance},
         }
         drawn: list[Path] = []
-
-        def writer(text: str, raw_dir: Path, character: bool = False) -> Path:
-            del text, character
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            plate = raw_dir / "plate.png"
-            plate.write_bytes(b"column" * 400)
-            drawn.append(plate)
-            return plate
-
-        plates = write_plates(show, writer, output_dir=self.output)
+        writer = picture_writer(drawn, b"column" * 400)
+        plates = write_pictures(show, writer, output_dir=self.output)
         self.assertEqual(len(drawn), 1)
         self.assertEqual(plates[0].read_bytes(), plates[1].read_bytes())
         generator = CountingGenerator(self.cube)
@@ -278,8 +268,10 @@ class AssetTests(unittest.TestCase):
         self._resolver(generator).resolve_show(show)
         self.assertEqual(generator.calls, 1)
         show["locations"]["room"]["spatial"]["landmarks"]["gate_column_r"]["size"] = [1.0, 1.0, 4.2]
-        write_plates(show, writer, output_dir=self.output)
-        self.assertEqual(len(drawn), 2)
+        write_pictures(show, writer, output_dir=self.output)
+        self.assertEqual(len(drawn), 1, "the same words keep their picture")
+        self._resolver(generator).resolve_show(show)
+        self.assertEqual(generator.calls, 2, "a new size is a new mesh")
 
     def test_fit_keeps_proportions_inside_the_requested_box(self) -> None:
         fitted = fit_to_size(box_mesh((2.0, 1.0, 4.0))[0], (8.0, 0.2, 0.2))
@@ -297,19 +289,10 @@ class AssetTests(unittest.TestCase):
                 "heightMeters": 1.6,
             }
         }
-        drawn: list[tuple[bool, Path]] = []
-
-        def writer(text: str, raw_dir: Path, character: bool = False) -> Path:
-            del text
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            plate = raw_dir / "plate.png"
-            plate.write_bytes(b"x" * 2048)
-            drawn.append((character, plate))
-            return plate
-
-        write_plates(show, writer, output_dir=self.output)
-        character_plates = [plate for character, plate in drawn if character]
-        self.assertEqual([plate.parent.name for plate in character_plates], ["ada"])
+        drawn: list[Path] = []
+        write_pictures(show, picture_writer(drawn), output_dir=self.output)
+        photos = [path for path in drawn if path.parent.parent.name == "characters"]
+        self.assertEqual([(path.parent.name, path.name) for path in photos], [("ada", "reference.png")], "the reference photo is the mesh's picture")
         generator = CountingGenerator(self.cube)
         item = self._resolver(generator).resolve_show(show)["character:ada"]
         self.assertEqual(item.source, "pixal3d")
@@ -384,13 +367,7 @@ class AssetTests(unittest.TestCase):
         }
 
     def _write_plates(self, show: dict) -> None:
-        for request in collect_requests(show):
-            plate = request.directory(self.output, "plates", "demo") / "plate.png"
-            plate.parent.mkdir(parents=True, exist_ok=True)
-            plate.write_bytes(b"x" * 2048)
-            plate.with_name("plate.json").write_text(
-                json.dumps({"descriptionHash": description_hash(request)}), encoding="utf-8"
-            )
+        write_pictures(show, picture_writer([]), output_dir=self.output)
 
 
 if __name__ == "__main__":

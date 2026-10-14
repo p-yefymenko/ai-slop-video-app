@@ -1,7 +1,10 @@
-"""Draw one object or character with Qwen, or turn a reviewed picture into a mesh.
+"""Draw the one picture of an object or character with Qwen-Image-2512, or turn a reviewed picture into a mesh.
 
-A landmark or prop uses TRELLIS.2. A character uses Pixal3D, which shares
-that shape VAE and adds pixel-aligned features so the front matches the plate.
+A character's picture is their reference photo (``reference.png``): the video
+model's reference and Pixal3D's input, so the mesh and the look are one person.
+An object's picture is its plate (``plate.png``), TRELLIS.2's input. Pixal3D
+shares TRELLIS.2's shape VAE and adds pixel-aligned features so the front matches
+the photo.
 """
 
 from __future__ import annotations
@@ -14,9 +17,20 @@ from mesh_io import TRIANGLE_BUDGET
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "prompts.json"
-PLATE_WORKFLOW = ROOT / "workflows" / "qwen_asset_plate.json"
-PLATE_PREFIX = "reelshort_asset_plate"
 MESH_PREFIX = "reelshort_asset"
+PICTURE_PREFIX = "reelshort_picture"
+
+# Qwen-Image-2512 (Q8) draws every picture: it follows a description item by item
+# and looks real. 50 steps, CFG 4, euler, AuraFlow shift 3.1: the model's own settings.
+PICTURE_MODEL = "qwen-image-2512-Q8_0.gguf"
+PICTURE_TEXT_ENCODER = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+PICTURE_VAE = "qwen_image_vae.safetensors"
+PICTURE_STEPS = 50
+PICTURE_CFG = 4.0
+PICTURE_SHIFT = 3.1
+# A standing person fills a 9:16 portrait; an object, Qwen-Image's native square.
+CHARACTER_PICTURE_SIZE = (928, 1664)
+OBJECT_PICTURE_SIZE = (1328, 1328)
 
 TRELLIS_UNET = "trellis_2_int8_convrot.safetensors"
 TRELLIS_DINO = "dino_v3_vit_l.safetensors"
@@ -27,7 +41,8 @@ PIXAL3D_DINO = "dino_v3_L_naf_fp32.safetensors"
 PIXAL3D_TEXTURE_VAE = "trellis_2_texture_vae_bf16.safetensors"
 MOGE_MODEL = "moge_2_vitl_normal_fp16.safetensors"
 BACKGROUND_MODEL = "birefnet.safetensors"
-PLATE_SIZE = 1024
+# The object cut out and cropped to a square this size, as TRELLIS.2 takes it.
+TRELLIS_INPUT_SIZE = 1024
 # Second shape pass. 1024 is the node default and fits a 16GB card with the int8 weights.
 UPSAMPLE_RESOLUTION = 1024
 # Pixal3D leaves a margin so the projected features line up with the photo.
@@ -43,18 +58,33 @@ def object_text(appearance: str, materials: str) -> str:
     return f"{' '.join(appearance.split())} {template.replace('{materials}', ' '.join(materials.split()))}"
 
 
-def plate_prompt(appearance: str, *, character: bool = False) -> str:
-    """A character, or one isolated object (a landmark or a prop)."""
-    prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    key = "characterPlate" if character else "landmarkPlate"
-    template = prompts.get(key)
-    token = "{description}" if character else "{appearance}"
-    if not isinstance(template, str) or token not in template:
-        raise RuntimeError(f"{PROMPTS_PATH} is missing a {key} template with {token}")
+def object_prompt(appearance: str) -> str:
+    """One isolated object (a landmark or a prop), from its words."""
+    from describe import template
+
     text = " ".join(appearance.split())
     if not text:
         raise RuntimeError("appearance is empty")
-    return template.replace(token, text)
+    return template("objectPicture", {"appearance": text})
+
+
+def picture_graph(prompt: str, negative: str, size: tuple[int, int], seed: int) -> dict:
+    """Qwen-Image-2512 from words alone."""
+    width, height = size
+    return {
+        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": PICTURE_MODEL}},
+        "2": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": PICTURE_SHIFT}},
+        "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": PICTURE_TEXT_ENCODER, "type": "qwen_image"}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": prompt}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": negative}},
+        "6": {"class_type": "VAELoader", "inputs": {"vae_name": PICTURE_VAE}},
+        "7": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+        "8": {"class_type": "KSampler", "inputs": {
+            "model": ["2", 0], "seed": seed, "steps": PICTURE_STEPS, "cfg": PICTURE_CFG, "sampler_name": "euler",
+            "scheduler": "simple", "positive": ["4", 0], "negative": ["5", 0], "latent_image": ["7", 0], "denoise": 1.0}},
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["6", 0]}},
+        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": PICTURE_PREFIX}},
+    }
 
 
 def object_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
@@ -96,8 +126,8 @@ def _shape_graph(
             "inputs": {
                 "images": ["1", 0],
                 "masks": ["3", 0],
-                "width": PLATE_SIZE,
-                "height": PLATE_SIZE,
+                "width": TRELLIS_INPUT_SIZE,
+                "height": TRELLIS_INPUT_SIZE,
                 "pad_factor": 1.0,
                 "grow_mask": 0,
                 "background": "#000000",
@@ -322,47 +352,25 @@ def _run(graph: dict, prefix: str, dest: Path, label: str, timeout_s: float) -> 
     return dest
 
 
-def generate_reference(character: dict, dest: Path) -> Path:
-    """Write a character's ``reference.png`` with Qwen-Image-2512, from their words, at a seed fixed by them."""
+def generate_picture(prompt: str, negative: str, size: tuple[int, int], dest: Path) -> Path:
+    """Draw ``dest`` from words at a seed fixed by them, and log what it was drawn from. ComfyUI must be running."""
     from comfy import stable_seed, write_log
-    from describe import reference_prompt
-    from wan import REFERENCE_PREFIX, reference_graph
-    from world import settings
 
-    prompt = reference_prompt(character)
-    negative = settings()["referenceNegative"]
     seed = stable_seed("reference", prompt)
-    _run(reference_graph(prompt, negative, seed), REFERENCE_PREFIX, dest, "Qwen-Image-2512 reference", PICTURE_TIMEOUT_SECONDS)
-    write_log(dest, {"prompt": prompt, "negative": negative, "seed": seed})
+    _run(picture_graph(prompt, negative, size, seed), PICTURE_PREFIX, dest, "Qwen-Image-2512 picture", PICTURE_TIMEOUT_SECONDS)
+    write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "seed": seed})
     return dest
 
 
-def reference_is_current(character: dict, dest: Path) -> bool:
-    """Whether ``reference.png`` exists and was drawn from the character's current words."""
+def picture_is_current(dest: Path, prompt: str, negative: str) -> bool:
+    """Whether ``dest`` exists and was drawn from these words."""
     from comfy import inputs_dir, present
-    from describe import reference_prompt
 
     log = inputs_dir(dest) / "log.json"
-    return present(dest) and log.is_file() and json.loads(log.read_text(encoding="utf-8")).get("prompt") == reference_prompt(character)
-
-
-def plate_is_ready(path: Path) -> bool:
-    return path.is_file() and path.stat().st_size > 1024
-
-
-def generate_asset_plate(appearance: str, raw_dir: Path, *, character: bool = False) -> Path:
-    """Write ``plate.png``, the picture the mesh is built from, and stop. ComfyUI must already be running."""
-    from comfy import clone_workflow, stable_seed, stage_input, write_solid_png
-
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    blank = raw_dir / "blank.png"
-    write_solid_png(blank, (210, 210, 210), PLATE_SIZE, PLATE_SIZE)
-    graph = clone_workflow(json.loads(PLATE_WORKFLOW.read_text(encoding="utf-8")))
-    graph["6"]["inputs"]["image"] = stage_input(blank, "asset_blank")
-    graph["7"]["inputs"]["prompt"] = plate_prompt(appearance, character=character)
-    graph["10"]["inputs"]["seed"] = stable_seed("asset", " ".join(appearance.split()))
-    label = "Qwen character plate" if character else "Qwen object plate"
-    return _run(graph, PLATE_PREFIX, raw_dir / "plate.png", label, PICTURE_TIMEOUT_SECONDS)
+    if not (present(dest) and log.is_file()):
+        return False
+    made = json.loads(log.read_text(encoding="utf-8"))
+    return made.get("prompt") == prompt and made.get("negative") == negative
 
 
 def generate_asset_mesh(
@@ -372,17 +380,17 @@ def generate_asset_mesh(
     *,
     character: bool = False,
 ) -> Path:
-    """Turn an existing ``plate.png`` into ``model.glb``. ComfyUI must already be running."""
-    from comfy import stable_seed, stage_input
+    """Turn ``picture.png`` in ``raw_dir`` into ``model.glb``. ComfyUI must already be running."""
+    from comfy import present, stable_seed, stage_input
 
-    plate_path = raw_dir / "plate.png"
-    if not plate_is_ready(plate_path):
+    picture = raw_dir / "picture.png"
+    if not present(picture):
         raise RuntimeError(
-            f"No reviewed plate at {plate_path}. "
+            f"No reviewed picture at {picture}. "
             "Run `pnpm run content:plates` and check the image before meshing."
         )
-    staged = stage_input(plate_path, "asset_plate")
-    # Every mesh keeps the plate's color. A character plate is a frontal photo,
+    staged = stage_input(picture, "asset_picture")
+    # Every mesh keeps the picture's color. A character's is a frontal photo,
     # so its mesh is pixel-aligned to it; an object keeps TRELLIS.2's upright frame.
     graph = (pixal3d_graph if character else object_graph)(staged, stable_seed("asset", " ".join(appearance.split())), triangle_budget)
     label = "Pixal3D mesh" if character else "TRELLIS.2 textured mesh"

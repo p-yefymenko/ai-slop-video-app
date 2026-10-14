@@ -52,17 +52,6 @@ S2V_SHIFT = 8.0
 # S2V's first latent frame decodes badly; the template decodes it twice and drops the first frames.
 S2V_DROP_FRAMES = 3
 
-# Qwen-Image-2512, the character reference: a full-length photo on pure white.
-REFERENCE_MODEL = "qwen-image-2512-Q8_0.gguf"
-REFERENCE_TEXT_ENCODER = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
-REFERENCE_VAE = "qwen_image_vae.safetensors"
-REFERENCE_SIZE = (928, 1664)
-REFERENCE_STEPS = 50
-REFERENCE_CFG = 4.0
-REFERENCE_SHIFT = 3.1
-
-# Output prefixes: each graph's result is picked by name, never by position.
-REFERENCE_PREFIX = "reelshort_reference"
 STILL_PREFIX = "reelshort_still"
 VACE_PREFIX = "reelshort_vace"
 S2V_PREFIX = "reelshort_s2v"
@@ -82,25 +71,6 @@ def _video_out(images: list, prefix: str, audio: list | None = None, frame_rate:
     if audio is not None:
         inputs["audio"] = audio
     return {"class_type": "VHS_VideoCombine", "inputs": inputs}
-
-
-def reference_graph(prompt: str, negative: str, seed: int) -> dict:
-    """One character as a full-length studio photo, from their words alone."""
-    width, height = REFERENCE_SIZE
-    return {
-        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": REFERENCE_MODEL}},
-        "2": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": REFERENCE_SHIFT}},
-        "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": REFERENCE_TEXT_ENCODER, "type": "qwen_image"}},
-        "4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": prompt}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": negative}},
-        "6": {"class_type": "VAELoader", "inputs": {"vae_name": REFERENCE_VAE}},
-        "7": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-        "8": {"class_type": "KSampler", "inputs": {
-            "model": ["2", 0], "seed": seed, "steps": REFERENCE_STEPS, "cfg": REFERENCE_CFG, "sampler_name": "euler",
-            "scheduler": "simple", "positive": ["4", 0], "negative": ["5", 0], "latent_image": ["7", 0], "denoise": 1.0}},
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["6", 0]}},
-        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": REFERENCE_PREFIX}},
-    }
 
 
 def vace_graph(

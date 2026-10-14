@@ -243,19 +243,14 @@ def mesh_path(show: dict, kind: str, entity_id: str, location_id: str | None = N
     return asset_dir(show, "assets", kind, entity_id, location_id) / "model.glb"
 
 
-def plate_path(show: dict, kind: str, entity_id: str, location_id: str | None = None) -> Path:
-    """The picture its mesh is built from: the solid entity alone, without effects."""
-    return asset_dir(show, "plates", kind, entity_id, location_id) / "plate.png"
-
-
 def reference_path(show: dict, character_id: str) -> Path:
     """The character as the video model knows them: a full-length photo on pure white (``content:plates``)."""
-    return plate_path(show, "character", character_id).with_name("reference.png")
+    return asset_dir(show, "plates", "character", character_id) / "reference.png"
 
 
 def voice_path(show: dict, character_id: str) -> Path:
     """The character's cast voice: a short clean recording every line of theirs is spoken in."""
-    return plate_path(show, "character", character_id).with_name("voice.wav")
+    return asset_dir(show, "plates", "character", character_id) / "voice.wav"
 
 
 def required_meshes(show: dict) -> list[Path]:

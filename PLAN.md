@@ -14,7 +14,7 @@ Build a vertical short-drama video app (ReelShort clone) as a single monorepo. A
 4. [x] Run `pnpm run setup` to create the R2 bucket and D1 database, then paste the printed IDs into `server/wrangler.toml`
 5. [ ] Obtain Google Play Billing service account credentials (Play Console → API access) and add them to `.env`/secrets
 6. [x] Get an LTX API key. *No longer needed: the pipeline moved from LTX to Wan 2.2, which encodes its text locally.*
-7. [ ] **Install ComfyUI + models locally on the GPU machine**: run `pnpm run content:setup-comfy` once (clones ComfyUI and the GGUF, VideoHelperSuite, and Frame-Interpolation nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (Wan 2.2 VACE and S2V, Qwen-Image-2512 and Qwen-Image-Edit-2511, TRELLIS.2, Pixal3D, and the check models; about 120 GB) and `pnpm run content:voice-deps` (the Chatterbox voice env). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. `content-pipeline-stack.md` lists every model and what it is for.
+7. [ ] **Install ComfyUI + models locally on the GPU machine**: run `pnpm run content:setup-comfy` once (clones ComfyUI and the GGUF, VideoHelperSuite, and Frame-Interpolation nodes into `content-pipeline/.comfyui` and installs CUDA PyTorch). If you already ran setup before CUDA torch existed, run `pnpm run content:comfy-torch`. Then `pnpm run content:models` (Wan 2.2 VACE and S2V, Qwen-Image-2512, TRELLIS.2, Pixal3D) and `pnpm run content:voice-deps` (the voice envs: Chatterbox and Qwen3-TTS VoiceDesign). Leave `pnpm run content:comfy` running so the API is at `http://127.0.0.1:8188`. `content-pipeline-stack.md` lists every model and what it is for.
 8. [ ] **Write a show JSON.** One file per show at `content-pipeline/shows/<id>/script.json` (`ShowScript` in `packages/shared/src/script.ts`). Put characters, locations (text only), every prompt template, and episodes in that file. `pnpm run content:frames` generates character stills from it — no handmade PNGs in `characters/`.
 9. [ ] Run `pnpm run content:frames`. Review `characters/` then `scene_*_start.png` in `content-pipeline/output/frames/<show>/`. Keep, replace, or delete any file you do not like. Then run `pnpm run content:generate` and `pnpm run content:upload` on your own machine (the RTX 5070 Ti). ComfyUI must already be running from the previous step.
 10. [ ] (Optional) Buy a domain and point it at the deployed Worker — needed for the privacy policy URL Play Store requires
@@ -162,7 +162,6 @@ reelshort-clone/
 │   ├── wrangler.toml                # Cloudflare Worker config (bindings for D1 + R2)
 │   └── drizzle/                      # generated migrations
 ├── content-pipeline/
-│   ├── workflows/                # qwen_asset_plate.json (mesh plates); every other ComfyUI graph is built in scripts/wan.py
 │   ├── scripts/
 │   │   ├── generate_batch.py     # calls ComfyUI API to render a batch of episodes from a script/prompt list
 │   │   └── upload_to_r2.py       # pushes finished MP4s + thumbnails to R2, registers them via the backend API

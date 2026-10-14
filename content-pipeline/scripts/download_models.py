@@ -39,9 +39,6 @@ MODELS = [
     ("unsloth/Qwen-Image-2512-GGUF", "qwen-image-2512-Q8_0.gguf", "diffusion_models", 15 * GB),
     (QWEN, "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "text_encoders", 5 * GB),
     (QWEN, "split_files/vae/qwen_image_vae.safetensors", "vae", 100 * MB),
-    # Qwen-Image-Edit-2511: the plates meshes are built from (workflows/qwen_asset_plate.json).
-    ("unsloth/Qwen-Image-Edit-2511-GGUF", "qwen-image-edit-2511-Q4_K_M.gguf", "diffusion_models", 10 * GB),
-    ("lightx2v/Qwen-Image-Edit-2511-Lightning", "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", "loras", 100 * MB),
     # TRELLIS.2 (object meshes) and Pixal3D (character meshes).
     (TRELLIS, "diffusion_models/trellis_2_int8_convrot.safetensors", "diffusion_models", 5 * GB),
     (TRELLIS, "clip_vision/dino_v3_vit_l.safetensors", "clip_vision", 1 * GB),

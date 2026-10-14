@@ -10,13 +10,13 @@ Vertical episodes are authored as one `ShowScript` JSON file and rendered on a l
 
 | Stage | Command | Writes |
 | --- | --- | --- |
-| Plates | `content:plates` | `output/plates/<show>/` — one per landmark, prop, and character, plus each character's reference photo |
+| Pictures and voices | `content:plates` | `output/plates/<show>/` — one picture per landmark, prop, and character (a character's is their reference photo), and each speaker's voice |
 | Meshes | `content:assets` | `output/assets/<show>/` — one per plate |
 | Previs and script checks | `content:previs` | `output/previs/<show>/<episode>/` — per-scene `blockout.mp4`, guides, observations, plus one episode `blockout.mp4` |
 | Wan stills | `content:frames` | `output/frames/<show>/<episode>/` |
 | Voices, Wan clips at 24 fps, episode cut | `content:generate` | `output/generate/<show>/<episode>/` |
 
-Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. Previs renders every character, landmark, and prop mesh where the timeline puts it, and fails with a list when the script claims something the camera does not see (a performance for someone off screen, a face seen from behind, a speaker without a visible mouth) or misses someone it does.
+Clay previs is **only** `content:previs` (or that stage inside `content:render`). `content:frames` reads those clay frames; it does not create them. `content:previs` does not need ComfyUI. `content:plates` and `content:assets` do. Previs renders every character, landmark, and prop mesh where the timeline puts it, and fails with a list of exact mismatches: the camera inside a mesh, a performer never in the frame, a `target` not in the start frame.
 
 Leave ComfyUI running in another terminal before the GPU stages:
 
@@ -93,7 +93,7 @@ Write the script, then `pnpm run content:validate`. Field semantics are in `pack
 
 `pnpm run view -- --show <show-id>` lists that show’s locations and scenes. Deep links: `/location/<locationId>`, `/scene/<episode>/<scene>`.
 
-`content:plates` has Qwen draw and stop, so the picture can be reviewed: one picture per landmark, prop, and character. The same appearance and size are drawn once. `content:assets` then meshes each reviewed picture, fitted uniformly into the size in the script. A landmark or prop uses TRELLIS.2. A character uses Pixal3D so the front matches the plate, and the plate's texture is kept on the mesh. The same appearance and size are meshed once. The default polygon limit is 10,000,000. `pnpm run content:assets -- --triangles 300000` sets another limit.
+`content:plates` has Qwen-Image-2512 draw and stop, so the picture can be reviewed: one picture per landmark, prop, and character (a character's is their reference photo). The same appearance and size are drawn once. `content:assets` then meshes each reviewed picture, fitted uniformly into the size in the script. A landmark or prop uses TRELLIS.2. A character uses Pixal3D so the front matches the photo, and the picture's color is kept on the mesh. The same appearance and size are meshed once. The default polygon limit is 10,000,000. `pnpm run content:assets -- --triangles 300000` sets another limit.
 
 God camera (OrbitControls):
 
@@ -112,6 +112,6 @@ Needed for `content:frames` and `content:generate`. Clay previs does not need it
 3. `pnpm run content:voice-deps` (the voice envs: Chatterbox, and Qwen3-TTS VoiceDesign)
 4. Leave `pnpm run content:comfy` running at `http://127.0.0.1:8188`
 
-`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws previs on the GPU. `content:plates` needs ComfyUI running and the Qwen-Image-Edit and Qwen-Image-2512 weights. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`.
+`pnpm run content:asset-deps` installs trimesh and moderngl into that same Python. trimesh reads glTF and OBJ files. moderngl draws previs on the GPU. `content:plates` needs ComfyUI running and the Qwen-Image-2512 weights. `content:assets` needs ComfyUI running and the TRELLIS.2, Pixal3D, and MoGe weights from `pnpm run content:models`.
 
-Catalog terms and licenses: `docs/ASSETS.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).
+Models and licenses: `content-pipeline-stack.md`. Attribution file: `docs/CREDITS.md` (`pnpm run content:assets -- --credits`).

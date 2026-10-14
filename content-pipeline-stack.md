@@ -17,16 +17,15 @@ Generation is offline, on the GPU machine (an RTX 5070 Ti, 16 GB; 34 GB RAM). CU
 | Path | Role |
 | --- | --- |
 | `content-pipeline/shows/<id>/script.json` | The show. `ShowScript` in `packages/shared/src/script.ts`. Folder name matches `id`. |
-| `content-pipeline/prompts.json` | Every word template the models get (plates, reference photos, the Wan prompt pieces, the negatives) and the episode loudness (`episodeLoudnessTargetLufs`). Not show content. |
+| `content-pipeline/prompts.json` | Every word template the models get (object pictures, reference photos, the Wan prompt pieces, the negatives) and the episode loudness (`episodeLoudnessTargetLufs`). Not show content. |
 | `content-pipeline/scripts/wan.py` | The Wan chain's graphs and every model setting (steps, CFG, shift, strength, sizes, frame rates), one named constant each, the same for every scene. |
-| `content-pipeline/workflows/qwen_asset_plate.json` | The one stored ComfyUI graph: the mesh plates. Every other graph is built in Python. |
 
 ### The world
 
 Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `content-pipeline/scripts/coords.py` is the only converter.
 
-- **Entities.** A character (`body`, `attributes`, `heightMeters`), a landmark (`position`, `size`, `appearance`, per location), and a prop (`appearance`, `size`) are all the same thing: one generated, plate-colored mesh, fitted into its size, with named regions. A character's regions are body parts; anything else has one region, `whole`. A whole place seen from far away (a hanging citadel) is one landmark the size of the location.
-- **Location look.** Each location has `look.materials` and `look.light`, said once. Every landmark's plate adds `materials` (`landmarkMaterials`), so the objects of one place share one material language; every Wan prompt there ends with `light`.
+- **Entities.** A character (`body`, `attributes`, `heightMeters`), a landmark (`position`, `size`, `appearance`, per location), and a prop (`appearance`, `size`) are all the same thing: one generated mesh colored by its picture, fitted into its size. A whole place seen from far away (a hanging citadel) is one landmark the size of the location.
+- **Location look.** Each location has `look.materials` and `look.light`, said once. Every landmark's picture adds `materials` (`landmarkMaterials`), so the objects of one place share one material language; every Wan prompt there ends with `light`.
 - **Effects.** Fire, smoke, steam, sparks, and glow are never part of a mesh: in a depth video they would be a solid shape, and the video would keep them solid. Any entity may list `effects`, each a box (`size`, `offset` from the entity's base, turned with it) and its own `appearance`. Effect words never go in an `appearance`, `body`, `materials`, or attribute: a mesh is built from those words. An effect is never rendered into the depth video or collided with. The Wan prompt names the effects the start frame shows, so the video makes them.
 - **Shots.** Every scene declares `shot`: what it shows, as one of a closed set of types (`single`, `group`, `overShoulder`, `insert`, `establishing`, `action`) with its subjects, `size` (ecu … wide), `angle` (eye, low, high), `side` (front, left, right), and `move` (static, pushIn, pullOut, tiltUp: the same place, turning from the feet up to the framing). An own camera that moves says how in `cameraMotion`, the words the clip prompt uses. For every shot of people the camera is computed from the blocking (`shots.py`, when the show is loaded): the top of the subject's height down by the shot size fills the frame, seen along their gaze, so a shot frames its subject by construction and nobody types camera coordinates. Only `insert` and `establishing` (required) and `action` (optional) set their own `camera`. Validation enforces each type's subjects and sizes.
 - **Timeline.** Every character and every prop has a track in every episode, starting at 0. A keyframe puts it in a location at a position, or off stage (`locationId: null`). A prop is placed; holding one is not supported (no robust hand position). A character's body faces `lookAtId` when set, else `bodyYawDegrees`.
@@ -42,8 +41,8 @@ Schema space is meters, X right, Y forward, Z up. glTF is Y-up, forward −Z. `c
 ```text
 script.json
     │
-    ├─ content:plates      Qwen-Image-Edit-2511 / -2512          one plate per landmark, prop, character; a reference photo per character
-    ├─ content:assets      TRELLIS.2 / Pixal3D                   one mesh per plate
+    ├─ content:plates      Qwen-Image-2512, Qwen3-TTS VoiceDesign one picture per landmark, prop, character; a voice per speaker
+    ├─ content:assets      TRELLIS.2 / Pixal3D                   one mesh per picture
     ├─ content:previs      moderngl                              render, guides, observations, script checks
     ├─ content:frames      Wan 2.2 VACE                          scene start stills
     └─ content:generate    Chatterbox → Wan S2V or VACE → RIFE   voice, scene clips at 24 fps, episode cut
@@ -51,24 +50,20 @@ script.json
 
 Plates and meshes skip files already on disk. A still, a voice track, or a clip is made again when what it was made from changed (its words, its size, its lines, the still under a talking take: each output's `inputs/<name>/log.json` records them), and is otherwise skipped; `--force` remakes one selected scene anyway. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show's generated files aside.
 
-### 1. Plates — Qwen-Image-Edit-2511, and reference photos — Qwen-Image-2512
+### 1. Pictures and voices — Qwen-Image-2512, Qwen3-TTS VoiceDesign
 
-`content:plates` draws and stops. ComfyUI must be running. A landmark or prop is one isolated object (`landmarkPlate`). A character is one full-body plate from `body` plus every attribute (`characterPlate`). Landmarks and props that share appearance and size are drawn once. The mesh is built from `plate.png` only; `effects` are never drawn into a plate (the video prompt names them). Output: `output/plates/<show>/<location>/<landmark>/`, `.../props/<prop>/`, `.../characters/<character>/`.
+`content:plates` draws and stops. ComfyUI must be running. Every entity has exactly one picture, the one its mesh is built from: Qwen-Image-2512 (Q8 GGUF, 50 steps, CFG 4, euler, AuraFlow shift 3.1; `asset_generate.picture_graph`), at a seed fixed by its words, drawn again only when its words change, and reviewed. A landmark or prop is one isolated object on light gray, 1328×1328 (`plate.png`; `objectPicture`, `objectNegative`, the location's `landmarkMaterials`); landmarks and props with the same appearance and size share one picture. A character's picture is their reference photo (`reference.png`): a full-length studio photo on pure white from `body` and every attribute, item by item, 928×1664 (`referencePhoto`, `referenceNegative`). It is also the picture the video model knows them by, so the mesh's silhouette and the look are one person. `effects` are never drawn into a picture (the video prompt names them). Each picture's words, size and seed are in `inputs/<name>/log.json`. Output: `output/plates/<show>/<location>/<landmark>/`, `.../props/<prop>/`, `.../characters/<character>/`.
 
-Graph: `workflows/qwen_asset_plate.json`. The 4-step Lightning LoRA, CFG 1, AuraFlow shift 3.1, denoise 1.0.
-
-**Reference photos.** Each character also gets `reference.png`, the picture the video model knows them by: Qwen-Image-2512 (Q8 GGUF, 50 steps, CFG 4, euler, AuraFlow shift 3.1, 928×1664), a full-length studio photo on pure white from `body` and every attribute, item by item (`referencePhoto`, `referenceNegative`). Qwen-Image-Edit's plates follow a description less closely and look less real. One photo per character, at a seed fixed by their words; it is drawn again when the words change, and reviewed like every plate.
-
-**Voices.** Every character with a `voice` description also gets `voice.wav` beside the reference: Qwen3-TTS VoiceDesign (1.7B, bf16, in `content-pipeline/.voicedesign`) speaks `voiceSample` (prompts.json) in a voice made from that description, in English, at a seed fixed by it (`voice.design_voices`). It is made again when the description, the sample or the model changes, and reviewed like every plate. ComfyUI's VRAM is freed first. Every line of that character is spoken in it (stage 5).
+**Voices.** Every character with a `voice` description also gets `voice.wav` beside the reference: Qwen3-TTS VoiceDesign (1.7B, bf16, in `content-pipeline/.voicedesign`) speaks `voiceSample` (prompts.json) in a voice made from that description, in English, at a seed fixed by it (`voice.design_voices`). It is made again when the description, the sample or the model changes, and reviewed like every picture. ComfyUI's VRAM is freed first. Every line of that character is spoken in it (stage 5).
 
 ### 2. Meshes — TRELLIS.2 and Pixal3D
 
-`content:assets` turns each reviewed plate into one mesh. A missing plate stops the build. Every mesh keeps the plate's color on its vertices (the TRELLIS.2 texture stage, painted onto the mesh).
+`content:assets` turns each reviewed picture into one mesh. A missing or stale picture stops the build. Every mesh keeps the picture's color on its vertices (the TRELLIS.2 texture stage, painted onto the mesh).
 
 | Subject | Model | Why |
 | --- | --- | --- |
-| Landmark, prop | TRELLIS.2 shape + texture | Built in its own upright frame. An object plate is drawn from slightly above; pixel alignment would tilt the object by that angle. Fitted uniformly into `size`, base center at its position. |
-| Character | Pixal3D shape + texture | The plate is a frontal, eye-level photo, so pixel alignment makes the front match it. Front turned to schema +Y (Pixal3D's axis convention), fitted to `heightMeters`. No cleanup: the mesh is used as generated. |
+| Landmark, prop | TRELLIS.2 shape + texture | Built in its own upright frame. An object picture may be seen from slightly above; pixel alignment would tilt the object by that angle. Fitted uniformly into `size`, base center at its position. |
+| Character | Pixal3D shape + texture | The reference photo is frontal and eye-level, so pixel alignment makes the front match it. Front turned to schema +Y (Pixal3D's axis convention), fitted to `heightMeters`. No cleanup: the mesh is used as generated. |
 
 Both remove the background with BiRefNet, condition with DINOv3, and run the shape cascade at 1024. ComfyUI's DecimateMesh caps the mesh (default 10,000,000 triangles).
 
@@ -144,7 +139,6 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 | Wan 2.2 S2V 14B | fp8 weights, `wav2vec2_large_english` audio encoder | Apache-2.0 |
 | Wan, shared | `umt5_xxl_fp8_e4m3fn_scaled` text encoder, `wan_2.1_vae` | Apache-2.0 |
 | Qwen-Image-2512 | Q8 GGUF (unsloth), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae` | Apache-2.0 |
-| Qwen-Image-Edit-2511 (mesh plates) | Q4_K_M GGUF, 4-step Lightning LoRA | Apache-2.0 |
 | TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet | MIT |
 | Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. | MIT |
 | RIFE | `rife49.pth`, fetched by ComfyUI-Frame-Interpolation on first use | MIT |

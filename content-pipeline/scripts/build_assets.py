@@ -1,4 +1,4 @@
-"""Draw plates for every landmark, prop, and character (and each character's reference photo and voice), or mesh reviewed plates.
+"""Draw every entity's one picture (an object's plate, a character's reference photo) and each character's voice, or mesh reviewed pictures.
 
 ``--episode``, ``--scene``, ``--seed``, and ``--size`` are accepted so ``content:render``
 can forward the same arguments. They do not change what is built.
@@ -14,12 +14,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_generate import generate_asset_plate, generate_reference, reference_is_current  # noqa: E402
+from asset_generate import generate_picture  # noqa: E402
 from mesh_io import TRIANGLE_BUDGET, require_triangle_budget  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
     export_credits,
-    write_plates,
+    write_pictures,
 )
 from pipeline_paths import (  # noqa: E402
     OUTPUT_DIR,
@@ -27,20 +27,6 @@ from pipeline_paths import (  # noqa: E402
     load_content_env,
     show_id_for_script,
 )
-
-
-def write_references(show: dict, *, refresh: bool, offline: bool) -> None:
-    """Every character's reference photo, the picture the video model knows them by."""
-    from world import reference_path
-
-    for cid, character in show["characters"].items():
-        dest = reference_path(show, cid)
-        if reference_is_current(character, dest) and not refresh:
-            continue
-        if offline:
-            raise SystemExit(f"Missing or stale {dest}, and --offline does not generate.")
-        print(f"Reference photo for {cid}...", flush=True)
-        generate_reference(character, dest)
 
 
 def write_voices(show: dict, *, refresh: bool, offline: bool) -> None:
@@ -103,15 +89,9 @@ def main() -> None:
     if args.stage == "plates":
         for script in scripts:
             show = json.loads(script.read_text(encoding="utf-8"))
-            plates = write_plates(
-                show,
-                generate_asset_plate,
-                refresh=args.force or args.refresh,
-                offline=args.offline,
-            )
-            print(f"{show_id_for_script(script)}: {len(plates)} plates")
             write_voices(show, refresh=args.force or args.refresh, offline=args.offline)
-            write_references(show, refresh=args.force or args.refresh, offline=args.offline)
+            pictures = write_pictures(show, generate_picture, refresh=args.force or args.refresh, offline=args.offline)
+            print(f"{show_id_for_script(script)}: {len(pictures)} pictures")
         print("Review the plates, references and voices, then run `pnpm run content:assets`.")
         return
     for script in scripts:
