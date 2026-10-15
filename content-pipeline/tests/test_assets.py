@@ -57,9 +57,11 @@ def picture_writer(drawn: list[Path], content: bytes = b"x" * 2048):
     """Stands in for Qwen-Image: writes the picture and its log, as ``generate_picture`` does."""
     from comfy import write_log
 
-    def writer(prompt: str, negative: str, size: tuple[int, int], dest: Path) -> Path:
+    def writer(prompt: str, negative: str, size: tuple[int, int], dest: Path, pose: bool) -> Path:
+        from asset_generate import POSE_NAME
+
         dest.write_bytes(content)
-        write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "seed": 1})
+        write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "pose": POSE_NAME if pose else None, "seed": 1})
         drawn.append(dest)
         return dest
 

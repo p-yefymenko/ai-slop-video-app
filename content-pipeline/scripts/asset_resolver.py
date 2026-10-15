@@ -68,6 +68,11 @@ class AssetRequest:
         return "reference.png" if self.character_id else "plate.png"
 
     @property
+    def pose(self) -> bool:
+        """A character's photo is drawn over the standing pose, so the whole figure is in it."""
+        return bool(self.character_id)
+
+    @property
     def picture_size(self) -> tuple[int, int]:
         return CHARACTER_PICTURE_SIZE if self.character_id else OBJECT_PICTURE_SIZE
 
@@ -151,7 +156,7 @@ class AssetResolver:
 
     def resolve_one(self, request: AssetRequest) -> ResolvedAsset:
         picture = self._dir(request, "plates") / request.picture
-        if not picture_is_current(picture, request.prompt, request.negative):
+        if not picture_is_current(picture, request.prompt, request.negative, request.pose):
             raise RuntimeError(
                 f"{request.consumer_id}: no picture of the current words at {picture}. Run `pnpm run content:plates`."
             )
@@ -307,7 +312,7 @@ def write_pictures(
     for request in collect_requests(show):
         digest = description_hash(request)
         picture = request.directory(output_dir, "plates", show_id) / request.picture
-        current = picture_is_current(picture, request.prompt, request.negative) and not refresh
+        current = picture_is_current(picture, request.prompt, request.negative, request.pose) and not refresh
         source = shared.get(digest) if request.shared else None
         if source is not None:
             if not current:
@@ -322,7 +327,7 @@ def write_pictures(
             if offline:
                 raise RuntimeError(f"{request.consumer_id}: no picture at {picture}; offline mode does not draw one")
             picture.parent.mkdir(parents=True, exist_ok=True)
-            writer(request.prompt, request.negative, request.picture_size, picture)
+            writer(request.prompt, request.negative, request.picture_size, picture, request.pose)
             _discard_mesh(output_dir, show_id, request)
         print(f"  {request.label}: {picture}", flush=True)
         pictures.append(picture)
@@ -399,7 +404,7 @@ def collect_requests(show: dict) -> list[AssetRequest]:
 
 def description_hash(request: AssetRequest) -> str:
     """Identity of the mesh: the words of its picture and the size."""
-    return asset_hash(GENERATED_SOURCE, appearance_source_id(f"{request.prompt}\n{request.negative}"), request.size)
+    return asset_hash(GENERATED_SOURCE, appearance_source_id(f"{request.prompt}\n{request.negative}\n{request.pose}"), request.size)
 
 
 def appearance_source_id(appearance: str) -> str:

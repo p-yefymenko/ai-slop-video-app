@@ -208,28 +208,24 @@ export const SHOT_SIZES = ["ecu", "cu", "mcu", "medium", "full", "wide"] as cons
 export type ShotSize = (typeof SHOT_SIZES)[number];
 
 /**
- * What the shot shows. For every shot of people the camera is computed from the
- * blocking (content-pipeline/scripts/shots.py), so it frames its subjects by
- * construction; only `insert`, `establishing` and `action` may set `camera` themselves.
+ * What the shot shows, in words for the video model, and whose reference photos
+ * it gets (`subjects`). The framing itself is the scene's authored `camera`;
+ * nothing here moves it.
  *
  * - `single`: one character (`subjects: [id]`), `size` ecu|cu|mcu|medium|full.
  * - `group`: two or more characters, `size` mcu|medium|full|wide.
- * - `overShoulder`: `subjects: [seen]` over the near shoulder of `over`, `size` cu|mcu|medium.
- * - `insert`: one detail (hands, a weapon); needs `camera`.
- * - `establishing`: the place; needs `camera`.
- * - `action`: characters in motion, `size` full|wide, or its own `camera`.
+ * - `overShoulder`: `subjects: [seen]`, past someone in the foreground, `size` cu|mcu|medium.
+ * - `insert`: one detail (hands, a weapon).
+ * - `establishing`: the place.
+ * - `action`: characters in motion, `size` full|wide.
  */
 export type SceneShot = {
   type: ShotType;
+  /** Whose faces the shot shows: their reference photos go to the video model. Never the foreground shoulder. */
   subjects?: string[];
-  over?: string;
   size?: ShotSize;
-  /** eye (default) | low (looking up: power) | high (looking down: defeat). */
+  /** eye (default) | low (looking up: power) | high (looking down: defeat). Words only; the camera must match. */
   angle?: "eye" | "low" | "high";
-  /** front (default, along the gaze) | left | right (a three-quarter view). */
-  side?: "front" | "left" | "right";
-  /** static (default) | pushIn | pullOut | tiltUp (from the feet up to the framing). */
-  move?: "static" | "pushIn" | "pullOut" | "tiltUp";
 };
 
 export type ScriptScene = {
@@ -239,17 +235,16 @@ export type ScriptScene = {
   storyBeat: string;
   /** Interval on the episode timeline. Scene duration is this interval. */
   timeRangeSeconds: [number, number];
-  /** What the shot shows; its camera follows from it. */
+  /** What the shot shows, in words. */
   shot: SceneShot;
-  /** Only for `establishing` (required) and `action` (optional). Never inside a mesh. */
-  camera?: SpatialCamera;
-  /** How an own camera that moves moves, in words for the video model ("flies low over the treetops toward the cliff edge"). Required exactly when it moves. */
+  /** The framing, authored for every scene: check it in the viewer. Never inside a mesh. */
+  camera: SpatialCamera;
+  /** How the camera moves, in words for the video model ("flies low over the treetops toward the cliff edge"). Required exactly when it has more than one keyframe. */
   cameraMotion?: string;
   /**
-   * Who acts in the shot. Everyone here is said to the video model with their
-   * whole look and their action; anyone else in the frame is not named (the
-   * shot's `over` is the shoulder in front). Previs fails when someone here is
-   * never in the frame. `{}` when nobody acts.
+   * Who acts in the shot. Everyone here is said to the video model by their
+   * `body` with their action; anyone else in the frame is not named. Previs
+   * fails when someone here is never in the frame. `{}` when nobody acts.
    */
   performances: Record<string, ScenePerformance>;
   /**

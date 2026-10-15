@@ -7,11 +7,10 @@ necessary, and each is the least that does its job:
   the script's. People are flat silhouettes at their own distance: the clay's
   face relief, copied, freezes the face. One fixed log scale for every shot, so a
   lone person far away is not stretched to white.
-- **Reference sheet** (shots with a face the model must get right): each such
-  person's reference photo, cut out onto pure white. VACE copies a reference's
-  backdrop into the take unless it is white, and paints a face for anyone on the
-  sheet, so a person whose face the shot does not show is left to the words
-  (``describe.faces_shown``).
+- **Reference sheet**: the reference photo of each of the shot's ``subjects``,
+  side by side on white. VACE copies a reference's backdrop into the take unless
+  it is white, and paints a face for anyone on the sheet, so only the people
+  whose faces the shot shows are subjects (``describe.reference_people``).
 """
 
 from __future__ import annotations

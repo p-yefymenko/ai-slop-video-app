@@ -32,6 +32,47 @@ PICTURE_SHIFT = 3.1
 CHARACTER_PICTURE_SIZE = (928, 1664)
 OBJECT_PICTURE_SIZE = (1328, 1328)
 
+# A character's photo is drawn over one fixed standing pose (InstantX ControlNet Union,
+# OpenPose skeleton), so the whole figure, head to feet, is an input, not a request
+# the model may ignore. One pose for everyone; height and build come from the words.
+POSE_CONTROLNET = "Qwen-Image-InstantX-ControlNet-Union.safetensors"
+POSE_NAME = "standing-front-v1"
+POSE_STRENGTH = 1.0
+# Released for the last steps, so the pose fixes the figure and the words finish the detail.
+POSE_END = 0.8
+# The figure, head top to soles, as a share of the picture's height, and where it starts.
+POSE_FIGURE_HEIGHT = 0.86
+POSE_TOP = 0.06
+# OpenPose body keypoints (BODY_18 order) of a person standing straight, facing the
+# camera, arms at the sides: (x from the body's center line, y down from the head top),
+# both in shares of the figure's height. The person's right is the picture's left.
+STANDING_POSE = [
+    (0.0, 0.075),     # nose
+    (0.0, 0.135),     # neck
+    (-0.12, 0.18),    # right shoulder
+    (-0.13, 0.37),    # right elbow
+    (-0.125, 0.52),   # right wrist
+    (0.12, 0.18),     # left shoulder
+    (0.13, 0.37),     # left elbow
+    (0.125, 0.52),    # left wrist
+    (-0.085, 0.5),    # right hip
+    (-0.065, 0.72),   # right knee
+    (-0.06, 0.955),   # right ankle
+    (0.085, 0.5),     # left hip
+    (0.065, 0.72),    # left knee
+    (0.06, 0.955),    # left ankle
+    (-0.025, 0.06),   # right eye
+    (0.025, 0.06),    # left eye
+    (-0.055, 0.07),   # right ear
+    (0.055, 0.07),    # left ear
+]
+# OpenPose's limbs (pairs of keypoints) and colors, as its annotator draws them.
+POSE_LIMBS = [(1, 2), (1, 5), (2, 3), (3, 4), (5, 6), (6, 7), (1, 8), (8, 9), (9, 10), (1, 11), (11, 12), (12, 13),
+              (1, 0), (0, 14), (14, 16), (0, 15), (15, 17)]
+POSE_COLORS = [(255, 0, 0), (255, 85, 0), (255, 170, 0), (255, 255, 0), (170, 255, 0), (85, 255, 0), (0, 255, 0),
+               (0, 255, 85), (0, 255, 170), (0, 255, 255), (0, 170, 255), (0, 85, 255), (0, 0, 255), (85, 0, 255),
+               (170, 0, 255), (255, 0, 255), (255, 0, 170), (255, 0, 85)]
+
 TRELLIS_UNET = "trellis_2_int8_convrot.safetensors"
 TRELLIS_DINO = "dino_v3_vit_l.safetensors"
 TRELLIS_SHAPE_VAE = "trellis_2_shape_vae_bf16.safetensors"
@@ -59,10 +100,38 @@ def object_prompt(appearance: str) -> str:
     return template("objectPicture", {"appearance": text})
 
 
-def picture_graph(prompt: str, negative: str, size: tuple[int, int], seed: int) -> dict:
-    """Qwen-Image-2512 from words alone."""
+def standing_pose(size: tuple[int, int], dest: Path) -> Path:
+    """Draw ``STANDING_POSE`` as an OpenPose skeleton on black, the figure centered and full height."""
+    import math
+
+    from PIL import Image, ImageDraw
+
     width, height = size
-    return {
+    figure = POSE_FIGURE_HEIGHT * height
+    points = [(width / 2 + x * figure, POSE_TOP * height + y * figure) for x, y in STANDING_POSE]
+    picture = Image.new("RGB", size, (0, 0, 0))
+    limbs = Image.new("RGB", size, (0, 0, 0))
+    draw = ImageDraw.Draw(limbs)
+    stick = max(2, round(height / 220))
+    for (a, b), color in zip(POSE_LIMBS, POSE_COLORS):
+        (x0, y0), (x1, y1) = points[a], points[b]
+        angle = math.atan2(y1 - y0, x1 - x0)
+        across = (-math.sin(angle) * stick, math.cos(angle) * stick)
+        draw.polygon([(x0 + across[0], y0 + across[1]), (x1 + across[0], y1 + across[1]),
+                      (x1 - across[0], y1 - across[1]), (x0 - across[0], y0 - across[1])], fill=color)
+    picture = Image.blend(picture, limbs, 0.6)
+    draw = ImageDraw.Draw(picture)
+    for (x, y), color in zip(points, POSE_COLORS):
+        draw.ellipse((x - stick, y - stick, x + stick, y + stick), fill=color)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    picture.save(dest)
+    return dest
+
+
+def picture_graph(prompt: str, negative: str, size: tuple[int, int], seed: int, pose: str | None = None) -> dict:
+    """Qwen-Image-2512 from words, over the ``pose`` skeleton (a ComfyUI input image) when given."""
+    width, height = size
+    graph = {
         "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": PICTURE_MODEL}},
         "2": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": PICTURE_SHIFT}},
         "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": PICTURE_TEXT_ENCODER, "type": "qwen_image"}},
@@ -76,6 +145,15 @@ def picture_graph(prompt: str, negative: str, size: tuple[int, int], seed: int) 
         "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["6", 0]}},
         "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": PICTURE_PREFIX}},
     }
+    if pose is not None:
+        graph["11"] = {"class_type": "LoadImage", "inputs": {"image": pose}}
+        graph["12"] = {"class_type": "ControlNetLoader", "inputs": {"control_net_name": POSE_CONTROLNET}}
+        graph["13"] = {"class_type": "ControlNetApplyAdvanced", "inputs": {
+            "positive": ["4", 0], "negative": ["5", 0], "control_net": ["12", 0], "image": ["11", 0],
+            "strength": POSE_STRENGTH, "start_percent": 0.0, "end_percent": POSE_END, "vae": ["6", 0]}}
+        graph["8"]["inputs"]["positive"] = ["13", 0]
+        graph["8"]["inputs"]["negative"] = ["13", 1]
+    return graph
 
 
 def object_graph(image_name: str, seed: int, triangle_budget: int = TRIANGLE_BUDGET) -> dict:
@@ -343,25 +421,32 @@ def _run(graph: dict, prefix: str, dest: Path, label: str, timeout_s: float) -> 
     return dest
 
 
-def generate_picture(prompt: str, negative: str, size: tuple[int, int], dest: Path) -> Path:
-    """Draw ``dest`` from words at a seed fixed by them, and log what it was drawn from. ComfyUI must be running."""
-    from comfy import stable_seed, write_log
+def generate_picture(prompt: str, negative: str, size: tuple[int, int], dest: Path, pose: bool = False) -> Path:
+    """Draw ``dest`` from words (over the standing pose when ``pose``) at a seed fixed by them, and log
+    what it was drawn from. ComfyUI must be running."""
+    from comfy import inputs_dir, stable_seed, stage_input, write_log
 
     seed = stable_seed("reference", prompt)
-    _run(picture_graph(prompt, negative, size, seed), PICTURE_PREFIX, dest, "Qwen-Image-2512 picture", PICTURE_TIMEOUT_SECONDS)
-    write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "seed": seed})
+    files = {}
+    staged = None
+    if pose:
+        files["pose"] = standing_pose(size, inputs_dir(dest) / "pose.png")
+        staged = stage_input(files["pose"], "picture_pose")
+    graph = picture_graph(prompt, negative, size, seed, staged)
+    _run(graph, PICTURE_PREFIX, dest, "Qwen-Image-2512 picture", PICTURE_TIMEOUT_SECONDS)
+    write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "pose": POSE_NAME if pose else None, "seed": seed}, files)
     return dest
 
 
-def picture_is_current(dest: Path, prompt: str, negative: str) -> bool:
-    """Whether ``dest`` exists and was drawn from these words."""
+def picture_is_current(dest: Path, prompt: str, negative: str, pose: bool = False) -> bool:
+    """Whether ``dest`` exists and was drawn from these words (and the standing pose, when ``pose``)."""
     from comfy import inputs_dir, present
 
     log = inputs_dir(dest) / "log.json"
     if not (present(dest) and log.is_file()):
         return False
     made = json.loads(log.read_text(encoding="utf-8"))
-    return made.get("prompt") == prompt and made.get("negative") == negative
+    return (made.get("prompt"), made.get("negative"), made.get("pose")) == (prompt, negative, POSE_NAME if pose else None)
 
 
 def generate_asset_mesh(

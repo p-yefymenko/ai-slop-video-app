@@ -35,10 +35,12 @@ MODELS = [
     # Shared by every Wan model.
     (WAN21, "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors", "text_encoders", 5 * GB),
     (WAN, "split_files/vae/wan_2.1_vae.safetensors", "vae", 200 * MB),
-    # Qwen-Image-2512: character reference photos.
+    # Qwen-Image-2512: every picture (character reference photos, object plates).
     ("unsloth/Qwen-Image-2512-GGUF", "qwen-image-2512-Q8_0.gguf", "diffusion_models", 15 * GB),
     (QWEN, "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "text_encoders", 5 * GB),
     (QWEN, "split_files/vae/qwen_image_vae.safetensors", "vae", 100 * MB),
+    # InstantX ControlNet Union for Qwen-Image: a character's reference photo is drawn over one fixed standing pose.
+    ("Comfy-Org/Qwen-Image-InstantX-ControlNets", "split_files/controlnet/Qwen-Image-InstantX-ControlNet-Union.safetensors", "controlnet", 3 * GB),
     # TRELLIS.2 (object meshes) and Pixal3D (character meshes).
     (TRELLIS, "diffusion_models/trellis_2_int8_convrot.safetensors", "diffusion_models", 5 * GB),
     (TRELLIS, "clip_vision/dino_v3_vit_l.safetensors", "clip_vision", 1 * GB),

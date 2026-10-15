@@ -28,11 +28,6 @@
   },
   "cameraHeld": "The camera is handheld and nearly still, holding the same framing for the whole take.",
   "cameraMotion": "The camera {motion}, in one smooth continuous move.",
-  "cameraMoves": {
-    "pushIn": "The camera slowly pushes in.",
-    "pullOut": "The camera slowly pulls back.",
-    "tiltUp": "The camera starts low on the feet and tilts slowly up the body to the face, then holds on the face."
-  },
   "person": "{body}: {action}.",
   "personEnters": "Coming into the frame, {body}: {action}.",
   "expression": "Face: {expression}.",

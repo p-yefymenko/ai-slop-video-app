@@ -74,6 +74,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
               ada: { action: "stands still, then shifts the weight once" },
             },
             shot: { type: "single", subjects: ["ada"], size: "full" },
+            camera: { keyframes: [{ timeSeconds: 0, position: [0, 4, 1.5], lookAt: [0, 0, 1], verticalFovDegrees: 40 }] },
             sound: {
               events: [
                 { text: "dress fabric rustles as she shifts her weight", source: { characterId: "ada" } },
@@ -230,14 +231,14 @@ test("a line starts within its scene", () => {
   assert.match(messages(show), /lines\[0\]\.startSeconds: must be within the scene/);
 });
 
-test("an own camera that moves says how in words", () => {
+test("a camera that moves says how in words", () => {
   const show = minimalShow();
   const scene = show.episodes[0].scenes[0];
   scene.shot = { type: "establishing" };
   scene.performances = {};
   const pose = (t: number, y: number) => ({ timeSeconds: t, position: [0, y, 1.6] as [number, number, number], lookAt: [0, 5, 1.2] as [number, number, number], verticalFovDegrees: 40 });
   scene.camera = { keyframes: [pose(0, -4), pose(1, -3)] };
-  assert.match(messages(show), /cameraMotion: an own camera that moves needs cameraMotion/);
+  assert.match(messages(show), /cameraMotion: a camera with more than one keyframe needs cameraMotion/);
   scene.cameraMotion = "glides forward";
   const result = parseShowScript(show);
   assert.ok(result.ok || !result.issues.some((issue) => issue.path.endsWith("cameraMotion")));
@@ -282,22 +283,18 @@ test("rejects a show id that does not match the file", () => {
   assert.match(result.issues[0].message, /other-show/);
 });
 
-test("every shot of people is framed from its subjects; only insert, establishing and action set a camera", () => {
+test("every scene authors its camera; a shot names its subjects and size", () => {
   const show = minimalShow();
   const scene = show.episodes[0].scenes[0];
-  scene.camera = { keyframes: [{ timeSeconds: 0, position: [0, -3, 1.5], lookAt: [0, 0, 1.5], verticalFovDegrees: 40 }] };
-  assert.match(messages(show), /camera: a single shot gets its camera from its subjects/);
-  delete scene.camera;
+  delete (scene as { camera?: unknown }).camera;
+  assert.match(messages(show), /camera: camera is required/);
+  scene.camera = { keyframes: [{ timeSeconds: 0, position: [0, 4, 1.5], lookAt: [0, 0, 1], verticalFovDegrees: 40 }] };
   scene.shot = { type: "single", subjects: [] };
-  assert.match(messages(show), /shot.subjects: a single shot frames 1 subject/);
+  assert.match(messages(show), /shot.subjects: a single shot has 1 subject/);
   scene.shot = { type: "single", subjects: ["ada"], size: "wide" };
   assert.match(messages(show), /shot.size: a single shot is ecu, cu, mcu, medium, full/);
-  scene.shot = { type: "overShoulder", subjects: ["ada"], over: "ada" };
-  assert.match(messages(show), /shot.over: the near shoulder belongs to someone other than the subject/);
-  scene.shot = { type: "insert" };
-  assert.match(messages(show), /camera: an insert shot needs its own camera/);
-  scene.shot = { type: "establishing" };
-  assert.match(messages(show), /camera: an establishing shot needs its own camera/);
+  (scene.shot as { over?: string }).over = "ada";
+  assert.match(messages(show), /shot: Unrecognized key/);
 });
 
 test("an action is aimed only through {target}", () => {

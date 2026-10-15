@@ -35,13 +35,8 @@ def settings() -> dict:
 
 
 def load_show(path: Path) -> dict:
-    """The script as authored, with every shot's camera framed (``shots.resolve_cameras``).
-
-    ``content:validate`` has already checked its shape.
-    """
-    from shots import resolve_cameras
-
-    return resolve_cameras(json.loads(Path(path).read_text(encoding="utf-8")))
+    """The script as authored. ``content:validate`` has already checked its shape."""
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def clause(text: object) -> str:

@@ -29,7 +29,8 @@
         "a thick gray wolf-fur mantle over the shoulders",
         "a cream linen tunic",
         "a long gray-green wool coat",
-        "a brown leather belt"
+        "a brown leather belt",
+        "worn brown leather boots"
       ],
       "heightMeters": 1.86,
       "voice": "an old man's voice, about sixty: low and gravelly, slow and measured, a weary authority, plain American accent"
@@ -44,7 +45,8 @@
         "brown irises",
         "a red-fox fur mantle over the shoulders",
         "a cream silk robe with a gold-embroidered collar",
-        "a leather belt"
+        "a leather belt",
+        "soft brown leather boots"
       ],
       "heightMeters": 1.84,
       "voice": "a middle-aged man's voice, about fifty-five: deep and booming, chesty, forceful and blunt, plain American accent"
@@ -58,7 +60,8 @@
         "pale gray irises",
         "a white fur cape over the shoulders",
         "a long cream linen gown",
-        "a small silver pendant"
+        "a small silver pendant",
+        "soft pale leather boots"
       ],
       "heightMeters": 1.72,
       "voice": "an older woman's voice, about sixty: low alto, cool and precise, clipped and stern, plain American accent"
@@ -72,7 +75,8 @@
         "black spiked plate armor",
         "a high crimson-lined collar",
         "a long crimson cloak",
-        "black gauntlets"
+        "black gauntlets",
+        "black armored boots"
       ],
       "heightMeters": 1.88
     },
@@ -487,7 +491,11 @@
             0.97
           ],
           "shot": {
-            "type": "action"
+            "type": "action",
+            "subjects": [
+              "ryan",
+              "mira"
+            ]
           },
           "performances": {
             "ryan": {
@@ -612,9 +620,41 @@
               "nori"
             ],
             "size": "mcu",
-            "angle": "low",
-            "move": "tiltUp"
+            "angle": "low"
           },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 5.9,
+                "position": [
+                  -0.4,
+                  -5.126,
+                  1.101
+                ],
+                "lookAt": [
+                  -0.5,
+                  -6.4,
+                  0.144
+                ],
+                "verticalFovDegrees": 30.0
+              },
+              {
+                "timeSeconds": 12.67,
+                "position": [
+                  -0.4,
+                  -5.126,
+                  1.101
+                ],
+                "lookAt": [
+                  -0.5,
+                  -6.4,
+                  1.516
+                ],
+                "verticalFovDegrees": 30.0
+              }
+            ]
+          },
+          "cameraMotion": "starts low on the feet and tilts slowly up the body to the face, then holds on the face",
           "performances": {
             "nori": {
               "action": "gazes up and out across the clearing, the eyebrows lifting in wonder"
@@ -662,9 +702,25 @@
             "subjects": [
               "adam"
             ],
-            "over": "ben",
-            "size": "mcu",
-            "side": "right"
+            "size": "mcu"
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 12.67,
+                "position": [
+                  0.34,
+                  -6.72,
+                  1.35
+                ],
+                "lookAt": [
+                  -0.4,
+                  -9.0,
+                  1.55
+                ],
+                "verticalFovDegrees": 20.0
+              }
+            ]
           },
           "performances": {
             "adam": {
@@ -720,9 +776,25 @@
             "subjects": [
               "nori"
             ],
-            "over": "adam",
-            "size": "medium",
-            "side": "right"
+            "size": "medium"
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 18.1,
+                "position": [
+                  -0.079,
+                  -9.538,
+                  1.6
+                ],
+                "lookAt": [
+                  -0.5,
+                  -6.4,
+                  1.345
+                ],
+                "verticalFovDegrees": 22.0
+              }
+            ]
           },
           "performances": {
             "nori": {
@@ -768,7 +840,10 @@
             22.87
           ],
           "shot": {
-            "type": "action"
+            "type": "action",
+            "subjects": [
+              "ryan"
+            ]
           },
           "performances": {
             "ryan": {
@@ -824,6 +899,24 @@
             ],
             "size": "mcu"
           },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 22.87,
+                "position": [
+                  -0.272,
+                  -6.884,
+                  1.556
+                ],
+                "lookAt": [
+                  0.3,
+                  -8.1,
+                  1.556
+                ],
+                "verticalFovDegrees": 30.0
+              }
+            ]
+          },
           "performances": {
             "ben": {
               "action": "speaks with a scornful smile, the head tilting",
@@ -875,6 +968,24 @@
             ],
             "size": "medium"
           },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 26.47,
+                "position": [
+                  -3.168,
+                  -3.875,
+                  1.405
+                ],
+                "lookAt": [
+                  -0.05,
+                  -8.55,
+                  1.405
+                ],
+                "verticalFovDegrees": 30.0
+              }
+            ]
+          },
           "performances": {
             "ben": {
               "action": "speaks with a theatrical sigh, the head shaking slowly",
@@ -921,8 +1032,25 @@
             "subjects": [
               "nori"
             ],
-            "over": "adam",
             "size": "mcu"
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 29.1,
+                "position": [
+                  -0.679,
+                  -9.561,
+                  1.6
+                ],
+                "lookAt": [
+                  -0.5,
+                  -6.4,
+                  1.516
+                ],
+                "verticalFovDegrees": 22.0
+              }
+            ]
           },
           "performances": {
             "nori": {
@@ -1059,8 +1187,25 @@
             "subjects": [
               "nori"
             ],
-            "size": "medium",
-            "side": "left"
+            "size": "medium"
+          },
+          "camera": {
+            "keyframes": [
+              {
+                "timeSeconds": 35.5,
+                "position": [
+                  -1.449,
+                  -4.58,
+                  1.345
+                ],
+                "lookAt": [
+                  -0.5,
+                  -6.4,
+                  1.345
+                ],
+                "verticalFovDegrees": 30.0
+              }
+            ]
           },
           "performances": {
             "nori": {

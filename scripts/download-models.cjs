@@ -1,5 +1,4 @@
 const { spawnSync } = require("node:child_process");
-const fs = require("node:fs");
 const path = require("node:path");
 const { findPython } = require("./find-python.cjs");
 
@@ -17,18 +16,7 @@ if (!python) {
   process.exit(1);
 }
 
-for (const folder of ["diffusion_models", "vae", "text_encoders", "audio_encoders", "loras"]) {
-  fs.mkdirSync(path.join(comfyDir, "models", folder), { recursive: true });
-}
-
-const workflowSrcDir = path.join(repoRoot, "content-pipeline", "workflows");
-const workflowDestDir = path.join(comfyDir, "user", "default", "workflows");
-fs.mkdirSync(workflowDestDir, { recursive: true });
-for (const name of fs.readdirSync(workflowSrcDir)) {
-  if (name.endsWith(".json")) {
-    fs.copyFileSync(path.join(workflowSrcDir, name), path.join(workflowDestDir, name));
-  }
-}
+// download_models.py creates each models folder it writes into.
 
 const result = spawnSync(python, [script, comfyDir], {
   stdio: "inherit",

@@ -33,7 +33,7 @@ def two_people() -> dict:
 
 def over_the_shoulder(**extra) -> dict:
     return scene(
-        shot={"type": "overShoulder", "subjects": ["ada"], "over": "bo", "size": "mcu", "angle": "low"},
+        shot={"type": "overShoulder", "subjects": ["ada"], "size": "mcu", "angle": "low"},
         performances={"ada": {"action": "speaks with a half-smile", "expression": "lips slightly parted"}},
         **extra,
     )
@@ -75,7 +75,7 @@ class ReferenceSheetTests(unittest.TestCase):
         show = two_people()
         self.assertEqual(reference_people(show, over_the_shoulder()), ["ada"], "the shoulder in front is left to the depth video")
         acting = scene(performances={"ada": {"action": "waits"}, "bo": {"action": "nods"}})
-        self.assertEqual(reference_people(show, acting), ["ada", "bo"], "no subjects: everyone with a performance")
+        self.assertEqual(reference_people(show, acting), [], "only subjects, never every performer")
         self.assertEqual(reference_people(show, scene()), [])
 
     def test_photos_side_by_side_on_white_as_drawn(self) -> None:

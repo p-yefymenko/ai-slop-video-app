@@ -151,7 +151,7 @@ def inputs_digest(show: dict, episode: dict, scene: dict) -> str:
     for path in required_meshes(show):
         digest.update(f"{path}:{path.stat().st_mtime_ns if path.is_file() else 0}".encode("utf-8"))
     here = Path(__file__).resolve().parent
-    for name in ("world.py", "render.py", "observe.py", "checks.py", "previs.py", "shots.py"):
+    for name in ("world.py", "render.py", "observe.py", "checks.py", "previs.py"):
         digest.update((here / name).read_bytes())
     return digest.hexdigest()
 

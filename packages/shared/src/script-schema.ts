@@ -170,11 +170,8 @@ const shotSchema = z
   .object({
     type: z.enum(SHOT_TYPES, { errorMap: () => ({ message: `shot.type must be one of ${SHOT_TYPES.join(", ")}` }) }),
     subjects: z.array(text("shot subject")).optional(),
-    over: text("shot.over").optional(),
     size: z.enum(SHOT_SIZES, { errorMap: () => ({ message: `shot.size must be one of ${SHOT_SIZES.join(", ")}` }) }).optional(),
     angle: z.enum(["eye", "low", "high"]).optional(),
-    side: z.enum(["front", "left", "right"]).optional(),
-    move: z.enum(["static", "pushIn", "pullOut", "tiltUp"]).optional(),
   })
   .strict();
 
@@ -305,9 +302,8 @@ const sceneSchema = z
             invalid_type_error: "camera.keyframes must be an array",
           })
           .min(1, "camera.keyframes needs at least one pose"),
-      })
-      .strict()
-      .optional(),
+      }, { required_error: "camera is required: every scene authors its framing" })
+      .strict(),
     cameraMotion: text("cameraMotion").optional(),
     performances: z.record(performanceSchema, {
       required_error: "performances is required; use {} when no one is on camera",
@@ -695,28 +691,17 @@ const SHOT_RULES: Record<ScriptScene["shot"]["type"], { sizes: string[]; subject
   action: { sizes: ["full", "wide"], subjects: [0, 99] },
 };
 
-/**
- * A shot names what it shows, and every shot of people gets its camera from the
- * blocking, so it frames its subjects by construction. Only an insert, an
- * establishing, or an action shot may set its own camera.
- */
+/** A shot names what it shows and whose faces; the camera is authored separately. */
 function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, scenePath: string) {
   const shot = scene.shot;
   const path = `${scenePath}.shot`;
   const rule = SHOT_RULES[shot.type];
   const subjects = shot.subjects ?? [];
   const isCharacter = (id: string) => id in show.characters;
-  const ownCamera = shot.type === "establishing" || shot.type === "insert" || (shot.type === "action" && scene.camera !== undefined);
-  if (scene.camera && !["insert", "establishing", "action"].includes(shot.type)) {
-    issues.push({ path: `${scenePath}.camera`, message: `a ${shot.type} shot gets its camera from its subjects; remove camera` });
-  }
-  if ((shot.type === "establishing" || shot.type === "insert") && !scene.camera) {
-    issues.push({ path: `${scenePath}.camera`, message: `an ${shot.type} shot needs its own camera` });
-  }
-  if (!ownCamera && (subjects.length < Math.max(rule.subjects[0], 1) || subjects.length > rule.subjects[1])) {
+  if (subjects.length < rule.subjects[0] || subjects.length > rule.subjects[1]) {
     issues.push({
       path: `${path}.subjects`,
-      message: `a ${shot.type} shot frames ${rule.subjects[0] === rule.subjects[1] ? rule.subjects[0] : `${Math.max(rule.subjects[0], 1)} or more`} subject(s)`,
+      message: `a ${shot.type} shot has ${rule.subjects[0] === rule.subjects[1] ? rule.subjects[0] : `${rule.subjects[0]} to ${rule.subjects[1]}`} subject(s)`,
     });
   }
   subjects.forEach((id, index) => {
@@ -729,15 +714,6 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
   });
   if (shot.size !== undefined && !rule.sizes.includes(shot.size)) {
     issues.push({ path: `${path}.size`, message: `a ${shot.type} shot is ${rule.sizes.join(", ") || "not sized"}` });
-  }
-  if (shot.type === "overShoulder") {
-    if (!shot.over || !isCharacter(shot.over)) {
-      issues.push({ path: `${path}.over`, message: "an over-the-shoulder shot needs over: the character whose shoulder is in front" });
-    } else if (subjects.includes(shot.over)) {
-      issues.push({ path: `${path}.over`, message: "the near shoulder belongs to someone other than the subject" });
-    }
-  } else if (shot.over !== undefined) {
-    issues.push({ path: `${path}.over`, message: "only an over-the-shoulder shot has over" });
   }
 }
 
@@ -767,11 +743,11 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
       issues.push({ path: `${path}.startSeconds`, message: `must be within the scene (0 to ${(sceneEnd - sceneStart).toFixed(2)} s)` });
     }
   });
-  const ownCameraMoves = (scene.camera?.keyframes.length ?? 0) > 1;
-  if (ownCameraMoves && !scene.cameraMotion) {
-    issues.push({ path: `${scenePath}.cameraMotion`, message: "an own camera that moves needs cameraMotion: how it moves, in words for the video model" });
-  } else if (scene.cameraMotion && !ownCameraMoves) {
-    issues.push({ path: `${scenePath}.cameraMotion`, message: "only an own camera that moves has cameraMotion; a shot's move is shot.move" });
+  const cameraMoves = (scene.camera?.keyframes.length ?? 0) > 1;
+  if (cameraMoves && !scene.cameraMotion) {
+    issues.push({ path: `${scenePath}.cameraMotion`, message: "a camera with more than one keyframe needs cameraMotion: how it moves, in words for the video model" });
+  } else if (scene.cameraMotion && !cameraMoves) {
+    issues.push({ path: `${scenePath}.cameraMotion`, message: "only a camera with more than one keyframe has cameraMotion" });
   }
   const landmarks = show.locations[scene.locationId]?.spatial.landmarks ?? {};
   scene.sound.events.forEach((event, eventIndex) => {

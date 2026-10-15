@@ -63,12 +63,9 @@ def shot_sentence(scene: dict) -> str:
 
 
 def camera_sentence(scene: dict) -> str:
-    """How the camera moves: an own camera's words, a shot's move, else held by hand."""
-    if scene.get("cameraMotion"):
+    """How the camera moves, in the script's words; else held by hand."""
+    if scene.get("cameraMotion") and camera_moves(scene):
         return template("cameraMotion", {"motion": clause(scene["cameraMotion"])})
-    move = (scene.get("shot") or {}).get("move", "static")
-    if move != "static" and camera_moves(scene):
-        return settings()["cameraMoves"][move]
     return template("cameraHeld", {})
 
 
@@ -137,14 +134,12 @@ def talking_speaker(scene: dict) -> str | None:
 
 
 def reference_people(show: dict, scene: dict) -> list[str]:
-    """Whose reference photos the take gets: the shot's subjects, else everyone with a performance, never the shoulder in front.
+    """Whose reference photos the take gets: the shot's ``subjects``, exactly as authored.
 
-    VACE paints a face for everyone on the sheet, so the shoulder in front (``over``)
-    is left to the depth video.
+    VACE paints a face for everyone on the sheet, so anyone whose face the shot
+    does not show (a shoulder in front) is left to the depth video.
     """
-    shot = scene.get("shot") or {}
-    chosen = shot.get("subjects") or list(scene.get("performances") or {})
-    return [cid for cid in dict.fromkeys(chosen) if cid in show["characters"] and cid != shot.get("over")]
+    return [cid for cid in dict.fromkeys((scene.get("shot") or {}).get("subjects") or []) if cid in show["characters"]]
 
 
 def reference_prompt(character: dict) -> str:

@@ -103,28 +103,33 @@ The reference episode, `packages/shared/src/reel-short-content-reference/return-
 
 Every character, landmark, and prop is a mesh that the timeline places. You
 never list who is in a shot: previs renders the world from the camera. Who the
-video model is told about is what you write: the shot's `subjects` and `over`,
-and the `performances`.
+video model is told about is what you write: the shot's `subjects` and the
+`performances`. Every scene's `camera` is authored too.
 
 - **Coverage is cut from one continuous blocking.** Nobody teleports to
   manufacture a close-up.
 - **Give a performance to everyone whose action matters.** The video model
   hears of a performer only their `body` and their action and expression;
   their look comes from their reference photo (if they are a subject) and
-  their shape from the depth video. Anyone else, the shot's `over` included,
-  is not named. A performer must be in the frame at some moment (previs fails
+  their shape from the depth video. Anyone else (a shoulder in front) is not
+  named. A performer must be in the frame at some moment (previs fails
   otherwise), and a `target` (always a person) in the start frame.
 - **`body` is build and skin only, never clothes**, and an action never names
   clothes, props, or landmarks: the words cannot know which part of them the
   frame shows, and the model draws whatever is named.
 - **The subjects are the faces.** The reference photos of the shot's `subjects`
-  (or, without subjects, of the performers) go to the model, and it paints
-  their faces; so list as a subject only someone whose face the shot should
-  show, and never the shoulder in front.
-- **Change the view through the blocking or the shot type, never through
-  coordinates.**
-  - Example: the near shoulder fills the edge of an over-the-shoulder shot →
-    move that person, or change `side` or `over`.
+  go to the model, and it paints their faces; so list as a subject only
+  someone whose face the shot should show, and never the shoulder in front.
+- **Author every camera.** Set each scene's `camera` keyframes (position,
+  `lookAt`, `verticalFovDegrees`) so the frame matches the shot: for the
+  benchmark, the reference frame. Check it in the viewer's scene camera and in
+  `content:previs`'s `start.png`, and adjust the numbers until it matches.
+  Keep `shot.size` and `shot.angle` true to the camera you set: they are the
+  words the model gets. A camera with more than one keyframe needs
+  `cameraMotion`.
+- **Write the whole look, head to feet.** Every visible garment goes in the
+  attributes, footwear included; anything left out, the model invents (bare
+  feet under a robe).
 
 ## Write for what the pipeline can show
 
