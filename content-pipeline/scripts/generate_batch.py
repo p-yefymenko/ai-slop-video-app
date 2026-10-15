@@ -89,10 +89,13 @@ def require_previs(show: dict, episode: dict, scene: dict) -> dict:
     return load_observation(*_ids(show, episode, scene), "start")
 
 
-def shot_inputs(show: dict, episode: dict, scene: dict, people: list[str], size: str, length: int, folder: Path) -> tuple[str, str | None]:
-    """The depth video for a take of ``length`` frames and the reference sheet of ``people``, staged for ComfyUI."""
+def shot_inputs(show: dict, episode: dict, scene: dict, people: list[str], size: str, length: int, folder: Path, still: bool) -> tuple[str, str | None]:
+    """The depth video for a take of ``length`` frames and the reference sheet of ``people``, staged for ComfyUI.
+
+    A still's depth keeps the people's relief; a clip's has them flat, so VACE does not freeze the faces.
+    """
     width, height = wan.SIZES[size]
-    depth = write_depth_video(show, episode, scene, width, height, length, wan.FPS, folder / "depth.mp4")
+    depth = write_depth_video(show, episode, scene, width, height, length, wan.FPS, folder / "depth.mp4", flat_people=not still)
     photos = [reference_path(show, cid) for cid in people]
     missing = [str(path) for path in photos if not present(path)]
     if missing:
@@ -107,11 +110,11 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     start = require_previs(show, episode, scene)
     prompt = video_prompt(show, episode, scene, start)
     people = reference_people(show, scene)
-    expected = {"prompt": prompt, "size": size, "references": people}
+    expected = {"prompt": prompt, "size": size, "references": people, "depth": "relief", "strength": wan.STILL_VACE_STRENGTH}
     if made_from(dest, expected) and not force:
         print("  Still is current.", flush=True)
         return dest
-    control, reference = shot_inputs(show, episode, scene, people, size, wan.STILL_FRAMES, inputs_dir(dest))
+    control, reference = shot_inputs(show, episode, scene, people, size, wan.STILL_FRAMES, inputs_dir(dest), still=True)
     graph = wan.vace_graph(prompt, settings()["vaceNegative"], size, wan.STILL_FRAMES, seed, control, reference, still=True)
     print(f"  Prompt: {prompt}", flush=True)
     run_graph(graph, {wan.STILL_PREFIX: dest}, f"VACE still {size}p, seed {seed}", STILL_TIMEOUT_SECONDS)
@@ -168,7 +171,7 @@ def generate_clip(show: dict, episode: dict, scene: dict, size: str, seed: int, 
         graph = wan.s2v_graph(prompt, settings()["s2vNegative"], size, length, seed, stage_input(still, "wan_start"), stage_input(voice, "wan_voice"))
         run_graph(graph, {wan.S2V_PREFIX: take}, f"S2V take {size}p, {length} frames, seed {seed}", TAKE_TIMEOUT_SECONDS)
     else:
-        control, reference = shot_inputs(show, episode, scene, reference_people(show, scene), size, length, folder)
+        control, reference = shot_inputs(show, episode, scene, reference_people(show, scene), size, length, folder, still=False)
         graph = wan.vace_graph(prompt, settings()["vaceNegative"], size, length, seed, control, reference, still=False)
         silent = folder / "take_silent.mp4"
         run_graph(graph, {wan.VACE_PREFIX: silent}, f"VACE take {size}p, {length} frames, seed {seed}", TAKE_TIMEOUT_SECONDS)

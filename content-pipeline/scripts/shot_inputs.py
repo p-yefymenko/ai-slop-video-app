@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image
 
 from ffmpeg_tools import encode_rgb_frames
-from observe import ground_depth
+from observe import backdrop_depth
 from render import render
 from world import camera_at, entities_at
 
@@ -54,22 +54,26 @@ def flatten_people(depth: np.ndarray, entity_ids: np.ndarray, people: list[int])
     return flat
 
 
-def depth_frame(show: dict, episode: dict, scene: dict, time_seconds: float, width: int, height: int) -> np.ndarray:
-    """The shot at one moment as a gray depth picture, rendered at the video's own size."""
+def depth_frame(show: dict, episode: dict, scene: dict, time_seconds: float, width: int, height: int, flat_people: bool) -> np.ndarray:
+    """The shot at one moment as a gray depth picture, rendered at the video's own size; people
+    flat (``flat_people``, for a clip VACE animates) or with their real relief (for a still)."""
     camera = camera_at(scene, time_seconds)
     entities = entities_at(show, episode, scene, time_seconds)
     frame = render(entities, camera, width, height)
-    people = [number + 1 for number, entity in enumerate(entities) if entity.kind == "character"]
-    depth = flatten_people(frame.depth, frame.entity, people)
-    # Past every mesh the ground runs on to the horizon: shaded at its own distance, never empty.
-    depth = np.where(np.isfinite(depth), depth, ground_depth(camera, depth.shape)[0])
+    depth = frame.depth
+    if flat_people:
+        depth = flatten_people(depth, frame.entity, [number + 1 for number, entity in enumerate(entities) if entity.kind == "character"])
+    # Past every mesh the ground runs on to the surround: shaded at its own distance, never empty.
+    backdrop = show["locations"][scene["locationId"]]
+    beyond = backdrop_depth(camera, depth.shape, backdrop["spatial"]["sizeMeters"], backdrop["backdrop"]["surroundHeightMeters"])[0]
+    depth = np.where(np.isfinite(depth), depth, beyond)
     return depth_gray(depth)
 
 
-def write_depth_video(show: dict, episode: dict, scene: dict, width: int, height: int, length: int, fps: int, dest: Path) -> Path:
+def write_depth_video(show: dict, episode: dict, scene: dict, width: int, height: int, length: int, fps: int, dest: Path, flat_people: bool) -> Path:
     """The shot's first ``length`` frames at ``fps`` as a depth video."""
     start = float(scene["timeRangeSeconds"][0])
-    frames = (depth_frame(show, episode, scene, start + index / fps, width, height) for index in range(length))
+    frames = (depth_frame(show, episode, scene, start + index / fps, width, height, flat_people) for index in range(length))
     raw = b"".join(np.repeat(gray[:, :, None], 3, axis=2).tobytes() for gray in frames)
     dest.parent.mkdir(parents=True, exist_ok=True)
     encode_rgb_frames(raw, width, height, fps, dest, crf=14)

@@ -94,6 +94,12 @@ export type LocationBackdrop = {
   /** Empty space beyond the location, at the horizon, and the flat color painted there. */
   surround: string;
   surroundColor: [number, number, number];
+  /**
+   * How tall the surround stands on the location's edge, in meters: a pine forest
+   * about 25, a city wall its height, 0 for open land or a valley below. The depth
+   * video and the words show it wherever it rises into the frame.
+   */
+  surroundHeightMeters: number;
 };
 
 /**

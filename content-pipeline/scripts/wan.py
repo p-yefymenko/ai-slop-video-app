@@ -36,10 +36,14 @@ VACE_LOW = "Wan2.2-VACE-Fun-A14B-low-noise-Q8_0.gguf"
 VACE_STEPS = 20
 VACE_CFG = 3.5
 VACE_SHIFT = 8.0
-# How hard the control video (the shot's depth) holds the picture. At 1.0 the
-# flat depth silhouettes are copied and the face freezes; 0.6 keeps the framing
-# and leaves the face alive.
+# How hard the control video (the shot's depth) holds a clip. At 1.0 the flat
+# depth silhouettes are copied and the face freezes; 0.6 keeps the framing and
+# leaves the face alive.
 VACE_STRENGTH = 0.6
+# A still is one picture, never animated by VACE (S2V or the clip animates it), so
+# its depth keeps the people's real relief and holds at full strength: at 0.6 with
+# flat people the model turned the subject and painted over the shoulder in front.
+STILL_VACE_STRENGTH = 1.0
 # A still is the first frame of a short take: a one-frame take ignores the control video.
 STILL_FRAMES = 9
 
@@ -95,7 +99,7 @@ def vace_graph(
         "10": {"class_type": "GetVideoComponents", "inputs": {"video": ["9", 0]}},
         "11": {"class_type": "WanVaceToVideo", "inputs": {
             "positive": ["6", 0], "negative": ["7", 0], "vae": ["8", 0], "width": width, "height": height,
-            "length": length, "batch_size": 1, "strength": VACE_STRENGTH, "control_video": ["10", 0]}},
+            "length": length, "batch_size": 1, "strength": STILL_VACE_STRENGTH if still else VACE_STRENGTH, "control_video": ["10", 0]}},
         "12": {"class_type": "KSamplerAdvanced", "inputs": {
             "model": ["3", 0], "add_noise": "enable", "noise_seed": seed, "steps": VACE_STEPS, "cfg": VACE_CFG,
             "sampler_name": "euler", "scheduler": "simple", "positive": ["11", 0], "negative": ["11", 1],

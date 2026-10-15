@@ -221,7 +221,7 @@ class GraphTests(unittest.TestCase):
     def test_a_still_is_the_first_frame_of_a_short_take(self) -> None:
         graph = wan.vace_graph("words", "bad", "480", wan.STILL_FRAMES, 5, "depth.mp4", None, still=True)
         vace = graph["11"]["inputs"]
-        self.assertEqual((vace["width"], vace["height"], vace["length"], vace["strength"]), (480, 832, 9, wan.VACE_STRENGTH))
+        self.assertEqual((vace["width"], vace["height"], vace["length"], vace["strength"]), (480, 832, 9, wan.STILL_VACE_STRENGTH))
         self.assertNotIn("reference_image", vace, "nobody to match: no reference")
         self.assertEqual(graph["17"]["inputs"]["length"], 1)
         self.assertEqual(graph["18"]["inputs"]["filename_prefix"], wan.STILL_PREFIX)

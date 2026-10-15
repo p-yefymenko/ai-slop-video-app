@@ -23,29 +23,55 @@ def in_shot(observation: dict, entity_id: str) -> bool:
     return entry is not None and entry["pixels"] > 0
 
 
-def ground_depth(camera: dict, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Where each pixel's ray meets the ground plane (z=0) out to the horizon: (camera-forward
-    meters, inf above the horizon; world x; world y)."""
+def _rays(camera: dict, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    """The camera position and each pixel's ray, scaled so its camera-forward part is 1: a ray's
+    parameter is then camera-forward meters, as in the rendered depth."""
     height, width = shape
     position, right, up, forward, focal = camera_basis(camera, height)
     ys, xs = np.indices((height, width))
     vx = (xs + 0.5 - width / 2.0) / focal
     vy = (height / 2.0 - (ys + 0.5)) / focal
-    ray = right[None, None, :] * vx[..., None] + up[None, None, :] * vy[..., None] + forward[None, None, :]
-    down = ray[..., 2] < -1e-4
-    t = np.where(down, -position[2] / np.where(down, ray[..., 2], -1.0), np.inf)
-    t = np.where(t > 0, t, np.inf)
-    return t, position[0] + np.where(np.isfinite(t), t, 0.0) * ray[..., 0], position[1] + np.where(np.isfinite(t), t, 0.0) * ray[..., 1]
+    return np.asarray(position, dtype=np.float64), right[None, None, :] * vx[..., None] + up[None, None, :] * vy[..., None] + forward[None, None, :]
 
 
-def backdrop_labels(camera: dict, frame, entities, size) -> np.ndarray:
+def backdrop_depth(camera: dict, shape: tuple[int, int], size, surround_height: float) -> tuple[np.ndarray, np.ndarray]:
+    """Where each pixel's ray goes when no mesh is in the way: (camera-forward meters, inf for sky;
+    label 1 sky, 2 ground inside the location, 3 surround).
+
+    The surround stands on the location's edge as a wall ``surround_height`` meters tall (a forest,
+    a city wall); a ray that leaves the location below its top meets it there. A ray over the wall
+    that comes down meets the ground beyond, also surround; one that never comes down is sky.
+    """
+    position, ray = _rays(camera, shape)
+    half = (float(size[0]) / 2.0, float(size[1]) / 2.0)
+    down = ray[..., 2] < -1e-9
+    ground = np.where(down, -position[2] / np.where(down, ray[..., 2], -1.0), np.inf)
+    ground = np.where(ground > 0, ground, np.inf)
+    # Where the ray enters and leaves the location's footprint (a slab per horizontal axis).
+    enter = np.zeros(shape)
+    leave = np.full(shape, np.inf)
+    for axis in (0, 1):
+        direction = ray[..., axis]
+        moving = np.abs(direction) > 1e-12
+        safe = np.where(moving, direction, 1.0)
+        near = np.where(moving, (np.where(direction > 0, -half[axis], half[axis]) - position[axis]) / safe, np.where(abs(position[axis]) <= half[axis], -np.inf, np.inf))
+        far = np.where(moving, (np.where(direction > 0, half[axis], -half[axis]) - position[axis]) / safe, np.where(abs(position[axis]) <= half[axis], np.inf, -np.inf))
+        enter = np.maximum(enter, near)
+        leave = np.minimum(leave, far)
+    crosses = leave > enter
+    wall_z = position[2] + np.where(np.isfinite(leave), leave, 0.0) * ray[..., 2]
+    on_ground_inside = crosses & (ground >= enter) & (ground <= leave)
+    on_wall = crosses & np.isfinite(leave) & ~on_ground_inside & (ground > leave) & (wall_z >= 0.0) & (wall_z <= surround_height)
+    distance = np.where(on_wall, leave, ground)
+    labels = np.where(np.isfinite(ground), 3, 1).astype(np.uint8)
+    labels[on_wall] = 3
+    labels[on_ground_inside] = 2
+    return distance, labels
+
+
+def backdrop_labels(camera: dict, frame, entities, size, surround_height: float) -> np.ndarray:
     """0 where a landmark, prop, or person is, else 1 sky, 2 ground (inside the location), 3 surround (beyond it)."""
-    t, hx, hy = ground_depth(camera, frame.entity.shape)
-    hit = np.isfinite(t)
-    inside = hit & (np.abs(hx) <= size[0] / 2.0) & (np.abs(hy) <= size[1] / 2.0)
-    labels = np.full(frame.entity.shape, 1, dtype=np.uint8)
-    labels[hit & ~inside] = 3
-    labels[inside] = 2
+    labels = backdrop_depth(camera, frame.entity.shape, size, surround_height)[1].copy()
     floor = [index + 1 for index, entity in enumerate(entities) if entity.kind == "floor"]
     labels[(frame.entity > 0) & ~np.isin(frame.entity, floor)] = 0
     return labels
@@ -84,7 +110,8 @@ def observe(show: dict, episode: dict, scene: dict, time_seconds: float, full: b
             found[entity.id]["depth"] = round(float(np.median(frame.depth[frame.entity == index + 1])), 3)
     observation = {"timeSeconds": time_seconds, "camera": camera, "entities": found}
     if full:
-        labels = backdrop_labels(camera, frame, entities, show["locations"][scene["locationId"]]["spatial"]["sizeMeters"])
+        location = show["locations"][scene["locationId"]]
+        labels = backdrop_labels(camera, frame, entities, location["spatial"]["sizeMeters"], location["backdrop"]["surroundHeightMeters"])
         for number, name in enumerate(BACKDROP, start=1):
             found[name] = {"kind": "backdrop", "pixels": int(np.count_nonzero(labels == number))}
         observation["effects"] = effects_in_frame(entities, camera)

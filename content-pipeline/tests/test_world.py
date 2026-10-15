@@ -59,6 +59,7 @@ def show_with(tracks: dict, props: dict | None = None, prop_tracks: dict | None 
                     "groundColor": [48, 44, 40],
                     "surround": "open fields",
                     "surroundColor": [24, 56, 40],
+                    "surroundHeightMeters": 0,
                 },
                 "soundscape": {"ambience": "wind", "space": "open air"},
                 "spatial": {
@@ -176,6 +177,22 @@ class InShotTests(unittest.TestCase):
         self.assertTrue(in_shot(observation({"ada": 1}), "ada"))
         self.assertFalse(in_shot(observation({"ada": 0}), "ada"))
         self.assertFalse(in_shot(observation({}), "nobody"))
+
+
+class BackdropTests(unittest.TestCase):
+    def test_the_surround_stands_on_the_edge_as_tall_as_written(self) -> None:
+        from observe import backdrop_depth
+
+        level = {"position": [0, 0, 1.6], "lookAt": [0, 5, 1.6], "verticalFovDegrees": 60}
+        shape = (101, 57)
+        distance, labels = backdrop_depth(level, shape, (10, 10, 5), 25.0)
+        self.assertEqual(int(labels[50, 28]), 3, "straight ahead: the wall")
+        self.assertAlmostEqual(float(distance[50, 28]), 5.0, places=6, msg="at the location's edge")
+        self.assertEqual(int(labels[100, 28]), 2, "looking down: the ground inside")
+        flat_distance, flat = backdrop_depth(level, shape, (10, 10, 5), 0.0)
+        self.assertEqual(int(flat[50, 28]), 1, "no wall: the horizon is sky")
+        self.assertEqual(int(flat[100, 28]), 2)
+        self.assertFalse(np.isfinite(flat_distance[0, 28]), "sky is at no distance")
 
 
 class CheckTests(unittest.TestCase):

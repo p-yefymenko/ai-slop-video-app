@@ -34,6 +34,7 @@ function minimalShow(overrides: Partial<ShowScript> = {}): ShowScript {
           groundColor: [48, 44, 40],
           surround: "open fields",
           surroundColor: [24, 56, 40],
+          surroundHeightMeters: 0,
         },
         soundscape: {
           ambience: "soft wind through stone arches, distant drip of water",

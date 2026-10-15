@@ -387,6 +387,10 @@ const showScriptSchema = z
                 groundColor: z.tuple([z.number(), z.number(), z.number()]),
                 surround: text("backdrop.surround"),
                 surroundColor: z.tuple([z.number(), z.number(), z.number()]),
+                surroundHeightMeters: finiteNumber("backdrop.surroundHeightMeters").refine(
+                  (value) => value >= 0,
+                  "backdrop.surroundHeightMeters must be 0 or more",
+                ),
               })
               .strict(),
             soundscape: locationSoundscapeSchema,
