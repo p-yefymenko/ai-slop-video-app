@@ -64,11 +64,14 @@ from pipeline_paths import (
 from previs import current_previs, load_observation, previs_episode
 from asset_generate import CHARACTER_PICTURE_SIZE, PICTURE_PREFIX, picture_graph
 from shot_inputs import (
+    blur_diameters,
+    blur_reach,
     drawing_camera,
     drawing_pixels,
     figure_box,
     fit_similarity,
     layer_people,
+    out_of_focus,
     own_colors,
     person_depth,
     placed,
@@ -161,12 +164,13 @@ def draw_person(show: dict, episode: dict, scene: dict, start: dict, cid: str, f
     return dest, (turn, shift), depth
 
 
-def shot_part(cid: str, drawing: Path, placement: tuple[complex, complex], frame: tuple[int, int], seed: int, folder: Path, force: bool):
-    """The shot's piece of a person's drawing, laid on the frame by ``placement`` at its size in the
-    shot and given back its detail by SeedVR2; its cut-out, made on that piece, so its edge is as
-    sharp as the picture (made on the drawing and enlarged with it, the edge blurred two people
-    into each other); where it goes in the frame; and the piece as laid, before SeedVR2."""
-    part, box = shot_piece(Image.open(drawing).convert("RGB"), *placement, frame)
+def shot_part(cid: str, drawing: Path, placement: tuple[complex, complex], frame: tuple[int, int], reach: int, seed: int, folder: Path, force: bool):
+    """The shot's piece of a person's drawing (and ``reach`` pixels past the frame, for their blur),
+    laid on the frame by ``placement`` at its size in the shot and given back its detail by
+    SeedVR2; its cut-out, made on that piece, so its edge is as sharp as the picture (made on the
+    drawing and enlarged with it, the edge blurred two people into each other); where it goes in
+    the frame; and the piece as laid, before SeedVR2."""
+    part, box = shot_piece(Image.open(drawing).convert("RGB"), *placement, frame, reach)
     enlarged = folder / f"alone_{cid}_shot_enlarged.png"
     part.save(enlarged)
     dest = folder / f"alone_{cid}_shot.png"
@@ -203,30 +207,32 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     numbers = {entity.id: number + 1 for number, entity in enumerate(entities)}
     drawn = {cid: draw_person(show, episode, scene, start, cid, frame, numbers[cid], stable_seed(seed, "alone", cid), work, force)
              for cid in people}
-    parts = {cid: shot_part(cid, path, placement, (width, height), stable_seed(seed, "restore", cid), work, force)
+    camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
+    blur = blur_diameters(scene, people, numbers, frame, camera)
+    parts = {cid: shot_part(cid, path, placement, (width, height), blur_reach(blur[cid]), stable_seed(seed, "restore", cid), work, force)
              for cid, (path, placement, _depth) in drawn.items()}
     expected = {"prompt": prompt, "size": size,
                 "people": {cid: [_digest(piece), _digest(matte)] for cid, (piece, matte, _box, _laid) in parts.items()},
                 "depth": "without people", "strength": wan.STILL_VACE_STRENGTH, "kept": "blended by cut-out, own colors, every frame",
-                "layered": "people cover each other by cut-outs only"}
+                "layered": "people cover each other by cut-outs only", "blur": {cid: round(value, 2) for cid, value in blur.items()}}
     if made_from(dest, expected) and present(inputs_dir(dest) / "collage.png") and not force:
         print("  Still is current.", flush=True)
         return dest
-    camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
     layers, rows = [], []
     for cid, (piece, matte, box, laid) in parts.items():
         size_in_shot = (box[2] - box[0], box[3] - box[1])
         cut = np.asarray(Image.open(matte).convert("L").resize(size_in_shot, Image.Resampling.LANCZOS), dtype=np.float32) / 255.0
         colors = own_colors(np.asarray(Image.open(piece).convert("RGB").resize(size_in_shot, Image.Resampling.LANCZOS)), cut)
-        layers.append((numbers[cid], render([next(e for e in entities if e.id == cid)], camera, width, height).depth,
-                       placed(colors, box, (width, height)), placed(cut, box, (width, height))))
+        seen_colors, seen_cut = out_of_focus(colors, cut, box, (width, height), blur[cid])
+        layers.append((numbers[cid], render([next(e for e in entities if e.id == cid)], camera, width, height).depth, seen_colors, seen_cut))
         drawing, placement, depth = drawn[cid]
         rows.append([(f"{cid}: 1 depth drawn from", Image.open(depth)),
                      (f"{cid}: 2 drawing, red = the shot", frame_outline(Image.open(drawing), *placement, (width, height))),
                      (f"{cid}: 3 shot piece, laid", Image.open(laid)),
                      (f"{cid}: 4 SeedVR2", Image.open(piece)),
                      (f"{cid}: 5 cut-out", Image.open(matte)),
-                     (f"{cid}: 6 own colors", over_nobody(colors, cut))])
+                     (f"{cid}: 6 own colors", over_nobody(colors, cut)),
+                     (f"{cid}: 7 out of focus, {blur[cid]:.0f} px", over_nobody(seen_colors, seen_cut))])
     floors = [number + 1 for number, entity in enumerate(entities) if entity.kind == "floor"]
     picture, alpha = layer_people(frame.entity, frame.depth, layers, floors)
     depth = write_depth_video(show, episode, scene, width, height, wan.STILL_FRAMES, wan.FPS, work / "depth.mp4", flat_people=False, people=False)
@@ -241,12 +247,12 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     drew = Image.open(around).convert("RGB").resize((width, height), Image.Resampling.LANCZOS)
     still = Image.fromarray(np.rint(picture * alpha[..., None] + np.asarray(drew) * (1.0 - alpha[..., None])).astype(np.uint8))
     still.save(dest)
-    steps = [("7 people layered", over_nobody(picture, alpha)),
-             ("8 how much is a person", Image.fromarray(np.rint(alpha * 255).astype(np.uint8))),
-             ("9 final pass control", first_frame(work / "control.mp4")),
-             ("10 keep mask (black)", first_frame(work / "keep.mp4")),
-             ("11 final pass drew", drew),
-             ("12 still", still)]
+    steps = [("8 people layered", over_nobody(picture, alpha)),
+             ("9 how much is a person", Image.fromarray(np.rint(alpha * 255).astype(np.uint8))),
+             ("10 final pass control", first_frame(work / "control.mp4")),
+             ("11 keep mask (black)", first_frame(work / "keep.mp4")),
+             ("12 final pass drew", drew),
+             ("13 still", still)]
     # At the frame's own size, so every pixel of the still can be checked in it.
     write_collage([*rows, steps], inputs_dir(dest) / "collage.png", width)
     write_log(dest, {**expected, "seed": seed})

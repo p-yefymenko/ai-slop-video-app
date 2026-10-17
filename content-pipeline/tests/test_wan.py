@@ -130,6 +130,29 @@ class ReferenceSheetTests(unittest.TestCase):
         self.assertEqual(turned.getpixel((10, 32)), (9, 9, 9))
         self.assertEqual(turned.getpixel((70, 8)), (0, 0, 0))
 
+    def test_a_lens_blurs_by_distance_from_the_focus(self) -> None:
+        from shot_inputs import blur_diameter
+
+        self.assertEqual(blur_diameter(2.0, 2.0, 20.0, 832), 0.0, "at the focus, sharp")
+        near, far = blur_diameter(1.0, 2.0, 20.0, 832), blur_diameter(8.0, 2.0, 20.0, 832)
+        self.assertGreater(near, far, "a near person is blurred more than a far one")
+        self.assertGreater(blur_diameter(1.0, 2.0, 10.0, 832), near, "a longer lens blurs more")
+
+    def test_an_out_of_focus_person_keeps_their_colors_and_spreads_their_edge(self) -> None:
+        from shot_inputs import out_of_focus
+
+        colors = np.zeros((40, 30, 3), dtype=np.uint8)
+        colors[:, :] = (200, 50, 10)
+        cut = np.zeros((40, 30), dtype=np.float32)
+        cut[:, :20] = 1.0
+        # The piece runs 10 px past the frame's left edge, so the blur there pulls in the person, not nothing.
+        seen, weight = out_of_focus(colors, cut, (-10, 0, 20, 40), (40, 40), 9.0)
+        self.assertEqual(seen.shape, (40, 40, 3))
+        self.assertAlmostEqual(float(weight[20, 0]), 1.0, places=4, msg="the frame's edge stays solid")
+        self.assertTrue(np.allclose(seen[20, 2], (200, 50, 10), atol=0.5), "colors are not darkened by the empty around")
+        self.assertTrue(0.2 < float(weight[20, 10]) < 0.8, "the person's edge is soft")
+        self.assertAlmostEqual(float(weight[20, 30]), 0.0, places=6)
+
     def test_the_collage_puts_each_stage_on_a_row(self) -> None:
         from collage import LABEL_HEIGHT, frame_outline, write_collage
 
@@ -216,7 +239,7 @@ class WordsTests(unittest.TestCase):
         )
         prompt = video_prompt(show, episode, over_the_shoulder(), seen)
         self.assertTrue(prompt.startswith("Low-angle medium close-up with shallow depth of field, cinematic"))
-        self.assertNotIn("shoulder", prompt, "the shoulder in front is left to the depth video")
+        self.assertNotIn("shoulder", prompt, "someone no nearer than the subject is not the foreground")
         self.assertNotIn("old man", prompt, "nobody without a performance is named")
         self.assertIn("An adult woman, brown skin: speaks with a half-smile. Face: lips slightly parted.", prompt)
         self.assertNotIn("black hair", prompt, "no look beyond the body: the frame may not show it")
@@ -229,6 +252,19 @@ class WordsTests(unittest.TestCase):
         self.assertNotIn("Speaking", prompt, "a picture prompt says nothing of speech")
         for word in ("left", "right", "center", "facing", "profile"):
             self.assertNotIn(word, prompt, "no screen side or facing")
+
+    def test_an_over_the_shoulder_shot_names_whom_it_looks_past(self) -> None:
+        from describe import video_prompt
+
+        show = two_people()
+        seen = observation({"ada": 5000, "bo": 9000})
+        seen["entities"]["bo"]["depth"] = 1.2
+        prompt = video_prompt(show, show["episodes"][0], over_the_shoulder(), seen)
+        self.assertIn("Low-angle medium close-up with shallow depth of field, cinematic live-action footage, photorealistic. "
+                      "Shot over the shoulder of an old man, broad build, who is close to the camera in the foreground.", prompt)
+        self.assertNotIn("fox", prompt, "by their body only")
+        single = scene(shot={"type": "single", "subjects": ["ada"], "size": "mcu"}, performances={"ada": {"action": "speaks"}})
+        self.assertNotIn("shoulder", video_prompt(show, show["episodes"][0], single, seen), "only a shot authored as over the shoulder")
 
     def test_a_performer_outside_the_start_frame_comes_into_it(self) -> None:
         from describe import video_prompt

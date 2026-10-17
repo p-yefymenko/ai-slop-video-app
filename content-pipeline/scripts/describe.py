@@ -52,13 +52,29 @@ def _a(text: str) -> str:
     return text if _ARTICLE.match(text) else ("an " if text[:1].lower() in "aeiou" else "a ") + text
 
 
-def shot_sentence(scene: dict) -> str:
-    """The kind of shot: its size and angle, from the script's shot."""
+def foreground_person(scene: dict, start: dict) -> str | None:
+    """Who an over-the-shoulder shot looks past: the nearest person in the start frame who is not a
+    subject and is nearer the camera than every subject; None when no one is."""
+    subjects = (scene.get("shot") or {}).get("subjects") or []
+    entities = start["entities"]
+    seen = [cid for cid, entry in entities.items() if entry["kind"] == "character" and in_shot(start, cid)]
+    subject_depths = [entities[cid]["depth"] for cid in subjects if cid in seen]
+    nearer = [cid for cid in seen if cid not in subjects and all(entities[cid]["depth"] < depth for depth in subject_depths)]
+    return min(nearer, key=lambda cid: entities[cid]["depth"], default=None)
+
+
+def shot_sentence(show: dict, scene: dict, start: dict) -> str:
+    """The kind of shot: its size and angle, from the script's shot. An over-the-shoulder shot also
+    says whom it looks past (``foreground_person``, by their body): told only the size, the video
+    model took the near person for part of the subject and moved them with him."""
     shot = scene.get("shot") or {}
     words = settings()["shot"]
     angle = words["angles"].get(shot.get("angle", "eye"), "")
     size = words["sizes"].get(shot.get("size", ""), words["types"].get(shot.get("type", ""), words["sizes"]["wide"]))
+    foreground = foreground_person(scene, start) if shot.get("type") == "overShoulder" else None
     text = template("shotSentence", {"angle": f"{angle} " if angle else "", "size": size})
+    if foreground:
+        text += " " + template("overShoulder", {"body": _a(clause(show["characters"][foreground]["body"]))})
     return text[:1].upper() + text[1:]
 
 
@@ -138,7 +154,7 @@ def speech_sentence(scene: dict, speaker: str) -> str:
 
 def video_prompt(show: dict, episode: dict, scene: dict, start: dict, speaker: str | None = None) -> str:
     """The take in words, for VACE (``speaker`` None) or for S2V (``speaker`` is the one whose voice drives it)."""
-    parts = [shot_sentence(scene), camera_sentence(scene), *people_sentences(show, scene, start)]
+    parts = [shot_sentence(show, scene, start), camera_sentence(scene), *people_sentences(show, scene, start)]
     if speaker is not None:
         parts.append(speech_sentence(scene, speaker))
     parts += setting_sentences(show, scene, start)

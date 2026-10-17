@@ -20,8 +20,10 @@ never asked to fill a small piece of a costume, nor to draw a figure stretched b
 view. The shot's piece is the drawing laid on the frame by the one scale, turn and shift
 that best matches where the part the shot sees falls in both (``fit_similarity``,
 ``shot_piece``): a whole-picture move, so nothing in the drawing is torn apart where it
-does not follow its mesh. A background-removal model cuts them out of their piece; the
-3D scene only says who is in front of whom (``layer_people``). The
+does not follow its mesh. A background-removal model cuts them out of their piece, and a
+person away from the focus (the first subject) is blurred as a lens would at their distance
+(``blur_diameter``, ``out_of_focus``); the 3D scene only says who is in front of whom
+(``layer_people``). The
 final pass keeps them by their cut-outs and draws everything around them
 (``write_kept_control``).
 """
@@ -55,6 +57,12 @@ WINDOW_MARGIN = 0.06
 # off-axis drawn 3.6 times as tall), which the picture model redraws with normal proportions,
 # so the part the shot sees landed elsewhere in the drawing.
 DRAWING_FOV_DEGREES = 24.0
+# The lens a still is seen through, for its depth of field: the frame's height is a Super 35
+# sensor's long side (frames are upright), and the aperture is a cinema prime's wide open, the
+# shallow depth of field close shots are asked for in words. A person the shot looks past, as
+# sharp as its subject, was taken for part of the subject and moved with him.
+SENSOR_HEIGHT_MM = 24.89
+F_NUMBER = 2.0
 
 
 def depth_gray(depth: np.ndarray) -> np.ndarray:
@@ -228,11 +236,12 @@ def fit_similarity(source: np.ndarray, target: np.ndarray) -> tuple[complex, com
     return complex(turn), complex(b_mean - turn * a_mean)
 
 
-def shot_piece(drawing: Image.Image, turn: complex, shift: complex, frame: tuple[int, int]) -> tuple[Image.Image, tuple[int, int, int, int]]:
+def shot_piece(drawing: Image.Image, turn: complex, shift: complex, frame: tuple[int, int], reach: int = 0) -> tuple[Image.Image, tuple[int, int, int, int]]:
     """The drawing laid on the frame by ``turn`` and ``shift`` (``fit_similarity``): the part of the
-    frame it covers, at the frame's own pixels, and where that goes (left, top, right, bottom).
-    The drawing is first resized by the scale (Lanczos, so a shrink does not alias), then turned;
-    past its edge its edge pixels go on, its plain backdrop."""
+    frame, and of ``reach`` pixels around it (what a blur pulls in from past the frame's edge),
+    that it covers, at the frame's own pixels, and where that goes (left, top, right, bottom; past
+    the frame by up to ``reach``). The drawing is first resized by the scale (Lanczos, so a shrink
+    does not alias), then turned; past its edge its edge pixels go on, its plain backdrop."""
     scale = abs(turn)
     sized = drawing.resize((max(1, round(drawing.width * scale)), max(1, round(drawing.height * scale))), Image.Resampling.LANCZOS)
     # A point s of the sized drawing is the drawing's (s.x * W / w, s.y * H / h), which lands at
@@ -240,8 +249,8 @@ def shot_piece(drawing: Image.Image, turn: complex, shift: complex, frame: tuple
     linear = np.array([[turn.real, -turn.imag], [turn.imag, turn.real]]) @ np.diag([drawing.width / sized.width, drawing.height / sized.height])
     offset = np.array([shift.real, shift.imag])
     corners = (linear @ np.array([[0, sized.width, 0, sized.width], [0, 0, sized.height, sized.height]], dtype=np.float64)).T + offset
-    left, top = (max(0, int(np.floor(corners[:, axis].min()))) for axis in (0, 1))
-    right, bottom = (min(frame[axis], int(np.ceil(corners[:, axis].max()))) for axis in (0, 1))
+    left, top = (max(-reach, int(np.floor(corners[:, axis].min()))) for axis in (0, 1))
+    right, bottom = (min(frame[axis] + reach, int(np.ceil(corners[:, axis].max()))) for axis in (0, 1))
     # The piece's pixel p samples the sized drawing at inverse @ (p + (left, top) - offset).
     inverse = np.linalg.inv(linear)
     origin = inverse @ (np.array([left, top], dtype=np.float64) - offset)
@@ -269,6 +278,61 @@ def placed(part: np.ndarray, box: tuple[int, int, int, int], frame: tuple[int, i
     left, top, right, bottom = box
     canvas[top:bottom, left:right] = part
     return canvas
+
+
+def blur_diameter(distance: float, focus: float, vertical_fov_degrees: float, height: int) -> float:
+    """How wide, in frame pixels, a thin lens focused at ``focus`` meters spreads a point ``distance``
+    meters away (its circle of confusion), for the frame's view and ``SENSOR_HEIGHT_MM`` and ``F_NUMBER``."""
+    focal = SENSOR_HEIGHT_MM / 2.0 / np.tan(np.radians(vertical_fov_degrees) / 2.0) / 1000.0
+    spread = focal / F_NUMBER * focal / (focus - focal) * abs(distance - focus) / distance
+    return float(spread * 1000.0 / SENSOR_HEIGHT_MM * height)
+
+
+def blur_diameters(scene: dict, people: list[str], numbers: dict[str, int], frame, camera: dict) -> dict[str, float]:
+    """How out of focus each of ``people`` is in the start ``frame`` (where person ``cid`` is entity
+    ``numbers[cid]``): the lens focuses on the first of the shot's subjects in the frame, and each
+    person is at the median distance of their pixels. A shot with no subject in it is all in focus."""
+    def distance(cid: str) -> float:
+        return float(np.median(frame.depth[frame.entity == numbers[cid]]))
+
+    subject = next((cid for cid in (scene.get("shot") or {}).get("subjects") or [] if cid in people), None)
+    if subject is None:
+        return {cid: 0.0 for cid in people}
+    focus = distance(subject)
+    return {cid: blur_diameter(distance(cid), focus, float(camera["verticalFovDegrees"]), frame.depth.shape[0]) for cid in people}
+
+
+def blur_reach(diameter: float) -> int:
+    """How far, in pixels, a blur of ``diameter`` pulls a pixel's neighbors in."""
+    return int(np.ceil(diameter / 2.0))
+
+
+def lens_blur(picture: np.ndarray, cut: np.ndarray, diameter: float) -> tuple[np.ndarray, np.ndarray]:
+    """A layer (colors, cut-out 0..1) out of focus: both spread over a disc ``diameter`` pixels
+    wide, the colors weighted by the cut-out, so the backdrop around the person does not bleed in."""
+    from scipy.signal import fftconvolve
+
+    radius = diameter / 2.0
+    ys, xs = np.mgrid[-blur_reach(diameter):blur_reach(diameter) + 1, -blur_reach(diameter):blur_reach(diameter) + 1]
+    disc = (xs * xs + ys * ys <= radius * radius).astype(np.float64)
+    disc /= disc.sum()
+    cut = cut.astype(np.float64)
+    weight = np.clip(fftconvolve(cut, disc, mode="same"), 0.0, 1.0)
+    spread = np.stack([fftconvolve(picture[..., channel] * cut, disc, mode="same") for channel in range(3)], axis=2)
+    colors = np.divide(spread, weight[..., None], out=np.zeros_like(spread), where=weight[..., None] > 0)
+    return np.clip(colors, 0.0, 255.0).astype(np.float32), weight.astype(np.float32)
+
+
+def out_of_focus(colors: np.ndarray, cut: np.ndarray, box: tuple[int, int, int, int], frame: tuple[int, int], diameter: float) -> tuple[np.ndarray, np.ndarray]:
+    """A person's piece (colors, cut-out) laid at ``box``, which may run past the frame by the blur's
+    reach (the drawing goes on past the frame's edge, and the blur there pulls it in), blurred by
+    ``diameter``, and cropped to the frame: (colors, cut-out)."""
+    margin = max(0, -box[0], -box[1], box[2] - frame[0], box[3] - frame[1])
+    canvas = (frame[0] + 2 * margin, frame[1] + 2 * margin)
+    shifted = (box[0] + margin, box[1] + margin, box[2] + margin, box[3] + margin)
+    blurred, weight = lens_blur(placed(colors, shifted, canvas).astype(np.float32), placed(cut, shifted, canvas), diameter)
+    window = (slice(margin, margin + frame[1]), slice(margin, margin + frame[0]))
+    return blurred[window], weight[window]
 
 
 def hidden(entity_ids: np.ndarray, depth: np.ndarray, number: int, own: np.ndarray, floors: list[int], people: list[int]) -> np.ndarray:

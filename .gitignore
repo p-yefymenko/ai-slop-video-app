@@ -16,6 +16,7 @@ content-pipeline/output
 content-pipeline/.comfyui
 content-pipeline/.voice
 content-pipeline/.voicedesign
+content-pipeline/.cosyvoice
 content-pipeline/.lipsync
 content-pipeline/__pycache__
 *.pyc
