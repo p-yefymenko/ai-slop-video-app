@@ -287,8 +287,12 @@ def encode_rgb_frames(
     dest: Path,
     *,
     crf: int | None = None,
+    lossless: bool = False,
 ) -> None:
-    """Pack raw RGB24 frames into one H.264 MP4. Used for the model-free blockout."""
+    """Pack raw RGB24 frames into one H.264 MP4. Used for the model-free blockout.
+
+    ``lossless`` keeps every pixel exactly (libx264rgb, crf 0): for masks.
+    """
     if width % 2 or height % 2:
         raise RuntimeError(f"Blockout size {width}x{height} must be even for yuv420p")
     frame_bytes = width * height * 3
@@ -315,11 +319,13 @@ def encode_rgb_frames(
         "pipe:0",
         "-an",
         "-c:v",
-        "libx264",
+        "libx264rgb" if lossless else "libx264",
         "-pix_fmt",
-        "yuv420p",
+        "rgb24" if lossless else "yuv420p",
     ]
-    if crf is not None:
+    if lossless:
+        cmd.extend(["-crf", "0"])
+    elif crf is not None:
         cmd.extend(["-crf", str(int(crf))])
     cmd.extend(["-movflags", "+faststart", str(dest)])
     result = subprocess.run(

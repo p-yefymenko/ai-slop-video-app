@@ -30,6 +30,7 @@ PICTURE_CFG = 4.0
 PICTURE_SHIFT = 3.1
 # A standing person fills a 9:16 portrait; an object, Qwen-Image's native square.
 CHARACTER_PICTURE_SIZE = (928, 1664)
+
 OBJECT_PICTURE_SIZE = (1328, 1328)
 
 # A character's photo is drawn over one fixed standing pose (InstantX ControlNet Union,

@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -77,6 +78,115 @@ class ReferenceSheetTests(unittest.TestCase):
         acting = scene(performances={"ada": {"action": "waits"}, "bo": {"action": "nods"}})
         self.assertEqual(reference_people(show, acting), [], "only subjects, never every performer")
         self.assertEqual(reference_people(show, scene()), [])
+
+    def test_a_picture_is_held_to_its_control_image(self) -> None:
+        import asset_generate
+
+        graph = asset_generate.picture_graph("words", "bad", (960, 1664), 5, "depth.png")
+        self.assertEqual(graph["11"]["inputs"]["image"], "depth.png")
+        self.assertEqual(graph["8"]["inputs"]["positive"], ["13", 0], "held by the ControlNet")
+        self.assertEqual((graph["7"]["inputs"]["width"], graph["7"]["inputs"]["height"]), (960, 1664))
+
+    def test_a_window_holds_the_whole_figure_at_the_frames_aspect(self) -> None:
+        from shot_inputs import WINDOW_MARGIN, window_around
+
+        x0, y0, x1, y1 = window_around((-100.0, 200.0), (60.0, 1200.0), 480, 832)
+        self.assertAlmostEqual((x1 - x0) / (y1 - y0), 480 / 832)
+        self.assertAlmostEqual(y0, 200.0 - WINDOW_MARGIN * 1000)
+        self.assertLess(x0, -100.0)
+        self.assertGreater(x1, 60.0)
+
+    def test_a_window_of_the_frame_is_centered_on_a_picture_of_another_aspect(self) -> None:
+        from shot_inputs import window_in_render
+
+        self.assertEqual(window_in_render((0.0, 0.0, 480.0, 832.0), (480, 832), (960, 1664)), (0.0, 0.0, 960.0, 1664.0))
+        x0, _y0, x1, _y1 = window_in_render((0.0, 0.0, 480.0, 832.0), (480, 832), (928, 1664))
+        self.assertAlmostEqual((x0 + x1) / 2, 464.0)
+
+    def test_the_fit_recovers_a_scale_turn_and_shift(self) -> None:
+        from shot_inputs import fit_similarity
+
+        source = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 20.0], [7.0, 3.0]])
+        a = source[:, 0] + 1j * source[:, 1]
+        b = (1.5 + 2.0j) * a + (4.0 - 9.0j)
+        turn, shift = fit_similarity(source, np.stack([b.real, b.imag], axis=1))
+        self.assertAlmostEqual(turn, 1.5 + 2.0j)
+        self.assertAlmostEqual(shift, 4.0 - 9.0j)
+
+    def test_the_drawing_is_laid_on_the_frame_by_the_fit(self) -> None:
+        from shot_inputs import placed, shot_piece
+
+        drawing = Image.new("RGB", (40, 80), (0, 0, 0))
+        drawing.paste((9, 9, 9), (20, 0, 40, 80))
+        part, box = shot_piece(drawing, 2.0 + 0.0j, -30.0 + 0.0j, (60, 100))
+        self.assertEqual(box, (0, 0, 50, 100), "twice as big, moved left, only the part inside the frame")
+        laid = placed(np.asarray(part), box, (60, 100))
+        self.assertEqual(tuple(laid[50, 0]), (0, 0, 0), "drawing x 15")
+        self.assertEqual(tuple(laid[50, 40]), (9, 9, 9), "drawing x 35")
+        turned, box = shot_piece(drawing, 1.0j, 80.0 + 0.0j, (100, 100))
+        self.assertEqual(box, (0, 0, 80, 40), "a quarter turn lays the tall drawing on its side")
+        # The piece's (x, y) is the drawing's (y, 80 - x): the drawing's right half is the piece's bottom.
+        self.assertEqual(turned.getpixel((70, 32)), (9, 9, 9))
+        self.assertEqual(turned.getpixel((10, 32)), (9, 9, 9))
+        self.assertEqual(turned.getpixel((70, 8)), (0, 0, 0))
+
+    def test_the_collage_puts_each_stage_on_a_row(self) -> None:
+        from collage import LABEL_HEIGHT, frame_outline, write_collage
+
+        drawing = Image.new("RGB", (200, 400), (0, 0, 0))
+        marked = frame_outline(drawing, 2.0 + 0.0j, -100.0 + 0.0j, (100, 100))
+        self.assertEqual(marked.getpixel((50, 25)), (255, 0, 0), "the frame's left edge falls at drawing x 50")
+        self.assertEqual(marked.getpixel((120, 25)), (0, 0, 0))
+        with tempfile.TemporaryDirectory() as folder:
+            dest = write_collage([[("a", drawing), ("b", drawing)], [("c", Image.new("RGB", (100, 100)))]], Path(folder) / "collage.png", 50)
+            with Image.open(dest) as sheet:
+                self.assertEqual(sheet.size, (100, 100 + 50 + 2 * LABEL_HEIGHT))
+
+    def test_a_person_is_drawn_from_the_direction_the_shot_sees_them_from(self) -> None:
+        from shot_inputs import DRAWING_FOV_DEGREES, drawing_camera
+
+        class Person:
+            class mesh:
+                vertices = np.array([[-0.3, -0.2, 0.0], [0.3, 0.2, 1.8]])
+
+            @staticmethod
+            def to_world(points):
+                return points
+
+        seen = np.array([[0.2, -0.2, 1.4], [0.3, -0.2, 1.6]])
+        camera = drawing_camera(Person, seen, {"position": [0.25, -0.8, 1.5]})
+        position = np.asarray(camera["position"])
+        self.assertTrue(np.allclose(np.cross(position - seen.mean(0), [0.0, -0.6, 0.0]), 0.0), "on the line from the seen part to the shot")
+        self.assertAlmostEqual(np.linalg.norm(position - seen.mean(0)), 0.9 / np.tan(np.radians(DRAWING_FOV_DEGREES) / 2))
+        self.assertEqual(camera["lookAt"], [0.0, 0.0, 0.9], "looking at the middle of the figure")
+
+    def test_a_soft_edge_loses_its_backdrop_color(self) -> None:
+        from shot_inputs import own_colors
+
+        cut = np.tile(np.linspace(1.0, 0.0, 32, dtype=np.float32), (32, 1))
+        person, backdrop = np.array([40.0, 60.0, 30.0]), np.array([200.0, 200.0, 200.0])
+        drawn = np.rint(cut[..., None] * person + (1.0 - cut[..., None]) * backdrop).astype(np.uint8)
+        colors = own_colors(drawn, cut)
+        edge = colors[16, 12].astype(float)
+        self.assertLess(np.abs(edge - person).max(), np.abs(drawn[16, 12].astype(float) - person).max() / 4,
+                        "at a half-soft pixel the person's own color, not the gray mixed in")
+
+    def test_a_cut_out_is_laid_in_only_where_nothing_is_in_front(self) -> None:
+        from shot_inputs import layer_people
+
+        ids = np.array([[2, 2, 3, 3, 0, 1, 4]], dtype=np.uint8)
+        depth = np.array([[5.0, 5.0, 2.0, 2.0, np.inf, 9.0, 1.0]], dtype=np.float32)
+        far = np.array([[5.0, 5.0, 5.0, 5.0, np.inf, np.inf, 5.0]], dtype=np.float32)
+        near = np.array([[np.inf, np.inf, 2.0, 2.0, np.inf, np.inf, np.inf]], dtype=np.float32)
+        cut = np.ones((1, 7), dtype=np.float32)
+        red, blue = np.full((1, 7, 3), (200, 0, 0), np.uint8), np.full((1, 7, 3), (0, 0, 200), np.uint8)
+        picture, alpha = layer_people(ids, depth, [(2, far, red, cut), (3, near, blue, cut * np.array([[0, 0, 1, 0, 0, 0, 0]]))], [1])
+        self.assertEqual(tuple(picture[0, 0]), (200, 0, 0))
+        self.assertEqual(tuple(picture[0, 2]), (0, 0, 200), "the nearer person covers the farther one")
+        self.assertEqual(tuple(picture[0, 3]), (200, 0, 0), "a nearer person's mesh past their own cut-out hides no one")
+        self.assertEqual(alpha[0, 4], 1.0, "a cut-out past the mesh (hair) is kept where nothing is in front")
+        self.assertEqual(tuple(picture[0, 5]), (200, 0, 0), "the floor hides nothing")
+        self.assertEqual(alpha[0, 6], 0.0, "a thing in front hides the person")
 
     def test_photos_side_by_side_on_white_as_drawn(self) -> None:
         from shot_inputs import reference_sheet
@@ -217,7 +327,37 @@ class VoiceTests(unittest.TestCase):
             self.assertFalse(voice_is_current({"voice": "a young woman's voice"}, dest))
 
 
+class AloneTests(unittest.TestCase):
+    def test_a_person_alone_is_named_by_body_and_drawn_without_effects(self) -> None:
+        from describe import alone_prompt
+
+        show = two_people()
+        seen = observation({"ada": 5000, "bo": 9000}, sky={"kind": "backdrop", "pixels": 20000})
+        shot = over_the_shoulder(motion="smoke drifts")
+        ada = alone_prompt(show, shot, seen, "ada")
+        self.assertIn("An adult woman, brown skin: speaks with a half-smile. Face: lips slightly parted.", ada)
+        self.assertNotIn("old man", ada, "only the one person")
+        bo = alone_prompt(show, shot, seen, "bo")
+        self.assertIn("An old man, broad build.", bo, "no performance: the body alone")
+        self.assertNotIn("smoke", bo, "the scene's motion is drawn around the people")
+        self.assertIn("a red fox-fur mantle", bo, "drawn whole from words: every attribute")
+        self.assertNotIn("sky", bo, "no setting: alone on plain gray")
+        self.assertIn("alone on a plain light gray background", bo)
+        self.assertIn("Soft overcast daylight.", bo)
+
+
 class GraphTests(unittest.TestCase):
+    def test_a_piece_is_restored_at_its_own_size_in_one_step(self) -> None:
+        graph = wan.restore_graph("part.png", 5)
+        self.assertEqual(graph["4"]["inputs"]["resized_images"], ["1", 0], "already at its final size")
+        self.assertEqual((graph["7"]["inputs"]["steps"], graph["7"]["inputs"]["cfg"]), (1, 1.0))
+        self.assertEqual(graph["9"]["inputs"]["color_correction_method"], wan.RESTORE_COLOR)
+
+    def test_a_still_keeps_what_its_mask_says(self) -> None:
+        graph = wan.vace_graph("words", "bad", "480", wan.STILL_FRAMES, 5, "control.mp4", None, still=True, mask="keep.mp4")
+        self.assertEqual(graph["11"]["inputs"]["control_masks"], ["21", 0])
+        self.assertEqual(graph["21"]["inputs"]["channel"], "red")
+
     def test_a_still_is_the_first_frame_of_a_short_take(self) -> None:
         graph = wan.vace_graph("words", "bad", "480", wan.STILL_FRAMES, 5, "depth.mp4", None, still=True)
         vace = graph["11"]["inputs"]

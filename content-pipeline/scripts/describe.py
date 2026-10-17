@@ -77,19 +77,25 @@ def _action(show: dict, performance: dict) -> str:
     return text
 
 
+def person_sentences(show: dict, scene: dict, start: dict, cid: str) -> list[str]:
+    """One person: their body, action, and expression; their body alone when they have no performance.
+    Someone with a performance who is not in the start frame comes into it."""
+    body = _a(clause(show["characters"][cid]["body"]))
+    performance = (scene.get("performances") or {}).get(cid)
+    if performance is None:
+        return [template("personPresent", {"body": body})]
+    sentences = [template("person" if in_shot(start, cid) else "personEnters", {"body": body, "action": _action(show, performance)})]
+    if performance.get("expression"):
+        sentences.append(template("expression", {"expression": clause(performance["expression"])}))
+    return sentences
+
+
 def people_sentences(show: dict, scene: dict, start: dict) -> list[str]:
     """Everyone with a performance, in the script's order: their body, action, and expression.
 
-    Nobody else is named, and nobody gets more than ``body`` (how the prompt points
-    at a person). Someone with a performance who is not in the start frame comes into it.
+    Nobody else is named, and nobody gets more than ``body`` (how the prompt points at a person).
     """
-    sentences: list[str] = []
-    for cid, performance in (scene.get("performances") or {}).items():
-        values = {"body": _a(clause(show["characters"][cid]["body"])), "action": _action(show, performance)}
-        sentences.append(template("person" if in_shot(start, cid) else "personEnters", values))
-        if performance.get("expression"):
-            sentences.append(template("expression", {"expression": clause(performance["expression"])}))
-    return sentences
+    return [sentence for cid in (scene.get("performances") or {}) for sentence in person_sentences(show, scene, start, cid)]
 
 
 def setting_sentences(show: dict, scene: dict, start: dict) -> list[str]:
@@ -108,6 +114,22 @@ def setting_sentences(show: dict, scene: dict, start: dict) -> list[str]:
     return sentences
 
 
+def _joined(parts: list[str]) -> str:
+    parts = [" ".join(part.split()) for part in parts if part]
+    return " ".join(part[:1].upper() + part[1:] for part in parts)
+
+
+def alone_prompt(show: dict, scene: dict, start: dict, cid: str) -> str:
+    """One person drawn alone and full height by Qwen-Image, for a still: every attribute, as their
+    reference photo was drawn (the whole figure is drawn, so every described part is in the
+    picture), their performance, and the light. No setting: words for a backdrop made the model
+    give it room and cut the person."""
+    character = show["characters"][cid]
+    light = template("light", {"light": clause(show["locations"][scene["locationId"]]["look"]["light"])})
+    opening = template("aloneImage", {"body": clause(character["body"]), "attributes": "; ".join(clause(item) for item in character["attributes"])})
+    return _joined([opening, *person_sentences(show, scene, start, cid), light])
+
+
 def speech_sentence(scene: dict, speaker: str) -> str:
     """How the speaker of a talking take speaks: their lines' deliveries, never the words."""
     deliveries = list(dict.fromkeys(clause(line["delivery"]) for line in scene.get("lines") or [] if line["speakerId"] == speaker))
@@ -120,8 +142,7 @@ def video_prompt(show: dict, episode: dict, scene: dict, start: dict, speaker: s
     if speaker is not None:
         parts.append(speech_sentence(scene, speaker))
     parts += setting_sentences(show, scene, start)
-    parts = [" ".join(part.split()) for part in parts if part]
-    return " ".join(part[:1].upper() + part[1:] for part in parts)
+    return _joined(parts)
 
 
 def talking_speaker(scene: dict) -> str | None:

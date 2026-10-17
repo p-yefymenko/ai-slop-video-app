@@ -87,10 +87,18 @@ Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `b
 
 **A still is the first frame of a short take** (`STILL_FRAMES`, 9 frames): a one-frame take ignores the control video and copies the reference's layout.
 
-**Inputs** (`shot_inputs.py`), the least that does the job:
+**A still is drawn person by person** (`generate_batch.generate_still`), because VACE cannot tell whose photo goes where when its one reference picture holds more than one person (two photos on one sheet were swapped and blended):
 
-- **Depth video** (every shot), rendered from the timeline at the take's own size and 16 fps. People are flat silhouettes at their own median distance: the clay's face relief, copied, froze the face; only where they stand and how big comes from here. One fixed log scale for every shot (0.5 m brightest, 60 m darkest, gray 48–255; black only where nothing is, the sky), so a lone person far away is not stretched to white. Past every mesh the ground runs on to the horizon at its own distance. Control strength `VACE_STRENGTH` 0.6: at 1.0 the flat silhouettes are copied and the face freezes.
-- **Reference sheet**: the reference photos of who the script says the shot is about (`describe.reference_people`): the shot's `subjects`, exactly as authored. Each photo goes on as drawn (on white, by its prompt), side by side in one picture (VACE takes one). Anyone on the sheet gets a face painted in, so the shoulder in front stays off it. No sheet when nobody is listed.
+1. **Each person alone.** Everyone with any pixel in the start frame (`shot_inputs.start_people`) gets one VACE pass with only their mesh in the depth video and only their photo on the sheet (`draw_alone`, words: `describe.alone_prompt`, their `body` and performance, the backdrop, and the light; no effects, no motion). A shot `subject` is drawn in the shot's own frame. Anyone else is drawn whole, through a window of the same camera around their whole figure (`person_window`, `WINDOW_MARGIN` room around it, a full shot in words): a shoulder alone at the frame's edge is no person to the model, which drew one elsewhere.
+2. **Pasted at exactly their pixels** in the 3D render (`kept_people`): who covers whom is the geometry's. The outermost `BLEND_PIXELS` of the people are left to the final pass so the edge blends.
+3. **The shot around them.** The final VACE pass gets the depth video with the pasted people in every frame and a mask that keeps them in every frame (`write_kept_control`; VACE samples the mask in time and never reads the first frame's own), no reference sheet, and the full words. The kept pixels are then put back exactly.
+
+Depth for every pass keeps the people's relief at strength `STILL_VACE_STRENGTH` 1.0, which holds the framing.
+
+**Inputs for a clip** (`shot_inputs.py`), the least that does the job:
+
+- **Depth video**, rendered from the timeline at the take's own size and 16 fps. People are flat silhouettes at their own median distance: the clay's face relief, copied, froze the face; only where they stand and how big comes from here. One fixed log scale for every shot (0.5 m brightest, 60 m darkest, gray 48–255; black only where nothing is, the sky), so a lone person far away is not stretched to white. Past every mesh the ground runs on to the surround at its own distance. Control strength `VACE_STRENGTH` 0.6: at 1.0 the flat silhouettes are copied and the face freezes.
+- **Reference sheet**: the reference photos of the shot's `subjects` (`describe.reference_people`), side by side on white in one picture (VACE takes one). No sheet when nobody is listed.
 
 **Words** (`describe.video_prompt`): only what holds whatever part of anyone or anything the frame shows. No clothes, props, or landmarks, no screen side, no facing: words cannot know which part of a person or thing is in frame, and a described part that is not gets drawn anyway. Every piece is a `prompts.json` template; nothing names a scene:
 
@@ -100,7 +108,7 @@ Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `b
 
 Lines are never in a picture prompt: told among the actions, a voice from off screen makes the model cut to its speaker. No names, ids, or pronouns are written. Negative: `vaceNegative`.
 
-Output: `output/frames/<show>/<episode>/scene_XX_start.png`; `inputs/scene_XX_start/` keeps the depth video, the reference sheet, and `log.json` (prompt, size, seed, who is on the sheet).
+Output: `output/frames/<show>/<episode>/scene_XX_start.png`; `inputs/scene_XX_start/` keeps each person's drawing (`alone_<id>.png`, with its own depth, sheet, and log), the final pass's control and keep mask, and `log.json` (prompt, size, seed, a digest of each drawing).
 
 ### No output checks
 

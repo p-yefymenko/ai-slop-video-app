@@ -1,7 +1,11 @@
 """ComfyUI graphs for the Wan 2.2 chain, and the settings every scene shares.
 
     character reference (Qwen-Image-2512, ``reference_graph``)
-      -> start still (Wan VACE: the references + the shot's depth, ``vace_graph`` with ``still=True``)
+      -> start still: each person in the start frame drawn alone and full height by Qwen-Image
+         through the shot's camera widened around them; cut out by BiRefNet (``matte_graph``); the
+         shot's rectangle of them cut, enlarged, and given back its detail by SeedVR2
+         (``restore_graph``); then the shot drawn around them by Wan VACE (``vace_graph``,
+         ``still=True``, the people kept by ``mask``)
       -> clip: an on-screen speaker's face -> Wan S2V from the still and the voice (``s2v_graph``);
                anything else -> Wan VACE over the whole take (``vace_graph``)
       -> 24 fps (RIFE, ``rife_graph``)
@@ -46,6 +50,15 @@ VACE_STRENGTH = 0.6
 STILL_VACE_STRENGTH = 1.0
 # A still is the first frame of a short take: a one-frame take ignores the control video.
 STILL_FRAMES = 9
+# The shot's piece of a full-height drawing (a face in a close-up is a small part of a whole
+# figure) is enlarged to its size in the shot, then SeedVR2 (one diffusion step) gives it back
+# its detail, its colors matched to the enlarged piece. As ComfyUI's SeedVR2 image template.
+RESTORE_MODEL = "seedvr2_7b_int8_convrot.safetensors"
+RESTORE_VAE = "seedvr2_ema_vae_fp16.safetensors"
+RESTORE_COLOR = "lab"
+# A person is cut out of their own drawing (alone, on plain gray) by a background-removal model.
+MATTE_MODEL = "birefnet.safetensors"
+
 
 # Wan 2.2 S2V 14B: a start picture and a voice track make a talking take.
 S2V_MODEL = "wan2.2_s2v_14B_fp8_scaled.safetensors"
@@ -57,6 +70,8 @@ S2V_SHIFT = 8.0
 S2V_DROP_FRAMES = 3
 
 STILL_PREFIX = "reelshort_still"
+RESTORE_PREFIX = "reelshort_restore"
+MATTE_PREFIX = "reelshort_matte"
 VACE_PREFIX = "reelshort_vace"
 S2V_PREFIX = "reelshort_s2v"
 RIFE_PREFIX = "reelshort_rife"
@@ -78,10 +93,12 @@ def _video_out(images: list, prefix: str, audio: list | None = None, frame_rate:
 
 
 def vace_graph(
-    prompt: str, negative: str, size: str, length: int, seed: int, control: str, reference: str | None, still: bool
+    prompt: str, negative: str, size: str, length: int, seed: int, control: str, reference: str | None, still: bool,
+    mask: str | None = None,
 ) -> dict:
     """Wan VACE over a take of ``length`` frames: ``control`` is the depth video, ``reference`` the people's sheet.
 
+    ``mask`` is a video, black where the control's pixels are kept and white where VACE draws.
     ``still`` keeps only the take's first frame, saved as an image.
     """
     width, height = SIZES[size]
@@ -112,6 +129,11 @@ def vace_graph(
         "14": {"class_type": "TrimVideoLatent", "inputs": {"samples": ["13", 0], "trim_amount": ["11", 3]}},
         "15": {"class_type": "VAEDecode", "inputs": {"samples": ["14", 0], "vae": ["8", 0]}},
     }
+    if mask is not None:
+        graph["19"] = {"class_type": "LoadVideo", "inputs": {"file": mask}}
+        graph["20"] = {"class_type": "GetVideoComponents", "inputs": {"video": ["19", 0]}}
+        graph["21"] = {"class_type": "ImageToMask", "inputs": {"image": ["20", 0], "channel": "red"}}
+        graph["11"]["inputs"]["control_masks"] = ["21", 0]
     if reference is not None:
         graph["16"] = {"class_type": "LoadImage", "inputs": {"image": reference}}
         graph["11"]["inputs"]["reference_image"] = ["16", 0]
@@ -148,6 +170,37 @@ def s2v_graph(prompt: str, negative: str, size: str, length: int, seed: int, sta
         "15": {"class_type": "VAEDecode", "inputs": {"samples": ["14", 0], "vae": ["6", 0]}},
         "16": {"class_type": "ImageFromBatch", "inputs": {"image": ["15", 0], "batch_index": S2V_DROP_FRAMES, "length": 4096}},
         "17": _video_out(["16", 0], S2V_PREFIX, audio=["8", 0]),
+    }
+
+
+def restore_graph(image: str, seed: int) -> dict:
+    """An enlarged picture (already at its final size) given back its detail by SeedVR2."""
+    tiles = {"tile_size": 512, "overlap": 128, "temporal_size": 4096, "temporal_overlap": 8}
+    return {
+        "1": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "2": {"class_type": "UNETLoader", "inputs": {"unet_name": RESTORE_MODEL, "weight_dtype": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": RESTORE_VAE}},
+        "4": {"class_type": "SeedVR2Preprocess", "inputs": {"resized_images": ["1", 0]}},
+        "5": {"class_type": "VAEEncodeTiled", "inputs": {"pixels": ["4", 0], "vae": ["3", 0], **tiles}},
+        "6": {"class_type": "SeedVR2Conditioning", "inputs": {"model": ["2", 0], "vae_conditioning": ["5", 0]}},
+        "7": {"class_type": "KSampler", "inputs": {
+            "model": ["2", 0], "seed": seed, "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple",
+            "positive": ["6", 0], "negative": ["6", 1], "latent_image": ["5", 0], "denoise": 1.0}},
+        "8": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["7", 0], "vae": ["3", 0], **tiles}},
+        "9": {"class_type": "SeedVR2PostProcessing", "inputs": {
+            "images": ["8", 0], "original_resized_images": ["1", 0], "color_correction_method": RESTORE_COLOR}},
+        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": RESTORE_PREFIX}},
+    }
+
+
+def matte_graph(image: str) -> dict:
+    """The person in a picture of them alone, as a soft cut-out (white is them) by ``MATTE_MODEL``."""
+    return {
+        "1": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "2": {"class_type": "LoadBackgroundRemovalModel", "inputs": {"bg_removal_name": MATTE_MODEL}},
+        "3": {"class_type": "RemoveBackground", "inputs": {"bg_removal_model": ["2", 0], "image": ["1", 0]}},
+        "4": {"class_type": "MaskToImage", "inputs": {"mask": ["3", 0]}},
+        "5": {"class_type": "SaveImage", "inputs": {"images": ["4", 0], "filename_prefix": MATTE_PREFIX}},
     }
 
 
