@@ -44,7 +44,7 @@ script.json
     ├─ content:plates      Qwen-Image-2512, Qwen3-TTS VoiceDesign one picture per landmark, prop, character; a voice per speaker
     ├─ content:assets      TRELLIS.2 / Pixal3D                   one mesh per picture
     ├─ content:previs      moderngl                              render, guides, observations, script checks
-    ├─ content:frames      Wan 2.2 VACE                          scene start stills
+    ├─ content:frames      Qwen-Image, SeedVR2, BiRefNet, VACE   scene start stills
     └─ content:generate    Chatterbox → Wan S2V or VACE → RIFE   voice, scene clips at 24 fps, episode cut
 ```
 
@@ -79,7 +79,7 @@ Every scene is rendered even when one fails; the stage ends with the full list o
 
 Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `blockout.mp4` (8 fps), `start.png`, `end.png` (clay), `scene.json` (every entity's mesh and pose per sample, for the viewer), and `guides/`: `start_observation.json` and `end_observation.json` (per entity: pixels in the frame, screen x, distance; sky, ground, and surround pixels; the effects in the frame) and `previs_record.json` (the check errors and a digest of everything previs read, so an unchanged scene is not rendered again).
 
-### 4. Scene stills — Wan 2.2 VACE
+### 4. Scene stills — Qwen-Image, SeedVR2, BiRefNet, then Wan 2.2 VACE
 
 `content:frames` runs previs for each scene first, unless `guides/previs_record.json` shows the guides were made from the same script, meshes, settings, and previs code, and stops on a mismatch. The still is the scene's first frame: a talking take starts from it, and the stills are reviewed before any clip is made.
 
@@ -87,13 +87,12 @@ Output is 768×1360. Per scene in `output/previs/<show>/<episode>/scene_XX/`: `b
 
 **A still is the first frame of a short take** (`STILL_FRAMES`, 9 frames): a one-frame take ignores the control video and copies the reference's layout.
 
-**A still is drawn person by person** (`generate_batch.generate_still`), because VACE cannot tell whose photo goes where when its one reference picture holds more than one person (two photos on one sheet were swapped and blended):
+**A still is drawn person by person** (`generate_batch.generate_still`), because no video model tells whose photo goes where when one reference picture holds more than one person (VACE swapped and blended two photos on one sheet; SCAIL-2 copied the sheet itself):
 
-1. **Each person alone.** Everyone with any pixel in the start frame (`shot_inputs.start_people`) gets one VACE pass with only their mesh in the depth video and only their photo on the sheet (`draw_alone`, words: `describe.alone_prompt`, their `body` and performance, the backdrop, and the light; no effects, no motion). A shot `subject` is drawn in the shot's own frame. Anyone else is drawn whole, through a window of the same camera around their whole figure (`person_window`, `WINDOW_MARGIN` room around it, a full shot in words): a shoulder alone at the frame's edge is no person to the model, which drew one elsewhere.
-2. **Pasted at exactly their pixels** in the 3D render (`kept_people`): who covers whom is the geometry's. The outermost `BLEND_PIXELS` of the people are left to the final pass so the edge blends.
-3. **The shot around them.** The final VACE pass gets the depth video with the pasted people in every frame and a mask that keeps them in every frame (`write_kept_control`; VACE samples the mask in time and never reads the first frame's own), no reference sheet, and the full words. The kept pixels are then put back exactly.
-
-Depth for every pass keeps the people's relief at strength `STILL_VACE_STRENGTH` 1.0, which holds the framing.
+1. **Each person alone, full height** (`draw_person`). Everyone with any pixel in the start frame (`shot_inputs.start_frame`) is drawn by Qwen-Image-2512 (as for plates: Q8, 50 steps, CFG 4) from their words (`describe.alone_prompt`: the `aloneImage` template with `body` and every attribute, their performance, the light) and their own depth alone on black, through the InstantX ControlNet Union (strength 1.0, released at 80%). The depth is seen through a long lens (`DRAWING_FOV_DEGREES` 24°) from the direction the shot sees the part of them it shows (`seen_surface`, `drawing_camera`), far enough to hold their whole height, upright, with `WINDOW_MARGIN` room around the figure. Never through the shot's own camera widened: a person a hand's width from it is stretched toward the edges of so wide a view (a leg 58° off-axis drawn 3.6 times as tall), which the model redraws with normal proportions. Never a piece alone: the model cannot draw a costume from a shoulder.
+2. **The shot's piece** (`shot_part`). The drawing is laid on the frame by the one scale, turn and shift that best match where the seen part falls in both (`fit_similarity`, least squares over every seen pixel's corners; `shot_piece`: Lanczos to the scale, then the turn). A whole-picture move, never a per-pixel warp through the mesh: the drawing does not follow its mesh exactly, and the warp tore it (a double beard). SeedVR2 7B then gives the enlarged piece back its detail (one step, Lab color fix; Real-ESRGAN left the eyes smooth), and BiRefNet cuts the person out of that piece at its final size (cut before the enlargement, the edge blurred into the next person). Where the cut-out is soft, the backdrop's gray is lifted off (`own_colors`, pymatting's foreground estimate).
+3. **Layered** (`layer_people`): farthest first, each person by their own cut-out. The 3D scene says only who is nearer; another person's mesh hides no one (the drawing does not fill its mesh, and the hole showed). A thing the final pass draws hides a person where its mesh is in front; the floor hides nothing.
+4. **The shot around them.** The final VACE pass (20 steps, CFG 3.5, strength `STILL_VACE_STRENGTH` 1.0) gets the scene's depth without the people, with the layered people blended in by their cut-outs, and a mask that keeps them as much as their cut-outs cover, in every frame (`write_kept_control`; VACE samples the mask in time and never reads the first frame's own), no reference sheet, and the full words. The people are then laid over its output exactly. Depth under the people would only add artifacts where the drawing and the mesh differ.
 
 **Inputs for a clip** (`shot_inputs.py`), the least that does the job:
 
@@ -108,7 +107,7 @@ Depth for every pass keeps the people's relief at strength `STILL_VACE_STRENGTH`
 
 Lines are never in a picture prompt: told among the actions, a voice from off screen makes the model cut to its speaker. No names, ids, or pronouns are written. Negative: `vaceNegative`.
 
-Output: `output/frames/<show>/<episode>/scene_XX_start.png`; `inputs/scene_XX_start/` keeps each person's drawing (`alone_<id>.png`, with its own depth, sheet, and log), the final pass's control and keep mask, and `log.json` (prompt, size, seed, a digest of each drawing).
+Output: `output/frames/<show>/<episode>/scene_XX_start.png`. Beside it, `inputs/scene_XX_start/` holds only what a review needs: `log.json` (prompt, size, seed, a digest of each piece and cut-out) and `collage.png`, every step in one picture (per person: depth, drawing with the shot's frame on it, the piece laid, SeedVR2, cut-out, own colors; then the layered people, the control, the keep mask, what the final pass drew, the still). What the steps keep for the next run (drawings, pieces, cut-outs, each with its log; the final pass's inputs) is in `work/` under it.
 
 ### No output checks
 
@@ -131,7 +130,7 @@ S2V moves one face. In a take with two speakers on screen it is about the first,
 
 **24 fps.** RIFE (ComfyUI-Frame-Interpolation, `rife49`, ensemble) triples the take to 48 fps with its sound, every other frame is dropped (24 fps), and the clip is cut to the scene's exact length.
 
-Output: `output/generate/<show>/<episode>/scene_XX.mp4`; `inputs/scene_XX/` keeps the 16 fps take, the 48 fps take, a VACE take's depth video and sheet, and `log.json` (prompt, size, model, seed, speaker, and digests of the voice and the still).
+Output: `output/generate/<show>/<episode>/scene_XX.mp4`; `inputs/scene_XX/` holds `log.json` (prompt, size, model, seed, speaker, and digests of the voice and the still), and `work/` under it the 16 fps take, the 48 fps take, and a VACE take's depth video and sheet.
 
 When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudnessTargetLufs` (-16 LUFS) and joins them into `episode.mp4`; `concat_videos` aborts if their width, height, or fps differ. `captions.caption_episode` then burns in subtitles from each scene's `lines`, timed to the words Whisper (large-v3-turbo) hears, and a name card (`characters.<id>.name`) the first time someone speaks on screen; the plain cut is kept as `episode_plain.mp4`. A single-scene run leaves `episode.mp4` alone.
 
@@ -146,7 +145,8 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 | Wan 2.2 VACE Fun A14B | high- and low-noise experts, Q8 GGUF (QuantStack) | Apache-2.0 |
 | Wan 2.2 S2V 14B | fp8 weights, `wav2vec2_large_english` audio encoder | Apache-2.0 |
 | Wan, shared | `umt5_xxl_fp8_e4m3fn_scaled` text encoder, `wan_2.1_vae` | Apache-2.0 |
-| Qwen-Image-2512 | Q8 GGUF (unsloth), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`; InstantX ControlNet Union for the standing pose | Apache-2.0 |
+| Qwen-Image-2512 | Q8 GGUF (unsloth), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`; InstantX ControlNet Union for the standing pose and a still's people | Apache-2.0 |
+| SeedVR2 7B | int8 weights and its fp16 VAE (Comfy-Org): a still's people, enlarged | Apache-2.0 |
 | TRELLIS.2 | int8 UNet (~5GB), DINOv3 ViT-L, shape VAE, BiRefNet | MIT |
 | Pixal3D | int8 UNet (~5.2GB), DINOv3 with NAF, texture VAE, MoGe-2. Shares the TRELLIS shape VAE. | MIT |
 | RIFE | `rife49.pth`, fetched by ComfyUI-Frame-Interpolation on first use | MIT |
@@ -164,7 +164,7 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 - [ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation) (RIFE)
 
-`pnpm run content:asset-deps` installs trimesh and moderngl into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs and the depth video. Do not install `content-pipeline/requirements.txt` into that virtualenv.
+`pnpm run content:asset-deps` installs trimesh, moderngl and pymatting into that same virtualenv. trimesh reads and writes glTF. moderngl draws previs and the depth video. pymatting lifts the backdrop off a cut-out's soft edge. Do not install `content-pipeline/requirements.txt` into that virtualenv.
 
 ## Stage viewer
 
