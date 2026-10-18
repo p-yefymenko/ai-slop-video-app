@@ -369,7 +369,7 @@ def main() -> None:
                     else:
                         write_still_request(show, episode, scene, args.size)
         if args.stage == "frames":
-            print("Draw each still in Gemini from its to_draw folder, save it where it says, then run `pnpm run content:generate`.", flush=True)
+            print("Draw each still in Gemini from its to_draw folder (Claude: the draw-stills skill), save it where it says, then run `pnpm run content:generate`.", flush=True)
         return
     require_comfy()
     for show in shows:
