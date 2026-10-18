@@ -113,7 +113,7 @@ ComfyUI is cloned at content-pipeline/.comfyui
 
 Next:
   1. pnpm run content:comfy-torch  # CUDA PyTorch for the 5070 Ti (if setup did not already install it)
-  2. pnpm run content:models       # Wan 2.2 (VACE, S2V), Qwen-Image, TRELLIS.2, Pixal3D, and the check models
+  2. pnpm run content:models       # Wan 2.2 (VACE, S2V), InfiniteTalk, Qwen-Image, TRELLIS.2, Pixal3D
   3. pnpm run content:voice-deps   # the Chatterbox voice env
   4. pnpm run content:comfy        # leave this running (http://127.0.0.1:8188)
   5. pnpm run content:plates, content:assets, content:frames, then content:generate

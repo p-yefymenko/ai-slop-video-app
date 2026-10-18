@@ -1,7 +1,7 @@
 """The words for Wan, taken from the script and the start frame's observation.
 
-Only what holds whatever part of anyone or anything the frame shows: the shot's
-size and angle, the camera's move, everyone with a performance by their ``body``
+Only what holds whatever part of anyone or anything the frame shows, and nothing
+the start still or the depth video already shows (no shot size or angle): the camera's move, everyone with a performance by their ``body``
 with their action and expression, the effects, sky, ground, and surround that
 are in the frame, the scene's motion, and the light. No clothes, no props or
 landmarks, no screen side, no facing: words cannot know which part of a person
@@ -10,8 +10,13 @@ drawn anyway. Looks come from the reference sheet; shapes from the depth video.
 Every sentence is a template in ``prompts.json``. Nothing here knows any one scene.
 
 Lines are never in the picture prompt: told among the actions, a line from off
-screen makes the model cut to the speaker. A talking take (S2V) says only how its
+screen makes the model cut to the speaker. A talking take says only how its
 speaker speaks. Character names and ids never reach a model.
+
+The start still is the exception (``layout_prompt``): an image model draws the
+whole frame from the shot's 3D layout, so everyone and everything in it is
+described, by the color their shape is tinted in the layout, as far as the frame
+shows them.
 """
 
 from __future__ import annotations
@@ -52,17 +57,16 @@ def _a(text: str) -> str:
     return text if _ARTICLE.match(text) else ("an " if text[:1].lower() in "aeiou" else "a ") + text
 
 
-def shot_sentence(scene: dict, over_shoulder: bool = True) -> str:
-    """The kind of shot: its size and angle, from the script's shot; an over-the-shoulder shot says
-    so (``overShoulder``, unless ``over_shoulder`` is False), naming nobody. Named by their body,
-    the person it looks past was given the subject's action (a hand reached up from a blurred
-    shoulder)."""
+def shot_sentence(scene: dict, framing: bool = True) -> str:
+    """The kind of shot: its size and angle, from the script's shot, for a still drawn from words
+    alone. With ``framing`` False, only ``footage``: no size, no angle, and no shot type, whose
+    words are sizes too ("action" is a wide shot)."""
+    if not framing:
+        return template("footage", {})
     shot = scene.get("shot") or {}
     words = settings()["shot"]
     angle = words["angles"].get(shot.get("angle", "eye"), "")
     size = words["sizes"].get(shot.get("size", ""), words["types"].get(shot.get("type", ""), words["sizes"]["wide"]))
-    if over_shoulder and shot.get("type") == "overShoulder":
-        size = template("overShoulder", {"size": size})
     text = template("shotSentence", {"angle": f"{angle} " if angle else "", "size": size})
     return text[:1].upper() + text[1:]
 
@@ -124,46 +128,6 @@ def _joined(parts: list[str]) -> str:
     return " ".join(part[:1].upper() + part[1:] for part in parts)
 
 
-def _view_index(view_degrees: float) -> int:
-    """The nearest of the ``views``, 45° apart, to ``view_degrees`` between where a person faces and
-    where the camera is (0 their front, 180 their back)."""
-    count = len(settings()["views"])
-    return round(min(max(view_degrees, 0.0), 180.0) / (180.0 / (count - 1)))
-
-
-def view_words(view_degrees: float) -> str:
-    """Which side of a person the camera sees, in words: the depth alone does not tell a back from a
-    front, and the model drew everyone from the front. The words name only what is seen: "the face
-    not visible" put a face in the picture."""
-    return settings()["views"][_view_index(view_degrees)]
-
-
-def alone_negative(view_degrees: float) -> str:
-    """The negative for a person drawn alone: ``aloneNegative``, and what the side they are seen
-    from must not show (``viewNegatives``: a face, from behind)."""
-    extra = settings()["viewNegatives"][_view_index(view_degrees)]
-    return ", ".join(part for part in (settings()["aloneNegative"], extra) if part)
-
-
-def alone_prompt(show: dict, scene: dict, start: dict, cid: str, view_degrees: float) -> str:
-    """One person drawn alone and full height by Qwen-Image, for a still: which side of them the
-    camera sees (``view_words``), every attribute, as their reference photo was drawn (the whole
-    figure is drawn, so every described part is in the picture), save the face's when it is turned
-    from the camera (named, the model turned the head to show a beard and eyes), their expression
-    when their face is toward the camera, and the light. No setting: words for a backdrop made the model give it
-    room and cut the person. No action: it is motion the take performs, the pose is the depth's,
-    and an action's ``{target}`` is another person, whom the model then drew beside them."""
-    character = show["characters"][cid]
-    facing = view_degrees < 90.0
-    light = template("light", {"light": clause(show["locations"][scene["locationId"]]["look"]["light"])})
-    seen = [attribute_text(item) for item in character["attributes"] if facing or not is_face(item)]
-    opening = template("aloneImage", {"body": clause(character["body"]), "view": view_words(view_degrees),
-                                      "attributes": "; ".join(clause(item) for item in seen)})
-    performance = (scene.get("performances") or {}).get(cid) or {}
-    face = [template("expression", {"expression": clause(performance["expression"])})] if performance.get("expression") and facing else []
-    return _joined([opening, *face, light])
-
-
 def speech_sentence(scene: dict, speaker: str) -> str:
     """How the speaker of a talking take speaks: their lines' deliveries, never the words."""
     deliveries = list(dict.fromkeys(clause(line["delivery"]) for line in scene.get("lines") or [] if line["speakerId"] == speaker))
@@ -171,33 +135,76 @@ def speech_sentence(scene: dict, speaker: str) -> str:
 
 
 def video_prompt(show: dict, episode: dict, scene: dict, start: dict, speaker: str | None = None) -> str:
-    """The take in words, for VACE (``speaker`` None) or for S2V (``speaker`` is the one whose voice drives it)."""
-    parts = [shot_sentence(scene), camera_sentence(scene), *people_sentences(show, scene, start)]
+    """The take in words, for VACE (``speaker`` None) or for a talking take (``speaker`` is the one whose voice drives it).
+
+    No shot size, angle or type: the start still or the depth video shows the framing exactly, and
+    the script's words for it can disagree with its camera (a shot of type ``action`` is called a
+    wide shot whatever the camera frames)."""
+    parts = [template("footage", {}), camera_sentence(scene), *people_sentences(show, scene, start)]
     if speaker is not None:
         parts.append(speech_sentence(scene, speaker))
     parts += setting_sentences(show, scene, start)
     return _joined(parts)
 
 
-def still_prompt(show: dict, scene: dict, start: dict) -> str:
-    """The words for a still's final pass, which keeps the people already drawn and draws only what
-    is around them: the shot's size and angle and the setting, and no one. Told the people (an
-    action's ``{target}`` named by body), it drew a person into the free frame; told it was over
-    someone's shoulder, a head to go with the shoulder."""
-    return _joined([shot_sentence(scene, over_shoulder=False), *setting_sentences(show, scene, start)])
+def still_prompt(show: dict, scene: dict, start: dict, framing: bool) -> str:
+    """A still's shot and setting, naming no one: the layout's words say who is in it. The shot's
+    size and angle only with ``framing``; never over whose shoulder (told it, a model drew a head to
+    go with the shoulder)."""
+    return _joined([shot_sentence(scene, framing=framing), *setting_sentences(show, scene, start)])
 
 
-def sheet_prompt(show: dict, scene: dict, start: dict, colors: dict[str, str], facing: dict[str, bool], size: tuple[int, int]) -> str:
-    """The words that go with a scene's sheet (``shot_inputs.prompt_sheet``) to an image model that
-    takes pictures: how to read the sheet (``sheetPrompt``: the layout, and each person's tint
-    ``colors[cid]`` matched to the photo framed in it), the face of each performer whose face is
-    toward the camera (``facing``), by their color, then the still's own words, the shot and the
-    setting (``still_prompt``). Looks are the photos'; no side of the frame is named."""
+def view_words(view_degrees: float) -> str:
+    """Which side of a person the camera sees (``views``, 45° apart; 0 is their front, 180 their
+    back): the layout's shading barely tells a back from a front, and the model turned a back to
+    the camera."""
+    views = settings()["views"]
+    return views[round(min(max(view_degrees, 0.0), 180.0) / (180.0 / (len(views) - 1)))]
+
+
+def thing_appearance(show: dict, scene: dict, kind: str, thing_id: str) -> str:
+    """A prop's or a landmark of the scene's location's words: what its picture and mesh were made from."""
+    if kind == "prop":
+        return show["props"][thing_id]["appearance"]
+    return show["locations"][scene["locationId"]]["spatial"]["landmarks"][thing_id]["appearance"]
+
+
+def layout_prompt(show: dict, scene: dict, start: dict, colors: dict[str, str], things: list[tuple[str, str, str]],
+                  views: dict[str, float], size: tuple[int, int]) -> str:
+    """The words for a still an image model draws from the shot's 3D layout alone (each person in
+    it tinted ``colors[cid]``, each prop and landmark in it its color in ``things``, as (kind, id,
+    color)): how to read the layout (``layoutPrompt``), each person's look by their color
+    (``layoutLook``: the side the camera sees, ``view_words`` of ``views[cid]``; body and
+    attributes as far as the frame shows them, the face's only when the face is toward the camera,
+    under 90°; the words their reference photo was drawn from), each thing's by its color
+    (``layoutThing``: its ``appearance``), the face of each performer whose face is toward the
+    camera, then the still's setting (``still_prompt``). A shape left untinted would have no
+    words, and what it is would be the model's guess. No photos: given full-length photos beside
+    the layout, the model drew everyone full length, facing the camera, as in the photos. No size
+    or angle: the layout shows the framing exactly, so words for it can only repeat or contradict
+    it (told "wide shot" over a layout cut at the knees, the model drew everyone full length). No
+    side of the frame is named."""
     performances = scene.get("performances") or {}
-    faces = [template("sheetFace", {"color": colors[cid], "expression": clause(performances[cid]["expression"])})
+    facing = {cid: views[cid] < 90.0 for cid in colors}
+    looks = [template("layoutLook", {"color": colors[cid], "view": view_words(views[cid]), "body": clause(show["characters"][cid]["body"]),
+                                     "attributes": "; ".join(clause(attribute_text(item)) for item in show["characters"][cid]["attributes"]
+                                                             if facing[cid] or not is_face(item))})
+             for cid in colors]
+    looks += [template("layoutThing", {"color": color, "appearance": clause(thing_appearance(show, scene, kind, thing_id))})
+              for kind, thing_id, color in things]
+    faces = [template("layoutFace", {"color": colors[cid], "expression": clause(performances[cid]["expression"])})
              for cid in colors if (performances.get(cid) or {}).get("expression") and facing[cid]]
-    return _joined([template("sheetPrompt", {"width": str(size[0]), "height": str(size[1])}), *faces,
-                    still_prompt(show, scene, start), template("sheetOnly", {})])
+    return _joined([template("layoutPrompt", {"width": str(size[0]), "height": str(size[1])}), *looks, *faces,
+                    still_prompt(show, scene, start, framing=False), template("frameOnly", {})])
+
+
+def plain_still_prompt(show: dict, scene: dict, start: dict, size: tuple[int, int]) -> str:
+    """The words for a still with none of the 3D scene in its frame (only sky, ground and surround,
+    which the layout has no shape for): the layout would be a blank, so the words go alone, with
+    the shot's size and angle, unless the camera moves: then they are the whole shot's, not its
+    first frame's (a tilt up from the boots is a medium close-up only at its end)."""
+    return _joined([template("plainStill", {"width": str(size[0]), "height": str(size[1])}),
+                    still_prompt(show, scene, start, framing=not camera_moves(scene))])
 
 
 def talking_speaker(scene: dict) -> str | None:

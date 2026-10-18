@@ -27,7 +27,6 @@
     "content:test-spatial": "node scripts/run-python.cjs -m unittest discover -s content-pipeline/tests -p test_*.py",
     "content:frames": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
     "content:frame": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage frames",
-    "content:sheets": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage sheets --size 720",
     "content:prompts": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage prompts",
     "content:generate": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",
     "content:clip": "node scripts/run-python.cjs content-pipeline/scripts/generate_batch.py --stage video",

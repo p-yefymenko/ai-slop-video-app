@@ -44,9 +44,6 @@ MODELS = [
     ("unsloth/Qwen-Image-2512-GGUF", "qwen-image-2512-Q8_0.gguf", "diffusion_models", 15 * GB),
     (QWEN, "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "text_encoders", 5 * GB),
     (QWEN, "split_files/vae/qwen_image_vae.safetensors", "vae", 100 * MB),
-    # SeedVR2 7B: the shot's piece of a person's full-height drawing, enlarged, given back its detail.
-    ("Comfy-Org/SeedVR2", "diffusion_models/seedvr2_7b_int8_convrot.safetensors", "diffusion_models", 8 * GB),
-    ("Comfy-Org/SeedVR2", "vae/seedvr2_ema_vae_fp16.safetensors", "vae", 400 * MB),
     # InstantX ControlNet Union for Qwen-Image: a character's reference photo is drawn over one fixed standing pose.
     ("Comfy-Org/Qwen-Image-InstantX-ControlNets", "split_files/controlnet/Qwen-Image-InstantX-ControlNet-Union.safetensors", "controlnet", 3 * GB),
     # TRELLIS.2 (object meshes) and Pixal3D (character meshes).

@@ -126,8 +126,9 @@ video model is told about is what you write: the shot's `subjects` and the
   `lookAt`, `verticalFovDegrees`) so the frame matches the shot: for the
   benchmark, the reference frame. Check it in the viewer's scene camera and in
   `content:previs`'s `start.png`, and adjust the numbers until it matches.
-  Keep `shot.size` and `shot.angle` true to the camera you set: they are the
-  words the model gets. A camera with more than one keyframe needs
+  Keep `shot.size` and `shot.angle` true to the camera you set. The models
+  take the framing from the 3D layout, never from these words; only a still
+  with no mesh in its frame (a view out over a valley) gets them. A camera with more than one keyframe needs
   `cameraMotion`.
 - **Write the whole look, head to feet.** Every visible garment goes in the
   attributes, footwear included; anything left out, the model invents (bare
@@ -146,7 +147,7 @@ video model is told about is what you write: the shot's `subjects` and the
   - The video model gets where people stand and how big they are; body motion
     and faces come from the words.
   - Keep each shot's motion simple. Keep its camera locked or slow.
-- **A speaker with a performance is lip-synced (S2V) from the start still.**
+- **A speaker with a performance is lip-synced (InfiniteTalk) from the start still.**
   Their face should be toward the camera in the start frame, best in a medium
   close-up; a speaker without a performance is a voice from off screen. Only one
   face is lip-synced per shot: give a shot one on-screen speaker.

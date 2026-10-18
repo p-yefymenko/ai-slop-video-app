@@ -21,6 +21,7 @@ Before writing any value, ask: "would this be right for every scene where this c
 
   Never a sentence about one scene's fur or one character's beard.
 - **No per-scene code or values.** No `if scene == N`, no per-scene seeds, strengths or step counts, and no paths to a picked plate or take.
+- **One fact, one source.** Never restate in words what a model input already shows exactly (the framing in a layout or depth video, where people stand, which way they face). Authored words for the same fact (`shot.size`, `shot.type`) drift from the authored camera, and the model follows whichever it trusts more.
 - **Settings are named constants with a reason**, in one place, the same for every scene. Change one only when the change is meant for all scenes.
 - **Picking by eye is not a step.** When a choice is needed (a plate seed, the best take), code makes it with a deterministic rule from the script. If it can't, flag it to the user as an open problem.
 - **No stopgaps.** Never use or offer a hand-picked file, a leftover from an experiment, or a one-off workaround in place of a general method (e.g. an old recording as a character's voice). Name the general fix and what it takes; that is the only option to present.
@@ -45,7 +46,7 @@ Before starting anything on the GPU, tell the user in one or two lines:
 
 Then:
 
-- **Review every prompt before any generation.** Run `pnpm run content:prompts` (same flags as the run) and read each prompt it prints: each person drawn alone, the still's final pass, the take. Check them against the rules here (nobody without a performance described, no part that may be off frame, nothing a model could draw that the shot must not show, no word that contradicts the view). Show the user any prompt a code change altered. A run whose prompts were not read is not started.
+- **Review every prompt before any generation.** Run `pnpm run content:prompts` (same flags as the run) and read each prompt it prints: the still's (for the image model) and the take's. Check them against the rules here (nobody without a performance described, no part that may be off frame, nothing a model could draw that the shot must not show, no word that contradicts the view). Show the user any prompt a code change altered. A run whose prompts were not read is not started.
 - **Use the cheapest run that answers the question:** a still before a clip, 480p before 720p, one scene before an episode, a short take before a full one.
 - **Don't re-render a finished result at higher quality just to show it.** Final-quality renders come from the integrated pipeline, at the end.
 - **Check with the user before any run over ~15 minutes,** unless they asked for exactly that run.

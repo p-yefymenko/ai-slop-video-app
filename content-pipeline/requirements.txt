@@ -1,5 +1,5 @@
 boto3>=1.35.0
 numpy>=1.26.0
 Pillow>=10.0.0
-# trimesh, moderngl, and pymatting are installed by `pnpm run content:asset-deps` into the ComfyUI venv; transformers (captions) comes with ComfyUI.
+# trimesh and moderngl are installed by `pnpm run content:asset-deps` into the ComfyUI venv; transformers (captions) comes with ComfyUI.
 # Do not pip-install this whole file into that venv.

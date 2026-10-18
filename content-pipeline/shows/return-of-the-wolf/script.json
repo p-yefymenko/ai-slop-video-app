@@ -529,11 +529,11 @@
           },
           "performances": {
             "ryan": {
-              "action": "seizes {target} by the throat with one gauntleted hand and drives forward",
+              "action": "seizes {target} by the throat with one hand and drives forward",
               "target": "mira"
             },
             "mira": {
-              "action": "chokes, both hands clawing at the gauntlet, the head tipping back",
+              "action": "chokes, both hands clawing at the hand on the throat, the head tipping back",
               "expression": "terror: eyes wide, mouth open in a choked gasp"
             }
           },
@@ -633,7 +633,7 @@
               }
             ]
           },
-          "cameraMotion": "flies fast and low over the misty forested valley, then rises and pulls back over the cliff edge, the mossy rock rising into frame from below, and settles low behind the rock",
+          "cameraMotion": "flies fast and low over the misty forested valley, then rises, pulls back and settles low near the ground",
           "motion": "Mist drifts through the valley far below"
         },
         {
@@ -876,7 +876,7 @@
           },
           "performances": {
             "ryan": {
-              "action": "stands still among the fallen, the crimson cloak stirring"
+              "action": "stands still, the arms hanging at the sides"
             }
           },
           "sound": {
@@ -1277,7 +1277,7 @@
           },
           "performances": {
             "adam": {
-              "action": "stands watching, the fur mantle stirring in the wind"
+              "action": "stands still, watching"
             }
           },
           "sound": {
@@ -1312,7 +1312,7 @@
               }
             ]
           },
-          "motion": "Far out across the clearing a figure wrapped in golden light streaks from left to right, leaving a bright trail of light"
+          "motion": "Far out across the clearing a figure wrapped in golden light streaks across, leaving a bright trail of light"
         }
       ]
     }
