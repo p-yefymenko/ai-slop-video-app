@@ -239,6 +239,13 @@ export type SceneShot = {
   size?: ShotSize;
   /** eye (default) | low (looking up: power) | high (looking down: defeat). Words only; the camera must match. */
   angle?: "eye" | "low" | "high";
+  /**
+   * Anyone only partly in the start frame (a near shoulder, a cut at the frame's edge) whose colors
+   * in the 3D layout leave what they wear a guess: the attributes of theirs the frame shows, each
+   * copied exactly from their `attributes`. Only these words of theirs reach the start still's
+   * image model, tied to no one: any word for a part the frame does not show gets that part drawn.
+   */
+  partlySeen?: Record<string, string[]>;
 };
 
 export type ScriptScene = {

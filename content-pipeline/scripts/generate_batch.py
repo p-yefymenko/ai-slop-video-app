@@ -3,7 +3,7 @@
 
 frames: previs (the 3D scene and its checks), then what an image model needs to
         draw the scene's start still in one pass: the shot's 3D layout with each
-        person, prop and landmark in it tinted a color, and the words
+        person, prop and landmark in it in their mesh's own colors, and the words
         (``describe.layout_prompt``).
         The still is drawn by hand in Gemini for now and saved where the stage
         says (``start_still_path``).
@@ -64,7 +64,7 @@ from pipeline_paths import (
     voice_track_path,
 )
 from previs import current_previs, load_observation, previs_episode
-from shot_inputs import reference_sheet, start_frame, tinted_layout, view_degrees, write_depth_video
+from shot_inputs import colored_layout, reference_sheet, start_frame, view_degrees, write_depth_video
 from voice import track_seconds, write_voice_track
 from world import camera_at, load_show, reference_path, settings
 
@@ -118,9 +118,8 @@ def print_prompts(show: dict, episode: dict, scene: dict, size: str) -> None:
     """Every prompt a frames and a video run of the scene would send, from the same code, and
     nothing generated: the still's (to the image model) and the take's. Read before any run."""
     start = require_previs(show, episode, scene)
-    _entities, _frame, tint, words = still_request(show, episode, scene, size)
-    given = ", ".join(f"{eid} {name}" for eid, (name, _rgb) in tint.items()) if tint else "words only, no layout"
-    print(f"  Still ({given}):\n    {words}", flush=True)
+    _entities, frame, words = still_request(show, episode, scene, size)
+    print(f"  Still ({'with the layout' if frame.entity.any() else 'words only, no layout'}):\n    {words}", flush=True)
     speaker = talking_speaker(scene)
     print(f"  Take ({'InfiniteTalk, ' + speaker if speaker else 'VACE'}):\n    {video_prompt(show, episode, scene, start, speaker)}", flush=True)
 
@@ -135,49 +134,41 @@ def still_request_dir(still: Path) -> Path:
 
 
 def still_request(show: dict, episode: dict, scene: dict, size: str):
-    """The start frame's layout at ``STILL_LAYOUT_SCALE`` times the take's size, each person, then
-    each prop and landmark, in it with their color (``layoutColors``, people in the script's order
-    of characters), and the words for the image model: (the entities, the render, {entity id:
-    (color name, rgb)}, the prompt). When none of the 3D scene is in the frame (only the backdrop,
-    which the layout has no shape for) the layout would be a blank, so the words go alone
-    (``plain_still_prompt``) and the tints are empty."""
+    """The start frame at ``STILL_LAYOUT_SCALE`` times the take's size and the words for the image
+    model: (the entities, the render, the prompt). When none of the 3D scene is in the frame (only
+    the backdrop, which the layout has no shape for) the layout would be a blank, so the words go
+    alone (``plain_still_prompt``)."""
     start = require_previs(show, episode, scene)
     width, height = (side * STILL_LAYOUT_SCALE for side in wan.SIZES[size])
-    people, things, entities, frame = start_frame(show, episode, scene, width, height)
+    people, entities, frame = start_frame(show, episode, scene, width, height)
     if not frame.entity.any():
-        return entities, frame, {}, plain_still_prompt(show, scene, start, (width, height))
-    colors = settings()["layoutColors"]
-    shapes = [*people, *(thing_id for _kind, thing_id in things)]
-    if len(shapes) > len(colors):
-        raise SystemExit(f"Scene {scene['sceneNumber']} has {len(shapes)} people and things in its start frame; prompts.layoutColors has {len(colors)} colors")
-    tint = dict(zip(shapes, colors))
+        return entities, frame, plain_still_prompt(show, scene, start, (width, height))
     camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
     views = {cid: view_degrees(next(entity for entity in entities if entity.id == cid), camera) for cid in people}
-    prompt = layout_prompt(show, scene, start, {cid: tint[cid][0] for cid in people},
-                           [(kind, thing_id, tint[thing_id][0]) for kind, thing_id in things], views, (width, height))
-    return entities, frame, tint, prompt
+    return entities, frame, layout_prompt(show, scene, start, views, (width, height))
 
 
 def write_still_request(show: dict, episode: dict, scene: dict, size: str) -> Path:
     """What an image model needs to draw the scene's start still in one pass, for a person to give
     it (the still is drawn by hand in Gemini for now; nothing here is generated): ``layout.png``
-    (the shot's 3D layout, each person and thing in it tinted their color; none when it would be a
-    blank) and ``prompt.txt`` (``describe.layout_prompt``). Beside the full-length reference photos the model drew everyone
+    (the shot's 3D layout, everyone and everything in it in their mesh's own colors,
+    ``colored_layout``; none when it would be a blank) and ``prompt.txt``
+    (``describe.layout_prompt``). Beside the full-length reference photos the model drew everyone
     full length, facing the camera, and lost the layout's framing; from the layout alone it kept
     it. The picture it draws is saved as the still (``start_still_path``)."""
     still = start_still_path(*_ids(show, episode, scene))
     folder = still_request_dir(still)
-    entities, frame, tint, prompt = still_request(show, episode, scene, size)
-    numbers = {entity.id: number + 1 for number, entity in enumerate(entities)}
+    entities, frame, prompt = still_request(show, episode, scene, size)
     if folder.exists():
         for old in folder.iterdir():
             old.unlink()
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "prompt.txt").write_text(prompt + "\n", encoding="utf-8")
-    if not tint:
+    if not frame.entity.any():
         print(f"  Give the words in {folder / 'prompt.txt'} alone (none of the 3D scene is in the frame); save the picture as {still}", flush=True)
         return folder
-    Image.fromarray(tinted_layout(frame.clay, frame.entity, {numbers[eid]: tuple(rgb) for eid, (_name, rgb) in tint.items()})).save(folder / "layout.png")
+    colored = [number + 1 for number, entity in enumerate(entities) if entity.mesh.colors is not None]
+    Image.fromarray(colored_layout(frame.clay, frame.albedo, frame.entity, colored)).save(folder / "layout.png")
     print(f"  Upload {folder / 'layout.png'} with the words in prompt.txt; save the picture as {still}", flush=True)
     return folder
 
@@ -232,7 +223,7 @@ def talk_masks(show: dict, episode: dict, scene: dict, speaker: str, size: str, 
     """The speaker's place in the still and everyone else's together, when the speaker and anyone
     else are in it; else None (one voice, no mask). The still is drawn from the start frame's
     layout, so each person is where their mesh is in that frame (the nearest mesh at each pixel)."""
-    people, _things, entities, frame = start_frame(show, episode, scene, *wan.SIZES[size])
+    people, entities, frame = start_frame(show, episode, scene, *wan.SIZES[size])
     others = [cid for cid in people if cid != speaker]
     if speaker not in people or not others:
         return None

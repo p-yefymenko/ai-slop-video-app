@@ -13,10 +13,9 @@ Lines are never in the picture prompt: told among the actions, a line from off
 screen makes the model cut to the speaker. A talking take says only how its
 speaker speaks. Character names and ids never reach a model.
 
-The start still is the exception (``layout_prompt``): an image model draws the
-whole frame from the shot's 3D layout, so everyone and everything in it is
-described, by the color their shape is tinted in the layout, as far as the frame
-shows them.
+The start still (``layout_prompt``) is drawn by an image model from the shot's 3D
+layout in the meshes' own colors: the looks come from the layout, and the words
+add only the faces' expressions and the setting.
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ from __future__ import annotations
 import re
 
 from observe import in_shot
-from world import attribute_text, backdrop_text, camera_moves, clause, is_face, settings
+from world import attribute_text, backdrop_text, camera_moves, clause, settings
 
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 _ARTICLE = re.compile(r"^(one|an?|the)\s+", re.IGNORECASE)
@@ -154,47 +153,32 @@ def still_prompt(show: dict, scene: dict, start: dict, framing: bool) -> str:
     return _joined([shot_sentence(scene, framing=framing), *setting_sentences(show, scene, start)])
 
 
-def view_words(view_degrees: float) -> str:
-    """Which side of a person the camera sees (``views``, 45° apart; 0 is their front, 180 their
-    back): the layout's shading barely tells a back from a front, and the model turned a back to
-    the camera."""
-    views = settings()["views"]
-    return views[round(min(max(view_degrees, 0.0), 180.0) / (180.0 / (len(views) - 1)))]
+def layout_prompt(show: dict, scene: dict, start: dict, views: dict[str, float], size: tuple[int, int]) -> str:
+    """The words for a still an image model draws from the shot's 3D layout in the meshes' own
+    colors: how to read it (``layoutPrompt``), what the frame shows of each person only partly in it
+    whose colors leave it a guess (``layoutPartly``: their attributes listed in ``shot.partlySeen``,
+    authored, tied to no one), the face of each performer in it whose face is toward the camera
+    (``views[cid]``, how far round from their front it stands, under 90°), named by their ``body``
+    (``layoutFace``), then the still's setting (``still_prompt``), and ``frameOnly``.
 
-
-def thing_appearance(show: dict, scene: dict, kind: str, thing_id: str) -> str:
-    """A prop's or a landmark of the scene's location's words: what its picture and mesh were made from."""
-    if kind == "prop":
-        return show["props"][thing_id]["appearance"]
-    return show["locations"][scene["locationId"]]["spatial"]["landmarks"][thing_id]["appearance"]
-
-
-def layout_prompt(show: dict, scene: dict, start: dict, colors: dict[str, str], things: list[tuple[str, str, str]],
-                  views: dict[str, float], size: tuple[int, int]) -> str:
-    """The words for a still an image model draws from the shot's 3D layout alone (each person in
-    it tinted ``colors[cid]``, each prop and landmark in it its color in ``things``, as (kind, id,
-    color)): how to read the layout (``layoutPrompt``), each person's look by their color
-    (``layoutLook``: the side the camera sees, ``view_words`` of ``views[cid]``; body and
-    attributes as far as the frame shows them, the face's only when the face is toward the camera,
-    under 90°; the words their reference photo was drawn from), each thing's by its color
-    (``layoutThing``: its ``appearance``), the face of each performer whose face is toward the
-    camera, then the still's setting (``still_prompt``). A shape left untinted would have no
-    words, and what it is would be the model's guess. No photos: given full-length photos beside
-    the layout, the model drew everyone full length, facing the camera, as in the photos. No size
-    or angle: the layout shows the framing exactly, so words for it can only repeat or contradict
-    it (told "wide shot" over a layout cut at the knees, the model drew everyone full length). No
-    side of the frame is named."""
+    No looks in words beyond ``partlySeen``: any word for a part the frame does not show got that
+    part drawn, and code cannot know which part of a person the frame shows. Given a
+    near shoulder's owner's whole look, the model drew their head and reframed the shot to fit it;
+    given everyone's wear as one list tied to no one, it drew the shoulder's owner whole, boots and
+    all, and pulled back to full length. Without the words, the colors alone leave a material to
+    guess (a fox-fur shoulder came out a sack). No photos: given
+    full-length photos beside the layout, the model drew everyone full length, facing the camera.
+    No size or angle: the layout shows the framing exactly, so words for it can only repeat or
+    contradict it (told "wide shot" over a layout cut at the knees, the model drew everyone full
+    length). No side of the frame is named."""
     performances = scene.get("performances") or {}
-    facing = {cid: views[cid] < 90.0 for cid in colors}
-    looks = [template("layoutLook", {"color": colors[cid], "view": view_words(views[cid]), "body": clause(show["characters"][cid]["body"]),
-                                     "attributes": "; ".join(clause(attribute_text(item)) for item in show["characters"][cid]["attributes"]
-                                                             if facing[cid] or not is_face(item))})
-             for cid in colors]
-    looks += [template("layoutThing", {"color": color, "appearance": clause(thing_appearance(show, scene, kind, thing_id))})
-              for kind, thing_id, color in things]
-    faces = [template("layoutFace", {"color": colors[cid], "expression": clause(performances[cid]["expression"])})
-             for cid in colors if (performances.get(cid) or {}).get("expression") and facing[cid]]
-    return _joined([template("layoutPrompt", {"width": str(size[0]), "height": str(size[1])}), *looks, *faces,
+    partly = (scene.get("shot") or {}).get("partlySeen") or {}
+    shown = [template("layoutPartly", {"wear": "; ".join(clause(item) for item in partly[cid])}) for cid in views if partly.get(cid)]
+    faces = [template("layoutFace", {"body": _ARTICLE.sub("", clause(show["characters"][cid]["body"])),
+                                     "expression": clause(performances[cid]["expression"])})
+             for cid in views if (performances.get(cid) or {}).get("expression") and views[cid] < 90.0]
+    return _joined([template("layoutPrompt", {"width": str(size[0]), "height": str(size[1])}),
+                    *shown, *faces,
                     still_prompt(show, scene, start, framing=False), template("frameOnly", {})])
 
 

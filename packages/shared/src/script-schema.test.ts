@@ -300,6 +300,15 @@ test("every scene authors its camera; a shot names its subjects and size", () =>
   assert.match(messages(show), /shot: Unrecognized key/);
 });
 
+test("what a shot shows of someone partly in it is their own attributes, word for word", () => {
+  const show = minimalShow();
+  const scene = show.episodes[0].scenes[0];
+  scene.shot = { type: "single", subjects: ["ada"], size: "full", partlySeen: { ada: ["a red cloak"] } };
+  assert.match(messages(show), /shot.partlySeen.ada\[0\]: "a red cloak" is not one of ada's attributes/);
+  scene.shot.partlySeen = { nobody: [] };
+  assert.match(messages(show), /shot.partlySeen.nobody: unknown character/);
+});
+
 test("an action is aimed only through {target}", () => {
   const show = minimalShow();
   const ada = show.episodes[0].scenes[0].performances.ada;

@@ -28,13 +28,14 @@ Before writing any value, ask: "would this be right for every scene where this c
 
 ### Only robust code: no heuristics
 
-The pipeline uses only authored script data (`shot.subjects`, `shot.over`, `performances`, `lines`, …) and exact geometry (the timeline, the meshes, the camera, the depth render, "any pixel of it is in the frame").
+The pipeline uses only authored script data (`shot.subjects`, `shot.partlySeen`, `performances`, `lines`, …) and exact geometry (the timeline, the meshes, the camera, the depth render, "any pixel of it is in the frame").
 
 - **No thresholds on pixels or mesh regions** (minimum sizes, visible shares, height bands standing in for body parts, color tolerances, mesh cleanup by size).
 - **The video prompt never describes what may be only partly in frame.** No clothes, props, or landmarks, no screen side, no facing: words cannot know which part of a person or thing the frame shows, and a described part the frame does not show gets drawn anyway. People are named only by `body`; looks come from the reference sheet, shapes from the depth video.
 - **No detectors on model output** (person or face detectors, cut or drift checks), and no automatic retries driven by them. Outputs are reviewed by the user.
 - **No word-list lints** in validation (pronouns, effect words, music words). Validation checks structure and references only.
 - When a rule seems to need a threshold or a detector, it needs an authored field instead: add it to the schema (`packages/shared/src/script.ts`) and the script.
+- **The LLM is part of the pipeline: it authors judgment.** Where a decision needs understanding and code can only guess (which part of a partly seen person the frame shows, what a shape in the layout is), Claude writes the answer into an authored field after looking at the inputs (e.g. `shot.partlySeen` from `to_draw/*/layout.png`). This is not hand-tuning: the field is general, validated (structure and references), reviewable in `script.json`, and gives the same result on every run. Prefer it over any threshold. It is not a live model call from code.
 
 ### Every GPU run must answer a question
 

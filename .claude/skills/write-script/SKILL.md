@@ -130,6 +130,16 @@ video model is told about is what you write: the shot's `subjects` and the
   take the framing from the 3D layout, never from these words; only a still
   with no mesh in its frame (a view out over a valley) gets them. A camera with more than one keyframe needs
   `cameraMotion`.
+- **Say what shows of anyone only partly in the start frame.** The start
+  still is drawn from the 3D layout in the meshes' own colors, and no look is
+  put in words, because a word for a part the frame does not show gets that
+  part drawn. Where a partial person's colors leave the material a guess (a
+  near shoulder's fur that reads as a sack or a rock, a cape cut by the frame's
+  edge), list in `shot.partlySeen` the attributes of theirs the frame shows,
+  copied word for word: `"partlySeen": { "ben": ["a red-fox fur mantle over
+  the shoulders"] }`. Look at `to_draw/scene_XX_start/layout.png` to decide.
+  Never list an attribute the frame does not show (hair or boots of a
+  shoulder), and nobody whose colors read clearly.
 - **Write the whole look, head to feet.** Every visible garment goes in the
   attributes, footwear included; anything left out, the model invents (bare
   feet under a robe).

@@ -8,9 +8,9 @@
   side by side on white. VACE copies a reference's backdrop into the take unless it is white,
   and paints a face for anyone on the sheet, so only the people whose faces the shot shows are
   subjects (``describe.reference_people``).
-- **Tinted layout** (the start still, drawn by an image model): the shot's clay render at its
-  start, each person, prop and landmark in it in their own color (``tinted_layout``), so words can
-  point at each by color and never by a side of the frame.
+- **Colored layout** (the start still, drawn by an image model): the shot's clay render at its
+  start, each person, prop and landmark in it in their mesh's own colors (``colored_layout``), so
+  the look of each comes from exactly the part of them the frame shows, not from words.
 """
 
 from __future__ import annotations
@@ -96,29 +96,30 @@ def reference_sheet(photos: list[Path], width: int, height: int, dest: Path) -> 
     return dest
 
 
-def tinted_layout(clay: np.ndarray, entity_ids: np.ndarray, tints: dict[int, tuple[int, int, int]]) -> np.ndarray:
-    """The shot's clay render with each person or thing (by entity number) in their color, shaded as
-    the clay is: which shape is whom, from the meshes, with no word for a side of the frame."""
+# The clay's brightest value (``render.py``'s shader): a surface turned to the light keeps its own colors.
+CLAY_LIGHTEST = 232.0
+
+
+def colored_layout(clay: np.ndarray, albedo: np.ndarray, entity_ids: np.ndarray, colored: list[int]) -> np.ndarray:
+    """The shot's clay render with each entity in ``colored`` (by entity number: those whose mesh
+    has colors, from the picture it was made from) in its own colors, shaded as the clay is. What
+    has no colors (the floor) stays clay."""
     out = clay.astype(np.float32)
-    shade = out.mean(axis=2, keepdims=True) / 255.0
-    for number, rgb in tints.items():
-        where = entity_ids == number
-        out[where] = (shade * np.asarray(rgb, dtype=np.float32))[where]
+    shade = out.mean(axis=2, keepdims=True) / CLAY_LIGHTEST
+    where = np.isin(entity_ids, colored)
+    out[where] = (albedo.astype(np.float32) * shade)[where]
     return np.rint(out).clip(0, 255).astype(np.uint8)
 
 
 def start_frame(show: dict, episode: dict, scene: dict, width: int, height: int):
     """The start frame at the still's size: (everyone with any pixel in it, in the script's order of
-    characters; every prop and landmark with any pixel in it, as (kind, id) in the world's order;
-    the entities; the render)."""
+    characters; the entities; the render)."""
     start = float(scene["timeRangeSeconds"][0])
     entities = entities_at(show, episode, scene, start)
     frame = render(entities, camera_at(scene, start), width, height)
-    seen = set(np.unique(frame.entity).tolist())
     numbers = {entity.id: number + 1 for number, entity in enumerate(entities) if entity.kind == "character"}
-    things = [(entity.kind, entity.id) for number, entity in enumerate(entities)
-              if entity.kind in ("prop", "landmark") and number + 1 in seen]
-    return [cid for cid in show["characters"] if numbers.get(cid) in seen], things, entities, frame
+    seen = set(np.unique(frame.entity).tolist())
+    return [cid for cid in show["characters"] if numbers.get(cid) in seen], entities, frame
 
 
 def view_degrees(person, camera: dict) -> float:

@@ -732,7 +732,12 @@
             "subjects": [
               "adam"
             ],
-            "size": "mcu"
+            "size": "mcu",
+            "partlySeen": {
+              "ben": [
+                "a red-fox fur mantle over the shoulders"
+              ]
+            }
           },
           "camera": {
             "keyframes": [
@@ -806,7 +811,12 @@
             "subjects": [
               "nori"
             ],
-            "size": "medium"
+            "size": "medium",
+            "partlySeen": {
+              "adam": [
+                "a thick gray wolf-fur mantle over the shoulders"
+              ]
+            }
           },
           "camera": {
             "keyframes": [
@@ -1061,7 +1071,12 @@
             "subjects": [
               "nori"
             ],
-            "size": "mcu"
+            "size": "mcu",
+            "partlySeen": {
+              "adam": [
+                "a thick gray wolf-fur mantle over the shoulders"
+              ]
+            }
           },
           "camera": {
             "keyframes": [
@@ -1215,7 +1230,12 @@
             "subjects": [
               "nori"
             ],
-            "size": "medium"
+            "size": "medium",
+            "partlySeen": {
+              "ben": [
+                "a red-fox fur mantle over the shoulders"
+              ]
+            }
           },
           "camera": {
             "keyframes": [
@@ -1273,7 +1293,15 @@
             39.6
           ],
           "shot": {
-            "type": "establishing"
+            "type": "establishing",
+            "partlySeen": {
+              "adam": [
+                "a thick gray wolf-fur mantle over the shoulders"
+              ],
+              "cora": [
+                "a white fur cape over the shoulders"
+              ]
+            }
           },
           "performances": {
             "adam": {

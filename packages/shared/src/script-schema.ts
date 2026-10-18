@@ -172,6 +172,7 @@ const shotSchema = z
     subjects: z.array(text("shot subject")).optional(),
     size: z.enum(SHOT_SIZES, { errorMap: () => ({ message: `shot.size must be one of ${SHOT_SIZES.join(", ")}` }) }).optional(),
     angle: z.enum(["eye", "low", "high"]).optional(),
+    partlySeen: z.record(z.array(text("shot partlySeen attribute"))).optional(),
   })
   .strict();
 
@@ -725,6 +726,18 @@ function checkShot(issues: ScriptIssue[], show: ShowScript, scene: ScriptScene, 
   });
   if (shot.size !== undefined && !rule.sizes.includes(shot.size)) {
     issues.push({ path: `${path}.size`, message: `a ${shot.type} shot is ${rule.sizes.join(", ") || "not sized"}` });
+  }
+  for (const [id, seen] of Object.entries(shot.partlySeen ?? {})) {
+    if (!isCharacter(id)) {
+      issues.push({ path: `${path}.partlySeen.${id}`, message: `unknown character ${JSON.stringify(id)}` });
+      continue;
+    }
+    const attributes = show.characters[id].attributes.map((item) => (typeof item === "string" ? item : item.face));
+    seen.forEach((item, index) => {
+      if (!attributes.includes(item)) {
+        issues.push({ path: `${path}.partlySeen.${id}[${index}]`, message: `${JSON.stringify(item)} is not one of ${id}'s attributes` });
+      }
+    });
   }
 }
 

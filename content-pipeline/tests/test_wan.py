@@ -260,46 +260,49 @@ class VoiceTests(unittest.TestCase):
 
 
 class SheetTests(unittest.TestCase):
-    def test_each_person_in_the_layout_is_their_color_shaded_as_the_clay(self) -> None:
-        from shot_inputs import tinted_layout
+    def test_the_layout_shows_each_mesh_in_its_own_colors_shaded_as_the_clay(self) -> None:
+        from shot_inputs import CLAY_LIGHTEST, colored_layout
 
-        clay = np.array([[[200, 200, 200], [100, 100, 100], [150, 150, 150]]], dtype=np.uint8)
-        ids = np.array([[1, 1, 0]], dtype=np.uint8)
-        out = tinted_layout(clay, ids, {1: (255, 0, 0)})
-        self.assertEqual(tuple(out[0, 0]), (200, 0, 0))
-        self.assertEqual(tuple(out[0, 1]), (100, 0, 0), "the clay's shading kept")
-        self.assertEqual(tuple(out[0, 2]), (150, 150, 150), "what is no person stays clay")
+        lit = int(CLAY_LIGHTEST)
+        clay = np.array([[[lit, lit, lit], [lit // 2, lit // 2, lit // 2], [150, 150, 150]]], dtype=np.uint8)
+        albedo = np.array([[[200, 100, 50], [200, 100, 50], [9, 9, 9]]], dtype=np.uint8)
+        ids = np.array([[1, 1, 2]], dtype=np.uint8)
+        out = colored_layout(clay, albedo, ids, [1])
+        self.assertEqual(tuple(out[0, 0]), (200, 100, 50), "a surface turned to the light keeps its own colors")
+        self.assertEqual(tuple(out[0, 1]), (100, 50, 25), "the clay's shading kept")
+        self.assertEqual(tuple(out[0, 2]), (150, 150, 150), "a mesh without colors stays clay")
 
-    def test_the_layout_words_name_people_by_color_with_their_looks_and_faces_only_when_toward_the_camera(self) -> None:
+    def test_the_layout_words_give_no_looks_and_faces_only_toward_the_camera(self) -> None:
         from describe import layout_prompt
 
         show = two_people()
         show["characters"]["ada"]["attributes"] = [{"face": "brown eyes"}, "black hair"]
         seen = observation({"ada": 5000, "bo": 9000}, sky={"kind": "backdrop", "pixels": 20000})
         shot = over_the_shoulder()
-        words = layout_prompt(show, shot, seen, {"ada": "red", "bo": "blue"}, [], {"ada": 10.0, "bo": 20.0}, (720, 1280))
+        words = layout_prompt(show, shot, seen, {"ada": 10.0, "bo": 20.0}, (720, 1280))
         self.assertIn("720 by 1280 pixels", words)
-        self.assertIn("The face of the person tinted red: lips slightly parted", words)
-        self.assertNotIn("The face of the person tinted blue", words, "a person without a performance gets no expression")
-        self.assertIn("tinted blue, seen from the front, as far as the frame shows them: old man", words, "everyone in the layout gets their look in words")
+        self.assertIn("The face of the adult woman, brown skin: lips slightly parted.", words)
+        self.assertNotIn("old man", words, "a person without a performance is not named")
+        self.assertNotIn("black hair", words, "looks come from the layout's colors, never words")
+        self.assertNotIn("fox-fur", words)
+        self.assertNotIn("brown eyes", words)
         self.assertNotIn("close-up", words, "the layout shows the framing; no words for it")
-        self.assertIn("brown eyes; black hair", words)
         self.assertNotIn("left", words)
         self.assertNotIn("right", words)
-        away = layout_prompt(show, shot, seen, {"ada": "red", "bo": "blue"}, [], {"ada": 170.0, "bo": 20.0}, (720, 1280))
-        self.assertNotIn("The face of the person tinted red", away, "no face words with the back toward the camera")
-        self.assertNotIn("brown eyes", away, "nor the face's attributes")
-        self.assertIn("black hair", away)
-        self.assertIn("The person tinted red, seen from behind,", away)
+        away = layout_prompt(show, shot, seen, {"ada": 170.0, "bo": 20.0}, (720, 1280))
+        self.assertNotIn("The face of", away, "no face words with the back toward the camera")
 
-    def test_a_prop_in_the_layout_is_named_by_its_color_with_its_appearance(self) -> None:
+    def test_a_person_partly_in_the_frame_gets_only_the_authored_words_for_what_it_shows(self) -> None:
         from describe import layout_prompt
 
         show = two_people()
-        show["props"] = {"crate": {"appearance": "One old wooden crate", "size": [1, 1, 1]}}
-        seen = observation({"ada": 5000})
-        words = layout_prompt(show, over_the_shoulder(), seen, {"ada": "red"}, [("prop", "crate", "blue")], {"ada": 10.0}, (720, 1280))
-        self.assertIn("The thing tinted blue, as far as the frame shows it: One old wooden crate.", words)
+        shot = over_the_shoulder()
+        shot["shot"]["partlySeen"] = {"bo": ["a red fox-fur mantle"], "ada": ["black hair"]}
+        seen = observation({"ada": 5000, "bo": 9000})
+        words = layout_prompt(show, shot, seen, {"bo": 20.0}, (720, 1280))
+        self.assertIn("Of a person only partly in the frame, it shows: a red fox-fur mantle.", words)
+        self.assertNotIn("old man", words, "tied to no one: a body's words would get the rest drawn")
+        self.assertNotIn("black hair", words, "nobody out of the start frame")
 
     def test_a_words_only_still_on_a_moving_camera_says_no_size_or_angle(self) -> None:
         from describe import plain_still_prompt
