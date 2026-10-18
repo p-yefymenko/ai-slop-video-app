@@ -5,7 +5,11 @@
   "voiceSample": "I walked a long way to get here, and the night was cold. Sit down for a moment, and listen to what I have to say.",
   "referenceNegative": "wrong clothes, extra garments, snow, particles, dust, background objects, cartoon, 3d render, plastic skin, airbrushed, painting, blurry face, deformed hands, cropped body",
   "vaceNegative": "cut, scene change, new shot, zoom out, extra people, blurry, distorted face, deformed hands, text, watermark",
-  "s2vNegative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+  "talkNegative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+  "sheetPrompt": "One photorealistic live-action film frame, {width} by {height} pixels, made from this sheet. The first picture is a gray 3D layout of the frame: keep its framing and camera, and where each person stands, how large they are, their pose and the way they face. It shows only shapes: draw real people, clothes and surroundings in their place, in natural color. Each person in the layout is tinted a color, and the photo framed in that same color shows how that person looks: their face, hair, build and clothes exactly as in that photo.",
+  "sheetFace": "The face of the person tinted {color}: {expression}.",
+  "sheetOnly": "The answer is the frame alone, with no sheet, tints, color frames or text.",
+  "sheetColors": [["red", [220, 50, 50]], ["blue", [50, 100, 230]], ["green", [40, 170, 80]], ["yellow", [235, 200, 40]], ["purple", [150, 70, 210]], ["orange", [240, 140, 30]]],
   "shotSentence": "{angle}{size}, cinematic live-action footage, photorealistic.",
   "overShoulder": "over-the-shoulder {size}",
   "shot": {

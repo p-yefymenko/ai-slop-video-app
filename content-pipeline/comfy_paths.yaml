@@ -1,0 +1,4 @@
+# Extra paths ComfyUI loads at start (`content:comfy` passes this file): the pipeline's own nodes,
+# kept in the repo beside the code that uses them.
+pipeline:
+  custom_nodes: comfy_nodes

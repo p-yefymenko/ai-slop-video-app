@@ -132,6 +132,11 @@ def start_still_path(show_id: str, episode_number: int, scene_number: int) -> Pa
 
 
 
+def sheet_path(show_id: str, episode_number: int, scene_number: int) -> Path:
+    """A scene's one-picture sheet for an image model that takes pictures with its words (its prompt beside it, ``.txt``)."""
+    return episode_dir("sheets", show_id, episode_number) / f"scene_{int(scene_number):02d}.png"
+
+
 def clip_path(show_id: str, episode_number: int, scene_number: int) -> Path:
     return episode_dir("generate", show_id, episode_number) / f"scene_{int(scene_number):02d}.mp4"
 

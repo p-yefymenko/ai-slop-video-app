@@ -17,7 +17,9 @@ const extraArgs = (process.env.COMFY_ARGS || "--reserve-vram 1.5")
   .split(/\s+/)
   .map((part) => part.trim())
   .filter(Boolean);
-const comfyArgs = ["main.py", "--listen", "127.0.0.1", "--port", "8188", ...extraArgs];
+// The pipeline's own nodes (content-pipeline/comfy_nodes), whatever the other args.
+const pipelinePaths = path.join(__dirname, "..", "content-pipeline", "comfy_paths.yaml");
+const comfyArgs = ["main.py", "--listen", "127.0.0.1", "--port", "8188", "--extra-model-paths-config", pipelinePaths, ...extraArgs];
 if (extraArgs.length) {
   console.log(`ComfyUI args from COMFY_ARGS: ${extraArgs.join(" ")}`);
 } else {

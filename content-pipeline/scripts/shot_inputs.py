@@ -105,10 +105,13 @@ def depth_frame(show: dict, episode: dict, scene: dict, time_seconds: float, wid
 
 
 def write_depth_video(show: dict, episode: dict, scene: dict, width: int, height: int, length: int, fps: int, dest: Path,
-                      flat_people: bool, people: bool = True) -> Path:
-    """The shot's first ``length`` frames at ``fps`` as a depth video (``people`` False: without them)."""
+                      flat_people: bool, people: bool = True, pace: float = 1.0) -> Path:
+    """The shot's first ``length`` frames at ``fps`` as a depth video (``people`` False: without them).
+    ``pace`` is how many seconds of the script's timeline pass in one second of the take: below 1
+    when the scene was lengthened to hold its speech, so its blocking is spread over the longer take
+    and never runs on into the next scene's."""
     start = float(scene["timeRangeSeconds"][0])
-    frames = (depth_frame(show, episode, scene, start + index / fps, width, height, flat_people, people) for index in range(length))
+    frames = (depth_frame(show, episode, scene, start + index / fps * pace, width, height, flat_people, people) for index in range(length))
     raw = b"".join(np.repeat(gray[:, :, None], 3, axis=2).tobytes() for gray in frames)
     dest.parent.mkdir(parents=True, exist_ok=True)
     encode_rgb_frames(raw, width, height, fps, dest, crf=14)
@@ -127,6 +130,38 @@ def reference_sheet(photos: list[Path], width: int, height: int, dest: Path) -> 
     dest.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(dest)
     return dest
+
+
+def tinted_layout(clay: np.ndarray, entity_ids: np.ndarray, tints: dict[int, tuple[int, int, int]]) -> np.ndarray:
+    """The shot's clay render with each person (by entity number) in their color, shaded as the clay
+    is: which shape is whom, from the meshes, with no word for a side of the frame."""
+    out = clay.astype(np.float32)
+    shade = out.mean(axis=2, keepdims=True) / 255.0
+    for number, rgb in tints.items():
+        where = entity_ids == number
+        out[where] = (shade * np.asarray(rgb, dtype=np.float32))[where]
+    return np.rint(out).clip(0, 255).astype(np.uint8)
+
+
+def prompt_sheet(layout: Image.Image, photos: list[tuple[Path, tuple[int, int, int]]], border: int, gap: int) -> Image.Image:
+    """One picture: the layout, then each reference photo framed in its person's color, all as tall
+    as the layout, on white."""
+    height = layout.height
+    framed = []
+    for path, rgb in photos:
+        photo = Image.open(path).convert("RGB")
+        inner = height - 2 * border
+        photo = photo.resize((max(1, round(photo.width * inner / photo.height)), inner), Image.Resampling.LANCZOS)
+        frame = Image.new("RGB", (photo.width + 2 * border, height), tuple(rgb))
+        frame.paste(photo, (border, border))
+        framed.append(frame)
+    pictures = [layout, *framed]
+    sheet = Image.new("RGB", (sum(picture.width for picture in pictures) + gap * (len(pictures) + 1), height + 2 * gap), (255, 255, 255))
+    x = gap
+    for picture in pictures:
+        sheet.paste(picture, (x, gap))
+        x += picture.width + gap
+    return sheet
 
 
 def start_frame(show: dict, episode: dict, scene: dict, width: int, height: int):
@@ -359,22 +394,26 @@ def hidden(entity_ids: np.ndarray, depth: np.ndarray, number: int, own: np.ndarr
 
 
 def layer_people(entity_ids: np.ndarray, depth: np.ndarray, people: list[tuple[int, np.ndarray, np.ndarray, np.ndarray]],
-                 floors: list[int]) -> tuple[np.ndarray, np.ndarray]:
+                 floors: list[int]) -> tuple[np.ndarray, np.ndarray, dict[int, np.ndarray]]:
     """The people laid over each other by their cut-outs, farthest (by their nearest point) first,
     each (number, own depth, picture, cut-out 0..1) where no thing is in front of them: (the
-    people's own colors, how much of each pixel is a person, 0..1). The colors are not yet
+    people's own colors, how much of each pixel is a person, 0..1, and by number how much of each
+    pixel is that person, as seen past everyone nearer). The colors are not yet
     multiplied by how much of the pixel is a person (every user lays them over something by
     ``alpha``); laid over black and then by ``alpha`` again, every soft edge got a dark rim."""
     picture = np.zeros((*entity_ids.shape, 3), dtype=np.float32)
     alpha = np.zeros(entity_ids.shape, dtype=np.float32)
     numbers = [person[0] for person in people]
     order = sorted(people, key=lambda person: -float(person[1][np.isfinite(person[1])].min()) if np.isfinite(person[1]).any() else 0.0)
+    shares: dict[int, np.ndarray] = {}
     for number, own, drawing, cut in order:
         cover = cut.astype(np.float32) * ~hidden(entity_ids, depth, number, own, floors, numbers)
         picture = picture * (1.0 - cover[..., None]) + drawing.astype(np.float32) * cover[..., None]
         alpha = alpha * (1.0 - cover) + cover
+        shares = {seen: share * (1.0 - cover) for seen, share in shares.items()}
+        shares[number] = cover
     picture = np.divide(picture, alpha[..., None], out=np.zeros_like(picture), where=alpha[..., None] > 0)
-    return np.rint(picture).clip(0, 255).astype(np.uint8), alpha
+    return np.rint(picture).clip(0, 255).astype(np.uint8), alpha, shares
 
 
 def write_kept_control(depth: Path, picture: np.ndarray, alpha: np.ndarray, length: int, fps: int, control_dest: Path, mask_dest: Path) -> None:

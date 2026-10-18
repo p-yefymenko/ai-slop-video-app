@@ -1,9 +1,12 @@
-"""A scene's voice track: every line spoken by Chatterbox, placed where the script says, as long as the scene.
+"""A scene's voice track: every line spoken by Chatterbox, placed where the script says.
 
 One speaker's lines in a row are one speech, spoken in one go so the voice runs
-on naturally, starting at the first line's ``startSeconds``. The track is the
-scene's length exactly: S2V paces the take by it, and a silent scene gets a
-silent track so every clip has sound to join.
+on naturally, starting at the first line's ``startSeconds``, or when the speech
+before it ends if it runs on past that. How long a line takes to say is known
+only once it is said, so the speech sets the scene's length: the track is the
+scene's scripted length, or longer, to a beat after the last word. The clip is
+as long as its track; the script's times stay the clock of the blocking. A
+silent scene gets a silent track so every clip has sound to join.
 
 A character's voice is made once, in ``content:plates``, from their ``voice``
 description: Qwen3-TTS VoiceDesign speaks ``voiceSample`` (prompts.json) in it,
@@ -38,6 +41,8 @@ SAMPLE_RATE = 24_000
 # How much the delivery is acted (0.5 is neutral) and how closely the pace follows the reference voice.
 EXAGGERATION = 0.6
 CFG_WEIGHT = 0.4
+# A lengthened scene is cut this long after its last word, not on it.
+SPEECH_TAIL_SECONDS = 0.3
 
 
 def design_entry(character: dict) -> dict:
@@ -88,19 +93,23 @@ def speeches(scene: dict) -> list[dict]:
 
 
 def lay_out(clips: list[tuple[float, np.ndarray]], seconds: float, rate: int = SAMPLE_RATE) -> tuple[np.ndarray, list[str]]:
-    """Each ``(start, samples)`` placed on a silent track ``seconds`` long. Returns the track and what did not fit."""
-    track = np.zeros(int(round(seconds * rate)), dtype=np.float32)
-    problems = []
-    ends = [start + len(samples) / rate for start, samples in clips]
+    """Each ``(start, samples)`` placed on a silent track, each speech at its start or when the one
+    before it ends, whichever is later; the track is ``seconds`` long, or to ``SPEECH_TAIL_SECONDS``
+    after the last speech if that is later. Returns the track and what moved, for the log."""
+    notes, placed, end = [], [], 0.0
     for index, (start, samples) in enumerate(clips):
-        if index + 1 < len(clips) and ends[index] > clips[index + 1][0] + 1e-3:
-            problems.append(f"speech {index + 1} runs {ends[index] - clips[index + 1][0]:.2f}s into the next one")
-        if ends[index] > seconds + 1e-3:
-            problems.append(f"speech {index + 1} ends at {ends[index]:.2f}s, after the scene's {seconds:.2f}s; its end is cut")
-        at = int(round(start * rate))
-        piece = samples[: max(0, len(track) - at)]
-        track[at:at + len(piece)] += piece
-    return np.clip(track, -1.0, 1.0), problems
+        at = max(start, end)
+        if at > start + 1e-3:
+            notes.append(f"speech {index + 1} starts at {at:.2f}s, when speech {index} ends (scripted {start:.2f}s)")
+        placed.append((int(round(at * rate)), samples))
+        end = at + len(samples) / rate
+    length = max(seconds, end + SPEECH_TAIL_SECONDS if clips else 0.0)
+    if length > seconds + 1e-3:
+        notes.append(f"the scene runs {length:.2f}s, not {seconds:.2f}s, to hold its speech")
+    track = np.zeros(int(round(length * rate)), dtype=np.float32)
+    for at, samples in placed:
+        track[at:at + len(samples)] += samples[: len(track) - at]
+    return np.clip(track, -1.0, 1.0), notes
 
 
 def read_wav(path: Path) -> np.ndarray:
@@ -120,7 +129,8 @@ def write_wav(path: Path, samples: np.ndarray, rate: int = SAMPLE_RATE) -> None:
 
 
 def write_voice_track(show: dict, episode: dict, scene: dict, dest: Path) -> list[str]:
-    """Speak the scene's lines and lay them out on a track as long as the scene. Returns what did not fit."""
+    """Speak the scene's lines and lay them out on a track as long as the scene, or as its speech
+    (``lay_out``). Returns what moved."""
     start, finish = (float(value) for value in scene["timeRangeSeconds"])
     said = speeches(scene)
     problems: list[str] = []
@@ -144,6 +154,12 @@ def write_voice_track(show: dict, episode: dict, scene: dict, dest: Path) -> lis
             job_file.write_text(json.dumps({"settings": {"exaggeration": EXAGGERATION, "cfgWeight": CFG_WEIGHT}, "speeches": jobs}), encoding="utf-8")
             subprocess.run([str(VOICE_PYTHON), str(WORKER), str(job_file)], check=True)
             clips = [(speech["start"], read_wav(Path(job["out"]))) for speech, job in zip(said, jobs)]
-    track, fit = lay_out(clips, finish - start)
+    track, notes = lay_out(clips, finish - start)
     write_wav(dest, track)
-    return problems + fit
+    return problems + notes
+
+
+def track_seconds(path: Path) -> float:
+    """How long a voice track runs: the scene's real length."""
+    with wave.open(str(path), "rb") as handle:
+        return handle.getnframes() / handle.getframerate()

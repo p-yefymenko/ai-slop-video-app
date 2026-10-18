@@ -32,6 +32,11 @@ MODELS = [
     # Wan 2.2 S2V (talking takes) and its audio encoder.
     (WAN, "split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors", "diffusion_models", 10 * GB),
     (WAN, "split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors", "audio_encoders", 500 * MB),
+    # InfiniteTalk (talking takes with a second person in the frame): Wan 2.1 I2V with its audio patch,
+    # which ties each voice to one person's mask, and its audio encoder.
+    (WAN21, "split_files/diffusion_models/wan2.1_i2v_480p_14B_fp8_scaled.safetensors", "diffusion_models", 15 * GB),
+    (WAN21, "split_files/model_patches/wan2.1_infiniteTalk_multi_fp16.safetensors", "model_patches", 4 * GB),
+    ("Kijai/wav2vec2_safetensors", "wav2vec2-chinese-base_fp16.safetensors", "audio_encoders", 150 * MB),
     # Shared by every Wan model.
     (WAN21, "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors", "text_encoders", 5 * GB),
     (WAN, "split_files/vae/wan_2.1_vae.safetensors", "vae", 200 * MB),

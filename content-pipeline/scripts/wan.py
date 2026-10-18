@@ -6,7 +6,8 @@
          shot's rectangle of them cut, enlarged, and given back its detail by SeedVR2
          (``restore_graph``); then the shot drawn around them by Wan VACE (``vace_graph``,
          ``still=True``, the people kept by ``mask``)
-      -> clip: an on-screen speaker's face -> Wan S2V from the still and the voice (``s2v_graph``);
+      -> clip: an on-screen speaker's face -> InfiniteTalk from the still and the voice, the voice
+               tied to the speaker's cut-out and silence to everyone else's (``talk_graph``);
                anything else -> Wan VACE over the whole take (``vace_graph``)
       -> 24 fps (RIFE, ``rife_graph``)
 
@@ -22,9 +23,8 @@ import math
 
 # Wan 2.2 14B is trained at 16 fps, and S2V ties its audio windows to it.
 FPS = 16
-# The cut plays at 24 fps: RIFE triples 16 to 48, then every other frame is dropped.
+# The cut plays at 24 fps: RIFE fills a take out (``rife_multiplier``), then 24 fps is taken from it.
 OUTPUT_FPS = 24
-RIFE_MULTIPLIER = 3
 RIFE_CHECKPOINT = "rife49.pth"
 
 # Frame sizes, width x height. 480p drafts answer most questions; 720p is the final look.
@@ -69,17 +69,44 @@ S2V_SHIFT = 8.0
 # S2V's first latent frame decodes badly; the template decodes it twice and drops the first frames.
 S2V_DROP_FRAMES = 3
 
+# InfiniteTalk (Wan 2.1 I2V 14B with its audio patch): a start picture and voices, each voice tied
+# to one person's mask, so only the speaker's mouth moves; S2V takes one voice and no mask, and
+# moved every face in the frame. As ComfyUI's InfiniteTalk template, at full steps and real CFG in
+# place of its speed LoRA, guided as InfiniteTalk's own sampler guides it, at its own scales and 480p shift.
+TALK_MODEL = "wan2.1_i2v_480p_14B_fp8_scaled.safetensors"
+TALK_PATCH = "wan2.1_infiniteTalk_multi_fp16.safetensors"
+TALK_AUDIO_ENCODER = "wav2vec2-chinese-base_fp16.safetensors"
+# InfiniteTalk reads a voice at 25 video frames a second.
+TALK_FPS = 25
+TALK_STEPS = 20
+# Each step is pushed toward the words and toward the voice, each by its own gap and scale
+# (``InfiniteTalkGuider``, the pipeline's ComfyUI node ``comfy_nodes/infinitetalk``): ComfyUI's
+# plain CFG gave the voice to both passes and never pushed toward it (loose lips), and one CFG of
+# 5 over a pass without words or voice overshot (burnt contrast and color).
+TALK_TEXT_CFG = 5.0
+TALK_AUDIO_CFG = 4.0
+TALK_SHIFT = 7.0
+# Wan 2.1 makes at most 81 frames at once (what it was trained on); a longer take is made in windows
+# of 81, each going on from the last 9 frames before it, as InfiniteTalk and its template do.
+TALK_WINDOW = 81
+TALK_MOTION_FRAMES = 9
+# Everyone but the speaker gets a silent track, which the node lays after the voice: it only has
+# to be long enough for the audio encoder to read, and it is never heard.
+TALK_SILENCE_SECONDS = 1.0
+TALK_SILENCE_RATE = 16000
+
 STILL_PREFIX = "reelshort_still"
 RESTORE_PREFIX = "reelshort_restore"
 MATTE_PREFIX = "reelshort_matte"
 VACE_PREFIX = "reelshort_vace"
 S2V_PREFIX = "reelshort_s2v"
+TALK_PREFIX = "reelshort_talk"
 RIFE_PREFIX = "reelshort_rife"
 
 
-def frames_for(seconds: float) -> int:
-    """Wan takes 4n+1 frames: the fewest that cover ``seconds`` at 16 fps."""
-    return int(math.ceil((max(seconds, 1.0 / FPS) * FPS - 1) / 4)) * 4 + 1
+def frames_for(seconds: float, fps: int = FPS) -> int:
+    """Wan takes 4n+1 frames: the fewest that cover ``seconds`` at ``fps``."""
+    return int(math.ceil((max(seconds, 1.0 / fps) * fps - 1) / 4)) * 4 + 1
 
 
 def _video_out(images: list, prefix: str, audio: list | None = None, frame_rate: int = FPS) -> dict:
@@ -173,6 +200,80 @@ def s2v_graph(prompt: str, negative: str, size: str, length: int, seed: int, sta
     }
 
 
+def talk_windows(length: int) -> list[int]:
+    """The windows a talking take of ``length`` frames is made in: one of ``length`` up to
+    ``TALK_WINDOW``; past it, windows of up to ``TALK_WINDOW``, each after the first going on from
+    the last ``TALK_MOTION_FRAMES`` of the take so far (so it adds that many fewer), the last one
+    as short as covers the rest (``4n+1`` frames, as Wan takes)."""
+    windows = [min(length, TALK_WINDOW)]
+    made = windows[0]
+    while made < length:
+        frames = min(TALK_WINDOW, math.ceil((length - made + TALK_MOTION_FRAMES - 1) / 4) * 4 + 1)
+        windows.append(frames)
+        made += frames - TALK_MOTION_FRAMES
+    return windows
+
+
+def talk_graph(prompt: str, negative: str, size: str, length: int, seed: int, start: str, voice: str,
+               others: tuple[str, str, str] | None) -> dict:
+    """InfiniteTalk: the start still talks to the ``voice`` track for ``length`` frames at
+    ``TALK_FPS``, in ``talk_windows`` (the take may run a few frames past ``length``).
+
+    ``others``, when anyone else is in the frame, is (the speaker's mask, everyone else's mask,
+    a silent track): the voice is tied to the speaker's mask and the silence to everyone else's.
+    The node lays the second track after the first, so through the voice everyone else hears
+    nothing, which MultiTalk was trained to read as a listener (white in a mask is the person)."""
+    width, height = SIZES[size]
+    graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": TALK_MODEL, "weight_dtype": "default"}},
+        "2": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": TALK_SHIFT}},
+        "3": {"class_type": "ModelPatchLoader", "inputs": {"name": TALK_PATCH}},
+        "4": {"class_type": "CLIPLoader", "inputs": {"clip_name": TEXT_ENCODER, "type": "wan"}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 0], "text": prompt}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 0], "text": negative}},
+        "7": {"class_type": "VAELoader", "inputs": {"vae_name": VAE}},
+        "8": {"class_type": "AudioEncoderLoader", "inputs": {"audio_encoder_name": TALK_AUDIO_ENCODER}},
+        "9": {"class_type": "LoadAudio", "inputs": {"audio": voice}},
+        "10": {"class_type": "AudioEncoderEncode", "inputs": {"audio_encoder": ["8", 0], "audio": ["9", 0]}},
+        "11": {"class_type": "LoadImage", "inputs": {"image": start}},
+        "22": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
+        "23": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+    }
+    speakers = {"mode": "single_speaker"}
+    if others is not None:
+        speaker_mask, other_mask, silence = others
+        graph["16"] = {"class_type": "LoadImage", "inputs": {"image": speaker_mask}}
+        graph["17"] = {"class_type": "ImageToMask", "inputs": {"image": ["16", 0], "channel": "red"}}
+        graph["18"] = {"class_type": "LoadImage", "inputs": {"image": other_mask}}
+        graph["19"] = {"class_type": "ImageToMask", "inputs": {"image": ["18", 0], "channel": "red"}}
+        graph["20"] = {"class_type": "LoadAudio", "inputs": {"audio": silence}}
+        graph["21"] = {"class_type": "AudioEncoderEncode", "inputs": {"audio_encoder": ["8", 0], "audio": ["20", 0]}}
+        speakers = {"mode": "two_speakers", "mode.audio_encoder_output_2": ["21", 0], "mode.mask_1": ["17", 0], "mode.mask_2": ["19", 0]}
+    taken = None
+    for index, frames in enumerate(talk_windows(length)):
+        talk, sample, decode = f"w{index}_talk", f"w{index}_sample", f"w{index}_decode"
+        graph[talk] = {"class_type": "WanInfiniteTalkToVideo", "inputs": {
+            **speakers, "model": ["2", 0], "model_patch": ["3", 0], "positive": ["5", 0], "negative": ["6", 0],
+            "vae": ["7", 0], "width": width, "height": height, "length": frames, "start_image": ["11", 0],
+            "audio_encoder_output_1": ["10", 0], "motion_frame_count": TALK_MOTION_FRAMES, "audio_scale": 1.0}}
+        graph[f"w{index}_guide"] = {"class_type": "InfiniteTalkGuider", "inputs": {
+            "model": [talk, 0], "positive": [talk, 1], "negative": [talk, 2], "text_cfg": TALK_TEXT_CFG, "audio_cfg": TALK_AUDIO_CFG}}
+        graph[f"w{index}_steps"] = {"class_type": "BasicScheduler", "inputs": {"model": [talk, 0], "scheduler": "normal", "steps": TALK_STEPS, "denoise": 1.0}}
+        graph[sample] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": ["22", 0], "guider": [f"w{index}_guide", 0], "sampler": ["23", 0], "sigmas": [f"w{index}_steps", 0], "latent_image": [talk, 3]}}
+        graph[decode] = {"class_type": "VAEDecode", "inputs": {"samples": [sample, 0], "vae": ["7", 0]}}
+        if taken is None:
+            taken = [decode, 0]
+            continue
+        # A later window starts with the take's last frames again (its ``trim_image``); they are cut off before it is added.
+        graph[talk]["inputs"]["previous_frames"] = taken
+        graph[f"w{index}_new"] = {"class_type": "ImageFromBatch", "inputs": {"image": [decode, 0], "batch_index": [talk, 4], "length": 4096}}
+        graph[f"w{index}_take"] = {"class_type": "ImageBatch", "inputs": {"image1": taken, "image2": [f"w{index}_new", 0]}}
+        taken = [f"w{index}_take", 0]
+    graph["15"] = _video_out(taken, TALK_PREFIX, audio=["9", 0], frame_rate=TALK_FPS)
+    return graph
+
+
 def restore_graph(image: str, seed: int) -> dict:
     """An enlarged picture (already at its final size) given back its detail by SeedVR2."""
     tiles = {"tile_size": 512, "overlap": 128, "temporal_size": 4096, "temporal_overlap": 8}
@@ -204,13 +305,20 @@ def matte_graph(image: str) -> dict:
     }
 
 
-def rife_graph(video: str) -> dict:
-    """A 16 fps take tripled to 48 fps by RIFE, its sound kept."""
+def rife_multiplier(fps: int) -> int:
+    """How many times RIFE fills a take of ``fps``: to at least twice ``OUTPUT_FPS``, so each frame
+    of the cut is a filled frame or within a quarter of a cut frame of one (16 -> 48, 25 -> 50)."""
+    return math.ceil(2 * OUTPUT_FPS / fps)
+
+
+def rife_graph(video: str, fps: int = FPS) -> dict:
+    """A take of ``fps`` filled out by RIFE (``rife_multiplier``), its sound kept."""
+    multiplier = rife_multiplier(fps)
     return {
         "1": {"class_type": "LoadVideo", "inputs": {"file": video}},
         "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
         "3": {"class_type": "RIFE VFI", "inputs": {
-            "ckpt_name": RIFE_CHECKPOINT, "frames": ["2", 0], "clear_cache_after_n_frames": 10, "multiplier": RIFE_MULTIPLIER,
+            "ckpt_name": RIFE_CHECKPOINT, "frames": ["2", 0], "clear_cache_after_n_frames": 10, "multiplier": multiplier,
             "fast_mode": False, "ensemble": True, "scale_factor": 1.0, "dtype": "float32", "torch_compile": False, "batch_size": 1}},
-        "4": _video_out(["3", 0], RIFE_PREFIX, audio=["2", 1], frame_rate=FPS * RIFE_MULTIPLIER),
+        "4": _video_out(["3", 0], RIFE_PREFIX, audio=["2", 1], frame_rate=fps * multiplier),
     }

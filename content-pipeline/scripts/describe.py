@@ -187,6 +187,19 @@ def still_prompt(show: dict, scene: dict, start: dict) -> str:
     return _joined([shot_sentence(scene, over_shoulder=False), *setting_sentences(show, scene, start)])
 
 
+def sheet_prompt(show: dict, scene: dict, start: dict, colors: dict[str, str], facing: dict[str, bool], size: tuple[int, int]) -> str:
+    """The words that go with a scene's sheet (``shot_inputs.prompt_sheet``) to an image model that
+    takes pictures: how to read the sheet (``sheetPrompt``: the layout, and each person's tint
+    ``colors[cid]`` matched to the photo framed in it), the face of each performer whose face is
+    toward the camera (``facing``), by their color, then the still's own words, the shot and the
+    setting (``still_prompt``). Looks are the photos'; no side of the frame is named."""
+    performances = scene.get("performances") or {}
+    faces = [template("sheetFace", {"color": colors[cid], "expression": clause(performances[cid]["expression"])})
+             for cid in colors if (performances.get(cid) or {}).get("expression") and facing[cid]]
+    return _joined([template("sheetPrompt", {"width": str(size[0]), "height": str(size[1])}), *faces,
+                    still_prompt(show, scene, start), template("sheetOnly", {})])
+
+
 def talking_speaker(scene: dict) -> str | None:
     """Who a talking take (S2V) is about: the first speaker with a performance, i.e. on screen.
 

@@ -10,10 +10,11 @@ Beside each output, ``inputs/<name>/`` holds only what a review needs: its log
 and, for a still, a collage of every step. What a stage keeps for itself is in
 ``work/`` under it.
 video:  the scene's voice track (``voice``), then the take:
-        - an on-screen speaker whose face the shot shows: Wan S2V from the start
-          still and the voice (``describe.talking_speaker``);
+        - an on-screen speaker whose face the shot shows: InfiniteTalk from the
+          start still and the voice (``describe.talking_speaker``), the voice tied
+          to the speaker's share of the still and silence to everyone else's;
         - anything else: Wan VACE over the whole take, the voice laid under it;
-        then RIFE to 24 fps, cut to the scene's exact length. When every scene
+        then RIFE and 24 fps, cut to the scene's exact length. When every scene
         of an episode has its clip, they are joined and captioned.
 
 Everything a model is given comes from the script, the 3D scene, and the
@@ -50,7 +51,7 @@ from comfy import (
     stage_input,
     write_log,
 )
-from describe import alone_negative, alone_prompt, reference_people, still_prompt, talking_speaker, video_prompt
+from describe import alone_negative, alone_prompt, reference_people, sheet_prompt, still_prompt, talking_speaker, video_prompt
 from ffmpeg_tools import concat_videos
 from pipeline_paths import (
     OUTPUT_DIR,
@@ -58,6 +59,7 @@ from pipeline_paths import (
     discover_show_scripts,
     episode_video_path,
     manifest_path,
+    sheet_path,
     start_still_path,
     voice_track_path,
 )
@@ -75,16 +77,18 @@ from shot_inputs import (
     own_colors,
     person_depth,
     placed,
+    prompt_sheet,
     reference_sheet,
     seen_surface,
     shot_piece,
     start_frame,
+    tinted_layout,
     view_degrees,
     window_around,
     write_depth_video,
     write_kept_control,
 )
-from voice import write_voice_track
+from voice import track_seconds, write_voice_track
 from render import render
 from world import camera_at, entities_at, load_show, reference_path, settings
 
@@ -121,13 +125,15 @@ def require_previs(show: dict, episode: dict, scene: dict) -> dict:
     return load_observation(*_ids(show, episode, scene), "start")
 
 
-def shot_inputs(show: dict, episode: dict, scene: dict, people: list[str], size: str, length: int, folder: Path, still: bool) -> tuple[str, str | None]:
-    """The depth video for a take of ``length`` frames and the reference sheet of ``people``, staged for ComfyUI.
+def shot_inputs(show: dict, episode: dict, scene: dict, people: list[str], size: str, length: int, folder: Path, still: bool,
+                pace: float = 1.0) -> tuple[str, str | None]:
+    """The depth video for a take of ``length`` frames (the timeline at ``pace``, see
+    ``write_depth_video``) and the reference sheet of ``people``, staged for ComfyUI.
 
     A still's depth keeps the people's relief; a clip's has them flat, so VACE does not freeze the faces.
     """
     width, height = wan.SIZES[size]
-    depth = write_depth_video(show, episode, scene, width, height, length, wan.FPS, folder / "depth.mp4", flat_people=not still)
+    depth = write_depth_video(show, episode, scene, width, height, length, wan.FPS, folder / "depth.mp4", flat_people=not still, pace=pace)
     photos = [reference_path(show, cid) for cid in people]
     missing = [str(path) for path in photos if not present(path)]
     if missing:
@@ -194,6 +200,12 @@ def shot_part(cid: str, drawing: Path, placement: tuple[complex, complex], frame
     return dest, matte, box, enlarged
 
 
+def seen_path(still: Path, cid: str) -> Path:
+    """How much of each pixel of a still is person ``cid`` (white), past everyone nearer: what ties
+    a voice to its speaker in the talking take."""
+    return inputs_dir(still) / "work" / f"seen_{cid}.png"
+
+
 def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int, force: bool) -> Path:
     """The scene's start still: the first frame of a short VACE take (a one-frame take ignores the depth).
 
@@ -223,7 +235,7 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     expected = {"prompt": prompt, "size": size,
                 "people": {cid: [_digest(piece), _digest(matte)] for cid, (piece, matte, _box, _laid) in parts.items()},
                 "depth": "without people", "strength": wan.STILL_VACE_STRENGTH, "kept": "blended by cut-out, own colors, every frame",
-                "layered": "people cover each other by cut-outs only", "blur": {cid: round(value, 2) for cid, value in blur.items()}}
+                "layered": "people cover each other by cut-outs only, in their own colors", "blur": {cid: round(value, 2) for cid, value in blur.items()}}
     if made_from(dest, expected) and present(inputs_dir(dest) / "collage.png") and not force:
         print("  Still is current.", flush=True)
         return dest
@@ -243,7 +255,9 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
                      (f"{cid}: 6 own colors", over_nobody(colors, cut)),
                      (f"{cid}: 7 out of focus, {blur[cid]:.0f} px", over_nobody(seen_colors, seen_cut))])
     floors = [number + 1 for number, entity in enumerate(entities) if entity.kind == "floor"]
-    picture, alpha = layer_people(frame.entity, frame.depth, layers, floors)
+    picture, alpha, shares = layer_people(frame.entity, frame.depth, layers, floors)
+    for cid in people:
+        Image.fromarray(np.rint(shares[numbers[cid]] * 255).astype(np.uint8)).save(seen_path(dest, cid))
     depth = write_depth_video(show, episode, scene, width, height, wan.STILL_FRAMES, wan.FPS, work / "depth.mp4", flat_people=False, people=False)
     write_kept_control(depth, picture, alpha, wan.STILL_FRAMES, wan.FPS, work / "control.mp4", work / "keep.mp4")
     graph = wan.vace_graph(prompt, settings()["vaceNegative"], size, wan.STILL_FRAMES, seed,
@@ -284,13 +298,48 @@ def print_prompts(show: dict, episode: dict, scene: dict, size: str) -> None:
               f"\n    Negative: {alone_negative(view)}", flush=True)
     print(f"  Still, around the people:\n    {still_prompt(show, scene, start)}", flush=True)
     speaker = talking_speaker(scene)
-    print(f"  Take ({'S2V, ' + speaker if speaker else 'VACE'}):\n    {video_prompt(show, episode, scene, start, speaker)}", flush=True)
+    print(f"  Take ({'InfiniteTalk, ' + speaker if speaker else 'VACE'}):\n    {video_prompt(show, episode, scene, start, speaker)}", flush=True)
+
+
+# The sheet's color frames and the space between its pictures, in pixels.
+SHEET_BORDER = 16
+SHEET_GAP = 24
+
+
+def write_sheet(show: dict, episode: dict, scene: dict, size: str) -> Path:
+    """The scene's start still as one picture and its words, for an image model that takes both
+    (``describe.sheet_prompt``): the shot's 3D layout with each person in it tinted their color, and
+    each one's reference photo framed in that color. Nothing is generated; the prompt is written
+    beside the picture (``.txt``)."""
+    dest = sheet_path(*_ids(show, episode, scene))
+    start = require_previs(show, episode, scene)
+    width, height = wan.SIZES[size]
+    people, entities, frame = start_frame(show, episode, scene, width, height)
+    colors = settings()["sheetColors"]
+    if len(people) > len(colors):
+        raise SystemExit(f"Scene {scene['sceneNumber']} has {len(people)} people in its start frame; prompts.sheetColors has {len(colors)} colors")
+    photos = {cid: reference_path(show, cid) for cid in people}
+    missing = [str(path) for path in photos.values() if not present(path)]
+    if missing:
+        raise SystemExit("Missing reference photos (run `pnpm run content:plates`):\n- " + "\n- ".join(missing))
+    tint = dict(zip(people, colors))
+    numbers = {entity.id: number + 1 for number, entity in enumerate(entities)}
+    layout = tinted_layout(frame.clay, frame.entity, {numbers[cid]: tuple(rgb) for cid, (_name, rgb) in tint.items()})
+    sheet = prompt_sheet(Image.fromarray(layout), [(photos[cid], tuple(rgb)) for cid, (_name, rgb) in tint.items()], SHEET_BORDER, SHEET_GAP)
+    camera = camera_at(scene, float(scene["timeRangeSeconds"][0]))
+    facing = {cid: view_degrees(next(entity for entity in entities if entity.id == cid), camera) < 90.0 for cid in people}
+    prompt = sheet_prompt(show, scene, start, {cid: name for cid, (name, _rgb) in tint.items()}, facing, (width, height))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(dest)
+    dest.with_suffix(".txt").write_text(prompt + "\n", encoding="utf-8")
+    print(f"  Sheet: {dest}\n  Prompt: {prompt}", flush=True)
+    return dest
 
 
 def generate_voice(show: dict, episode: dict, scene: dict) -> Path:
-    """The scene's voice track, remade only when its lines change."""
+    """The scene's voice track, remade only when its lines change. Its length is the scene's (``voice.lay_out``)."""
     dest = voice_track_path(*_ids(show, episode, scene))
-    expected = {"lines": scene.get("lines") or [], "timeRangeSeconds": scene["timeRangeSeconds"]}
+    expected = {"lines": scene.get("lines") or [], "timeRangeSeconds": scene["timeRangeSeconds"], "length": "the scene's, or as long as its speech"}
     if made_from(dest, expected):
         return dest
     if scene.get("lines"):
@@ -307,22 +356,41 @@ def _ffmpeg(*args: str) -> None:
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *args], check=True)
 
 
+def talk_masks(show: dict, episode: dict, scene: dict, speaker: str, still: Path, size: str, folder: Path) -> tuple[Path, Path] | None:
+    """The speaker's share of the still and everyone else's together (each person in it, from
+    ``seen_path``), when the speaker and anyone else are in it; else None (one voice, no mask)."""
+    people, _entities, _frame = start_frame(show, episode, scene, *wan.SIZES[size])
+    others = [cid for cid in people if cid != speaker]
+    if speaker not in people or not others:
+        return None
+    missing = [str(seen_path(still, cid)) for cid in people if not present(seen_path(still, cid))]
+    if missing:
+        raise SystemExit("Missing the people's shares of the still (run `pnpm run content:frames`):\n- " + "\n- ".join(missing))
+    share = {cid: np.asarray(Image.open(seen_path(still, cid)).convert("L")) for cid in people}
+    speaker_mask, others_mask = folder / "speaker_mask.png", folder / "others_mask.png"
+    Image.fromarray(share[speaker]).save(speaker_mask)
+    Image.fromarray(np.max(np.stack([share[cid] for cid in others]), axis=0)).save(others_mask)
+    return speaker_mask, others_mask
+
+
 def generate_clip(show: dict, episode: dict, scene: dict, size: str, seed: int, force: bool) -> Path:
-    """The scene's take at 16 fps (S2V for an on-screen speaker, else VACE), its voice, then 24 fps at the scene's length."""
+    """The scene's take (InfiniteTalk for an on-screen speaker, else VACE), its voice, then 24 fps at the scene's length."""
     ids = _ids(show, episode, scene)
     dest = clip_path(*ids)
     start = require_previs(show, episode, scene)
-    seconds = float(scene["timeRangeSeconds"][1]) - float(scene["timeRangeSeconds"][0])
-    length = wan.frames_for(seconds)
     voice = generate_voice(show, episode, scene)
+    # The scene's real length: as scripted, or as long as its speech runs.
+    scripted = float(scene["timeRangeSeconds"][1]) - float(scene["timeRangeSeconds"][0])
+    seconds = track_seconds(voice)
     speaker = talking_speaker(scene)
     still = start_still_path(*ids)
     if speaker is not None and not present(still):
         raise SystemExit(f"Missing start still {still}. Run `pnpm run content:frames` first, and review it.")
     prompt = video_prompt(show, episode, scene, start, speaker)
     expected = {
-        "prompt": prompt, "size": size, "model": "s2v" if speaker else "vace",
+        "prompt": prompt, "size": size, "model": "infinitetalk" if speaker else "vace",
         "voice": _digest(voice), "still": _digest(still) if speaker else None,
+        "guidance": {"text": wan.TALK_TEXT_CFG, "audio": wan.TALK_AUDIO_CFG} if speaker else None,
     }
     if made_from(dest, expected) and not force:
         print("  Clip is current.", flush=True)
@@ -331,24 +399,38 @@ def generate_clip(show: dict, episode: dict, scene: dict, size: str, seed: int, 
     # The take's own files, under its log.
     folder = inputs_dir(dest) / "work"
     folder.mkdir(parents=True, exist_ok=True)
-    take = folder / "take_16fps.mp4"
+    fps = wan.TALK_FPS if speaker is not None else wan.FPS
+    length = wan.frames_for(seconds, fps)
+    take = folder / f"take_{fps}fps.mp4"
     print(f"  Prompt: {prompt}", flush=True)
     if speaker is not None:
-        graph = wan.s2v_graph(prompt, settings()["s2vNegative"], size, length, seed, stage_input(still, "wan_start"), stage_input(voice, "wan_voice"))
-        run_graph(graph, {wan.S2V_PREFIX: take}, f"S2V take {size}p, {length} frames, seed {seed}", TAKE_TIMEOUT_SECONDS)
+        masks = talk_masks(show, episode, scene, speaker, still, size, folder)
+        others = None
+        if masks is not None:
+            silence = folder / "silence.wav"
+            _ffmpeg("-f", "lavfi", "-i", f"anullsrc=r={wan.TALK_SILENCE_RATE}:cl=mono", "-t", f"{wan.TALK_SILENCE_SECONDS}", str(silence))
+            others = (stage_input(masks[0], "talk_speaker"), stage_input(masks[1], "talk_others"), stage_input(silence, "talk_silence"))
+            pictures = np.asarray(Image.open(still).convert("RGB").resize(wan.SIZES[size], Image.Resampling.LANCZOS))
+            write_collage([[("still", Image.fromarray(pictures)),
+                            ("the voice is theirs", over_nobody(pictures, np.asarray(Image.open(masks[0]), dtype=np.float32) / 255.0)),
+                            ("silent", over_nobody(pictures, np.asarray(Image.open(masks[1]), dtype=np.float32) / 255.0))]],
+                          inputs_dir(dest) / "collage.png", wan.SIZES[size][0])
+        graph = wan.talk_graph(prompt, settings()["talkNegative"], size, length, seed, stage_input(still, "wan_start"), stage_input(voice, "wan_voice"), others)
+        run_graph(graph, {wan.TALK_PREFIX: take}, f"InfiniteTalk take {size}p, {length} frames, seed {seed}", TAKE_TIMEOUT_SECONDS)
     else:
-        control, reference = shot_inputs(show, episode, scene, reference_people(show, scene), size, length, folder, still=False)
+        control, reference = shot_inputs(show, episode, scene, reference_people(show, scene), size, length, folder, still=False, pace=scripted / seconds)
         graph = wan.vace_graph(prompt, settings()["vaceNegative"], size, length, seed, control, reference, still=False)
         silent = folder / "take_silent.mp4"
         run_graph(graph, {wan.VACE_PREFIX: silent}, f"VACE take {size}p, {length} frames, seed {seed}", TAKE_TIMEOUT_SECONDS)
         _ffmpeg("-i", str(silent), "-i", str(voice), "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-shortest", str(take))
-    tripled = folder / "take_48fps.mp4"
+    filled_fps = fps * wan.rife_multiplier(fps)
+    filled = folder / f"take_{filled_fps}fps.mp4"
     free_comfy_models()
-    run_graph(wan.rife_graph(stage_input(take, "wan_take")), {wan.RIFE_PREFIX: tripled}, "RIFE to 48 fps", RIFE_TIMEOUT_SECONDS)
-    # Every other frame of 48 is 24; the take ran a few frames past the scene, so it is cut to the scene.
-    _ffmpeg("-i", str(tripled), "-vf", f"fps={wan.OUTPUT_FPS}", "-t", f"{seconds:.3f}", "-c:v", "libx264", "-crf", "16",
+    run_graph(wan.rife_graph(stage_input(take, "wan_take"), fps), {wan.RIFE_PREFIX: filled}, f"RIFE to {filled_fps} fps", RIFE_TIMEOUT_SECONDS)
+    # 24 fps taken from the filled take; the take ran a few frames past the scene, so it is cut to the scene.
+    _ffmpeg("-i", str(filled), "-vf", f"fps={wan.OUTPUT_FPS}", "-t", f"{seconds:.3f}", "-c:v", "libx264", "-crf", "16",
             "-pix_fmt", "yuv420p", "-c:a", "aac", str(dest))
-    write_log(dest, {**expected, "seed": seed, "speaker": speaker}, {})
+    write_log(dest, {**expected, "seed": seed, "speaker": speaker, "seconds": round(seconds, 3)}, {})
     return dest
 
 
@@ -389,8 +471,8 @@ def generate_show(show: dict, stage: str, size: str, partial: bool, force: bool,
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render scene stills (frames) or clips (video) with Wan 2.2 through ComfyUI, or print every prompt they would send (prompts).")
-    parser.add_argument("--stage", choices=("prompts", "frames", "video"), default="video")
+    parser = argparse.ArgumentParser(description="Render scene stills (frames) or clips (video) through ComfyUI, print every prompt they would send (prompts), or write each start still as one sheet and its words for an image model (sheets).")
+    parser.add_argument("--stage", choices=("prompts", "sheets", "frames", "video"), default="video")
     parser.add_argument("--show", help="Render only this show id")
     parser.add_argument("--episode", type=int, help="Render only this episode number")
     parser.add_argument("--scene", type=int, help="Render only this scene number (requires --episode)")
@@ -418,12 +500,15 @@ def main() -> None:
             show["episodes"][0]["scenes"] = [scene for scene in show["episodes"][0]["scenes"] if scene["sceneNumber"] == args.scene]
             if not show["episodes"][0]["scenes"]:
                 raise SystemExit(f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}")
-    if args.stage == "prompts":
+    if args.stage in ("prompts", "sheets"):
         for show in shows:
             for episode in show["episodes"]:
                 for scene in episode["scenes"]:
-                    print(f"Scene {scene['sceneNumber']:02d} prompts:", flush=True)
-                    print_prompts(show, episode, scene, args.size)
+                    print(f"Scene {scene['sceneNumber']:02d} {args.stage}:", flush=True)
+                    if args.stage == "prompts":
+                        print_prompts(show, episode, scene, args.size)
+                    else:
+                        write_sheet(show, episode, scene, args.size)
         return
     require_comfy()
     for show in shows:

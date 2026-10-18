@@ -203,13 +203,15 @@ class ReferenceSheetTests(unittest.TestCase):
         near = np.array([[np.inf, np.inf, 2.0, 2.0, np.inf, np.inf, np.inf]], dtype=np.float32)
         cut = np.ones((1, 7), dtype=np.float32)
         red, blue = np.full((1, 7, 3), (200, 0, 0), np.uint8), np.full((1, 7, 3), (0, 0, 200), np.uint8)
-        picture, alpha = layer_people(ids, depth, [(2, far, red, cut), (3, near, blue, cut * np.array([[0, 0, 1, 0, 0, 0, 0]]))], [1])
+        picture, alpha, shares = layer_people(ids, depth, [(2, far, red, cut), (3, near, blue, cut * np.array([[0, 0, 1, 0, 0, 0, 0]]))], [1])
         self.assertEqual(tuple(picture[0, 0]), (200, 0, 0))
         self.assertEqual(tuple(picture[0, 2]), (0, 0, 200), "the nearer person covers the farther one")
         self.assertEqual(tuple(picture[0, 3]), (200, 0, 0), "a nearer person's mesh past their own cut-out hides no one")
         self.assertEqual(alpha[0, 4], 1.0, "a cut-out past the mesh (hair) is kept where nothing is in front")
         self.assertEqual(tuple(picture[0, 5]), (200, 0, 0), "the floor hides nothing")
         self.assertEqual(alpha[0, 6], 0.0, "a thing in front hides the person")
+        self.assertEqual((shares[2][0, 2], shares[3][0, 2]), (0.0, 1.0), "a pixel is the nearer person's where they cover")
+        self.assertEqual(shares[2][0, 3], 1.0, "and the farther one's past the nearer one's cut-out")
 
     def test_a_soft_edge_keeps_the_persons_own_color(self) -> None:
         from shot_inputs import layer_people
@@ -217,7 +219,7 @@ class ReferenceSheetTests(unittest.TestCase):
         ids, depth = np.array([[2, 0]], dtype=np.uint8), np.array([[5.0, np.inf]], dtype=np.float32)
         own = np.array([[5.0, np.inf]], dtype=np.float32)
         red = np.full((1, 2, 3), (200, 0, 0), np.uint8)
-        picture, alpha = layer_people(ids, depth, [(2, own, red, np.array([[1.0, 0.5]], dtype=np.float32))], [])
+        picture, alpha, _shares = layer_people(ids, depth, [(2, own, red, np.array([[1.0, 0.5]], dtype=np.float32))], [])
         self.assertEqual(alpha[0, 1], 0.5)
         self.assertEqual(tuple(picture[0, 1]), (200, 0, 0), "half covered, still the person's color: laid by alpha, not darkened twice")
 
@@ -357,19 +359,22 @@ class VoiceTests(unittest.TestCase):
             {"speakerId": "bo", "text": "Wait.", "start": 3.0},
         ])
 
-    def test_speech_is_laid_out_over_exactly_the_scene(self) -> None:
-        from voice import lay_out
+    def test_speech_is_laid_out_over_the_scene_or_as_long_as_it_runs(self) -> None:
+        from voice import SPEECH_TAIL_SECONDS, lay_out
 
         rate = 100
-        track, problems = lay_out([(0.5, np.full(50, 0.5, dtype=np.float32))], 2.0, rate)
-        self.assertEqual(len(track), 200)
+        track, notes = lay_out([(0.5, np.full(50, 0.5, dtype=np.float32))], 2.0, rate)
+        self.assertEqual(len(track), 200, "speech that fits leaves the scene its scripted length")
         self.assertEqual(float(track[49]), 0.0)
         self.assertEqual(float(track[50]), 0.5)
-        self.assertEqual(problems, [])
-        _track, problems = lay_out([(0.0, np.ones(150, dtype=np.float32)), (1.0, np.ones(150, dtype=np.float32))], 2.0, rate)
-        self.assertEqual(len(problems), 2, "the first runs into the second, the second past the scene")
-        silent, problems = lay_out([], 1.5, rate)
-        self.assertEqual((len(silent), float(np.abs(silent).max()), problems), (150, 0.0, []))
+        self.assertEqual(notes, [])
+        track, notes = lay_out([(0.0, np.ones(150, dtype=np.float32)), (1.0, np.full(150, 0.5, dtype=np.float32))], 2.0, rate)
+        self.assertEqual(float(track[149]), 1.0)
+        self.assertEqual(float(track[150]), 0.5, "the second speech waits for the first to end, never over it")
+        self.assertEqual(len(track), round((3.0 + SPEECH_TAIL_SECONDS) * rate), "the scene runs to a beat after the last word")
+        self.assertEqual(len(notes), 2)
+        silent, notes = lay_out([], 1.5, rate)
+        self.assertEqual((len(silent), float(np.abs(silent).max()), notes), (150, 0.0, []))
 
     def test_a_voice_is_made_again_when_its_description_changes(self) -> None:
         from comfy import write_log
@@ -413,6 +418,34 @@ class AloneTests(unittest.TestCase):
         self.assertIn("Soft overcast daylight.", bo)
 
 
+class SheetTests(unittest.TestCase):
+    def test_each_person_in_the_layout_is_their_color_shaded_as_the_clay(self) -> None:
+        from shot_inputs import tinted_layout
+
+        clay = np.array([[[200, 200, 200], [100, 100, 100], [150, 150, 150]]], dtype=np.uint8)
+        ids = np.array([[1, 1, 0]], dtype=np.uint8)
+        out = tinted_layout(clay, ids, {1: (255, 0, 0)})
+        self.assertEqual(tuple(out[0, 0]), (200, 0, 0))
+        self.assertEqual(tuple(out[0, 1]), (100, 0, 0), "the clay's shading kept")
+        self.assertEqual(tuple(out[0, 2]), (150, 150, 150), "what is no person stays clay")
+
+    def test_the_sheet_words_name_people_by_color_and_their_faces_only_when_toward_the_camera(self) -> None:
+        from describe import sheet_prompt
+
+        show = two_people()
+        seen = observation({"ada": 5000, "bo": 9000}, sky={"kind": "backdrop", "pixels": 20000})
+        shot = over_the_shoulder()
+        words = sheet_prompt(show, shot, seen, {"ada": "red", "bo": "blue"}, {"ada": True, "bo": True}, (720, 1280))
+        self.assertIn("720 by 1280 pixels", words)
+        self.assertIn("tinted red: lips slightly parted", words)
+        self.assertNotIn("tinted blue:", words, "a person without a performance gets no words")
+        self.assertNotIn("old man", words, "looks come from the photos")
+        self.assertNotIn("left", words)
+        self.assertNotIn("right", words)
+        away = sheet_prompt(show, shot, seen, {"ada": "red", "bo": "blue"}, {"ada": False, "bo": True}, (720, 1280))
+        self.assertNotIn("tinted red:", away, "no face words with the back toward the camera")
+
+
 class GraphTests(unittest.TestCase):
     def test_a_piece_is_restored_at_its_own_size_in_one_step(self) -> None:
         graph = wan.restore_graph("part.png", 5)
@@ -450,6 +483,62 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(graph["3"]["inputs"]["multiplier"] * wan.FPS, 2 * wan.OUTPUT_FPS)
         self.assertEqual(graph["4"]["inputs"]["frame_rate"], 48)
         self.assertEqual(graph["4"]["inputs"]["audio"], ["2", 1])
+
+    def test_rife_fills_a_25_fps_take_to_at_least_twice_the_cut(self) -> None:
+        graph = wan.rife_graph("take.mp4", wan.TALK_FPS)
+        self.assertEqual(graph["4"]["inputs"]["frame_rate"], 50)
+
+    def test_a_take_with_one_person_talks_to_one_voice(self) -> None:
+        graph = wan.talk_graph("words", "bad", "480", 69, 5, "still.png", "voice.wav", None)
+        node = graph["w0_talk"]["inputs"]
+        self.assertEqual(node["mode"], "single_speaker")
+        self.assertNotIn("mode.mask_1", node)
+        self.assertEqual(graph["15"]["inputs"]["audio"], ["9", 0], "the take carries the voice, never the silence")
+        self.assertEqual(graph["15"]["inputs"]["frame_rate"], wan.TALK_FPS)
+
+    def test_with_anyone_else_in_frame_the_voice_is_tied_to_the_speaker_and_silence_to_the_rest(self) -> None:
+        graph = wan.talk_graph("words", "bad", "480", 69, 5, "still.png", "voice.wav", ("speaker.png", "others.png", "silence.wav"))
+        node = graph["w0_talk"]["inputs"]
+        self.assertEqual(node["mode"], "two_speakers")
+        self.assertEqual(node["audio_encoder_output_1"], ["10", 0])
+        self.assertEqual(graph["10"]["inputs"]["audio"], ["9", 0])
+        self.assertEqual(graph["9"]["inputs"]["audio"], "voice.wav")
+        self.assertEqual(graph[node["mode.mask_1"][0]]["inputs"]["image"], ["16", 0])
+        self.assertEqual(graph["16"]["inputs"]["image"], "speaker.png")
+        self.assertEqual(graph["18"]["inputs"]["image"], "others.png")
+        self.assertEqual(graph[graph[node["mode.audio_encoder_output_2"][0]]["inputs"]["audio"][0]]["inputs"]["audio"], "silence.wav")
+        self.assertEqual(graph["15"]["inputs"]["audio"], ["9", 0])
+
+    def test_a_long_take_is_made_in_windows_each_going_on_from_the_last_frames(self) -> None:
+        self.assertEqual(wan.talk_windows(69), [69])
+        self.assertEqual(wan.talk_windows(81), [81])
+        self.assertEqual(wan.talk_windows(113), [81, 41])
+        self.assertEqual(wan.talk_windows(153), [81, 81])
+        for length in range(82, 400, 4):
+            windows = wan.talk_windows(length)
+            made = windows[0] + sum(frames - wan.TALK_MOTION_FRAMES for frames in windows[1:])
+            self.assertGreaterEqual(made, length)
+            self.assertLess(made - length, 4, "the last window no longer than needed")
+            self.assertTrue(all(frames % 4 == 1 and frames <= wan.TALK_WINDOW for frames in windows))
+        graph = wan.talk_graph("words", "bad", "480", 113, 5, "still.png", "voice.wav", ("s.png", "o.png", "silence.wav"))
+        second = graph["w1_talk"]["inputs"]
+        self.assertEqual(second["previous_frames"], ["w0_decode", 0])
+        self.assertEqual(second["mode.mask_1"], graph["w0_talk"]["inputs"]["mode.mask_1"])
+        self.assertEqual(graph["w1_new"]["inputs"]["batch_index"], ["w1_talk", 4], "the repeated frames are cut off")
+        self.assertEqual(graph["15"]["inputs"]["images"], ["w1_take", 0])
+
+    def test_each_window_is_guided_toward_the_words_and_the_voice_each_at_its_own_scale(self) -> None:
+        graph = wan.talk_graph("words", "bad", "480", 113, 5, "still.png", "voice.wav", None)
+        for window in ("w0", "w1"):
+            guide = graph[f"{window}_guide"]
+            self.assertEqual(guide["class_type"], "InfiniteTalkGuider")
+            self.assertEqual((guide["inputs"]["text_cfg"], guide["inputs"]["audio_cfg"]), (wan.TALK_TEXT_CFG, wan.TALK_AUDIO_CFG))
+            self.assertEqual(guide["inputs"]["model"], [f"{window}_talk", 0])
+            self.assertEqual(graph[f"{window}_sample"]["inputs"]["guider"], [f"{window}_guide", 0])
+            self.assertEqual(graph[f"{window}_steps"]["inputs"]["steps"], wan.TALK_STEPS)
+
+    def test_frames_cover_the_scene_at_the_takes_rate(self) -> None:
+        self.assertEqual(wan.frames_for(2.63, wan.TALK_FPS), 69)
 
 
 class RemakeTests(unittest.TestCase):

@@ -45,8 +45,10 @@ script.json
     ├─ content:assets      TRELLIS.2 / Pixal3D                   one mesh per picture
     ├─ content:previs      moderngl                              render, guides, observations, script checks
     ├─ content:frames      Qwen-Image, SeedVR2, BiRefNet, VACE   scene start stills
-    └─ content:generate    Chatterbox → Wan S2V or VACE → RIFE   voice, scene clips at 24 fps, episode cut
+    └─ content:generate    Chatterbox → InfiniteTalk or VACE → RIFE   voice, scene clips at 24 fps, episode cut
 ```
+
+`content:sheets` (no GPU) writes each scene's start still as one picture and its words for an image model that takes pictures with its prompt, to test whether one such pass can replace the still's chain: `output/sheets/<show>/<episode>/scene_XX.png` (the shot's 3D layout with each person in the start frame tinted a color from `sheetColors`, then each one's reference photo framed in that color) and `scene_XX.txt` (`describe.sheet_prompt`: how to read the sheet, each performer's face by color when toward the camera, then the still's own words). The colors tie each shape to its photo, so no side of the frame is named.
 
 Plates and meshes skip files already on disk. A still, a voice track, or a clip is made again when what it was made from changed (its words, its size, its lines, the still under a talking take: each output's `inputs/<name>/log.json` records them), and is otherwise skipped; `--force` remakes one selected scene anyway. `content:previs` always rewrites the playblast and guides. After a structural script rewrite, `content:archive` moves that show's generated files aside.
 
@@ -114,24 +116,24 @@ Output: `output/frames/<show>/<episode>/scene_XX_start.png`. Beside it, `inputs/
 
 Stills and clips are not checked automatically and not remade on their own: each is made once, at a seed fixed by its scene, and reviewed. `--force` remakes one selected scene; `--seed` rerolls it.
 
-### 5. Clips — Chatterbox, then Wan S2V or VACE, then RIFE
+### 5. Clips — Chatterbox, then InfiniteTalk or Wan VACE, then RIFE
 
 `content:generate` makes each scene's clip in three steps (`generate_batch.generate_clip`).
 
-**Voice** (`voice.py`, Chatterbox in `content-pipeline/.voice`, installed by `content:voice-deps`). One speaker's lines in a row are one speech, spoken in one go so the voice runs on, starting at the first line's `startSeconds`. The speeches are laid on a track exactly the scene's length (`output/generate/<show>/<episode>/voices/scene_XX.wav`); a scene without lines gets a silent track, so every clip has sound. A speech that runs into the next one or past the scene is reported. Each character speaks in their voice, `voice.wav` beside their reference photo (made by `content:plates`); validation requires a `voice` for every speaker. Exaggeration 0.6, CFG weight 0.4. Chatterbox reads no delivery words; the delivery reaches only the picture. Background sound and music are not made here.
+**Voice** (`voice.py`, Chatterbox in `content-pipeline/.voice`, installed by `content:voice-deps`). One speaker's lines in a row are one speech, spoken in one go so the voice runs on, starting at the first line's `startSeconds`. The speeches are laid on a track (`output/generate/<show>/<episode>/voices/scene_XX.wav`), each at its `startSeconds` or when the speech before it ends, whichever is later. How long a line takes is known only once it is said, so the speech sets the scene's length: the track is the scene's scripted length, or runs to `SPEECH_TAIL_SECONDS` (0.3) after the last word, and the clip is as long as its track. Nothing after it moves: each clip is its own file, the cut joins them, and the captions time themselves from each clip. The script's times stay the clock of the blocking; a lengthened VACE take spreads its scene's stretch of the timeline over the longer take (`pace`). A scene without lines gets a silent track, so every clip has sound. Each character speaks in their voice, `voice.wav` beside their reference photo (made by `content:plates`); validation requires a `voice` for every speaker. Exaggeration 0.6, CFG weight 0.4. Chatterbox reads no delivery words; the delivery reaches only the picture. Background sound and music are not made here.
 
-**The take**, at 16 fps (Wan 14B's own rate), `4n+1` frames covering the scene (`wan.frames_for`):
+**The take**, `4n+1` frames covering the scene (`wan.frames_for`) at the model's own rate: 25 fps for InfiniteTalk (it reads a voice at 25 frames a second), 16 fps for VACE (Wan 2.2 14B's):
 
 | Scene | Model | Inputs |
 | --- | --- | --- |
-| A speaker with a performance, i.e. on screen (`describe.talking_speaker`: the first such speaker) | Wan 2.2 S2V 14B (fp8): 20 steps, CFG 6, uni_pc, shift 8, wav2vec2 audio encoder, and its first-frame fix (the first latent decoded twice, `S2V_DROP_FRAMES` 3 dropped) | The start still and the voice track. Prompt: `video_prompt` plus how they speak (`speaking`: the lines' deliveries, never the words). Negative: `s2vNegative` (the template's). |
+| A speaker with a performance, i.e. on screen (`describe.talking_speaker`: the first such speaker) | InfiniteTalk (`wan.talk_graph`): Wan 2.1 I2V 14B 480p (fp8) with the InfiniteTalk multi patch, as ComfyUI's template but at 20 steps and shift 7 in place of its speed LoRA, guided as InfiniteTalk's own sampler: each step three passes (neither words nor voice, the voice alone, both), pushed toward the words at 5 and the voice at 4 (`InfiniteTalkGuider`); `wav2vec2-chinese-base` audio encoder. A take past 81 frames (what Wan 2.1 makes at once) is made in windows of up to 81, each going on from the last 9 frames before it, the last as short as covers the rest (`talk_windows`) | The start still and the voice track. When anyone else is in the still, the voice is tied to the speaker's share of it and a silent track to everyone else's (`talk_masks`, from each person's `seen_<id>.png` saved with the still: their cut-out past everyone nearer); the node lays the silence after the voice, so through the take the others hear nothing and keep their mouths shut. Prompt: `video_prompt` plus how they speak (`speaking`: the lines' deliveries, never the words). Negative: `talkNegative` (the template's). |
 | Anything else: no lines, or only voices from off screen | Wan 2.2 VACE, as for the still, over the whole take | The depth video and the reference sheet. The voice track is laid under it. |
 
-S2V moves one face. In a take with two speakers on screen it is about the first, and mouths every line on the track (a model limit).
+Wan 2.2 S2V was dropped for talking takes: it takes one voice and no mask, and moved the mouth of everyone in the frame (scene 8: the listener talked along). InfiniteTalk ties a voice to at most two masks, so a take is about one speaker; the speaker mouths every line on the track, an off-screen speaker's too (open).
 
-**24 fps.** RIFE (ComfyUI-Frame-Interpolation, `rife49`, ensemble) triples the take to 48 fps with its sound, every other frame is dropped (24 fps), and the clip is cut to the scene's exact length.
+**24 fps.** RIFE (ComfyUI-Frame-Interpolation, `rife49`, ensemble) fills the take out to at least twice 24 fps with its sound (`wan.rife_multiplier`: 16 → 48, 25 → 50), 24 fps is taken from it, and the clip is cut to the scene's exact length.
 
-Output: `output/generate/<show>/<episode>/scene_XX.mp4`; `inputs/scene_XX/` holds `log.json` (prompt, size, model, seed, speaker, and digests of the voice and the still), and `work/` under it the 16 fps take, the 48 fps take, and a VACE take's depth video and sheet.
+Output: `output/generate/<show>/<episode>/scene_XX.mp4`; `inputs/scene_XX/` holds `log.json` (prompt, size, model, seed, speaker, and digests of the voice and the still), and, for a talking take with anyone else in it, `collage.png` (the still, whose the voice is, who is silent); `work/` under it holds the take and the filled take, a talking take's masks and silence, and a VACE take's depth video and sheet.
 
 When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudnessTargetLufs` (-16 LUFS) and joins them into `episode.mp4`; `concat_videos` aborts if their width, height, or fps differ. `captions.caption_episode` then burns in subtitles from each scene's `lines`, timed to the words Whisper (large-v3-turbo) hears, and a name card (`characters.<id>.name`) the first time someone speaks on screen; the plain cut is kept as `episode_plain.mp4`. A single-scene run leaves `episode.mp4` alone.
 
@@ -144,7 +146,7 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 | Stack | Files | Licence (model card) |
 | --- | --- | --- |
 | Wan 2.2 VACE Fun A14B | high- and low-noise experts, Q8 GGUF (QuantStack) | Apache-2.0 |
-| Wan 2.2 S2V 14B | fp8 weights, `wav2vec2_large_english` audio encoder | Apache-2.0 |
+| InfiniteTalk (MeiGen) on Wan 2.1 I2V 14B 480p | fp8 weights, `wan2.1_infiniteTalk_multi_fp16` patch, `wav2vec2-chinese-base` audio encoder | Apache-2.0 |
 | Wan, shared | `umt5_xxl_fp8_e4m3fn_scaled` text encoder, `wan_2.1_vae` | Apache-2.0 |
 | Qwen-Image-2512 | Q8 GGUF (unsloth), `qwen_2.5_vl_7b_fp8_scaled` text encoder, `qwen_image_vae`; InstantX ControlNet Union for the standing pose and a still's people | Apache-2.0 |
 | SeedVR2 7B | int8 weights and its fp16 VAE (Comfy-Org): a still's people, enlarged | Apache-2.0 |
@@ -160,7 +162,8 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 
 `pnpm run content:setup-comfy` clones into `content-pipeline/.comfyui`:
 
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI), including native Wan (VACE, S2V), Qwen-Image, TRELLIS.2, and Pixal3D nodes
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI), including native Wan (VACE, InfiniteTalk), Qwen-Image, TRELLIS.2, and Pixal3D nodes
+- The pipeline's own ComfyUI nodes, `content-pipeline/comfy_nodes/` (loaded through `content-pipeline/comfy_paths.yaml`, which `content:comfy` passes): `infinitetalk` makes ComfyUI's InfiniteTalk run as InfiniteTalk's own sampler does: `InfiniteTalkGuider` guesses each step without words or voice, with the voice alone, and with both, and pushes toward the words (5) and the voice (4) separately. ComfyUI's plain CFG gave the voice to both of its passes and never pushed toward it (the lips followed loosely); one CFG of 5 over a pass with neither overshot and burnt the contrast and color. It also sends each sample of a batch through the audio attention alone, since that code takes one at a time and stopped when ComfyUI batched the passes (a 41-frame window). Delete each part once ComfyUI's code does the same
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)
 - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 - [ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation) (RIFE)
@@ -179,4 +182,4 @@ When every scene has its clip, ffmpeg loudness-normalizes each to `episodeLoudne
 | Reference photos | 928×1664 | Qwen-Image-2512's 9:16; a whole figure with room above the head and below the feet |
 | Previs | 768×1360 | Vertical, near 9:16 |
 | Wan stills and takes | 480×832 (`--size 480`, the default) or 720×1280 (`--size 720`) | 480p answers most questions in a fraction of the time; 720p is the final look. The depth video is rendered at the take's own size. |
-| Clips | the take's size, 24 fps | RIFE from Wan's 16 fps |
+| Clips | the take's size, 24 fps | RIFE from the take's 16 or 25 fps |

@@ -50,8 +50,8 @@ The reference episode, `packages/shared/src/reel-short-content-reference/return-
    and does it flip?". People act on status: mock, threaten, grab, interrupt,
    kneel, laugh. Nobody explains feelings, history, or the rules of the world.
 
-4. **Lines are moves.** 2–8 words, one line per shot: a taunt, threat, insult,
-   order, boast, defiance, or punchline.
+4. **Lines are moves.** One line per shot: a taunt, threat, insult, order,
+   boast, defiance, or punchline.
    - Bad: "The sun-well takes a false bride tonight." (ceremony; nobody does
      anything to anybody).
    - Good: "Kneel, or burn." / "Another puppy came to die?" / "You're nothing."
@@ -95,7 +95,9 @@ The reference episode, `packages/shared/src/reel-short-content-reference/return-
 9. **Durations:**
    - insert or reaction: 1–2 s;
    - action beat: 2–3 s;
-   - spoken line: 2–4 s (5 s only for a line over ~8 words).
+   - spoken line: as long as it takes to say. How long that is is known only
+     once it is spoken, so the pipeline lengthens a scene to hold its speech;
+     set `timeRangeSeconds` to the reference cut, or a guess.
 
    Most scenes are 2–3 s, so a 60 s episode has about 20–30 scenes.
 
@@ -172,7 +174,7 @@ video model is told about is what you write: the shot's `subjects` and the
    - The beats read as a therefore/but chain.
    - The first scene is moving danger, with no line.
    - At least half the scenes are action.
-   - Every line is 8 words or fewer, is a move, and is followed by a reaction.
+   - Every line is a move and is followed by a reaction.
    - Every performance has a verb, a body part, and a direction.
    - No two consecutive scenes share a framing.
    - The last scene is a punchline or a question.
