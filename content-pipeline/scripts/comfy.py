@@ -58,11 +58,23 @@ def _post(path: str, payload: dict, timeout: float = 30) -> dict:
     return json.loads(body) if body.strip() else {}
 
 
+def keep_awake() -> None:
+    """Ask Windows not to sleep while this process runs (the screen may still turn off). A busy GPU
+    is not activity to Windows: on its idle timer it slept in the middle of a render, which froze
+    for hours. The request ends when the process exits."""
+    if os.name == "nt":
+        import ctypes
+
+        es_continuous, es_system_required = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | es_system_required)
+
+
 def require_comfy() -> None:
     try:
         urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=3)
     except urllib.error.URLError as exc:
         raise SystemExit(f"ComfyUI is not reachable at {COMFYUI_URL}. Start it with `pnpm run content:comfy`.") from exc
+    keep_awake()
 
 
 def free_comfy_models() -> None:

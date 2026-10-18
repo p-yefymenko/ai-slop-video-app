@@ -272,10 +272,12 @@ test("accepts effects on a landmark, a prop, and a character", () => {
   assert.ok(result.ok, result.ok ? "" : result.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
 });
 
-test("rejects tagged attributes; a detail is plain text", () => {
+test("an attribute is plain text, or marked as a detail of the face; nothing else", () => {
   const show = minimalShow();
+  show.characters.ada.attributes = [{ face: "brown eyes" }, "black hair"];
+  assert.equal(parseShowScript(show, { showId: "demo-show", showIdLabel: "the filename stem" }).ok, true);
   (show.characters.ada.attributes as unknown[]) = [{ text: "black hair", parts: ["hair"] }];
-  assert.match(messages(show), /characters\.ada\.attributes\[0\]: attribute must be a string/);
+  assert.match(messages(show), /characters\.ada\.attributes\[0\]/);
 });
 
 test("rejects a show id that does not match the file", () => {
@@ -310,4 +312,13 @@ test("an action is aimed only through {target}", () => {
   ada.action = "glares down";
   ada.target = "bench";
   assert.match(messages(show), /target: the action must say where it is aimed, as \{target\}/);
+});
+
+test("an action is aimed only at someone who performs in the scene", () => {
+  const show = minimalShow();
+  show.characters.bo = { ...show.characters.ada };
+  const ada = show.episodes[0].scenes[0].performances.ada;
+  ada.action = "glares down at {target}";
+  ada.target = "bo";
+  assert.match(messages(show), /target: "bo" has no performance in this scene/);
 });

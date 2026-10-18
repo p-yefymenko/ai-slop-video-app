@@ -211,6 +211,16 @@ class ReferenceSheetTests(unittest.TestCase):
         self.assertEqual(tuple(picture[0, 5]), (200, 0, 0), "the floor hides nothing")
         self.assertEqual(alpha[0, 6], 0.0, "a thing in front hides the person")
 
+    def test_a_soft_edge_keeps_the_persons_own_color(self) -> None:
+        from shot_inputs import layer_people
+
+        ids, depth = np.array([[2, 0]], dtype=np.uint8), np.array([[5.0, np.inf]], dtype=np.float32)
+        own = np.array([[5.0, np.inf]], dtype=np.float32)
+        red = np.full((1, 2, 3), (200, 0, 0), np.uint8)
+        picture, alpha = layer_people(ids, depth, [(2, own, red, np.array([[1.0, 0.5]], dtype=np.float32))], [])
+        self.assertEqual(alpha[0, 1], 0.5)
+        self.assertEqual(tuple(picture[0, 1]), (200, 0, 0), "half covered, still the person's color: laid by alpha, not darkened twice")
+
     def test_photos_side_by_side_on_white_as_drawn(self) -> None:
         from shot_inputs import reference_sheet
 
@@ -238,8 +248,7 @@ class WordsTests(unittest.TestCase):
             bench={"kind": "landmark", "pixels": 3000},
         )
         prompt = video_prompt(show, episode, over_the_shoulder(), seen)
-        self.assertTrue(prompt.startswith("Low-angle medium close-up with shallow depth of field, cinematic"))
-        self.assertNotIn("shoulder", prompt, "someone no nearer than the subject is not the foreground")
+        self.assertTrue(prompt.startswith("Low-angle over-the-shoulder medium close-up with shallow depth of field, cinematic"))
         self.assertNotIn("old man", prompt, "nobody without a performance is named")
         self.assertIn("An adult woman, brown skin: speaks with a half-smile. Face: lips slightly parted.", prompt)
         self.assertNotIn("black hair", prompt, "no look beyond the body: the frame may not show it")
@@ -253,18 +262,31 @@ class WordsTests(unittest.TestCase):
         for word in ("left", "right", "center", "facing", "profile"):
             self.assertNotIn(word, prompt, "no screen side or facing")
 
-    def test_an_over_the_shoulder_shot_names_whom_it_looks_past(self) -> None:
+    def test_an_over_the_shoulder_shot_says_so_and_names_nobody_in_front(self) -> None:
         from describe import video_prompt
 
         show = two_people()
         seen = observation({"ada": 5000, "bo": 9000})
         seen["entities"]["bo"]["depth"] = 1.2
         prompt = video_prompt(show, show["episodes"][0], over_the_shoulder(), seen)
-        self.assertIn("Low-angle medium close-up with shallow depth of field, cinematic live-action footage, photorealistic. "
-                      "Shot over the shoulder of an old man, broad build, who is close to the camera in the foreground.", prompt)
-        self.assertNotIn("fox", prompt, "by their body only")
+        self.assertNotIn("old man", prompt, "named, the person in front was given the subject's action")
         single = scene(shot={"type": "single", "subjects": ["ada"], "size": "mcu"}, performances={"ada": {"action": "speaks"}})
         self.assertNotIn("shoulder", video_prompt(show, show["episodes"][0], single, seen), "only a shot authored as over the shoulder")
+
+    def test_a_person_drawn_alone_is_seen_from_the_side_the_camera_is_on(self) -> None:
+        from describe import view_words
+        from shot_inputs import view_degrees
+
+        class Person:
+            offset, yaw_degrees = (0.0, 0.0, 0.0), 0.0  # facing +Y
+
+        self.assertAlmostEqual(view_degrees(Person, {"position": [0.0, 3.0, 1.5]}), 0.0)
+        self.assertAlmostEqual(view_degrees(Person, {"position": [0.0, -3.0, 1.5]}), 180.0)
+        self.assertAlmostEqual(view_degrees(Person, {"position": [-3.0, 0.0, 1.5]}), 90.0)
+        self.assertEqual(view_words(10.0), "from the front")
+        self.assertEqual(view_words(50.0), "from the front and the side")
+        self.assertIn("the back of the head", view_words(170.0))
+        self.assertNotIn("face", view_words(170.0), "a word in the prompt is drawn, \"not\" or no")
 
     def test_a_performer_outside_the_start_frame_comes_into_it(self) -> None:
         from describe import video_prompt
@@ -370,11 +392,20 @@ class AloneTests(unittest.TestCase):
         show = two_people()
         seen = observation({"ada": 5000, "bo": 9000}, sky={"kind": "backdrop", "pixels": 20000})
         shot = over_the_shoulder(motion="smoke drifts")
-        ada = alone_prompt(show, shot, seen, "ada")
-        self.assertIn("An adult woman, brown skin: speaks with a half-smile. Face: lips slightly parted.", ada)
-        self.assertNotIn("old man", ada, "only the one person")
-        bo = alone_prompt(show, shot, seen, "bo")
-        self.assertIn("An old man, broad build.", bo, "no performance: the body alone")
+        ada = alone_prompt(show, shot, seen, "ada", 10.0)
+        self.assertIn("seen from the front", ada)
+        self.assertIn("Face: lips slightly parted.", ada, "the authored expression")
+        self.assertNotIn("half-smile", ada, "no action: the take performs it")
+        show["characters"]["ada"]["attributes"] = [{"face": "brown eyes"}, "black hair"]
+        behind = alone_prompt(show, shot, seen, "ada", 170.0)
+        self.assertNotIn("Face:", behind, "no face words when the back is toward the camera")
+        self.assertNotIn("brown eyes", behind, "nor the face's attributes")
+        self.assertIn("black hair", behind)
+        self.assertIn("brown eyes; black hair", alone_prompt(show, shot, seen, "ada", 10.0), "from the front, every attribute in order")
+        reaching = scene(shot=shot["shot"], performances={"ada": {"action": "points at {target}", "target": "bo"}})
+        self.assertNotIn("old man", alone_prompt(show, reaching, seen, "ada", 10.0), "an action's target is never drawn beside them")
+        bo = alone_prompt(show, shot, seen, "bo", 10.0)
+        self.assertIn("one person, old man, broad build", bo)
         self.assertNotIn("smoke", bo, "the scene's motion is drawn around the people")
         self.assertIn("a red fox-fur mantle", bo, "drawn whole from words: every attribute")
         self.assertNotIn("sky", bo, "no setting: alone on plain gray")

@@ -361,6 +361,16 @@ def backdrop_text(show: dict, scene: dict, part: str) -> str:
     return clause(show["locations"][scene["locationId"]]["backdrop"][part])
 
 
+def attribute_text(item) -> str:
+    """An attribute's words: a plain clause, or ``{"face": clause}`` for a detail of the face."""
+    return item["face"] if isinstance(item, dict) else item
+
+
+def is_face(item) -> bool:
+    """Whether an attribute is marked as a detail of the face."""
+    return isinstance(item, dict)
+
+
 def character_appearance_text(character: dict) -> str:
     """Plate text: body, then every attribute."""
-    return ", ".join(clause(item) for item in [character["body"], *character["attributes"]])
+    return ", ".join(clause(item) for item in [character["body"], *map(attribute_text, character["attributes"])])

@@ -107,7 +107,7 @@ const showCharacterSchema = z
   .object({
     name: text("name").optional(),
     body: text("body"),
-    attributes: z.array(text("attribute"), {
+    attributes: z.array(z.union([text("attribute"), z.object({ face: text("attribute face") }).strict()]), {
       required_error: "attributes is required",
       invalid_type_error: "attributes must be an array",
     }),
@@ -560,6 +560,7 @@ function checkTarget(
   characterId: string,
   performance: ScenePerformance,
   show: ShowScript,
+  performances: Record<string, ScenePerformance>,
 ) {
   const placeholders = [...performance.action.matchAll(/\{([^}]*)\}/g)].map((match) => match[1]);
   if (placeholders.some((name) => name !== "target")) {
@@ -583,6 +584,12 @@ function checkTarget(
     issues.push({
       path: `${path}.target`,
       message: `unknown target ${JSON.stringify(performance.target)}: a character (props and landmarks are never named to the video model)`,
+    });
+  } else if (!(performance.target in performances)) {
+    // Named by body, someone with nothing to do was drawn or moved by the model (an arm raised from a blurred shoulder).
+    issues.push({
+      path: `${path}.target`,
+      message: `${JSON.stringify(performance.target)} has no performance in this scene: a target must be a performer, since the video model is never told of anyone else`,
     });
   }
 }
@@ -731,7 +738,7 @@ function checkPerformances(issues: ScriptIssue[], show: ShowScript, scene: Scrip
     if (!(characterId in show.characters)) {
       issues.push({ path, message: `unknown character ${JSON.stringify(characterId)}` });
     }
-    checkTarget(issues, path, characterId, performance, show);
+    checkTarget(issues, path, characterId, performance, show, performances);
   }
   const [sceneStart, sceneEnd] = scene.timeRangeSeconds;
   (scene.lines ?? []).forEach((line, lineIndex) => {

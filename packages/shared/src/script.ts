@@ -11,6 +11,9 @@
  * that everyone with a performance is in the frame.
  */
 
+/** One clause of a look; `{ face }` when it is a detail of the face. */
+export type CharacterAttribute = string | { face: string };
+
 export type ShowCharacter = {
   /** How the episode's name card titles them the first time they speak on screen ("Master Adam"). Never sent to a model. */
   name?: string;
@@ -20,8 +23,12 @@ export type ShowCharacter = {
    * Every other detail of their look, one clause each: age, hair, clothes,
    * scars. Only the plate and the reference photo are drawn from them; the
    * video model gets the look from the reference photo, never in words.
+   * A detail of the face (age, beard, eyes, a scar on the cheek) is written
+   * `{ "face": "a short white beard" }`: a person drawn from behind is not
+   * told of it (named, the model turned the head to show it). Hair is not
+   * face: it shows from behind.
    */
-  attributes: string[];
+  attributes: CharacterAttribute[];
   /** Standing height in meters. The generated mesh is fitted to it. */
   heightMeters: number;
   /**
@@ -275,8 +282,9 @@ export type ScenePerformance = {
   action: string;
   /**
    * Who the action is aimed at, written as `{target}` in the action: a
-   * character id. They must be in the start frame; the clip prompt names them
-   * by their `body`.
+   * character id with a performance in the same scene (the video model is
+   * never told of anyone else). They must be in the start frame; the clip
+   * prompt names them by their `body`.
    */
   target?: string;
   /**

@@ -7,7 +7,7 @@
   "vaceNegative": "cut, scene change, new shot, zoom out, extra people, blurry, distorted face, deformed hands, text, watermark",
   "s2vNegative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
   "shotSentence": "{angle}{size}, cinematic live-action footage, photorealistic.",
-  "overShoulder": "Shot over the shoulder of {body}, who is close to the camera in the foreground.",
+  "overShoulder": "over-the-shoulder {size}",
   "shot": {
     "angles": {
       "low": "low-angle",
@@ -30,7 +30,9 @@
   "cameraHeld": "The camera is handheld and nearly still, holding the same framing for the whole take.",
   "cameraMotion": "The camera {motion}, in one smooth continuous move.",
   "person": "{body}: {action}.",
-  "aloneImage": "A photorealistic full-length film frame of one person, {body}, alone on a plain light gray background, the whole figure head to toe. Exactly as described, item by item: {attributes}.",
+  "aloneImage": "A photorealistic full-length film frame of one person, {body}, seen {view}, alone on a plain light gray background, the whole figure head to toe. Exactly as described, item by item, as far as each shows from this side: {attributes}.",
+  "views": ["from the front", "from the front and the side", "from the side", "from behind and the side", "from behind, the back of the head and the back toward the camera"],
+  "viewNegatives": ["", "", "", "face, eyes, looking back over the shoulder", "face, eyes, profile, looking back over the shoulder"],
   "aloneNegative": "extra people, scenery, cartoon, 3d render, plastic skin, airbrushed, painting, blurry face, deformed hands, cropped body",
   "personPresent": "{body}.",
   "personEnters": "Coming into the frame, {body}: {action}.",

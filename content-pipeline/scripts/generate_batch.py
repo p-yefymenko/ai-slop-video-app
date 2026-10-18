@@ -50,7 +50,7 @@ from comfy import (
     stage_input,
     write_log,
 )
-from describe import alone_prompt, reference_people, talking_speaker, video_prompt
+from describe import alone_negative, alone_prompt, reference_people, still_prompt, talking_speaker, video_prompt
 from ffmpeg_tools import concat_videos
 from pipeline_paths import (
     OUTPUT_DIR,
@@ -79,6 +79,7 @@ from shot_inputs import (
     seen_surface,
     shot_piece,
     start_frame,
+    view_degrees,
     window_around,
     write_depth_video,
     write_kept_control,
@@ -135,11 +136,11 @@ def shot_inputs(show: dict, episode: dict, scene: dict, people: list[str], size:
     return stage_input(depth, "wan_depth"), stage_input(sheet, "wan_reference") if sheet else None
 
 
-def draw_person(show: dict, episode: dict, scene: dict, start: dict, cid: str, frame, number: int, seed: int, folder: Path, force: bool):
-    """A person of a still, alone, upright and full height, by Qwen-Image from their words and their
-    own depth (through the ControlNet Union), seen through a long lens from the direction the shot
-    (whose render is ``frame``, where they are entity ``number``) sees them from. Returns the
-    drawing and the scale, turn and shift that lay it on the shot."""
+def alone_view(show: dict, episode: dict, scene: dict, cid: str, frame, number: int):
+    """How a person of a still is seen when drawn alone: a long lens from the direction the shot
+    (whose render is ``frame``, where they are entity ``number``) sees them from, the window of it
+    around their whole figure, and the scale, turn and shift that lay that drawing on the shot:
+    (the person, the camera, the window, (turn, shift))."""
     width, height = CHARACTER_PICTURE_SIZE
     time_seconds = float(scene["timeRangeSeconds"][0])
     person = next(entity for entity in entities_at(show, episode, scene, time_seconds) if entity.id == cid)
@@ -147,14 +148,22 @@ def draw_person(show: dict, episode: dict, scene: dict, start: dict, cid: str, f
     camera = drawing_camera(person, seen, camera_at(scene, time_seconds))
     box = figure_box(person, camera, width, height)
     window = window_around(box[:2], box[2:], width, height)
-    turn, shift = fit_similarity(drawing_pixels(seen, camera, window, (width, height)), shot_pixels)
+    return person, camera, window, fit_similarity(drawing_pixels(seen, camera, window, (width, height)), shot_pixels)
+
+
+def draw_person(show: dict, episode: dict, scene: dict, start: dict, cid: str, frame, number: int, seed: int, folder: Path, force: bool):
+    """A person of a still, alone, upright and full height, by Qwen-Image from their words and their
+    own depth (through the ControlNet Union), seen as ``alone_view`` says. Returns the drawing and
+    the scale, turn and shift that lay it on the shot."""
+    width, height = CHARACTER_PICTURE_SIZE
+    person, camera, window, (turn, shift) = alone_view(show, episode, scene, cid, frame, number)
     dest = folder / f"alone_{cid}.png"
     guides = inputs_dir(dest)
     guides.mkdir(parents=True, exist_ok=True)
     depth = guides / "depth.png"
     person_depth(person, camera, window, (width, height), (width, height)).save(depth)
-    prompt = alone_prompt(show, scene, start, cid)
-    negative = settings()["aloneNegative"]
+    prompt = alone_prompt(show, scene, start, cid, view_degrees(person, camera))
+    negative = alone_negative(view_degrees(person, camera))
     expected = {"prompt": prompt, "negative": negative, "size": [width, height], "depth": _digest(depth)}
     if not made_from(dest, expected) or force:
         print(f"  Alone: {prompt}", flush=True)
@@ -200,7 +209,7 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     """
     dest = start_still_path(*_ids(show, episode, scene))
     start = require_previs(show, episode, scene)
-    prompt = video_prompt(show, episode, scene, start)
+    prompt = still_prompt(show, scene, start)
     work = inputs_dir(dest) / "work"
     width, height = wan.SIZES[size]
     people, entities, frame = start_frame(show, episode, scene, width, height)
@@ -247,7 +256,8 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     drew = Image.open(around).convert("RGB").resize((width, height), Image.Resampling.LANCZOS)
     still = Image.fromarray(np.rint(picture * alpha[..., None] + np.asarray(drew) * (1.0 - alpha[..., None])).astype(np.uint8))
     still.save(dest)
-    steps = [("8 people layered", over_nobody(picture, alpha)),
+    steps = [("0 the 3D scene", Image.fromarray(frame.clay)),
+             ("8 people layered", over_nobody(picture, alpha)),
              ("9 how much is a person", Image.fromarray(np.rint(alpha * 255).astype(np.uint8))),
              ("10 final pass control", first_frame(work / "control.mp4")),
              ("11 keep mask (black)", first_frame(work / "keep.mp4")),
@@ -257,6 +267,24 @@ def generate_still(show: dict, episode: dict, scene: dict, size: str, seed: int,
     write_collage([*rows, steps], inputs_dir(dest) / "collage.png", width)
     write_log(dest, {**expected, "seed": seed})
     return dest
+
+
+def print_prompts(show: dict, episode: dict, scene: dict, size: str) -> None:
+    """Every prompt a frames and a video run of the scene would send, from the same code, and
+    nothing generated: each person drawn alone (with the side they are seen from), the still's
+    final pass, and the take. Read before any run."""
+    start = require_previs(show, episode, scene)
+    width, height = wan.SIZES[size]
+    people, entities, frame = start_frame(show, episode, scene, width, height)
+    numbers = {entity.id: number + 1 for number, entity in enumerate(entities)}
+    for cid in people:
+        person, camera, _window, _placement = alone_view(show, episode, scene, cid, frame, numbers[cid])
+        view = view_degrees(person, camera)
+        print(f"  Alone {cid} ({view:.0f} degrees round from the front):\n    {alone_prompt(show, scene, start, cid, view)}"
+              f"\n    Negative: {alone_negative(view)}", flush=True)
+    print(f"  Still, around the people:\n    {still_prompt(show, scene, start)}", flush=True)
+    speaker = talking_speaker(scene)
+    print(f"  Take ({'S2V, ' + speaker if speaker else 'VACE'}):\n    {video_prompt(show, episode, scene, start, speaker)}", flush=True)
 
 
 def generate_voice(show: dict, episode: dict, scene: dict) -> Path:
@@ -361,8 +389,8 @@ def generate_show(show: dict, stage: str, size: str, partial: bool, force: bool,
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render scene stills (frames) or clips (video) with Wan 2.2 through ComfyUI.")
-    parser.add_argument("--stage", choices=("frames", "video"), default="video")
+    parser = argparse.ArgumentParser(description="Render scene stills (frames) or clips (video) with Wan 2.2 through ComfyUI, or print every prompt they would send (prompts).")
+    parser.add_argument("--stage", choices=("prompts", "frames", "video"), default="video")
     parser.add_argument("--show", help="Render only this show id")
     parser.add_argument("--episode", type=int, help="Render only this episode number")
     parser.add_argument("--scene", type=int, help="Render only this scene number (requires --episode)")
@@ -390,6 +418,13 @@ def main() -> None:
             show["episodes"][0]["scenes"] = [scene for scene in show["episodes"][0]["scenes"] if scene["sceneNumber"] == args.scene]
             if not show["episodes"][0]["scenes"]:
                 raise SystemExit(f"Show {show['id']!r} episode {args.episode} has no scene {args.scene}")
+    if args.stage == "prompts":
+        for show in shows:
+            for episode in show["episodes"]:
+                for scene in episode["scenes"]:
+                    print(f"Scene {scene['sceneNumber']:02d} prompts:", flush=True)
+                    print_prompts(show, episode, scene, args.size)
+        return
     require_comfy()
     for show in shows:
         generate_show(show, args.stage, args.size, partial=args.scene is not None, force=args.force, seed_override=args.seed)

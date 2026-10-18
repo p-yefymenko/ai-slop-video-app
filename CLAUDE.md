@@ -45,6 +45,7 @@ Before starting anything on the GPU, tell the user in one or two lines:
 
 Then:
 
+- **Review every prompt before any generation.** Run `pnpm run content:prompts` (same flags as the run) and read each prompt it prints: each person drawn alone, the still's final pass, the take. Check them against the rules here (nobody without a performance described, no part that may be off frame, nothing a model could draw that the shot must not show, no word that contradicts the view). Show the user any prompt a code change altered. A run whose prompts were not read is not started.
 - **Use the cheapest run that answers the question:** a still before a clip, 480p before 720p, one scene before an episode, a short take before a full one.
 - **Don't re-render a finished result at higher quality just to show it.** Final-quality renders come from the integrated pipeline, at the end.
 - **Check with the user before any run over ~15 minutes,** unless they asked for exactly that run.

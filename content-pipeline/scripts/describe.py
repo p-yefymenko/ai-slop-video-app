@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 
 from observe import in_shot
-from world import backdrop_text, camera_moves, clause, settings
+from world import attribute_text, backdrop_text, camera_moves, clause, is_face, settings
 
 PLACEHOLDER = re.compile(r"\{([a-zA-Z][a-zA-Z0-9]*)\}")
 _ARTICLE = re.compile(r"^(one|an?|the)\s+", re.IGNORECASE)
@@ -52,29 +52,18 @@ def _a(text: str) -> str:
     return text if _ARTICLE.match(text) else ("an " if text[:1].lower() in "aeiou" else "a ") + text
 
 
-def foreground_person(scene: dict, start: dict) -> str | None:
-    """Who an over-the-shoulder shot looks past: the nearest person in the start frame who is not a
-    subject and is nearer the camera than every subject; None when no one is."""
-    subjects = (scene.get("shot") or {}).get("subjects") or []
-    entities = start["entities"]
-    seen = [cid for cid, entry in entities.items() if entry["kind"] == "character" and in_shot(start, cid)]
-    subject_depths = [entities[cid]["depth"] for cid in subjects if cid in seen]
-    nearer = [cid for cid in seen if cid not in subjects and all(entities[cid]["depth"] < depth for depth in subject_depths)]
-    return min(nearer, key=lambda cid: entities[cid]["depth"], default=None)
-
-
-def shot_sentence(show: dict, scene: dict, start: dict) -> str:
-    """The kind of shot: its size and angle, from the script's shot. An over-the-shoulder shot also
-    says whom it looks past (``foreground_person``, by their body): told only the size, the video
-    model took the near person for part of the subject and moved them with him."""
+def shot_sentence(scene: dict, over_shoulder: bool = True) -> str:
+    """The kind of shot: its size and angle, from the script's shot; an over-the-shoulder shot says
+    so (``overShoulder``, unless ``over_shoulder`` is False), naming nobody. Named by their body,
+    the person it looks past was given the subject's action (a hand reached up from a blurred
+    shoulder)."""
     shot = scene.get("shot") or {}
     words = settings()["shot"]
     angle = words["angles"].get(shot.get("angle", "eye"), "")
     size = words["sizes"].get(shot.get("size", ""), words["types"].get(shot.get("type", ""), words["sizes"]["wide"]))
-    foreground = foreground_person(scene, start) if shot.get("type") == "overShoulder" else None
+    if over_shoulder and shot.get("type") == "overShoulder":
+        size = template("overShoulder", {"size": size})
     text = template("shotSentence", {"angle": f"{angle} " if angle else "", "size": size})
-    if foreground:
-        text += " " + template("overShoulder", {"body": _a(clause(show["characters"][foreground]["body"]))})
     return text[:1].upper() + text[1:]
 
 
@@ -135,15 +124,44 @@ def _joined(parts: list[str]) -> str:
     return " ".join(part[:1].upper() + part[1:] for part in parts)
 
 
-def alone_prompt(show: dict, scene: dict, start: dict, cid: str) -> str:
-    """One person drawn alone and full height by Qwen-Image, for a still: every attribute, as their
-    reference photo was drawn (the whole figure is drawn, so every described part is in the
-    picture), their performance, and the light. No setting: words for a backdrop made the model
-    give it room and cut the person."""
+def _view_index(view_degrees: float) -> int:
+    """The nearest of the ``views``, 45° apart, to ``view_degrees`` between where a person faces and
+    where the camera is (0 their front, 180 their back)."""
+    count = len(settings()["views"])
+    return round(min(max(view_degrees, 0.0), 180.0) / (180.0 / (count - 1)))
+
+
+def view_words(view_degrees: float) -> str:
+    """Which side of a person the camera sees, in words: the depth alone does not tell a back from a
+    front, and the model drew everyone from the front. The words name only what is seen: "the face
+    not visible" put a face in the picture."""
+    return settings()["views"][_view_index(view_degrees)]
+
+
+def alone_negative(view_degrees: float) -> str:
+    """The negative for a person drawn alone: ``aloneNegative``, and what the side they are seen
+    from must not show (``viewNegatives``: a face, from behind)."""
+    extra = settings()["viewNegatives"][_view_index(view_degrees)]
+    return ", ".join(part for part in (settings()["aloneNegative"], extra) if part)
+
+
+def alone_prompt(show: dict, scene: dict, start: dict, cid: str, view_degrees: float) -> str:
+    """One person drawn alone and full height by Qwen-Image, for a still: which side of them the
+    camera sees (``view_words``), every attribute, as their reference photo was drawn (the whole
+    figure is drawn, so every described part is in the picture), save the face's when it is turned
+    from the camera (named, the model turned the head to show a beard and eyes), their expression
+    when their face is toward the camera, and the light. No setting: words for a backdrop made the model give it
+    room and cut the person. No action: it is motion the take performs, the pose is the depth's,
+    and an action's ``{target}`` is another person, whom the model then drew beside them."""
     character = show["characters"][cid]
+    facing = view_degrees < 90.0
     light = template("light", {"light": clause(show["locations"][scene["locationId"]]["look"]["light"])})
-    opening = template("aloneImage", {"body": clause(character["body"]), "attributes": "; ".join(clause(item) for item in character["attributes"])})
-    return _joined([opening, *person_sentences(show, scene, start, cid), light])
+    seen = [attribute_text(item) for item in character["attributes"] if facing or not is_face(item)]
+    opening = template("aloneImage", {"body": clause(character["body"]), "view": view_words(view_degrees),
+                                      "attributes": "; ".join(clause(item) for item in seen)})
+    performance = (scene.get("performances") or {}).get(cid) or {}
+    face = [template("expression", {"expression": clause(performance["expression"])})] if performance.get("expression") and facing else []
+    return _joined([opening, *face, light])
 
 
 def speech_sentence(scene: dict, speaker: str) -> str:
@@ -154,11 +172,19 @@ def speech_sentence(scene: dict, speaker: str) -> str:
 
 def video_prompt(show: dict, episode: dict, scene: dict, start: dict, speaker: str | None = None) -> str:
     """The take in words, for VACE (``speaker`` None) or for S2V (``speaker`` is the one whose voice drives it)."""
-    parts = [shot_sentence(show, scene, start), camera_sentence(scene), *people_sentences(show, scene, start)]
+    parts = [shot_sentence(scene), camera_sentence(scene), *people_sentences(show, scene, start)]
     if speaker is not None:
         parts.append(speech_sentence(scene, speaker))
     parts += setting_sentences(show, scene, start)
     return _joined(parts)
+
+
+def still_prompt(show: dict, scene: dict, start: dict) -> str:
+    """The words for a still's final pass, which keeps the people already drawn and draws only what
+    is around them: the shot's size and angle and the setting, and no one. Told the people (an
+    action's ``{target}`` named by body), it drew a person into the free frame; told it was over
+    someone's shoulder, a head to go with the shoulder."""
+    return _joined([shot_sentence(scene, over_shoulder=False), *setting_sentences(show, scene, start)])
 
 
 def talking_speaker(scene: dict) -> str | None:
@@ -181,4 +207,4 @@ def reference_people(show: dict, scene: dict) -> list[str]:
 
 def reference_prompt(character: dict) -> str:
     """A character's reference photo: the whole person on pure white, from their words alone."""
-    return template("referencePhoto", {"body": clause(character["body"]), "attributes": "; ".join(clause(item) for item in character["attributes"])})
+    return template("referencePhoto", {"body": clause(character["body"]), "attributes": "; ".join(clause(attribute_text(item)) for item in character["attributes"])})

@@ -216,6 +216,15 @@ def drawing_camera(person, seen: np.ndarray, camera: dict) -> dict:
             "verticalFovDegrees": DRAWING_FOV_DEGREES}
 
 
+def view_degrees(person, camera: dict) -> float:
+    """How far round from a person's front ``camera`` stands, in degrees seen from above: 0 in front
+    of them, 180 behind. A mesh faces its own +Y, turned by the person's yaw."""
+    yaw = np.radians(person.yaw_degrees)
+    facing = np.array([np.sin(yaw), np.cos(yaw)])
+    toward = np.asarray(camera["position"], dtype=np.float64)[:2] - np.asarray(person.offset, dtype=np.float64)[:2]
+    return float(np.degrees(np.arccos(np.clip(facing @ toward / np.linalg.norm(toward), -1.0, 1.0))))
+
+
 def drawing_pixels(points: np.ndarray, camera: dict, window, size: tuple[int, int]) -> np.ndarray:
     """World ``points`` in a picture of ``size`` that shows ``window`` of ``camera``'s frame of that size."""
     position, right, up, forward, focal = camera_basis(camera, size[1])
@@ -353,7 +362,9 @@ def layer_people(entity_ids: np.ndarray, depth: np.ndarray, people: list[tuple[i
                  floors: list[int]) -> tuple[np.ndarray, np.ndarray]:
     """The people laid over each other by their cut-outs, farthest (by their nearest point) first,
     each (number, own depth, picture, cut-out 0..1) where no thing is in front of them: (the
-    picture, how much of each pixel is a person, 0..1)."""
+    people's own colors, how much of each pixel is a person, 0..1). The colors are not yet
+    multiplied by how much of the pixel is a person (every user lays them over something by
+    ``alpha``); laid over black and then by ``alpha`` again, every soft edge got a dark rim."""
     picture = np.zeros((*entity_ids.shape, 3), dtype=np.float32)
     alpha = np.zeros(entity_ids.shape, dtype=np.float32)
     numbers = [person[0] for person in people]
@@ -362,6 +373,7 @@ def layer_people(entity_ids: np.ndarray, depth: np.ndarray, people: list[tuple[i
         cover = cut.astype(np.float32) * ~hidden(entity_ids, depth, number, own, floors, numbers)
         picture = picture * (1.0 - cover[..., None]) + drawing.astype(np.float32) * cover[..., None]
         alpha = alpha * (1.0 - cover) + cover
+    picture = np.divide(picture, alpha[..., None], out=np.zeros_like(picture), where=alpha[..., None] > 0)
     return np.rint(picture).clip(0, 255).astype(np.uint8), alpha
 
 

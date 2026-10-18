@@ -6,9 +6,13 @@
       "name": "Nori",
       "body": "young man, slim athletic build, fair skin",
       "attributes": [
-        "20 years old",
+        {
+          "face": "20 years old"
+        },
         "tousled short blond hair",
-        "blue-gray irises",
+        {
+          "face": "blue-gray irises"
+        },
         "a long brown wool cloak fastened at the throat, bare-headed",
         "a dark leather jerkin laced at the chest",
         "a wide leather belt set with round iron studs",
@@ -22,10 +26,16 @@
       "name": "Master Adam",
       "body": "old man, tall lean build, fair weathered skin",
       "attributes": [
-        "62 years old",
+        {
+          "face": "62 years old"
+        },
         "silver-white hair combed back into a low tail",
-        "a short white beard",
-        "gray-blue irises",
+        {
+          "face": "a short white beard"
+        },
+        {
+          "face": "gray-blue irises"
+        },
         "a thick gray wolf-fur mantle over the shoulders",
         "a cream linen tunic",
         "a long gray-green wool coat",
@@ -39,10 +49,16 @@
       "name": "Master Ben",
       "body": "middle-aged man, tall broad build, tanned skin",
       "attributes": [
-        "55 years old",
+        {
+          "face": "55 years old"
+        },
         "long straight platinum-blond hair",
-        "clean-shaven",
-        "brown irises",
+        {
+          "face": "clean-shaven"
+        },
+        {
+          "face": "brown irises"
+        },
         "a red-fox fur mantle over the shoulders",
         "a cream silk robe with a gold-embroidered collar",
         "a leather belt",
@@ -55,9 +71,13 @@
       "name": "Master Cora",
       "body": "older woman, tall slender build, pale skin",
       "attributes": [
-        "58 years old",
+        {
+          "face": "58 years old"
+        },
         "silver-white hair in a braided crown",
-        "pale gray irises",
+        {
+          "face": "pale gray irises"
+        },
         "a white fur cape over the shoulders",
         "a long cream linen gown",
         "a small silver pendant",
@@ -69,9 +89,13 @@
     "ryan": {
       "body": "adult man, tall lean build, very pale skin",
       "attributes": [
-        "30 years old",
+        {
+          "face": "30 years old"
+        },
         "long straight black hair",
-        "crimson irises",
+        {
+          "face": "crimson irises"
+        },
         "black spiked plate armor",
         "a high crimson-lined collar",
         "a long crimson cloak",
@@ -83,9 +107,13 @@
     "mira": {
       "body": "young woman, slender build, fair skin",
       "attributes": [
-        "25 years old",
+        {
+          "face": "25 years old"
+        },
         "long dark brown hair in a loose braid",
-        "brown irises",
+        {
+          "face": "brown irises"
+        },
         "a long olive-brown wool cloak",
         "a cream linen dress",
         "a plain leather belt",
@@ -322,7 +350,7 @@
               "lookAtId": "ryan"
             },
             {
-              "timeSeconds": 18.45,
+              "timeSeconds": 18.1,
               "locationId": "clearing",
               "position": [
                 -0.5,
@@ -785,23 +813,22 @@
               {
                 "timeSeconds": 18.1,
                 "position": [
-                  -0.079,
-                  -9.538,
-                  1.6
+                  0.0,
+                  -9.7,
+                  1.75
                 ],
                 "lookAt": [
-                  -0.5,
+                  -0.65,
                   -6.4,
-                  1.345
+                  1.25
                 ],
-                "verticalFovDegrees": 22.0
+                "verticalFovDegrees": 26.0
               }
             ]
           },
           "performances": {
             "nori": {
-              "action": "turns around and protests, one open hand lifting toward {target}",
-              "target": "adam"
+              "action": "protests, one open hand lifting palm up at waist height"
             }
           },
           "sound": {
@@ -975,14 +1002,14 @@
               {
                 "timeSeconds": 26.47,
                 "position": [
-                  -3.168,
-                  -3.875,
-                  1.405
+                  0.45,
+                  -5.52,
+                  1.7
                 ],
                 "lookAt": [
-                  -0.05,
-                  -8.55,
-                  1.405
+                  0.0,
+                  -8.38,
+                  1.23
                 ],
                 "verticalFovDegrees": 30.0
               }
@@ -1056,9 +1083,8 @@
           },
           "performances": {
             "nori": {
-              "action": "stares wide-eyed at {target}, silent",
-              "expression": "stunned: eyes wide, lips closed",
-              "target": "adam"
+              "action": "stares wide-eyed, silent, standing still",
+              "expression": "stunned: eyes wide, lips closed"
             }
           },
           "sound": {
