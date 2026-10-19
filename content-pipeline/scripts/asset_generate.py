@@ -1,10 +1,12 @@
-"""Draw the one picture of an object or character with Qwen-Image-2512, or turn a reviewed picture into a mesh.
+"""Draw the one picture of an object or character, or turn a reviewed picture into a mesh.
 
 A character's picture is their reference photo (``reference.png``): the video
 model's reference and Pixal3D's input, so the mesh and the look are one person.
-An object's picture is its plate (``plate.png``), TRELLIS.2's input. Pixal3D
-shares TRELLIS.2's shape VAE and adds pixel-aligned features so the front matches
-the photo.
+It is drawn by hand in the Gemini app from words this stage writes
+(``hand_drawn_picture``). An object's picture is its plate (``plate.png``),
+drawn by Qwen-Image-2512, TRELLIS.2's input. Pixal3D shares TRELLIS.2's shape
+VAE and adds pixel-aligned features so the front matches the photo; the mesh is
+then painted from the photo it saw (``photo_paint``).
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "prompts.json"
 MESH_PREFIX = "reelshort_asset"
 PICTURE_PREFIX = "reelshort_picture"
+# The square crop of the reference photo Pixal3D saw, saved so the mesh can be painted from it.
+CROP_PREFIX = "reelshort_asset_crop"
 
 # Qwen-Image-2512 (Q8) draws every picture: it follows a description item by item
 # and looks real. 50 steps, CFG 4, euler, AuraFlow shift 3.1: the model's own settings.
@@ -38,6 +42,9 @@ OBJECT_PICTURE_SIZE = (1328, 1328)
 # the model may ignore. One pose for everyone; height and build come from the words.
 POSE_CONTROLNET = "Qwen-Image-InstantX-ControlNet-Union.safetensors"
 POSE_NAME = "standing-front-v1"
+# Who draws a picture: Qwen-Image here, or a person in the Gemini app from the words this stage writes.
+QWEN_DRAWER = "qwen-image"
+GEMINI_DRAWER = "gemini-app"
 POSE_STRENGTH = 1.0
 # Released for the last steps, so the pose fixes the figure and the words finish the detail.
 POSE_END = 0.8
@@ -356,6 +363,8 @@ def _shape_graph(
         "class_type": "MoGeGeometryToFOV",
         "inputs": {"moge_geometry": ["31", 0], "axis": "horizontal", "unit": "degrees"},
     }
+    graph["40"] = {"class_type": "SaveImage", "inputs": {"images": ["4", 0], "filename_prefix": CROP_PREFIX}}
+    graph["41"] = {"class_type": "PreviewAny", "inputs": {"source": ["32", 0]}}
     return graph
 
 
@@ -439,15 +448,63 @@ def generate_picture(prompt: str, negative: str, size: tuple[int, int], dest: Pa
     return dest
 
 
-def picture_is_current(dest: Path, prompt: str, negative: str, pose: bool = False) -> bool:
-    """Whether ``dest`` exists and was drawn from these words (and the standing pose, when ``pose``)."""
+def picture_is_current(dest: Path, prompt: str, negative: str, pose: bool = False, drawer: str = QWEN_DRAWER) -> bool:
+    """Whether ``dest`` exists and was drawn by ``drawer`` from these words (Qwen-Image over the
+    standing pose, when ``pose``; by hand, the pose is in the words)."""
     from comfy import inputs_dir, present
 
     log = inputs_dir(dest) / "log.json"
     if not (present(dest) and log.is_file()):
         return False
     made = json.loads(log.read_text(encoding="utf-8"))
-    return (made.get("prompt"), made.get("negative"), made.get("pose")) == (prompt, negative, POSE_NAME if pose else None)
+    over = POSE_NAME if pose and drawer == QWEN_DRAWER else None
+    return (made.get("prompt"), made.get("negative"), made.get("pose"), made.get("drawer", QWEN_DRAWER)) == (prompt, negative, over, drawer)
+
+
+# What a picture drawn by hand in the image model's app may be saved as, beside its own name.
+HAND_DRAWN_FORMATS = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def hand_drawn_picture(prompt: str, negative: str, size: tuple[int, int], dest: Path, pose: bool) -> Path | None:
+    """A picture drawn by hand in the Gemini app (the draw-stills skill): ``to_draw/prompt.txt``
+    beside ``dest`` holds its words (``handPicture``, its size, then ``prompt``; the app takes no
+    negative). A picture saved under ``dest``'s name in any of ``HAND_DRAWN_FORMATS`` after those
+    words were written becomes ``dest`` (PNG), logged as drawn from them; until then the request
+    is written (kept as it is when its words are already these) and None is returned."""
+    from PIL import Image
+
+    from comfy import write_log
+    from describe import template
+
+    del pose  # the standing pose is in the words
+    request = dest.parent / "to_draw" / "prompt.txt"
+    words = template("handPicture", {"width": str(size[0]), "height": str(size[1])}) + " " + prompt
+    if request.is_file() and request.read_text(encoding="utf-8").strip() == words:
+        asked = request.stat().st_mtime
+        saved = [path for path in (dest.with_suffix(suffix) for suffix in HAND_DRAWN_FORMATS) if path.is_file() and path.stat().st_mtime > asked]
+        if len(saved) > 1:
+            raise RuntimeError(f"Keep one drawn picture, not {', '.join(path.name for path in saved)}")
+        if saved:
+            picture = Image.open(saved[0]).convert("RGB")
+            picture.save(dest)
+            if saved[0] != dest:
+                saved[0].unlink()
+            write_log(dest, {"prompt": prompt, "negative": negative, "size": list(picture.size), "pose": None, "drawer": GEMINI_DRAWER})
+            return dest
+    else:
+        request.parent.mkdir(parents=True, exist_ok=True)
+        request.write_text(words + "\n", encoding="utf-8")
+    print(f"  To draw by hand: the words in {request}; save the picture beside it as {dest.parent / dest.stem}.<png|jpg|webp>", flush=True)
+    return None
+
+
+def draw_picture(prompt: str, negative: str, size: tuple[int, int], dest: Path, pose: bool) -> Path | None:
+    """A character's reference photo is drawn by hand in Gemini (``hand_drawn_picture``): Qwen-Image's
+    photos lost detail, and Pixal3D's mesh and its colors carry whatever the photo has. An object's
+    plate is drawn by Qwen-Image (``generate_picture``)."""
+    if pose:
+        return hand_drawn_picture(prompt, negative, size, dest, pose)
+    return generate_picture(prompt, negative, size, dest, pose)
 
 
 def generate_asset_mesh(
@@ -469,9 +526,41 @@ def generate_asset_mesh(
     staged = stage_input(picture, "asset_picture")
     # Every mesh keeps the picture's color. A character's is a frontal photo,
     # so its mesh is pixel-aligned to it; an object keeps TRELLIS.2's upright frame.
-    graph = (pixal3d_graph if character else object_graph)(staged, stable_seed("asset", " ".join(appearance.split())), triangle_budget)
-    label = "Pixal3D mesh" if character else "TRELLIS.2 textured mesh"
-    return _run(graph, MESH_PREFIX, raw_dir / "model.glb", label, MESH_TIMEOUT_SECONDS)
+    seed = stable_seed("asset", " ".join(appearance.split()))
+    if not character:
+        return _run(object_graph(staged, seed, triangle_budget), MESH_PREFIX, raw_dir / "model.glb", "TRELLIS.2 textured mesh", MESH_TIMEOUT_SECONDS)
+    return _character_mesh(pixal3d_graph(staged, seed, triangle_budget), raw_dir)
+
+
+def _character_mesh(graph: dict, raw_dir: Path) -> Path:
+    """Run Pixal3D, keep the crop it saw (``photo_crop.png``) and its field of view
+    (``photo_camera.json``), and paint the mesh from the crop (``photo_paint``)."""
+    import numpy as np
+    from PIL import Image
+
+    from comfy import download_output, free_comfy_models, output_named, queue_prompt, wait_for_files
+    from mesh_io import read_schema_mesh, read_vertex_colors, write_schema_glb
+    from photo_paint import paint_from_photo, surface_depth
+
+    mesh, crop_path = raw_dir / "model.glb", raw_dir / "photo_crop.png"
+    print("  Pixal3D mesh...", flush=True)
+    try:
+        free_comfy_models()
+        files, item = wait_for_files(queue_prompt(graph), MESH_TIMEOUT_SECONDS)
+    except urllib.error.URLError as exc:
+        raise RuntimeError(_comfy_unreachable()) from exc
+    download_output(output_named(files, MESH_PREFIX), mesh)
+    download_output(output_named(files, CROP_PREFIX), crop_path)
+    fov = float(str((item["outputs"]["41"].get("text") or [""])[0]).strip())
+    (raw_dir / "photo_camera.json").write_text(json.dumps({"fovDegrees": fov}, indent=2), encoding="utf-8")
+    vertices, faces = read_schema_mesh(mesh)
+    colors = read_vertex_colors(mesh)
+    if colors is None:
+        colors = np.zeros_like(vertices, dtype=np.float32)
+    crop = np.asarray(Image.open(crop_path).convert("RGB"))
+    painted = paint_from_photo(vertices, colors, crop, fov, surface_depth(vertices, faces, fov, crop.shape[0]))
+    write_schema_glb(mesh, vertices, faces, painted)
+    return mesh
 
 
 def _comfy_unreachable() -> str:

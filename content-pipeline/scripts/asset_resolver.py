@@ -20,7 +20,9 @@ from pathlib import Path
 
 from asset_generate import (
     CHARACTER_PICTURE_SIZE,
+    GEMINI_DRAWER,
     OBJECT_PICTURE_SIZE,
+    QWEN_DRAWER,
     generate_asset_mesh,
     object_prompt,
     picture_is_current,
@@ -47,6 +49,8 @@ FACING = "schema-plus-y"
 PIXAL3D_PAGE = "https://github.com/TencentARC/Pixal3D"
 # Plate color sampled by Pixal3D and stored on each vertex.
 SURFACE = "vertex-color"
+# A character's vertex colors are painted from the photo crop Pixal3D saw (``photo_paint``).
+CHARACTER_SURFACE = "photo-painted-vertex-color"
 @dataclass
 class AssetRequest:
     consumer_id: str
@@ -71,6 +75,11 @@ class AssetRequest:
     def pose(self) -> bool:
         """A character's photo is drawn over the standing pose, so the whole figure is in it."""
         return bool(self.character_id)
+
+    @property
+    def drawer(self) -> str:
+        """A character's reference photo is drawn by hand in Gemini; an object's plate by Qwen-Image."""
+        return GEMINI_DRAWER if self.character_id else QWEN_DRAWER
 
     @property
     def picture_size(self) -> tuple[int, int]:
@@ -156,7 +165,7 @@ class AssetResolver:
 
     def resolve_one(self, request: AssetRequest) -> ResolvedAsset:
         picture = self._dir(request, "plates") / request.picture
-        if not picture_is_current(picture, request.prompt, request.negative, request.pose):
+        if not picture_is_current(picture, request.prompt, request.negative, request.pose, request.drawer):
             raise RuntimeError(
                 f"{request.consumer_id}: no picture of the current words at {picture}. Run `pnpm run content:plates`."
             )
@@ -182,7 +191,7 @@ class AssetResolver:
             return None
         if record.get("decimator") != DECIMATOR or record.get("fit") != "uniform":
             return None
-        if (record.get("meshModel"), record.get("surface")) != (_model(request), SURFACE):
+        if (record.get("meshModel"), record.get("surface")) != (_model(request), _surface(request)):
             return None
         size = record.get("sizeMeters") or list(request.size)
         return ResolvedAsset(
@@ -239,11 +248,11 @@ class AssetResolver:
             "title": request.appearance,
             "source": source,
             "sourceId": source_id,
-            "author": "Qwen-Image-Edit-2511, Pixal3D" if character else "Qwen-Image-Edit-2511, TRELLIS.2",
+            "author": "Gemini app, Pixal3D" if character else "Qwen-Image-2512, TRELLIS.2",
             "license": "MIT",
             "pageUrl": PIXAL3D_PAGE if character else "https://github.com/microsoft/TRELLIS.2",
             "meshModel": _model(request),
-            "surface": SURFACE,
+            "surface": _surface(request),
             "retrieved": date.today().isoformat(),
             "triangleCount": int(len(faces)),
             "triangleBudget": self.triangle_budget,
@@ -290,6 +299,10 @@ def _model(request: AssetRequest) -> str:
     return CHARACTER_MODEL if request.character_id else OBJECT_MODEL
 
 
+def _surface(request: AssetRequest) -> str:
+    return CHARACTER_SURFACE if request.character_id else SURFACE
+
+
 def write_pictures(
     show: dict,
     writer,
@@ -312,7 +325,7 @@ def write_pictures(
     for request in collect_requests(show):
         digest = description_hash(request)
         picture = request.directory(output_dir, "plates", show_id) / request.picture
-        current = picture_is_current(picture, request.prompt, request.negative, request.pose) and not refresh
+        current = picture_is_current(picture, request.prompt, request.negative, request.pose, request.drawer) and not refresh
         source = shared.get(digest) if request.shared else None
         if source is not None:
             if not current:
@@ -327,7 +340,9 @@ def write_pictures(
             if offline:
                 raise RuntimeError(f"{request.consumer_id}: no picture at {picture}; offline mode does not draw one")
             picture.parent.mkdir(parents=True, exist_ok=True)
-            writer(request.prompt, request.negative, request.picture_size, picture, request.pose)
+            if writer(request.prompt, request.negative, request.picture_size, picture, request.pose) is None:
+                print(f"  {request.label}: waits for its picture to be drawn", flush=True)
+                continue
             _discard_mesh(output_dir, show_id, request)
         print(f"  {request.label}: {picture}", flush=True)
         pictures.append(picture)

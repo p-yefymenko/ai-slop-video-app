@@ -100,14 +100,20 @@ def reference_sheet(photos: list[Path], width: int, height: int, dest: Path) -> 
 CLAY_LIGHTEST = 232.0
 
 
-def colored_layout(clay: np.ndarray, albedo: np.ndarray, entity_ids: np.ndarray, colored: list[int]) -> np.ndarray:
-    """The shot's clay render with each entity in ``colored`` (by entity number: those whose mesh
-    has colors, from the picture it was made from) in its own colors, shaded as the clay is. What
-    has no colors (the floor) stays clay."""
+def colored_layout(clay: np.ndarray, albedo: np.ndarray, entity_ids: np.ndarray, colored: list[int],
+                   floor: list[int], ground: tuple[int, int, int], sky: tuple[int, int, int]) -> np.ndarray:
+    """The shot's render with each entity in ``colored`` (by entity number: those whose mesh has
+    colors, from the picture it was made from) in its own colors, shaded as the clay is; the
+    ``floor`` in the location's ``ground`` color, shaded the same; and where nothing is, the
+    location's ``sky`` color. Both left one clay gray, the ground read as sky: from a camera
+    looking down at nothing but ground, the model drew a horizon and trees."""
     out = clay.astype(np.float32)
     shade = out.mean(axis=2, keepdims=True) / CLAY_LIGHTEST
     where = np.isin(entity_ids, colored)
     out[where] = (albedo.astype(np.float32) * shade)[where]
+    under = np.isin(entity_ids, floor)
+    out[under] = (np.asarray(ground, dtype=np.float32) * shade)[under]
+    out[entity_ids == 0] = np.asarray(sky, dtype=np.float32)
     return np.rint(out).clip(0, 255).astype(np.uint8)
 
 

@@ -54,14 +54,16 @@ class CountingGenerator:
 
 
 def picture_writer(drawn: list[Path], content: bytes = b"x" * 2048):
-    """Stands in for Qwen-Image: writes the picture and its log, as ``generate_picture`` does."""
+    """Stands in for Qwen-Image (an object's plate) and for a hand drawing accepted by
+    ``hand_drawn_picture`` (a character's photo): writes the picture and its log as they do."""
     from comfy import write_log
 
     def writer(prompt: str, negative: str, size: tuple[int, int], dest: Path, pose: bool) -> Path:
-        from asset_generate import POSE_NAME
+        from asset_generate import GEMINI_DRAWER, QWEN_DRAWER
 
         dest.write_bytes(content)
-        write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "pose": POSE_NAME if pose else None, "seed": 1})
+        write_log(dest, {"prompt": prompt, "negative": negative, "size": list(size), "pose": None, "seed": 1,
+                         "drawer": GEMINI_DRAWER if pose else QWEN_DRAWER})
         drawn.append(dest)
         return dest
 
@@ -132,6 +134,9 @@ class AssetTests(unittest.TestCase):
         aligned_classes = [node["class_type"] for node in aligned.values()]
         self.assertIn("Pixal3DConditioning", aligned_classes)
         self.assertNotIn("Trellis2Conditioning", aligned_classes)
+        saved = [node["inputs"] for node in aligned.values() if node["class_type"] == "SaveImage"]
+        self.assertEqual(saved[0]["images"][0], "4", "the crop Pixal3D sees is kept, to paint the mesh from")
+        self.assertIn("PreviewAny", aligned_classes, "and the field of view it was seen with")
         self.assertNotIn("FillHoles", aligned_classes)
         self.assertNotIn("RemeshMesh", aligned_classes)
         aligned_unet = next(node for node in aligned.values() if node["class_type"] == "UNETLoader")
@@ -298,7 +303,7 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(record["characterId"], "ada")
         self.assertEqual(record["meshModel"], "pixal3d")
         self.assertEqual(record["facing"], "schema-plus-y")
-        self.assertEqual(record["surface"], "vertex-color")
+        self.assertEqual(record["surface"], "photo-painted-vertex-color")
         self.assertIn("amber irises", record["title"])
         np.testing.assert_allclose(face_schema_forward(np.array([[0.2, -0.5, 1.0]])), [[-0.2, 0.5, 1.0]])
         calls = generator.calls
@@ -317,6 +322,52 @@ class AssetTests(unittest.TestCase):
         kept = read_vertex_colors(self._resolver(CountingGenerator(painted)).resolve_show(show)["character:ada"].glb)
         assert kept is not None
         np.testing.assert_allclose(kept, painted_colors)
+
+    def test_a_character_photo_is_asked_for_in_words_and_taken_once_drawn(self) -> None:
+        import os
+
+        from PIL import Image
+
+        from asset_generate import GEMINI_DRAWER, hand_drawn_picture, picture_is_current
+
+        dest = self.output / "plates" / "demo" / "characters" / "ada" / "reference.png"
+        dest.parent.mkdir(parents=True)
+        Image.new("RGB", (8, 16), (9, 9, 9)).save(dest)  # an older photo, drawn before the request
+        self.assertIsNone(hand_drawn_picture("Full-length photo.", "bad", (928, 1664), dest, True))
+        request = dest.parent / "to_draw" / "prompt.txt"
+        self.assertEqual(request.read_text(encoding="utf-8").strip(), "One photograph, 928 by 1664 pixels. Full-length photo.")
+        self.assertIsNone(hand_drawn_picture("Full-length photo.", "bad", (928, 1664), dest, True), "a picture older than the request is not it")
+        drawn = dest.with_suffix(".jpg")
+        noise = np.random.default_rng(0).integers(0, 60, (128, 64, 3), dtype=np.uint8)
+        Image.fromarray(noise + np.array([190, 90, 40], dtype=np.uint8)).save(drawn)  # a photo, over 1 KB
+        later = request.stat().st_mtime + 5
+        os.utime(drawn, (later, later))
+        self.assertEqual(hand_drawn_picture("Full-length photo.", "bad", (928, 1664), dest, True), dest)
+        self.assertFalse(drawn.exists(), "kept as the PNG only")
+        self.assertEqual(Image.open(dest).getpixel((0, 0))[0] > 150, True)
+        self.assertTrue(picture_is_current(dest, "Full-length photo.", "bad", True, GEMINI_DRAWER))
+        self.assertFalse(picture_is_current(dest, "Other words.", "bad", True, GEMINI_DRAWER))
+
+    def test_a_character_mesh_is_painted_from_the_photo_crop_its_camera_sees(self) -> None:
+        from photo_paint import camera_distance, paint_from_photo, project
+
+        fov = 40.0
+        resolution = 64
+        # Two points on the camera's axis: the near one is seen, the one behind it is not.
+        vertices = np.array([[0.0, -0.1, 0.0], [0.0, 0.3, 0.0], [0.6, 0.0, 0.0]])
+        column, row, depth = project(vertices, fov, resolution)
+        self.assertAlmostEqual(float(column[0]), resolution / 2)
+        self.assertAlmostEqual(float(depth[0]), camera_distance(fov) - 0.1)
+        self.assertGreater(float(column[2]), resolution, "half a unit off the axis is past the crop's edge at the center's depth")
+        crop = np.zeros((resolution, resolution, 3), dtype=np.uint8)
+        crop[..., 0] = 255
+        surface = np.full((resolution, resolution), np.inf)
+        surface[int(row[0]), int(column[0])] = float(depth[0])
+        own = np.full((3, 3), 0.25, dtype=np.float32)
+        painted = paint_from_photo(vertices, own, crop, fov, surface)
+        np.testing.assert_allclose(painted[0], [1.0, 0.0, 0.0])
+        np.testing.assert_allclose(painted[1], [0.25, 0.25, 0.25], err_msg="hidden behind the near surface: its own color")
+        np.testing.assert_allclose(painted[2], [0.25, 0.25, 0.25], err_msg="outside the crop: its own color")
 
     def test_offline_never_generates(self) -> None:
         generator = CountingGenerator(self.cube)

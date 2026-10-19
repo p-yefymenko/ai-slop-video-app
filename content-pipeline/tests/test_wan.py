@@ -267,10 +267,13 @@ class SheetTests(unittest.TestCase):
         clay = np.array([[[lit, lit, lit], [lit // 2, lit // 2, lit // 2], [150, 150, 150]]], dtype=np.uint8)
         albedo = np.array([[[200, 100, 50], [200, 100, 50], [9, 9, 9]]], dtype=np.uint8)
         ids = np.array([[1, 1, 2]], dtype=np.uint8)
-        out = colored_layout(clay, albedo, ids, [1])
+        out = colored_layout(clay, albedo, ids, [1], [], (70, 60, 50), (150, 160, 170))
         self.assertEqual(tuple(out[0, 0]), (200, 100, 50), "a surface turned to the light keeps its own colors")
         self.assertEqual(tuple(out[0, 1]), (100, 50, 25), "the clay's shading kept")
         self.assertEqual(tuple(out[0, 2]), (150, 150, 150), "a mesh without colors stays clay")
+        floor = colored_layout(clay, albedo, np.array([[2, 0, 1]], dtype=np.uint8), [1], [2], (70, 60, 50), (150, 160, 170))
+        self.assertEqual(tuple(floor[0, 0]), (70, 60, 50), "the floor in the ground's color")
+        self.assertEqual(tuple(floor[0, 1]), (150, 160, 170), "nothing, in the sky's color")
 
     def test_the_layout_words_give_no_looks_and_faces_only_toward_the_camera(self) -> None:
         from describe import layout_prompt

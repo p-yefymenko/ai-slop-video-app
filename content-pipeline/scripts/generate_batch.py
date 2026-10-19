@@ -168,7 +168,10 @@ def write_still_request(show: dict, episode: dict, scene: dict, size: str) -> Pa
         print(f"  Give the words in {folder / 'prompt.txt'} alone (none of the 3D scene is in the frame); save the picture as {still}", flush=True)
         return folder
     colored = [number + 1 for number, entity in enumerate(entities) if entity.mesh.colors is not None]
-    Image.fromarray(colored_layout(frame.clay, frame.albedo, frame.entity, colored)).save(folder / "layout.png")
+    floor = [number + 1 for number, entity in enumerate(entities) if entity.kind == "floor"]
+    backdrop = show["locations"][scene["locationId"]]["backdrop"]
+    layout = colored_layout(frame.clay, frame.albedo, frame.entity, colored, floor, tuple(backdrop["groundColor"]), tuple(backdrop["skyColor"]))
+    Image.fromarray(layout).save(folder / "layout.png")
     print(f"  Upload {folder / 'layout.png'} with the words in prompt.txt; save the picture as {still}", flush=True)
     return folder
 

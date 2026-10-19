@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_generate import generate_picture  # noqa: E402
+from asset_generate import draw_picture  # noqa: E402
 from mesh_io import TRIANGLE_BUDGET, require_triangle_budget  # noqa: E402
 from asset_resolver import (  # noqa: E402
     AssetResolver,
@@ -90,7 +90,7 @@ def main() -> None:
         for script in scripts:
             show = json.loads(script.read_text(encoding="utf-8"))
             write_voices(show, refresh=args.force or args.refresh, offline=args.offline)
-            pictures = write_pictures(show, generate_picture, refresh=args.force or args.refresh, offline=args.offline)
+            pictures = write_pictures(show, draw_picture, refresh=args.force or args.refresh, offline=args.offline)
             print(f"{show_id_for_script(script)}: {len(pictures)} pictures")
         print("Review the plates, references and voices, then run `pnpm run content:assets`.")
         return

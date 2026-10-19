@@ -51,6 +51,25 @@ to run `/chrome` (or type `@browser`) and stop until they do.
    clip stage refuses two), but only a file whose stem is exactly
    `scene_XX_start`, never one such as `scene_04_start_old.png`.
 
+## Character reference photos
+
+Each character's reference photo is drawn the same way. Pixal3D builds their mesh
+from it, the mesh is painted from it, and the video model gets it as the reference.
+`pnpm run content:plates --show <show>` writes one request per character whose
+photo is not drawn from the current words:
+`content-pipeline/output/plates/<show>/characters/<id>/to_draw/prompt.txt`.
+
+1. Draw each one as above, but with the words alone (there is no layout), in a new chat.
+2. Save the download beside `to_draw` as `reference.<its extension>`, after the
+   request was written (an older file is not taken). Replace only a file named exactly
+   `reference.*`.
+3. Run `pnpm run content:plates --show <show>` again. It takes each new picture as
+   `reference.png` and logs it, and drops the character's old mesh.
+4. Review each photo against the words: the whole figure head to toe on plain white,
+   standing and facing the camera with the arms at the sides, every attribute item by
+   item, nothing extra. Then `pnpm run content:assets` remakes the meshes on the GPU
+   (about 10 minutes each). Say so before starting it.
+
 ## After drawing
 
 Review every still against its layout, as CLAUDE.md asks for every result. Read

@@ -31,3 +31,4 @@ apps/mobile/ios
 coverage
 packages/shared/src/reel-short-content-reference
 tmp
+.claude/settings.local.json
